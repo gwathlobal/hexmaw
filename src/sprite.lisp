@@ -52,20 +52,24 @@ the camera is on the side that needs the mirrored view."
     (values (min 4 (round (abs angle) #.(float (/ pi 4) 0f0)))
             (< angle 0))))
 
-(defun update-frame-uv (sprite)
-  "Point FRAME-UV (u, v, du, dv) at the current view's atlas cell; negative du mirrors."
-  (let* ((atlas (atlas sprite))
-         (cell (getf atlas :cell-width))
+(defun strip-uv (uv atlas index count &optional mirrored)
+  "Point UV (u, v, du, dv) at cell INDEX of ATLAS, a strip of COUNT cells side by
+side; negative du mirrors."
+  (let* ((cell (getf atlas :cell-width))
          (gap (getf atlas :gap))
-         (n (length (getf atlas :views)))
-         (width (float (+ (* n cell) (* (1- n) gap)) 0f0))
-         (u0 (/ (* (view-index sprite) (+ cell gap)) width))
-         (du (/ cell width))
-         (uv (frame-uv sprite)))
-    (if (mirrored sprite)
+         (width (float (+ (* count cell) (* (1- count) gap)) 0f0))
+         (u0 (/ (* index (+ cell gap)) width))
+         (du (/ cell width)))
+    (if mirrored
         (setf (vx uv) (+ u0 du) (vz uv) (- du))
         (setf (vx uv) u0 (vz uv) du))
-    (setf (vy uv) 0.0 (vw uv) 1.0)))
+    (setf (vy uv) 0.0 (vw uv) 1.0)
+    uv))
+
+(defun update-frame-uv (sprite)
+  "Point FRAME-UV at the current view's atlas cell."
+  (let ((atlas (atlas sprite)))
+    (strip-uv (frame-uv sprite) atlas (view-index sprite) (length (getf atlas :views)) (mirrored sprite))))
 
 (define-handler (billboard tick) ()
   (let ((camera (camera (scene +main+))))

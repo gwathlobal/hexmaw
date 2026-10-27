@@ -22,7 +22,10 @@
   ((name :initarg :name :reader spell-name)
    (delivery :initarg :delivery :initform :projectile :reader spell-delivery)
    (projectile-speed :initarg :projectile-speed :initform 20.0 :reader projectile-speed)
-   (projectile-color :initarg :projectile-color :initform (vec 1.0 0.55 0.15) :reader projectile-color)
+   (projectile-animation :initarg :projectile-animation :initform NIL :reader projectile-animation
+                         :documentation "Effect animation the projectile flies as.")
+   (impact-animation :initarg :impact-animation :initform NIL :reader impact-animation
+                     :documentation "Effect animation played where the projectile hits, or NIL.")
    (effects :initarg :effects :reader spell-effects)))
 
 (defvar *spells* (make-hash-table :test 'eq))
@@ -81,13 +84,13 @@ it (a SPELL-PROJECTILE for projectile spells)."))
 ;;; Projectile delivery.
 
 (defparameter *projectile-lifetime* 3.0 "Seconds before a projectile that hit nothing vanishes.")
-(defparameter *projectile-size* 0.18 "Diameter in metres.")
+(defparameter *projectile-size* 0.18 "Collision diameter in metres; the sprite can be bigger.")
+(defparameter *impact-pullback* 0.25
+  "Metres back along the flight path where the impact plays, so it isn't buried in the wall.")
 
-(define-shader-entity spell-projectile (vertex-entity colored-entity transformed-entity listener)
-  ((vertex-array :initform (// 'trial 'unit-sphere))
-   (spell :initarg :spell :initform NIL :reader spell)
-   (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)
-   (age :initform 0.0 :accessor age)))
+(define-shader-entity spell-projectile (fx-sprite)
+  ((spell :initarg :spell :initform NIL :reader spell)
+   (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)))
 
 ;; Knockback pushes along the direction the projectile was flying.
 (defmethod apply-effect ((kind (eql :knockback)) effect (target creature) (source spell-projectile))
@@ -95,32 +98,36 @@ it (a SPELL-PROJECTILE for projectile spells)."))
 
 (defun launch-projectile (spell origin direction container)
   "Fire SPELL from ORIGIN along unit vector DIRECTION."
-  (let ((size (float *projectile-size* 0f0))
-        (color (projectile-color spell))
-        (projectile (make-instance 'spell-projectile :spell spell :location (vcopy origin))))
-    (setf (scaling projectile) (vec size size size)
-          (color projectile) (vec4 (vx color) (vy color) (vz color) 1))
+  (let ((projectile (make-instance 'spell-projectile
+                                  :spell spell :location (vcopy origin)
+                                  :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
     (nv* (projectile-velocity projectile) (float (projectile-speed spell) 0f0))
     (enter projectile container)))
 
-(defun remove-projectile (projectile)
-  (when (container projectile)
-    (leave projectile (container projectile))))
+(defun impact (projectile)
+  "Play the spell's impact where PROJECTILE hit, and remove it."
+  (let ((name (impact-animation (spell projectile))))
+    (when (and name (container projectile))
+      (let* ((velocity (projectile-velocity projectile))
+             (at (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
+        (spawn-fx name at (container projectile)))))
+  (despawn projectile))
 
-(define-handler (spell-projectile tick) (dt)
+;; After FX-SPRITE's tick, which animates and ages it.
+(define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
     (let* ((loc (location spell-projectile))
            (r (* 0.5 (float *projectile-size* 0f0))))
       (nv+* loc (projectile-velocity spell-projectile) dt)
-      (incf (age spell-projectile) dt)
       (let ((victim (creature-at loc r)))
         (cond (victim
                (apply-spell (spell spell-projectile) victim spell-projectile)
-               (remove-projectile spell-projectile))
-              ((or (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))
-                   (< *projectile-lifetime* (age spell-projectile)))
-               (remove-projectile spell-projectile)))))))
+               (impact spell-projectile))
+              ((solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))
+               (impact spell-projectile))
+              ((< *projectile-lifetime* (age spell-projectile))
+               (despawn spell-projectile)))))))
 
 (defun cast-spell (spell origin direction container)
   "Deliver SPELL from ORIGIN along unit vector DIRECTION. Mana is the caster's business."
@@ -129,6 +136,21 @@ it (a SPELL-PROJECTILE for projectile spells)."))
 
 ;;; The spells.
 
-(define-spell bolt (:delivery :projectile :projectile-speed 20.0 :projectile-color (vec 1.0 0.55 0.15))
+(defun preload-spells (scene)
+  "Load the projectile and impact sprites of every spell, which only appear mid-game."
+  (loop for spell being the hash-values of *spells*
+        do (dolist (name (list (projectile-animation spell) (impact-animation spell)))
+             (when name
+               (preload (make-instance 'fx-sprite :animation (find-fx-animation name)) scene)))
+           (when (projectile-animation spell)
+             (preload (make-instance 'spell-projectile :spell spell
+                                                       :animation (find-fx-animation (projectile-animation spell)))
+                      scene))))
+
+(define-fx-animation bolt-flight "sprites/bolt/flight" :fps 12 :loop T :size 0.4)
+(define-fx-animation bolt-burst "sprites/bolt/burst" :fps 14 :size 0.9)
+
+(define-spell bolt (:delivery :projectile :projectile-speed 20.0
+                    :projectile-animation 'bolt-flight :impact-animation 'bolt-burst)
   (:damage :magnitude '(6 10))
   (:knockback :magnitude '(4 4)))

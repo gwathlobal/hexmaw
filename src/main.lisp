@@ -17,8 +17,8 @@
     (setf *player* new)
     (enter new scene))
   (add-hud scene)
-  ;; Projectiles are spawned mid-game; load their shader and mesh up front.
-  (preload 'spell-projectile scene)
+  ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
+  (preload-spells scene)
   (setf *render-pass* (make-instance 'render-pass))
   (enter *render-pass* scene))
 

@@ -106,6 +106,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   death and revival), `*creatures*` for hit tests, and the `imp`.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
+- `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `define-fx-animation`,
+  `spawn-fx`); fullbright, no fog. Projectiles are effect sprites.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, and the `bolt`. A new effect kind is a method on `apply-effect`.
 - `src/hud.lisp`: HP and mana bars in the lower-left corner. HUD pieces are `hud-element`
@@ -140,6 +142,19 @@ other side. Generated sheets aren't always consistent (the imp's back-quarter fa
 right), so look at each view and pass the odd ones to `--mirror`. To check angle
 selection in game, orbit the camera around the sprite and screenshot each 45°.
 Billboards have no collision yet.
+
+Effect animations (projectiles, impacts) start as a grid of frames, same magenta and
+cyan convention; rows and cell sizes may be uneven, and empty cells are skipped.
+`tools/slice_frames.py` writes one strip per animation, `<name>.png` plus `.lisp`, and
+also removes the pink glow generators paint into the background. `--pixel` is the size
+of one art pixel in the source:
+
+```bash
+python3 tools/slice_frames.py "Bolt Spell Sheet.webp" data/sprites/bolt --pixel 5 flight:5 burst:7
+```
+
+Hook a strip up with `define-fx-animation` (fps, loop, height in metres) and name it in
+a spell's `:projectile-animation` / `:impact-animation`.
 
 ## Level blocks
 

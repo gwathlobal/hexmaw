@@ -8,6 +8,7 @@
                (:file "sprite")
                (:file "creature")
                (:file "blocks")
+               (:file "fx")
                (:file "spells")
                (:file "player")
                (:file "hud")
