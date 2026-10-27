@@ -12,10 +12,14 @@
 (define-shader-entity greybox (vertex-entity colored-entity transformed-entity)
   ((vertex-array :initform (// 'trial 'unit-cube))))
 
-(defmethod render :before ((box greybox) (program shader-program))
+(defun set-fog-uniforms (program)
+  "Set fog_color, fog_start and fog_end, shared by every shader that fogs."
   (setf (uniform program "fog_color") *fog-color*)
   (setf (uniform program "fog_start") (float *fog-start* 0f0))
-  (setf (uniform program "fog_end") (float *fog-end* 0f0))
+  (setf (uniform program "fog_end") (float *fog-end* 0f0)))
+
+(defmethod render :before ((box greybox) (program shader-program))
+  (set-fog-uniforms program)
   (setf (uniform program "grid_strength") (float *grid-strength* 0f0)))
 
 (define-class-shader (greybox :fragment-shader)

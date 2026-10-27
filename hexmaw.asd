@@ -5,6 +5,7 @@
   :components ((:file "package")
                (:file "dev")
                (:file "greybox")
+               (:file "sprite")
                (:file "player")
                (:file "level")
                (:file "main"))

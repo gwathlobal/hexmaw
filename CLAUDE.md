@@ -89,6 +89,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
 - `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`).
+- `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring) and the `imp`.
+  Assets live in `data/` (Trial pool `hexmaw`).
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
@@ -102,6 +104,22 @@ On a step the camera holds its height and eases to the new one.
 To test movement without a mouse or keyboard, hold keys from the eval server:
 `tools/hd '(game (setf (vy (rotation *player*)) 0.0 (retained :w) t))'`, wait, then
 `(setf (retained :w) nil)` and check `tools/hd status`. Yaw 0 faces −Z, π/2 faces +X.
+
+## Monster sprites
+
+A monster starts as a 5-view turnaround sheet (front, front-quarter, side,
+back-quarter, back; magenta background, cyan separators). `tools/slice_turnaround.py`
+keys and slices it into `data/sprites/<monster>/turnaround.png` plus a `.lisp` index:
+
+```bash
+python3 tools/slice_turnaround.py "Pixel Demon Character Turnaround.png" data/sprites/imp/turnaround --height 96 --mirror back-quarter
+```
+
+The game assumes the three turned views face image-left and mirrors them for the
+other side. Generated sheets aren't always consistent (the imp's back-quarter faced
+right), so look at each view and pass the odd ones to `--mirror`. To check angle
+selection in game, orbit the camera around the sprite and screenshot each 45°.
+Billboards have no collision yet.
 
 Controls: click the window to capture the mouse, Esc to release. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, F12 for a screenshot.
