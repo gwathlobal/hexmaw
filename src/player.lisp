@@ -14,6 +14,7 @@
 (defparameter *eye-height* 1.6)
 (defparameter *crouch-eye-height* 0.9)
 (defparameter *eye-height-speed* 6.0)
+(defparameter *step-height* 0.45)
 (defparameter *player-radius* 0.3)
 (defparameter *player-height* 1.8)
 (defparameter *mouse-sensitivity* 0.0025)
@@ -87,6 +88,43 @@
                  (put vel 0f0)
                  (when (= 0 delta) (return)))))))
 
+(defun horizontal-distance-squared (feet x0 z0)
+  (+ (expt (- (vx feet) x0) 2) (expt (- (vz feet) z0) 2)))
+
+(defun move-horizontal (player dx dz can-step)
+  "Move by DX, DZ against solids. When CAN-STEP and the move is blocked, also try it
+raised by up to *STEP-HEIGHT* and dropped back down, and keep whichever got further.
+On a step the eye keeps its height and eases to the new one."
+  (let* ((feet (feet player)) (vel (velocity player))
+         (x0 (vx feet)) (y0 (vy feet)) (z0 (vz feet))
+         (vx0 (vx vel)) (vy0 (vy vel)) (vz0 (vz vel)))
+    (move-axis player 0 dx)
+    (move-axis player 2 dz)
+    ;; MOVE-AXIS zeroes the velocity component it was blocked on.
+    (when (and can-step (or (/= (vx vel) vx0) (/= (vz vel) vz0)))
+      (let ((px (vx feet)) (pz (vz feet)) (pvx (vx vel)) (pvz (vz vel))
+            (plain (horizontal-distance-squared feet x0 z0)))
+        (setf (vx feet) x0 (vy feet) y0 (vz feet) z0 (vx vel) vx0 (vy vel) vy0 (vz vel) vz0)
+        (move-axis player 1 (float *step-height* 0f0))
+        (move-axis player 0 dx)
+        (move-axis player 2 dz)
+        (move-axis player 1 (- y0 (vy feet)))
+        (if (< (+ plain 1f-8) (horizontal-distance-squared feet x0 z0))
+            (decf (eye player) (- (vy feet) y0))
+            (setf (vx feet) px (vy feet) y0 (vz feet) pz
+                  (vx vel) pvx (vy vel) vy0 (vz vel) pvz
+                  (grounded player) NIL))))))
+
+(defun snap-to-ground (player)
+  "Keep a walking player on the floor when it drops away by up to *STEP-HEIGHT*
+(walking down steps) instead of letting them fall off each one."
+  (let* ((feet (feet player)) (vel (velocity player))
+         (y0 (vy feet)) (vy0 (vy vel)))
+    (move-axis player 1 (- (float *step-height* 0f0)))
+    (if (grounded player)
+        (incf (eye player) (- y0 (vy feet)))
+        (setf (vy feet) y0 (vy vel) vy0))))
+
 (define-handler (player tick) (dt)
   (let* ((dt (min dt 0.05))
          (vel (velocity player))
@@ -114,10 +152,13 @@
     (when (and (grounded player) (retained :space) (not crouching))
       (setf (vy vel) (float *jump-speed* 0f0)))
     (decf (vy vel) (* *gravity* dt))
-    (setf (grounded player) NIL)
-    (move-axis player 0 (* (vx vel) dt))
-    (move-axis player 2 (* (vz vel) dt))
-    (move-axis player 1 (* (vy vel) dt))
+    ;; Steps only while walking: not mid-air, and not on the frame a jump starts.
+    (let ((walking (and (grounded player) (<= (vy vel) 0))))
+      (setf (grounded player) NIL)
+      (move-horizontal player (* (vx vel) dt) (* (vz vel) dt) walking)
+      (move-axis player 1 (* (vy vel) dt))
+      (when (and walking (not (grounded player)))
+        (snap-to-ground player)))
     (when (< (vy (feet player)) *kill-height*)
       (respawn player))
     ;; Ease the eye toward standing or crouching height, then place the camera.

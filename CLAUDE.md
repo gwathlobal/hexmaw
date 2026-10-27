@@ -95,7 +95,13 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
 (north). Collision is axis-aligned boxes in `*solids*`, resolved one axis at a time.
-There is no step-up yet: anything taller than the floor needs a jump.
+A walking player steps up and down ledges of up to `*step-height*` (0.45 m); anything
+taller needs a jump (0.45 m is also the most a block can rise per step in level design).
+On a step the camera holds its height and eases to the new one.
+
+To test movement without a mouse or keyboard, hold keys from the eval server:
+`tools/hd '(game (setf (vy (rotation *player*)) 0.0 (retained :w) t))'`, wait, then
+`(setf (retained :w) nil)` and check `tools/hd status`. Yaw 0 faces −Z, π/2 faces +X.
 
 Controls: click the window to capture the mouse, Esc to release. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, F12 for a screenshot.
