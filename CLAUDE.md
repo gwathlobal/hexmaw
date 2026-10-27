@@ -104,6 +104,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   Assets live in `data/` (Trial pool `hexmaw`).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
   death and revival), `*creatures*` for hit tests, and the `imp`.
+- `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
+  `seal-connector`); see "Level blocks" below.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, and the `bolt`. A new effect kind is a method on `apply-effect`.
 - `src/hud.lisp`: HP and mana bars in the lower-left corner. HUD pieces are `hud-element`
@@ -138,6 +140,28 @@ other side. Generated sheets aren't always consistent (the imp's back-quarter fa
 right), so look at each view and pass the odd ones to `--mirror`. To check angle
 selection in game, orbit the camera around the sprite and screenshot each 45°.
 Billboards have no collision yet.
+
+## Level blocks
+
+Blocks are hand-authored pieces of dungeon, one `.glb` each in `data/blocks/`, drawn
+with the greybox shader in their material colours. Authoring conventions (Blender or
+`tools/make_test_block.py`, which generates `test-room.glb` as a stand-in):
+
+- Metres, +Y up, the block's origin at its centre on the floor.
+- Every mesh object is drawn and its bounding box is a solid, unless its name starts
+  with `deco_` (drawn, no collision). Model collision as boxes: a sloped or L-shaped
+  object's bounding box is the whole box around it.
+- Empties named `connector_<anything>` mark doorways, on the outer face of the wall.
+  A connector faces the direction from the origin to it, snapped to N/E/S/W. Doorways
+  are 3 × 3 m (`*doorway-width*`, `*doorway-height*`).
+- Empties named `spawn_<monster>` (e.g. `spawn_imp`) place a monster facing the
+  empty's −Z.
+- A material's base colour is the piece's colour; textures aren't read yet.
+
+`(attach-block 'test-room container "connector_south" :at point :facing :south)` places a
+block so that connector sits at `point`, opening toward `:south`, and returns the block's
+connectors in world space for the next block or `seal-connector`. Blocks turn in quarter
+turns only. Re-saving a `.glb` and running `tools/hd reset` picks up the new version.
 
 Controls: click the window to capture the mouse, Esc to release. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, left click to cast the bolt, F12 for a screenshot.

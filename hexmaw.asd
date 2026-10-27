@@ -7,6 +7,7 @@
                (:file "greybox")
                (:file "sprite")
                (:file "creature")
+               (:file "blocks")
                (:file "spells")
                (:file "player")
                (:file "hud")
@@ -15,4 +16,5 @@
   :depends-on (:trial
                :trial-glfw
                :trial-png
+               :trial-gltf
                :sb-bsd-sockets))

@@ -32,10 +32,15 @@
     (add-box container 6.5 0 -5  8 0.4 -3.5 :color *platform-color*)
     ;; An imp in the middle of the hall, facing the spawn point.
     (spawn-creature (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
-    ;; Corridor north, 3 m wide, 3 m tall, 14 m long, dead end.
+    ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))
       (add-box container -1.5 -0.5 z1  1.5 0 z0 :color *floor-color*)
       (add-box container -1.5 3 z1  1.5 3.5 z0 :color *ceiling-color*)
       (add-box container (- -1.5 w) 0 z1  -1.5 3 z0 :color *wall-color*)
       (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :color *wall-color*)
-      (add-box container -1.5 0 (- z1 w)  1.5 3 z1 :color *wall-color*))))
+      ;; The test block (data/blocks/test-room.glb) at the corridor's end, attached by
+      ;; its south doorway. Its other doorways are walled off for now.
+      (dolist (c (attach-block 'test-room container "connector_south" :at (vec 0 0 z1) :facing :south))
+        (destructuring-bind (name position direction) c
+          (unless (string-equal name "connector_south")
+            (seal-connector container position direction)))))))
