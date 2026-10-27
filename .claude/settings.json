@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/tools/claude-reload-hook.sh",
+            "timeout": 90,
+            "statusMessage": "Reloading into the running game"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+(in-package #:hexmaw)
+
+(defclass main (trial:main)
+  ()
+  (:default-initargs
+   :context '(:title "hexmaw" :width 1280 :height 720)))
+
+(defvar *player* NIL)
+
+(defmethod setup-scene ((main main) scene)
+  (build-level scene)
+  ;; A scene reload makes a fresh player; carry over where it stood and looked.
+  (let ((old *player*)
+        (new (make-instance 'player)))
+    (when old
+      (v<- (feet new) (feet old))
+      (v<- (rotation new) (rotation old))
+      (setf (mouse-look new) (mouse-look old)))
+    (setf *player* new)
+    (enter new scene))
+  (setf *render-pass* (make-instance 'render-pass))
+  (enter *render-pass* scene))
+
+(defmethod update :around ((main main) tt dt fc)
+  (setf *game-thread* (bt:current-thread))
+  (handler-bind ((error (lambda (e) (guard-runtime-error e :update))))
+    (call-next-method)))
+
+(defmethod update :after ((main main) tt dt fc)
+  ;; Clear to the fog colour so geometry fades into the background.
+  (when *render-pass*
+    (let ((clear (clear-color *render-pass*)))
+      (setf (vx clear) (vx *fog-color*) (vy clear) (vy *fog-color*) (vz clear) (vz *fog-color*) (vw clear) 1.0))))
+
+(defmethod render :around ((main main) target)
+  (handler-bind ((error (lambda (e) (guard-runtime-error e :render))))
+    (call-next-method)))
+
+(defun status ()
+  "One-line summary of the running game, for agents and the REPL."
+  (if (game-running-p)
+      (let* ((feet (feet *player*)) (rot (rotation *player*))
+             (now (get-internal-real-time))
+             (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
+                               *runtime-errors*)))
+        (format NIL "running; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a; ~
+                     ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
+                (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
+                active (length *runtime-errors*)))
+      "not running"))
+
+(defun launch (&rest args)
+  (apply #'trial:launch 'main args))
+
+(defun dev-launch ()
+  "Entry point for run.sh: eval server (and Swank if asked), then the game.
+Quits the process when the window closes."
+  (start-eval-server)
+  (let ((swank-port (env-integer "HEXMAW_SWANK_PORT")))
+    (when swank-port
+      (ql:quickload :swank :silent T)
+      (uiop:symbol-call :swank :create-server :port swank-port :dont-close T)))
+  (unwind-protect (launch)
+    (stop-eval-server)
+    (uiop:quit 0)))

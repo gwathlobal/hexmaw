@@ -1,0 +1,13 @@
+# Project-local Quicklisp (Trial comes from the Shirakumo dist)
+/.ql/
+
+# Compiled Lisp
+*.fasl
+*.fas
+*.lx64fsl
+
+# Runtime output
+/screenshots/
+/bin/
+*.log
+.cache/
