@@ -18,11 +18,14 @@
 (defparameter *player-radius* 0.3)
 (defparameter *player-height* 1.8)
 (defparameter *mouse-sensitivity* 0.0025)
+(defparameter *player-max-health* 100)
 (defparameter *max-mana* 50.0)
 (defparameter *mana-regen* 8.0 "Mana per second.")
 (defparameter *cast-cooldown* 0.35 "Seconds between casts.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
+
+(defvar *player* NIL "The player in the current scene.")
 
 (defclass player (fps-camera)
   ((name :initform :player)
@@ -34,6 +37,7 @@
    (grounded :initform NIL :accessor grounded)
    (eye :initform *eye-height* :accessor eye)
    (mouse-look :initform NIL :accessor mouse-look)
+   (health :initform *player-max-health* :accessor health)
    (mana :initform *max-mana* :accessor mana)
    (cast-timer :initform 0.0 :accessor cast-timer)))
 

@@ -9,6 +9,7 @@
                (:file "creature")
                (:file "spells")
                (:file "player")
+               (:file "hud")
                (:file "level")
                (:file "main"))
   :depends-on (:trial

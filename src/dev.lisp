@@ -209,7 +209,16 @@ with the runtime errors if the game starts failing once it is loaded."
       (unless output
         (reload-failed "~a did not compile; nothing was loaded and the game runs the previous code.~%~a" name log))
       ;; Trial shadows LOAD with a generic function for assets.
-      (load-and-check (lambda () (cl:load output)) name log))))
+      (let ((result (load-and-check (lambda () (cl:load output)) name log)))
+        ;; Redefining a loaded asset reloads it, and entities already using it stop
+        ;; drawing until the scene is rebuilt.
+        (cond ((and (game-running-p) (defines-assets-p source))
+               (reload-scene)
+               (format NIL "~a~%Scene reloaded because this file defines assets." result))
+              (T result))))))
+
+(defun defines-assets-p (source)
+  (search "(define-asset " (uiop:read-file-string source) :test #'char-equal))
 
 (defun reload-system ()
   "Reload the whole system through ASDF, for changes that affect other files (macros, the .asd)."

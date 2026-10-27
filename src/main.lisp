@@ -5,8 +5,6 @@
   (:default-initargs
    :context '(:title "hexmaw" :width 1280 :height 720)))
 
-(defvar *player* NIL)
-
 (defmethod setup-scene ((main main) scene)
   (build-level scene)
   ;; A scene reload makes a fresh player; carry over where it stood and looked.
@@ -18,6 +16,7 @@
       (setf (mouse-look new) (mouse-look old)))
     (setf *player* new)
     (enter new scene))
+  (add-hud scene)
   ;; Projectiles are spawned mid-game; load their shader and mesh up front.
   (preload 'spell-projectile scene)
   (setf *render-pass* (make-instance 'render-pass))
@@ -47,9 +46,10 @@
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a mana ~d; ~
+        (format NIL "running; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a hp ~d mana ~d; ~
                      creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
-                (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*) (floor (mana *player*))
+                (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
+                (health *player*) (floor (mana *player*))
                 (map 'list (lambda (c)
                              (format NIL "~(~a~) ~:[~d/~d hp~;dead~*~*~] at (~,2f ~,2f)"
                                      (type-of c) (dead c) (health c) (max-health c)

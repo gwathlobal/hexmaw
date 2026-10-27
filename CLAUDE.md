@@ -83,6 +83,10 @@ thread. Check the game's output, then restart `./run.sh`.
 - Changing a macro or an inline function: run `tools/hd reload-system` so callers
   recompile.
 - Shader code (`define-class-shader`) refreshes automatically on reload.
+- Reloading a file that contains `define-asset` makes Trial reload those assets, which
+  stops entities already using them from drawing. The reload tool rebuilds the scene
+  automatically for such files and says so ("Scene reloaded because this file defines
+  assets"); creatures reset with it.
 - Trial shadows some CL symbols with its own generics, `load` among them. Use
   `cl:load` for files.
 
@@ -102,6 +106,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   death and revival), `*creatures*` for hit tests, and the `imp`.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, and the `bolt`. A new effect kind is a method on `apply-effect`.
+- `src/hud.lisp`: HP and mana bars in the lower-left corner. HUD pieces are `hud-element`
+  entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
+  on whole pixels, since a half-pixel position drops an edge row.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
