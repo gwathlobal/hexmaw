@@ -51,7 +51,8 @@
 (define-handler (player mouse-move) (old-pos pos)
   (when (mouse-look player)
     (let ((rot (rotation player)))
-      (setf (vx rot) (max -1.55 (min 1.55 (+ (vx rot) (* *mouse-sensitivity* (- (vy pos) (vy old-pos)))))))
+      ;; Mouse Y grows upward here, while positive pitch looks down; hence the minus.
+      (setf (vx rot) (max -1.55 (min 1.55 (- (vx rot) (* *mouse-sensitivity* (- (vy pos) (vy old-pos)))))))
       (setf (vy rot) (mod (+ (vy rot) (* *mouse-sensitivity* (- (vx pos) (vx old-pos)))) #.(float (* 2 pi) 0f0))))))
 
 (defun overlapping-solid (feet)

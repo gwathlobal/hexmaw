@@ -14,6 +14,7 @@ one bolt spell with a hit reaction.
 
 Opens the game window and an eval server on `127.0.0.1:7171` (`HEXMAW_EVAL_PORT` to
 change it). `HEXMAW_SWANK_PORT=4005 ./run.sh` also starts Swank for an editor.
+The game opens in a 1280×720 window; `HEXMAW_FULLSCREEN=1 ./run.sh` starts it fullscreen.
 The process exits when the window closes.
 
 Every Lisp session on this project goes through `boot.lisp`:

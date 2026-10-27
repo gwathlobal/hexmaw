@@ -49,7 +49,16 @@
                 active (length *runtime-errors*)))
       "not running"))
 
+(defparameter *fullscreen* NIL
+  "Start fullscreen. HEXMAW_FULLSCREEN=1 turns it on for one run.")
+
 (defun launch (&rest args)
+  ;; Trial's default settings are fullscreen at monitor resolution. Override in
+  ;; memory only: saving would write ~/.config/shirakumo/trial/settings.lisp,
+  ;; which every Trial game shares.
+  (let ((org.shirakumo.fraf.trial::*save-settings* NIL))
+    (setf (setting :display :fullscreen)
+          (or *fullscreen* (eql 1 (env-integer "HEXMAW_FULLSCREEN")))))
   (apply #'trial:launch 'main args))
 
 (defun dev-launch ()
