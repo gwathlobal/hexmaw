@@ -73,6 +73,13 @@ thread. Check the game's output, then restart `./run.sh`.
 - `defconstant` can't be redefined. Don't use it for anything you might change.
 - Changes to `build-level`, `setup-scene` or an entity's initforms only affect objects
   created afterwards. Run `tools/hd reset` to see them.
+- A slot added to a live class gets its `:initform`, but `initialize-instance :after`
+  doesn't run again, so slots it fills stay unbound on existing objects (expect
+  "slot is unbound" runtime errors). Run `tools/hd reset`.
+- Something spawned mid-game (projectiles) needs `(preload 'class scene)` in
+  `setup-scene`, or its shader isn't loaded when it first appears.
+- A subclass's `define-handler` replaces the parent's handler for that event. Use a
+  qualifier, as in `(define-handler (creature tick :after) ...)`, to add to it.
 - Changing a macro or an inline function: run `tools/hd reload-system` so callers
   recompile.
 - Shader code (`define-class-shader`) refreshes automatically on reload.
@@ -89,8 +96,12 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
 - `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`).
-- `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring) and the `imp`.
+- `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint).
   Assets live in `data/` (Trial pool `hexmaw`).
+- `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
+  death and revival), `*creatures*` for hit tests, and the `imp`.
+- `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
+  projectile delivery, and the `bolt`. A new effect kind is a method on `apply-effect`.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
@@ -122,4 +133,8 @@ selection in game, orbit the camera around the sprite and screenshot each 45°.
 Billboards have no collision yet.
 
 Controls: click the window to capture the mouse, Esc to release. WASD, Shift to run,
-Space to jump, C or Ctrl to crouch, F12 for a screenshot.
+Space to jump, C or Ctrl to crouch, left click to cast the bolt, F12 for a screenshot.
+
+To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
+fires from the player's view; `(hurt (aref *creatures* 0) 0)` triggers a hit reaction;
+`tools/hd status` shows mana and each creature's health.

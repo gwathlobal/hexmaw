@@ -18,6 +18,8 @@
       (setf (mouse-look new) (mouse-look old)))
     (setf *player* new)
     (enter new scene))
+  ;; Projectiles are spawned mid-game; load their shader and mesh up front.
+  (preload 'spell-projectile scene)
   (setf *render-pass* (make-instance 'render-pass))
   (enter *render-pass* scene))
 
@@ -27,6 +29,8 @@
     (call-next-method)))
 
 (defmethod update :after ((main main) tt dt fc)
+  (when (frozen-p)
+    (setf *hit-stop* (max 0.0 (- *hit-stop* dt))))
   ;; Clear to the fog colour so geometry fades into the background.
   (when *render-pass*
     (let ((clear (clear-color *render-pass*)))
@@ -43,9 +47,14 @@
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a; ~
-                     ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
-                (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
+        (format NIL "running; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a mana ~d; ~
+                     creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
+                (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*) (floor (mana *player*))
+                (map 'list (lambda (c)
+                             (format NIL "~(~a~) ~:[~d/~d hp~;dead~*~*~] at (~,2f ~,2f)"
+                                     (type-of c) (dead c) (health c) (max-health c)
+                                     (vx (location c)) (vz (location c))))
+                     *creatures*)
                 active (length *runtime-errors*)))
       "not running"))
 

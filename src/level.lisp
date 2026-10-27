@@ -11,7 +11,8 @@
 (defparameter *platform-color* (vec 0.4 0.46 0.56))
 
 (defun build-level (container)
-  (setf (fill-pointer *solids*) 0)
+  (setf (fill-pointer *solids*) 0
+        (fill-pointer *creatures*) 0)
   (let ((h 4.0) (w 0.5))
     ;; Hall: floor, ceiling, east/west/south walls, north wall with a doorway.
     (add-box container -10 -0.5 -10  10 0 10 :color *floor-color*)
@@ -30,7 +31,7 @@
     (add-box container 5 0 -5  6.5 0.8 -3.5 :color *platform-color*)
     (add-box container 6.5 0 -5  8 0.4 -3.5 :color *platform-color*)
     ;; An imp in the middle of the hall, facing the spawn point.
-    (enter (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
+    (spawn-creature (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long, dead end.
     (let ((z0 (- -10 w)) (z1 -25))
       (add-box container -1.5 -0.5 z1  1.5 0 z0 :color *floor-color*)

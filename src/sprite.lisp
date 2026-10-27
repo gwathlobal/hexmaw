@@ -30,7 +30,9 @@
    (sprite-height :initarg :sprite-height :initform 1.5 :accessor sprite-height)
    (view-index :initform 0 :accessor view-index)
    (mirrored :initform NIL :accessor mirrored)
-   (frame-uv :initform (vec4 0 0 1 1) :reader frame-uv)))
+   (frame-uv :initform (vec4 0 0 1 1) :reader frame-uv)
+   (tint :initform (vec4 0 0 0 0) :reader tint
+         :documentation "RGB mixed over the sprite by A, for hit flashes and the like.")))
 
 (defmethod initialize-instance :after ((sprite billboard) &key)
   (let ((atlas (atlas sprite))
@@ -78,7 +80,8 @@ the camera is on the side that needs the mirrored view."
 
 (defmethod render :before ((sprite billboard) (program shader-program))
   (set-fog-uniforms program)
-  (setf (uniform program "frame_uv") (frame-uv sprite)))
+  (setf (uniform program "frame_uv") (frame-uv sprite))
+  (setf (uniform program "tint") (tint sprite)))
 
 (define-class-shader (billboard :vertex-shader)
   "layout (location = TRIAL_V_UV) in vec2 in_uv;
@@ -95,21 +98,13 @@ void main(){
 uniform vec3 fog_color;
 uniform float fog_start;
 uniform float fog_end;
+uniform vec4 tint;
 out vec4 color;
 
 void main(){
   maybe_call_next_method();
   if(color.a < 0.5) discard;
+  color.rgb = mix(color.rgb, tint.rgb, tint.a);
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);
 }")
-
-;;; The imp.
-
-(defparameter *imp-height* 1.5
-  "Imp height in metres, horns to feet. The player's eye is at 1.6.")
-
-(define-shader-entity imp (billboard)
-  ((texture :initform (// 'hexmaw 'imp-turnaround))
-   (atlas :initform (read-atlas "data/sprites/imp/turnaround.lisp"))
-   (sprite-height :initform *imp-height*)))

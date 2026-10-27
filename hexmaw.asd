@@ -6,6 +6,8 @@
                (:file "dev")
                (:file "greybox")
                (:file "sprite")
+               (:file "creature")
+               (:file "spells")
                (:file "player")
                (:file "level")
                (:file "main"))

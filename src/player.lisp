@@ -18,6 +18,9 @@
 (defparameter *player-radius* 0.3)
 (defparameter *player-height* 1.8)
 (defparameter *mouse-sensitivity* 0.0025)
+(defparameter *max-mana* 50.0)
+(defparameter *mana-regen* 8.0 "Mana per second.")
+(defparameter *cast-cooldown* 0.35 "Seconds between casts.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
 
@@ -30,7 +33,9 @@
    (velocity :initform (vec 0 0 0) :accessor velocity)
    (grounded :initform NIL :accessor grounded)
    (eye :initform *eye-height* :accessor eye)
-   (mouse-look :initform NIL :accessor mouse-look)))
+   (mouse-look :initform NIL :accessor mouse-look)
+   (mana :initform *max-mana* :accessor mana)
+   (cast-timer :initform 0.0 :accessor cast-timer)))
 
 (defun capture-mouse (player)
   (lock-cursor (context +main+))
@@ -40,9 +45,30 @@
   (show-cursor (context +main+))
   (setf (mouse-look player) NIL))
 
-(define-handler (player mouse-press) ()
-  (unless (mouse-look player)
-    (capture-mouse player)))
+(defun look-direction (player)
+  "Unit vector the player is looking along, pitch included."
+  (let ((pitch (vx (rotation player)))
+        (yaw (vy (rotation player))))
+    (vec (* (sin yaw) (cos pitch)) (- (sin pitch)) (- (* (cos yaw) (cos pitch))))))
+
+(defun player-cast (player name)
+  "Cast spell NAME from just below the eye toward where the player looks, if mana and
+the cooldown allow. Returns true if it was cast."
+  (let* ((spell (find-spell name))
+         (cost (spell-cost spell)))
+    (when (and (<= (cast-timer player) 0) (<= cost (mana player)))
+      (decf (mana player) cost)
+      (setf (cast-timer player) *cast-cooldown*)
+      (let* ((dir (look-direction player))
+             (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
+        (cast-spell spell origin dir (container player)))
+      T)))
+
+(define-handler (player mouse-press) (button)
+  (cond ((not (mouse-look player))
+         (capture-mouse player))
+        ((eq button :left)
+         (player-cast player 'bolt))))
 
 (define-handler (player key-press) (key)
   (case key
@@ -58,16 +84,8 @@
 
 (defun overlapping-solid (feet)
   "Return the first solid the player box at FEET overlaps, or NIL."
-  (let* ((r (float *player-radius* 0f0))
-         (x0 (- (vx feet) r)) (x1 (+ (vx feet) r))
-         (y0 (vy feet)) (y1 (+ (vy feet) (float *player-height* 0f0)))
-         (z0 (- (vz feet) r)) (z1 (+ (vz feet) r))
-         (eps 1f-4))
-    (loop for s across *solids*
-          when (and (< x0 (- (aref s 3) eps)) (> x1 (+ (aref s 0) eps))
-                    (< y0 (- (aref s 4) eps)) (> y1 (+ (aref s 1) eps))
-                    (< z0 (- (aref s 5) eps)) (> z1 (+ (aref s 2) eps)))
-          return s)))
+  (solid-overlapping (vx feet) (vy feet) (vz feet)
+                     (float *player-radius* 0f0) (float *player-height* 0f0)))
 
 (defun move-axis (player axis delta)
   "Move along AXIS (0 x, 1 y, 2 z) by DELTA, stopping flush against solids."
@@ -126,6 +144,10 @@ On a step the eye keeps its height and eases to the new one."
         (setf (vy feet) y0 (vy vel) vy0))))
 
 (define-handler (player tick) (dt)
+  (when (frozen-p)
+    (return))
+  (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
+        (cast-timer player) (max 0.0 (- (cast-timer player) dt)))
   (let* ((dt (min dt 0.05))
          (vel (velocity player))
          (yaw (vy (rotation player)))
