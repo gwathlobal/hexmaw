@@ -20,7 +20,10 @@ edge: each frame is still centred horizontally on its cell, but its lowest solid
 goes on the strip's bottom edge, wherever the generator happened to cut the arms. --pixel is the
 size of one art pixel in the sheet (generated pixel art is upscaled); the frames
 are downscaled by it with nearest-neighbour, the same for all animations, so
-their sizes stay comparable.
+their sizes stay comparable. Generated art is often noisy below its pixel grid; --filter box
+averages each art pixel's source pixels instead of picking one, and --colors N maps every
+frame of an animation onto one N-colour palette taken from its own pixels, which merges
+the speckle into flat pixel-art colours.
 
 Keying removes the magenta and the soft glow that generators paint into it:
 fire, embers and smoke never have much more blue than green, a magenta blend
@@ -130,6 +133,9 @@ def main():
     ap.add_argument("--exact", action="store_true",
                     help="the sheet is a render on pure magenta (255, 0, 255): key only that, with no "
                          "rim cut or despill, which would eat a render's outlines and bluish steel")
+    ap.add_argument("--filter", choices=("nearest", "box"), default="nearest",
+                    help="downscale by picking one source pixel per art pixel, or by averaging them")
+    ap.add_argument("--colors", type=int, help="reduce each animation to a palette of this many colours")
     ap.add_argument("--min-pixels", type=int, default=50,
                     help="cells with fewer opaque pixels than this after keying are empty")
     args = ap.parse_args()
@@ -156,7 +162,9 @@ def main():
                 r, g, b, a = px[x, y]
                 if a and b > g:
                     # Despill: edges and smoke blended with magenta turn pink; pull blue down to green.
-                    px[x, y] = (r, g, g, 255)
+                    # A dark pixel is an outline blended with magenta: pull red down too, or it
+                    # rims the sprite in dark red.
+                    px[x, y] = (min(r, g + 24) if r < 96 and b > g + 16 else r, g, g, 255)
 
     frames = []
     for box in found:

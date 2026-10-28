@@ -199,20 +199,25 @@ cyan line between:
 python3 tools/slice_frames.py "Fire Hands Sheet.png" data/sprites/hands --pixel 4 --anchor bottom hands:12
 ```
 
-The sword is one 12-frame strip (4 idle, then an 8-frame slash), each cell a whole 16:9
-screen (about 328 × 250 art pixels, the size `*sword-height*` expects). It starts as a 3D
+The sword is one 12-frame strip (4 idle, then an 8-frame slash), each cell about 326 × 250
+art pixels (the height `*sword-height*` expects), drawn with square pixels
+(`*sword-stretch*` 1.0, unlike the hands). It starts as a 3D
 model posed in Blender: `art/sword.blend`, rigged and rendered by `tools/blender_sword.py`
 (its docstring covers build, update, reframe and render; `tools/blender` runs the flatpak on
 the NVIDIA GPU). Close the Blender window, or File → Revert, after a script changes the
 .blend, or the window's next save undoes it. The render at art scale is a 4 × 3 sheet,
-which an image generator restyles; `art/Sword Sheet.webp` is that restyle:
+which an image generator restyles; `art/Armored Gauntlet Sword Sprite Sheet.png` is that
+restyle. Save the generator's download into the project: an image pasted into chat arrives
+shrunk and recompressed.
 
 ```bash
 tools/blender -b --python tools/blender_sword.py -- render art/sword.blend art/sword-pixel --height 250
-python3 tools/slice_frames.py "art/Sword Sheet.webp" data/sprites/sword --pixel 1.25 --margin 2 sword:12
+python3 tools/slice_frames.py "art/Armored Gauntlet Sword Sprite Sheet.png" data/sprites/sword --pixel 1.25 --margin 2 --filter box --colors 48 sword:12
 ```
 
-`--pixel` scales the restyled cells back to the render's size. To use the raw render instead,
+`--pixel` scales the restyled cells back to the render's size. Generated sheets are noisy
+below their pixel grid: `--filter box` averages instead of picking one source pixel, and
+`--colors 48` flattens the speckle onto one palette for all frames. To use the raw render instead,
 slice `art/sword-pixel/sheet.png` with `--exact --margin 0`; `--exact` keys only pure magenta
 and keeps the render's outlines and bluish steel.
 

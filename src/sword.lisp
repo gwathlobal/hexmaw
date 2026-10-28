@@ -31,7 +31,9 @@
 of the window height. Snaps to whole screen pixels per art pixel. The strip is a
 render framed to reach the screen's top edge (250 art pixels tall, 3 screen pixels
 each at 720), so the swing is cut only by the screen.")
-(defparameter *sword-stretch* 1.25 "Width over height of an art pixel on screen, as for the hands.")
+(defparameter *sword-stretch* 1.0
+  "Width over height of an art pixel on screen. Square, unlike the hands, so the sword
+keeps the proportions of its render and of the generator's restyle.")
 (defparameter *sword-drop* 6 "Art pixels the sword sits below the bottom edge.")
 (defparameter *sword-overhang* 6
   "Art pixels the strip reaches past the right edge. The arm runs off that edge in the
