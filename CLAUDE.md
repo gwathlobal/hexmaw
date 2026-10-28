@@ -330,6 +330,22 @@ python3 tools/stack_views.py "art/imp/Imp Attack Sheet.png" "art/imp/Red Imp Fou
 python3 tools/slice_frames.py "art/imp/Imp Attack Sheet.png" data/sprites/imp --pixel 8 --anchor bottom --filter box attack:20
 ```
 
+The flinch on a hit is 2 frames per view (jolt, then stagger), played over
+`*stagger-time*` instead of the old squash: `art/imp/hurt-<view>-N.png`, generated per view
+with `art/prompts/imp-hurt-common.txt`, `imp-hurt-layout.txt` and `imp-hurt-<view>.txt`
+(the other views add `imp-hurt-follow.txt` and reference the finished front,
+`hurt-front-3.png`). The generator draws every sheet about the same height whatever
+the reference's scale, so a sheet's scale can't be taken from its walk sheet; the
+buckled jolt frame is about 0.83 of standing height, hence `--height 640`:
+
+```bash
+python3 tools/stack_views.py "art/imp/Imp Hurt Sheet.png" art/imp/hurt-front-3.png art/imp/hurt-front-quarter-2.png art/imp/hurt-side-2.png art/imp/hurt-back-quarter-2.png art/imp/hurt-back-2.png --height 640 --mirror 4
+python3 tools/slice_frames.py "art/imp/Imp Hurt Sheet.png" data/sprites/imp --pixel 8 --anchor bottom --filter box hurt:10
+```
+
+To look at a flinch frame, `(setf *hit-stop* 1000.0)` and `(setf (stagger imp) 0.3)` (jolt)
+or `0.1` (stagger).
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The

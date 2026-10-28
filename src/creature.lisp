@@ -1,7 +1,7 @@
 (in-package #:hexmaw)
 
 ;;; Creatures: billboard monsters that can be hurt. A hit flashes the sprite,
-;;; squashes it in a flinch (stagger), slides it back along the blow (knockback)
+;;; plays its flinch (stagger; without a hurt animation, a squash), slides it back along the blow (knockback)
 ;;; and freezes the action for a moment (hit-stop). At zero health it plays its
 ;;; death animation and stays down as a corpse (or, without one, collapses into the
 ;;; floor); for now it then revives at its spawn point, so there is always
@@ -93,6 +93,9 @@ WALK-ANIMATION; NIL to attack in the standing pose.")
 billboard's view order. NIL to glide in the standing pose.")
    (stride :initarg :stride :initform 0.35 :accessor stride
            :documentation "Metres walked per walk animation frame.")
+   (hurt-animation :initarg :hurt-animation :initform NIL :accessor hurt-animation
+                   :documentation "Frame animation of the flinch, one sequence per view like
+WALK-ANIMATION, spread over *STAGGER-TIME*; NIL to squash the standing pose instead.")
    (knockback :initform (vec 0 0 0) :reader knockback)
    (stagger :initform 0.0 :accessor stagger)
    (flash :initform 0.0 :accessor flash)
@@ -112,7 +115,8 @@ corpse; NIL to collapse into the floor instead.")
 
 ;; Only the current texture gets loaded with the scene; the other strips have to be too.
 (defmethod stage :after ((creature creature) (area staging-area))
-  (dolist (name (list (death-animation creature) (walk-animation creature) (attack-animation creature)))
+  (dolist (name (list (death-animation creature) (walk-animation creature) (attack-animation creature)
+                    (hurt-animation creature)))
     (when name
       (stage (animation-texture (find-fx-animation name)) area))))
 
@@ -449,6 +453,9 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 (defun creature-walking-p (creature)
   (and (eq (brain creature) :walking) (not (dead creature)) (walk-animation creature)))
 
+(defun creature-hurting-p (creature)
+  (and (< 0 (stagger creature)) (not (dead creature)) (hurt-animation creature)))
+
 (defun creature-attacking-p (creature)
   (and (eq (brain creature) :attacking) (not (dead creature)) (attack-animation creature)))
 
@@ -480,7 +487,13 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
     (setf (vx scale) (* (vx base) (+ 1 (* s *stagger-squash* 0.7)))
           (vy scale) (* (vy base) (- 1 (* s *stagger-squash*)))
           (vz scale) (vz base))
-    (cond ((creature-attacking-p creature)
+    (cond ((creature-hurting-p creature)
+           ;; The frames carry the flinch, so no squash on top.
+           (let ((frames (floor (getf (animation-atlas (find-fx-animation (hurt-animation creature))) :frames)
+                                (length (getf (atlas creature) :views)))))
+             (show-view-frame creature (hurt-animation creature)
+                              (min (1- frames) (floor (* (- 1 s) frames))) 0.0)))
+          ((creature-attacking-p creature)
            (show-view-frame creature (attack-animation creature) (attack-frame creature) s))
           ((creature-walking-p creature)
            ;; The frame follows the distance walked, so feet don't skate.
@@ -542,6 +555,9 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
 ;; 110 px tall to fit the raised claw, with the standing imp 96 px like the walk's.
 ;; The frames run on the imp's ATTACK-FRAME-TIMES, so :FPS is unused.
 (define-fx-animation imp-attack "sprites/imp/attack" :size (* *imp-height* 110/96))
+;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*. Its cells
+;; are 80 px tall, the buckled jolt at the walk's scale (standing imp 96 px).
+(define-fx-animation imp-hurt "sprites/imp/hurt" :size (* *imp-height* 80/96))
 
 (define-shader-entity imp (creature)
   ((texture :initform (// 'hexmaw 'imp-turnaround))
@@ -550,6 +566,7 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
    (death-animation :initform 'imp-death)
    (walk-animation :initform 'imp-walk)
    (attack-animation :initform 'imp-attack)
+   (hurt-animation :initform 'imp-hurt)
    (attack-damage :initform '(6 10))
    (chase-speed :initform 2.6)
    (max-health :initform 30)))

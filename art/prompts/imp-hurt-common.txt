@@ -1,0 +1,5 @@
+Pixel-art sprite sheet: a 2-frame pain (flinch) animation of the red imp demon, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles. It plays for a third of a second when the imp is struck by a sword or a fire bolt.
+
+REFERENCE IMAGES, in the order attached:
+1. The imp's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: proportions, palette, horn shape, pointed ears, glowing yellow eyes, dark grey claws, arrow-tipped tail and shading style.
+2. The imp's walk cycle for THIS sheet's camera view. Match its camera angle, the direction the imp faces, its pixel size, outline weight, scale and ground line exactly.
