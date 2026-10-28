@@ -104,6 +104,12 @@ thread. Check the game's output, then restart `./run.sh`.
   until `tools/hd reset`. Only a definition at the start of a line counts.
 - Trial shadows some CL symbols with its own generics, `load` among them. Use
   `cl:load` for files.
+- Changing a `define-gl-struct` that a uniform buffer uses (`lamp-block` and its parts)
+  can't be reloaded live: the reload errors and the scene breaks. Restart `./run.sh`.
+  Trial only declares the last nested struct type a block uses in the shader, so keep
+  `lamp-block` to one array of structs (`lights`) and the rest plain arrays; and
+  `slot-offset` on a struct only takes single-value fields, so array offsets come from
+  its class (`put-rooms` in lights.lisp).
 
 ## Per-frame code
 
@@ -131,12 +137,33 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   torch is brighter. A world grid (`*wall-light-snap*`, `*sprite-light-snap*`) and
   brightness bands (`*wall-light-bands*`, `*sprite-light-bands*`) give a blocky retro look
   instead; 0, the default, turns them off. Torches stop flickering while the world is
-  frozen. No shadows: light goes through walls. Effects and the HUD stay unlit.
+  frozen. Rooms keep light from going through walls (`src/rooms.lisp`, below), but there
+  are no shadows within a room. Effects and the HUD stay unlit.
+- `src/rooms.lisp`: rooms and portals, so light stays in its room. A room (`add-room`) is a
+  box of air, its walls, floor and ceiling outside it; a portal (`add-portal`) is a box
+  joining two rooms, a doorway through a wall's thickness or a flat opening. `build-level`
+  empties `*rooms*` and `*portals*` and ends with `link-rooms`, which finds the room on each
+  side of every portal along its thinnest axis and drops the portals that don't lead into
+  a room on both sides (walled-off doorways). A placed block is one room, its bounds walls
+  and all, and each connector is a flat 3 × 3 m portal. A lamp lights the rooms it stands in
+  (one room, or both rooms of a portal it's in; a lamp with a source is found again each
+  frame) and the rooms beyond up to 4 portals within its radius, but only along lines that
+  pass through the opening: within the portal's thickness, the line must stay inside it.
+  `gather-lights` sends the rooms and portals the lit lamps need (up to `*max-rooms*` and
+  `*max-portals*`, 32 each), and each lamp gets a room mask and portal list. The shader
+  finds a wall's room just off it on the side it's seen from, and a sprite's at the middle
+  of its body (`light_probe`), so the whole sprite is lit alike. A surface in no room is lit
+  only by lamps in no room, and those light everything, so a level without rooms is lit as
+  before. Rooms shouldn't overlap. To check for leaks, put a strong lamp in one room
+  (`(add-lamp (vec x y z) (vec 4 0 0) 6.0)`) and look from the next; turning rooms off
+  (`(setf (fill-pointer *rooms*) 0)` and `(setf (located lamp) nil)` on every lamp) shows
+  what it would leak. `tools/hd reset` restores them.
 - `src/nav.lisp`: the nav grid, where creatures can stand and how they get around; see
   "Creature movement" below.
 - `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint, lit), and
   frame animations from `tools/slice_frames.py` strips (`define-fx-animation`).
-  Assets live in `data/` (Trial pool `hexmaw`).
+  Assets live in `data/` (Trial pool `hexmaw`, defined at the top of greybox.lisp,
+  the first file with an asset).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
   death and revival; wandering, hunting and attacking the player, and the walk and attack
   animations), `*creatures*` for hit tests, bodies (collision between actors), and the `imp`. A creature's
@@ -183,7 +210,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
 - `src/player.lisp`: first-person controller and box collision.
-- `src/level.lisp`: the greybox test level.
+- `src/level.lisp`: the greybox test level. A new room or doorway in it needs its
+  `add-room` / `add-portal`, or torches light through its walls.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
@@ -450,7 +478,9 @@ with the greybox shader in their material colours. Authoring conventions (Blende
   object's bounding box is the whole box around it.
 - Empties named `connector_<anything>` mark doorways, on the outer face of the wall.
   A connector faces the direction from the origin to it, snapped to N/E/S/W. Doorways
-  are 3 × 3 m (`*doorway-width*`, `*doorway-height*`).
+  are 3 × 3 m (`*doorway-width*`, `*doorway-height*`). Light passes between blocks only
+  through connectors: a block is one room for lighting, so its walls stop light from a
+  block stacked above, below or beside it.
 - Empties named `spawn_<monster>` (e.g. `spawn_imp`) place a monster facing the
   empty's −Z.
 - A material's base colour is the piece's colour; textures aren't read yet.

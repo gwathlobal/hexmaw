@@ -45,6 +45,14 @@ upstairs."
               for south = (- z1 1 (* tread (1- k)))
               for north = (if (= k steps) z0 (- south tread))
               do (add-box container x 0 north  shaft (* rise k) south :color *platform-color*))))
+    ;; Rooms, so the torches don't light through floors and walls, and the doorways
+    ;; between them: hall to lower room, lower room to shaft, shaft to upper room.
+    (add-room x0 0 z0  x1 3 z1)
+    (add-room x0 upper z0  x1 top z1)
+    (add-room (+ x1 w) 0 z0  shaft (+ top w) z1)
+    (add-portal 10 0 3.5  x0 3 6.5)
+    (add-portal x1 0 (- z1 2)  (+ x1 w) 3 z1)
+    (add-portal x1 upper z0  (+ x1 w) top (+ z0 2))
     (add-torch container (- x1 0.5) 2.2 4)
     (add-torch container (+ x0 0.5) (+ upper 2.0) 5)
     (add-torch container (- shaft 0.5) 4.5 6)
@@ -53,8 +61,12 @@ upstairs."
 (defun build-level (container)
   (setf (fill-pointer *solids*) 0
         (fill-pointer *creatures*) 0
-        (fill-pointer *lamps*) 0)
+        (fill-pointer *lamps*) 0
+        (fill-pointer *rooms*) 0
+        (fill-pointer *portals*) 0)
   (let ((h 4.0) (w 0.5))
+    (add-room -10 0 -10  10 h 10)
+    (add-portal -1.5 0 (- -10 w)  1.5 3 -10)
     ;; Hall: floor, ceiling, east/west/south walls, north wall with a doorway.
     (add-box container -10 -0.5 -10  10 0 10 :color *floor-color*)
     (add-box container -10 h -10  10 (+ h 0.5) 10 :color *ceiling-color*)
@@ -84,6 +96,7 @@ upstairs."
     (build-annex container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))
+      (add-room -1.5 0 z1  1.5 3 z0)
       (add-box container -1.5 -0.5 z1  1.5 0 z0 :color *floor-color*)
       (add-box container -1.5 3 z1  1.5 3.5 z0 :color *ceiling-color*)
       (add-box container (- -1.5 w) 0 z1  -1.5 3 z0 :color *wall-color*)
@@ -98,5 +111,6 @@ upstairs."
       ;; Two torches on the test room's side walls.
       (add-torch container -4.5 2.6 -30.5)
       (add-torch container 4.5 2.6 -30.5)))
-  ;; Last, once every solid is in.
+  ;; Last, once every solid, room and portal is in.
+  (link-rooms)
   (build-nav-grid))

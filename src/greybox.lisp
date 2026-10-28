@@ -5,6 +5,9 @@
 ;;; and distance fog hides the far end. Every parameter here is a DEFPARAMETER so
 ;;; it can be tuned live.
 
+;; The project's assets (data/). Defined here, in the first file that defines an asset.
+(define-pool hexmaw :path #p"../data/")
+
 (defparameter *fog-color* (vec 0.06 0.05 0.07))
 (defparameter *fog-start* 3.0)
 (defparameter *fog-end* 12.0)
@@ -14,18 +17,36 @@
 ;;; light falling on a world position, ambient plus the lights in the LAMP-BLOCK uniform
 ;;; buffer, which GATHER-LIGHTS (lights.lisp) fills once a frame for every lit shader. A light is down to half at LIGHT_FALLOFF metres and fades smoothly to
 ;;; nothing at its radius. Callers may snap the position (SNAP_POSITION) or step the
-;;; result into bands (BAND_LIGHT) for a retro look. No shadows: light goes through walls.
+;;; result into bands (BAND_LIGHT) for a retro look. Rooms (rooms.lisp) keep light in: a
+;;; light reaches its own rooms, and the rooms beyond their portals only through the
+;;; opening. No shadows within a room.
 
 ;; Up to 128 lights, the nearest first. The 128 must match *MAX-LIGHTS* (lights.lisp).
+;; ROOM-MASK has a bit per room that the light stands in, 0 for none (it then lights
+;; everything); PORTAL-IDS are the portals it shines through, -1 for none.
 (define-gl-struct lamp-light
   (sphere :vec4)
-  (color :vec3))
+  (color :vec3)
+  (room-mask :uint)
+  (portal-ids :ivec4))
 
+;; Rooms and portals are boxes, their corners in ROOM-LOWS and ROOM-HIGHS and so on, in
+;; plain arrays rather than arrays of structs: Trial declares only the last struct type
+;; a block uses in the shader. A portal's low W is the axis light crosses it along (0 to
+;; 2 for X to Z), and PORTAL-MASKS has the bits of the two rooms it joins. The 32s must
+;; match *MAX-ROOMS* and *MAX-PORTALS* (rooms.lisp).
 (define-gl-struct lamp-block
   (ambient-light :vec3)
   (camera-position :vec3)
   (light-falloff :float)
   (light-count :int)
+  (room-count :int)
+  (portal-count :int)
+  (room-lows (:array :vec4 32))
+  (room-highs (:array :vec4 32))
+  (portal-lows (:array :vec4 32))
+  (portal-highs (:array :vec4 32))
+  (portal-masks (:array :uint 32))
   (lights (:array (:struct lamp-light) 128)))
 
 (define-asset (hexmaw lamp-block) uniform-block
@@ -39,15 +60,63 @@
   "uniform float light_snap;
 uniform float light_bands;
 
+bool in_box(vec3 p, vec3 low, vec3 high){
+  return all(greaterThanEqual(p, low)) && all(lessThanEqual(p, high));
+}
+
+// Bits of the rooms Q is in: its room's, or both rooms' of the portal it is in.
+uint rooms_at(vec3 q){
+  uint mask = 0u;
+  for(int i = 0; i < room_count; ++i)
+    if(in_box(q, room_lows[i].xyz, room_highs[i].xyz)) mask |= 1u << uint(i);
+  for(int i = 0; i < portal_count; ++i)
+    if(in_box(q, portal_lows[i].xyz, portal_highs[i].xyz)) mask |= portal_masks[i];
+  return mask;
+}
+
+// True if the segment from A to B passes through portal I: wherever it is within the
+// portal's thickness, it is inside the opening, so it doesn't clip a wall beside it.
+bool through_portal(vec3 a, vec3 b, int i){
+  vec3 d = b - a;
+  d = mix(d, vec3(0.000001), lessThan(abs(d), vec3(0.000001)));
+  vec3 t0 = (portal_lows[i].xyz - a) / d;
+  vec3 t1 = (portal_highs[i].xyz - a) / d;
+  vec3 enter = min(t0, t1);
+  vec3 leave = max(t0, t1);
+  int k = int(portal_lows[i].w);
+  float from = max(enter[k], 0.0);
+  float to = min(leave[k], 1.0);
+  if(from > to) return false;
+  for(int j = 0; j < 3; ++j)
+    if(j != k && (enter[j] > from + 0.0001 || leave[j] < to - 0.0001)) return false;
+  return true;
+}
+
 // FACING 1 lights a surface with normal N by the angle to each light; 0 ignores the
-// angle, for sprites, which are flat cards standing in for round bodies.
-vec3 light_at(vec3 p, vec3 n, float facing){
+// angle, for sprites, which are flat cards standing in for round bodies. Q is the
+// point whose room decides which lights reach it: just off a wall on the side it is
+// seen from, or the middle of a sprite's body, so the whole sprite is lit alike.
+vec3 light_at(vec3 p, vec3 n, float facing, vec3 q){
   vec3 total = ambient_light;
+  uint here = rooms_at(q);
   for(int i = 0; i < light_count; ++i){
     vec3 d = lights[i].sphere.xyz - p;
     float dist = length(d);
     // Most lights reach only part of the view; skip them everywhere else.
     if(dist >= lights[i].sphere.w) continue;
+    uint mask = lights[i].room_mask;
+    if(mask != 0u && (mask & here) == 0u){
+      // Another room: only through a portal into this one. HERE has none of MASK's bits,
+      // so a portal with one of HERE's bits leads here from the light's side.
+      bool seen = false;
+      for(int k = 0; k < 4 && !seen; ++k){
+        int j = lights[i].portal_ids[k];
+        if(j < 0) break;
+        seen = (portal_masks[j] & here) != 0u
+            && through_portal(q, lights[i].sphere.xyz, j);
+      }
+      if(!seen) continue;
+    }
     float edge = dist / lights[i].sphere.w;
     // Inverse-square-like near the light, windowed to reach zero at the radius.
     float window = clamp(1.0 - edge * edge * edge * edge, 0.0, 1.0);
@@ -108,7 +177,7 @@ void main(){
   vec3 tangent = step(n, vec3(0.5));
   float d = min(min(mix(1.0, g.x, tangent.x), mix(1.0, g.y, tangent.y)), mix(1.0, g.z, tangent.z));
   float line = 1.0 - smoothstep(0.0, 0.02, d);
-  color.rgb *= shade * (1.0 - grid_strength * line) * band_light(light_at(snap_position(v_world_position), face, 1.0));
+  color.rgb *= shade * (1.0 - grid_strength * line) * band_light(light_at(snap_position(v_world_position), face, 1.0, v_world_position + face * 0.05));
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);
 }")

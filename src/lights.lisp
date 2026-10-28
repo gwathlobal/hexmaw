@@ -36,7 +36,13 @@ the hall about as bright as with Trial's renderer at 0.5.")
    (source :initarg :source :initform NIL :reader source
            :documentation "Entity the lamp follows; it goes out when the entity leaves the scene.")
    (camera-distance :initform 0.0 :accessor camera-distance
-                    :documentation "Metres from the camera, as of the last GATHER-LIGHTS.")))
+                    :documentation "Metres from the camera, as of the last GATHER-LIGHTS.")
+   (room-a :initform NIL :accessor room-a
+           :documentation "The room it stands in, or the first room of the portal it is in.")
+   (room-b :initform NIL :accessor room-b
+           :documentation "The second room of the portal it is in.")
+   (located :initform NIL :accessor located
+            :documentation "True once ROOM-A and ROOM-B are found; a lamp with a source is found again every frame.")))
 
 (defvar *lamps* (make-array 0 :adjustable T :fill-pointer T)
   "Every light in the level. BUILD-LEVEL empties it.")
@@ -91,15 +97,24 @@ the hall about as bright as with Trial's renderer at 0.5.")
   "The lamps that can light something visible this frame, nearest first.")
 (defvar *light-color* (vec3) "Scratch: colour of the light being sent.")
 
+(defun locate-lamp (lamp)
+  "Find the rooms LAMP shines in directly (rooms.lisp)."
+  (let ((at (location lamp)))
+    (multiple-value-bind (a b) (rooms-at (vx at) (vy at) (vz at))
+      (setf (room-a lamp) a (room-b lamp) b (located lamp) T))))
+
 (defun update-lamps ()
-  "Move lamps with a source onto it, and remove those whose source left the scene."
+  "Move lamps with a source onto it, remove those whose source left the scene, and find
+the rooms of those that moved or are new."
   (let ((j 0))
     (loop for lamp across *lamps*
           for source = (source lamp)
           do (cond ((null source)
+                    (unless (located lamp) (locate-lamp lamp))
                     (setf (aref *lamps* j) lamp) (incf j))
                    ((container source)
                     (v<- (location lamp) (location source))
+                    (locate-lamp lamp)
                     (setf (aref *lamps* j) lamp) (incf j))))
     (setf (fill-pointer *lamps*) j)))
 
@@ -135,9 +150,73 @@ surfaces. Insertion sort: the order barely changes from frame to frame."
         (cffi:mem-ref memory :float (+ offset 4)) (vy vector)
         (cffi:mem-ref memory :float (+ offset 8)) (vz vector)))
 
+;; These two take the block rather than its memory pointer, and get the pointer
+;; themselves: passing a raw pointer to a function that isn't inline boxes (allocates) it.
+(defun put-lamp-rooms (block light lamp)
+  "Write LAMP's room mask and the portals it shines through into LIGHT, its entry in
+LAMP-BLOCK, BLOCK, sending those rooms and portals too."
+  (let ((memory (memory-region-pointer (storage block)))
+        (mask 0)
+        (offset (slot-offset light 'portal-ids))
+        (n 0))
+    (declare (type (unsigned-byte 32) mask) (type fixnum n))
+    (flet ((add (room)
+             (when room
+               (let ((index (send-room room)))
+                 (when (<= 0 index) (setf mask (logior mask (ash 1 index))))))))
+      (add (room-a lamp))
+      (add (room-b lamp)))
+    ;; The portals out of its rooms that it reaches, up to the four LAMP-LIGHT holds.
+    (flet ((try (room)
+             (when room
+               (dolist (portal (portals room))
+                 (when (and (< n 4)
+                            (not (and (member (room-a lamp) (rooms portal))
+                                      (member (room-b lamp) (rooms portal))))
+                            (< (box-distance (box portal) (location lamp)) (radius lamp)))
+                   (let ((index (send-portal portal)))
+                     (when (<= 0 index)
+                       (setf (cffi:mem-ref memory :int (+ offset (* 4 n))) index)
+                       (incf n))))))))
+      (try (room-a lamp))
+      (try (room-b lamp)))
+    (loop for k from n below 4
+          do (setf (cffi:mem-ref memory :int (+ offset (* 4 k))) -1))
+    (setf (cffi:mem-ref memory :uint (slot-offset light 'room-mask)) mask)))
+
+(defun put-rooms (block)
+  "Write the rooms and portals sent this frame into LAMP-BLOCK, BLOCK."
+  ;; Every array element, a vec4 or a uint, takes 16 bytes. SLOT-OFFSET on the block
+  ;; only handles single values, so array offsets come from its class.
+  (flet ((array-offset (slot)
+           (+ (org.shirakumo.fraf.trial::base-offset block) (slot-offset (class-of block) slot))))
+    (let ((memory (memory-region-pointer (storage block)))
+          (room-lows (array-offset 'room-lows))
+          (room-highs (array-offset 'room-highs))
+          (portal-lows (array-offset 'portal-lows))
+          (portal-highs (array-offset 'portal-highs))
+          (portal-masks (array-offset 'portal-masks)))
+      (loop for room across *sent-rooms*
+            for at = (* 16 (buffer-index room))
+            do (put-box memory (+ room-lows at) (+ room-highs at) (box room)))
+      (loop for portal across *sent-portals*
+            for at = (* 16 (buffer-index portal))
+            do (put-box memory (+ portal-lows at) (+ portal-highs at) (box portal))
+               (setf (cffi:mem-ref memory :float (+ portal-lows at 12)) (float (axis portal) 0f0)
+                     (cffi:mem-ref memory :uint (+ portal-masks at))
+                     (let ((mask 0))
+                       (declare (type (unsigned-byte 32) mask))
+                       (dolist (room (rooms portal) mask)
+                         (when (<= 0 (buffer-index room))
+                           (setf mask (logior mask (ash 1 (buffer-index room)))))))))
+      (setf (cffi:mem-ref memory :int (slot-offset block 'room-count)) (length *sent-rooms*)
+            (cffi:mem-ref memory :int (slot-offset block 'portal-count)) (length *sent-portals*)))))
+
 (defun gather-lights ()
-  "Send the nearest lamps the fog doesn't hide to the LAMP-BLOCK uniform buffer."
+  "Send the nearest lamps the fog doesn't hide to the LAMP-BLOCK uniform buffer, with
+the rooms and portals they light."
   (update-lamps)
+  (clear-sent-rooms)
   (let ((buffer (// 'hexmaw 'lamp-block))
         (camera (location (camera (scene +main+)))))
     (when (allocated-p buffer)
@@ -161,5 +240,7 @@ surfaces. Insertion sort: the order barely changes from frame to frame."
                   (setf (cffi:mem-ref memory :float (+ offset 12)) (radius lamp)))
                 (v<- color (color lamp))
                 (nv* color (lamp-brightness lamp))
-                (put-floats memory (slot-offset light 'color) color)))))))))
+                (put-floats memory (slot-offset light 'color) color)
+                (put-lamp-rooms block light lamp)))
+            (put-rooms block)))))))
 

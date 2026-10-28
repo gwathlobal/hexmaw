@@ -136,8 +136,18 @@
 seen from above. Enters its pieces into CONTAINER, adds its solids to *SOLIDS* and spawns
 its monsters. Returns its connectors in world space: a list of (NAME POSITION DIRECTION)."
   (let ((def (find-block name))
-        (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0)))))
+        (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0))))
+        (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
+        (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (flet ((world (point) (nv+ (turn-point point turns) at)))
+      ;; The whole block is one room, walls and all, and its doorways are portals.
+      (dolist (piece (getf def :pieces))
+        (dolist (corner (getf piece :bounds))
+          (let ((p (world corner)))
+            (setf low (vmin low p) high (vmax high p)))))
+      (add-room (vx low) (vy low) (vz low) (vx high) (vy high) (vz high))
+      (dolist (c (getf def :connectors))
+        (add-doorway-portal (world (getf c :position)) (turn-direction (getf c :direction) turns)))
       (dolist (piece (getf def :pieces))
         (let ((tf (getf piece :transform)))
           (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
@@ -162,6 +172,15 @@ its monsters. Returns its connectors in world space: a list of (NAME POSITION DI
 
 (defparameter *doorway-width* 3.0 "Doorways are this wide and *DOORWAY-HEIGHT* tall in every block.")
 (defparameter *doorway-height* 3.0)
+
+(defun add-doorway-portal (position direction)
+  "A flat portal filling the doorway of a connector at POSITION facing DIRECTION. If
+nothing is attached there, LINK-ROOMS finds no room beyond and drops it."
+  (let ((x (vx position)) (y (vy position)) (z (vz position))
+        (half (/ *doorway-width* 2)))
+    (if (member direction '(:north :south))
+        (add-portal (- x half) y z (+ x half) (+ y *doorway-height*) z)
+        (add-portal x y (- z half) x (+ y *doorway-height*) (+ z half)))))
 
 (defun seal-connector (container position direction &key (color *wall-color*))
   "Wall off the doorway of a connector at POSITION facing DIRECTION, outside the block."

@@ -6,8 +6,6 @@
 ;;; come from tools/slice_turnaround.py, whose turned views all face image-left;
 ;;; they are mirrored when the camera is on the sprite's other side.
 
-(define-pool hexmaw :path #p"../data/")
-
 ;; A unit quad standing on its bottom edge, so a billboard's location is its feet.
 (define-asset (hexmaw billboard-quad) mesh
     (make-rectangle-mesh 1 1 :y 0.5))
@@ -110,12 +108,19 @@ side; negative du mirrors."
       (!qfrom-angle (orientation billboard) +vy+ (- (vy (rotation camera))))))
   (update-frame-uv billboard))
 
+(defvar *light-probe* (vec3) "Scratch: the point a sprite's light is decided at.")
+
 (defmethod render :before ((sprite billboard) (program shader-program))
   (set-fog-uniforms program)
   (setf (uniform program "light_snap") (float *sprite-light-snap* 0f0))
   (setf (uniform program "light_bands") (float *sprite-light-bands* 0f0))
   (setf (uniform program "frame_uv") (frame-uv sprite))
-  (setf (uniform program "tint") (tint sprite)))
+  (setf (uniform program "tint") (tint sprite))
+  ;; Rooms decide the light at the middle of the body, so the whole sprite is lit alike.
+  (let ((probe *light-probe*))
+    (v<- probe (location sprite))
+    (incf (vy probe) (* 0.5 (sprite-height sprite)))
+    (setf (uniform program "light_probe") probe)))
 
 (define-class-shader (billboard :vertex-shader)
   "layout (location = TRIAL_V_UV) in vec2 in_uv;
@@ -134,12 +139,13 @@ uniform vec3 fog_color;
 uniform float fog_start;
 uniform float fog_end;
 uniform vec4 tint;
+uniform vec3 light_probe;
 out vec4 color;
 
 void main(){
   maybe_call_next_method();
   if(color.a < 0.5) discard;
-  color.rgb *= band_light(light_at(snap_position(v_world_position), vec3(0), 0.0));
+  color.rgb *= band_light(light_at(snap_position(v_world_position), vec3(0), 0.0, light_probe));
   color.rgb = mix(color.rgb, tint.rgb, tint.a);
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);
