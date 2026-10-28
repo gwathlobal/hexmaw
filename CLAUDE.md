@@ -195,6 +195,31 @@ an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one,
 `(hide-nav)` or a reset clears them. `tools/hd status` shows each creature's `brain`
 (`idle` or `walking`).
 
+## Generating art
+
+`tools/gen_image.py` generates images with OpenAI's image models, so prompts don't need
+to go through ChatGPT by hand. With `--ref` images (a design reference, a turnaround,
+a Blender render) it restyles or extends them; without, it generates from the prompt alone.
+Output lands at full resolution where you name it, with a `<stem>.prompt.json` beside it
+recording the prompt, references and options:
+
+```bash
+tools/gen_image.py art/imp/attack-1.png --prompt-file art/prompts/imp-attack.txt --ref "art/imp/Four-frame pixel imp walk cycle (frame 1).png" --size 1536x1024
+```
+
+By default it goes through the Codex CLI (`codex exec`, signed in with the ChatGPT
+account), whose built-in image tool counts against the ChatGPT plan instead of being
+billed. Codex runs locked down (no shell, plugins or browser) in a temp folder. One image
+per run, about 45 s, so run it in the background; `-n 3` makes three runs. Size and
+background are requests in the prompt (1536x1024 came back exact), and `--quality` does
+nothing there. `--backend api` calls the paid Image API instead (key in `$OPENAI_API_KEY`
+or `~/.config/openai/api_key`), which honours size, quality and `--mask` exactly.
+
+Neither keeps a conversation the way ChatGPT does: every call carries the full prompt and
+every reference it needs, so a follow-up pose attaches the earlier result as a `--ref`.
+Keep prompts worth repeating as files under `art/prompts/`, and `--dry-run` a new command
+line to see what will be sent.
+
 ## Monster sprites
 
 A monster starts as a 5-view turnaround sheet (front, front-quarter, side,
