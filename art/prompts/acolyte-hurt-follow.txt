@@ -1,0 +1,2 @@
+REFERENCE IMAGE 3 is the finished pain animation seen from the FRONT, laid out the same way (cell 1 standing, then the jolt and the stagger). It is the same flinch this sheet must show: the same 2 pain poses, the same arms, the same censer. Only the camera angle changes, to the one in reference 2.
+

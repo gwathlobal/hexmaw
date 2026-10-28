@@ -1,0 +1,25 @@
+Pixel-art character turnaround sheet for a monster in a Doom/Hexen-style first-person dark-fantasy dungeon game, where monsters are drawn as sprites seen from several camera angles: the ACOLYTE, a hooded cultist spellcaster who keeps its distance and hurls balls of fire.
+
+REFERENCE IMAGE: a turnaround sheet of another monster from the same game (a red imp). Use it ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of the imp's design.
+
+THE ACOLYTE
+- A tall, gaunt human figure, about a fifth taller than the imp would be beside it, shoulders hunched forward and head bowed slightly, menacing and still.
+- A heavy, floor-length robe in deep oxblood red, darkening to soot black at the hem and inside the folds. The hem is ragged and brushes the floor, hiding the feet entirely.
+- Tarnished bronze trim in angular, rune-like bands: down the front opening of the robe, around the wide sleeve cuffs, and across a stiff mantle over the shoulders.
+- A tall, pointed cowl that hangs forward over the face. The face inside is lost in black shadow except for two small ember-orange eyes, glowing faintly.
+- Long, wide sleeves. The hands are bony and ash-grey, with long fingers.
+- In its left hand it holds a short chain, and from it hangs a small, dented bronze censer with a dull orange glow inside its vents.
+- Its right hand is empty, held a little forward at waist height, fingers curled, a faint ember glow in the palm.
+- A rope belt knotted at the waist, with three small bone charms hanging from it on cords.
+- A muted, grimy palette: oxblood, soot, tarnished bronze, ash grey, and orange only for the eyes, the palm and the censer.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).
+- In the front three-quarter, side and rear three-quarter views the acolyte faces IMAGE-LEFT.
+- The censer stays in the same hand in every view, so it is on the opposite side of the body in the front and back views.
+- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The whole figure, including the cowl's tip and the censer, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, sparks, smoke or effects outside the figure.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

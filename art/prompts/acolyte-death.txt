@@ -1,0 +1,25 @@
+Pixel-art sprite sheet: the 8-frame death animation of the ACOLYTE, a hooded cultist spellcaster, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The death is seen from the front only. The last frame is the corpse, which stays on the floor.
+
+REFERENCE IMAGES, in the order attached:
+1. The acolyte's turnaround sheet. It is the character design: the oxblood robe darkening to soot at the ragged hem, the tarnished bronze rune trim and shoulder mantle, the tall pointed cowl with a black face and two ember-orange eyes, the bony ash-grey hands, the rope belt with bone charms, the bronze censer on its chain, and the shading style.
+2. The acolyte standing, seen from the front. Match its pixel size, outline weight and scale exactly: frame 1 is exactly as tall as reference 2.
+
+THE DEATH: the fire inside the acolyte gets loose and burns it away, leaving its empty robe. The body is never shown; under the cowl there is only blackness and fire.
+- Frame 1, HIT: standing as in reference 2 but jolted back, the cowl snapped back, both arms flung up and out, the eyes flaring.
+- Frame 2, BURNING UP: it staggers, arms raised and clawing at the air. Fire bursts out of the black opening of the cowl and the ends of both sleeves, bright yellow and orange.
+- Frame 3, BUCKLING: the knees give way and the robe sags lower, the cowl tipped back, fire pouring out of it in a column. The censer slips from the hand.
+- Frame 4, KNEELING: the figure sinks to its knees, half the standing height, arms limp, fire raging out of the cowl and sleeves. The censer lies on the floor beside it.
+- Frame 5, FALLING: the robe topples forward, folding in on itself, the cowl collapsing; the fire is dying down.
+- Frame 6, CRUMPLING: the robe is a sinking heap of cloth, the cowl flattened on top, a few tongues of flame.
+- Frame 7, SMOULDERING: an empty robe lying flat on the floor, the bronze trim and bone charms visible in the folds, a few glowing embers and a thin wisp of dark smoke.
+- Frame 8, CORPSE: the same flat heap of empty robe, the flattened cowl at one end, a few faint embers glowing in the folds, the dented censer on its side beside it. No smoke, no flames. This frame stays on screen.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- The same scale in every frame. In every frame the acolyte, the robe or the heap rests on the same ground line near the bottom of its cell; nothing reaches below it, and nothing floats.
+- The whole figure, the fire and the censer fit inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, blood or gore.
+- The fire is solid shapes with hard pixel edges: a bright yellow core, then orange, then a deep red rim. No glow or haze spilling onto the magenta around it.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

@@ -14,6 +14,15 @@ between:
 
 --mirror takes 1-based input positions. Turned views must face image-left, like the
 turnaround; generators don't always draw them that way.
+
+--frame N scales each view by its Nth frame (1-based) instead of its tallest, for an
+animation whose tallest frame varies between views (fire held over the head in one view
+and beside it in another): name a frame that is the same pose in every view, such as
+the standing one, and give its height.
+
+--blank N empties frame N of every view after scaling, so slice_frames skips it: for a
+pose drawn only to set the scale. The acolyte's pain sheets open with a copy of the
+standing pose, which sets the scale with --frame 1 and is dropped with --blank 1.
 """
 
 import argparse
@@ -54,9 +63,11 @@ def cells(img):
     return [(a[1], b[0]) for a, b in zip(edges, edges[1:]) if b[0] - a[1] > 8]
 
 
-def sprite_height(img):
+def sprite_height(img, frame=None):
+    """Height of the tallest frame, or of FRAME (0-based) alone."""
+    spans = cells(img) if frame is None else [cells(img)[frame]]
     # Inside the cells only: a separator's anti-aliased end can miss is_cyan.
-    xs = [x for x0, x1 in cells(img) for x in range(x0 + 3, x1 - 3, 2)]
+    xs = [x for x0, x1 in spans for x in range(x0 + 3, x1 - 3, 2)]
     px = img.load()
     rows = [y for y in range(img.height) if any(not is_background(*px[x, y]) for x in xs)]
     return rows[-1] - rows[0] + 1
@@ -67,7 +78,9 @@ def main():
     ap.add_argument("output")
     ap.add_argument("inputs", nargs="+")
     ap.add_argument("--height", type=int, required=True, help="tallest frame of every view, in pixels")
+    ap.add_argument("--frame", type=int, help="1-based frame to scale by, at --height, instead of the tallest")
     ap.add_argument("--mirror", type=int, nargs="*", default=[], help="1-based inputs to mirror frame by frame")
+    ap.add_argument("--blank", type=int, nargs="*", default=[], help="1-based frames to empty in every view")
     args = ap.parse_args()
 
     rows = []
@@ -76,7 +89,10 @@ def main():
         if n in args.mirror:
             for x0, x1 in cells(img):
                 img.paste(img.crop((x0, 0, x1, img.height)).transpose(Image.FLIP_LEFT_RIGHT), (x0, 0))
-        scale = args.height / sprite_height(img)
+        scale = args.height / sprite_height(img, None if args.frame is None else args.frame - 1)
+        for frame in args.blank:
+            x0, x1 = cells(img)[frame - 1]
+            img.paste(MAGENTA, (x0, 0, x1, img.height))
         # Nearest keeps the key colours pure; slice_frames does the real downscaling.
         rows.append(img.resize((round(img.width * scale), round(img.height * scale)), Image.NEAREST))
 

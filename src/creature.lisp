@@ -27,6 +27,8 @@
 (defparameter *chase-replan* 0.5 "Seconds between a hunting creature's fresh paths to the player.")
 (defparameter *chase-pause* 0.1 "Seconds a hunting creature stands at the end of a path before the next.")
 (defparameter *chase-max-walk* 15.0 "Longest path, in metres, a creature takes to reach the player.")
+(defparameter *retreat-step* 3.0 "Metres a ranged creature backs off at a time when the player is too close.")
+(defparameter *cast-aim-height* 1.1 "Height above the player's feet a creature's spell is aimed at.")
 (defparameter *attack-start-reach* 0.5
   "Fraction of its ATTACK-REACH within which a creature starts an attack. The rest
 leaves the player room to back out of the blow during the wind-up.")
@@ -67,7 +69,17 @@ change it; anything but :PLAYING freezes the world.")
    (look-timer :initform 0.0 :accessor look-timer :documentation "Seconds until it next looks for the player.")
    (replan-timer :initform 0.0 :accessor replan-timer :documentation "Seconds until a hunt plans a fresh path.")
    (attack-damage :initarg :attack-damage :initform NIL :accessor attack-damage
-                  :documentation "Least and most health a blow takes; NIL for a creature that never attacks.")
+                  :documentation "Least and most health a blow takes; NIL for a creature without a melee attack.")
+   (attack-spell :initarg :attack-spell :initform NIL :accessor attack-spell
+                 :documentation "Spell it casts at the player instead of a blow, or NIL. Its
+attack releases the spell on ATTACK-HIT-FRAME.")
+   (attack-range :initarg :attack-range :initform 10.0 :accessor attack-range
+                 :documentation "Metres within which a caster starts casting at a player it can see.")
+   (keep-away :initarg :keep-away :initform 4.0 :accessor keep-away
+              :documentation "Metres a caster backs off to keep between itself and the player.")
+   (cast-offset :initarg :cast-offset :initform 0.0 :accessor cast-offset
+                :documentation "Metres to its right of its centre line that its spell leaves
+from: where the casting hand is on the release frame.")
    (attack-reach :initarg :attack-reach :initform 0.6 :accessor attack-reach
                  :documentation "Metres from its body's edge to the player's that a blow reaches.")
    (attack-arc :initarg :attack-arc :initform 0.8 :accessor attack-arc
@@ -103,6 +115,13 @@ WALK-ANIMATION, spread over *STAGGER-TIME*; NIL to squash the standing pose inst
    (death-animation :initarg :death-animation :initform NIL :accessor death-animation
                     :documentation "Frame animation played once on death, its last frame the
 corpse; NIL to collapse into the floor instead.")
+   (death-glow :initarg :death-glow :initform NIL :reader death-glow
+               :documentation "Colour of the light a burning death gives off, or NIL for none.")
+   (death-glow-radius :initarg :death-glow-radius :initform 3.0 :reader death-glow-radius)
+   (death-glow-times :initarg :death-glow-times :initform '(0.1 0.2 0.4 0.8) :reader death-glow-times
+                     :documentation "Seconds into the death that the glow starts, is at full
+strength, starts to fade and is out, to match the fire in the death animation.")
+   (death-lamp :initform NIL :accessor death-lamp :documentation "The lamp lit while its death glows.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
    (base-scaling :reader base-scaling)))
@@ -136,12 +155,14 @@ corpse; NIL to collapse into the floor instead.")
   (vector-push-extend creature *creatures*)
   (enter creature container))
 
-(defun creature-at (point margin)
-  "The first live creature whose body contains POINT, grown by MARGIN metres, or NIL."
+(defun creature-at (point margin &optional ignore)
+  "The first live creature other than IGNORE whose body contains POINT, grown by MARGIN
+metres, or NIL."
   (loop for c across *creatures*
         for loc = (location c)
         for r = (+ (body-radius c) margin)
         when (and (not (dead c))
+                  (not (eq c ignore))
                   (< (+ (expt (- (vx point) (vx loc)) 2) (expt (- (vz point) (vz loc)) 2)) (* r r))
                   (< (- (vy loc) margin) (vy point) (+ (vy loc) (sprite-height c) margin)))
           return c))
@@ -240,8 +261,11 @@ whether the X move and whether the Z move were blocked."
           (setf (vx kb) 0.0 (vz kb) 0.0)
           (setf (vx kb) (* (vx kb) (/ slower speed)) (vz kb) (* (vz kb) (/ slower speed)))))))
 
+(defun attacker-p (creature)
+  (or (attack-damage creature) (attack-spell creature)))
+
 (defun hunting-p (creature)
-  (and (attack-damage creature) (< 0 (alert creature))))
+  (and (attacker-p creature) (< 0 (alert creature))))
 
 (defun stop-walking (creature &optional (pause (if (hunting-p creature) *chase-pause* (wander-pause))))
   "Stand still, walking or attacking, for PAUSE seconds."
@@ -292,7 +316,9 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
 ;;; Hunting: a creature that can attack notices the player in front of it within
 ;;; *SIGHT-RANGE* (or close behind it), and when hit. While alert it chases the player
 ;;; along the nav grid and attacks within reach; the blow lands on ATTACK-HIT-FRAME if
-;;; the player is still in reach and in front of it.
+;;; the player is still in reach and in front of it. A caster (ATTACK-SPELL) instead
+;;; stops to cast within ATTACK-RANGE wherever it has a clear line to the player, and
+;;; backs off when the player comes within KEEP-AWAY.
 
 (defun player-within-p (creature reach)
   "True if the player's body is within REACH metres of CREATURE's, and level with it."
@@ -362,16 +388,56 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
         (attack-time creature) 0.0
         (attack-pending creature) T))
 
+(defun chase (creature)
+  "Set off along a fresh path toward the player."
+  (let ((route (chase-path creature)))
+    (setf (replan-timer creature) *chase-replan*)
+    (if route
+        (setf (path creature) route
+              (brain creature) :walking)
+        (stop-walking creature *chase-replan*))))
+
+(defun player-distance (creature)
+  (let ((loc (location creature))
+        (feet (feet *player*)))
+    (sqrt (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2)))))
+
+(defun cast-height (creature)
+  "Height above its feet that CREATURE casts from."
+  (* 0.7 (sprite-height creature)))
+
+(defun retreat (creature)
+  "Walk *RETREAT-STEP* metres away from the player, or as near away as the nav grid
+allows a straight walk. Returns NIL if every way back is blocked."
+  (let* ((loc (location creature))
+         (feet (feet *player*))
+         (away (atan (- (vx loc) (vx feet)) (- (vz feet) (vz loc)))))
+    (when *nav-grid*
+      (loop for turn in '(0.0 0.6 -0.6 1.2 -1.2)
+            for yaw = (+ away turn)
+            for to = (vec (+ (vx loc) (* *retreat-step* (sin yaw))) (vy loc)
+                          (- (vz loc) (* *retreat-step* (cos yaw))))
+            when (nav-line-clear-p loc to (body-radius creature) (sprite-height creature) (step-height creature))
+              do (setf (path creature) (list to)
+                       (brain creature) :walking
+                       (replan-timer creature) *chase-replan*)
+                 (return T)))))
+
+(defun hunt-from-range (creature)
+  "Back off from a player too close, cast at one in range and in sight, else close in."
+  (let ((distance (player-distance creature)))
+    (cond ((and (< distance (keep-away creature)) (retreat creature)))
+          ((and (< distance (attack-range creature))
+                (clear-path-p (location creature) (feet *player*) (cast-height creature)))
+           (start-attack creature))
+          (T (chase creature)))))
+
 (defun hunt (creature)
   "Attack the player if within reach, or set off along a fresh path toward them."
-  (if (player-within-p creature (* *attack-start-reach* (attack-reach creature)))
-      (start-attack creature)
-      (let ((route (chase-path creature)))
-        (setf (replan-timer creature) *chase-replan*)
-        (if route
-            (setf (path creature) route
-                  (brain creature) :walking)
-            (stop-walking creature *chase-replan*)))))
+  (cond ((attack-spell creature) (hunt-from-range creature))
+        ((player-within-p creature (* *attack-start-reach* (attack-reach creature)))
+         (start-attack creature))
+        (T (chase creature))))
 
 (defun attack-hit-time (creature)
   (loop for time in (attack-frame-times creature)
@@ -388,24 +454,43 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
           return frame
         finally (return frame)))
 
+(defun release-attack-spell (creature)
+  "Cast CREATURE's ATTACK-SPELL from in front of it at where the player stands now."
+  (let* ((loc (location creature))
+         (feet (feet *player*))
+         (out (+ (body-radius creature) 0.15))
+         (side (cast-offset creature))
+         (yaw (facing creature))
+         ;; Forward is (sin, -cos) of the facing, its right (cos, sin).
+         (origin (vec (+ (vx loc) (* out (sin yaw)) (* side (cos yaw)))
+                      (+ (vy loc) (cast-height creature))
+                      (+ (vz loc) (- (* out (cos yaw))) (* side (sin yaw)))))
+         (aim (v- (vec (vx feet) (+ (vy feet) *cast-aim-height*) (vz feet)) origin)))
+    (when (< 1f-4 (vlength aim))
+      (cast-spell (find-spell (attack-spell creature)) origin (nvunit aim) (container creature)
+                  :caster creature))))
+
 (defun attack (creature dt)
   (let ((time (incf (attack-time creature) dt))
         (times (attack-frame-times creature)))
-    ;; It turns to follow the player through the wind-up; after that the blow is committed.
-    (when (< time (first times))
+    ;; It turns to follow the player through the wind-up (a caster, until it casts);
+    ;; after that the blow is committed.
+    (when (< time (if (attack-spell creature) (attack-hit-time creature) (first times)))
       (face-player creature))
     (when (and (attack-pending creature) (<= (attack-hit-time creature) time))
       (setf (attack-pending creature) NIL)
-      (when (and (player-within-p creature (attack-reach creature))
-                 (< (player-angle creature) (attack-arc creature))
-                 (clear-path-p (location creature) (feet *player*) 1.0))
-        (hurt-player *player* (roll (attack-damage creature)) (location creature))))
+      (cond ((attack-spell creature)
+             (release-attack-spell creature))
+            ((and (player-within-p creature (attack-reach creature))
+                  (< (player-angle creature) (attack-arc creature))
+                  (clear-path-p (location creature) (feet *player*) 1.0))
+             (hurt-player *player* (roll (attack-damage creature)) (location creature)))))
     (when (<= (reduce #'+ times) time)
       (stop-walking creature (attack-pause creature)))))
 
 (defun think (creature dt)
   "Hunt the player while alert, wander otherwise."
-  (when (attack-damage creature)
+  (when (attacker-p creature)
     (notice-player creature dt))
   (let ((hunting (hunting-p creature)))
     (ecase (brain creature)
@@ -417,7 +502,8 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
        (when (<= (decf (idle-timer creature) dt) 0)
          (if hunting (hunt creature) (plan-wander creature))))
       (:walking
-       (cond ((and hunting (player-within-p creature (* *attack-start-reach* (attack-reach creature))))
+       (cond ((and hunting (not (attack-spell creature))
+                   (player-within-p creature (* *attack-start-reach* (attack-reach creature))))
               (start-attack creature))
              (T
               (when (and hunting (<= (decf (replan-timer creature) dt) 0))
@@ -518,6 +604,45 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
                (setf (vy scale) (* (vy base) k)
                      (vx tint) 0.1 (vy tint) 0.0 (vz tint) 0.0 (vw tint) (- 1 k))))))))
 
+;;; A burning death lights its surroundings: a lamp that comes up with the fire, fades
+;;; with it and is then taken out of *LAMPS*, since a corpse never leaves the scene.
+
+(defparameter *death-glow-flicker* 0.25)
+
+(defun death-glow-strength (creature)
+  "How bright CREATURE's death glow is now, 0 to 1."
+  (let ((d (dead creature)))
+    (if (or (null d) (null (death-glow creature)))
+        0.0
+        (destructuring-bind (start full fade out) (death-glow-times creature)
+          (cond ((<= d start) 0.0)
+                ((< d full) (/ (- d start) (- full start)))
+                ((<= d fade) 1.0)
+                ((< d out) (/ (- out d) (- out fade)))
+                (T 0.0))))))
+
+(defun update-death-glow (creature)
+  (let ((k (death-glow-strength creature))
+        (lamp (death-lamp creature)))
+    (cond ((< 0 k)
+           ;; A level rebuild empties *LAMPS* under it.
+           (unless (and lamp (find lamp *lamps*))
+             (setf lamp (add-lamp (location creature) (death-glow creature) (death-glow-radius creature)
+                                  :flicker *death-glow-flicker*)
+                   (death-lamp creature) lamp))
+           (let ((at (location lamp))
+                 (loc (location creature))
+                 (color (color lamp))
+                 (glow (death-glow creature)))
+             (setf (vx at) (vx loc) (vy at) (+ (vy loc) (* 0.5 (sprite-height creature))) (vz at) (vz loc))
+             (setf (vx color) (* k (vx glow)) (vy color) (* k (vy glow)) (vz color) (* k (vz glow)))))
+          (lamp
+           (let ((at (position lamp *lamps*)))
+             (when at
+               (replace *lamps* *lamps* :start1 at :start2 (1+ at))
+               (decf (fill-pointer *lamps*))))
+           (setf (death-lamp creature) NIL)))))
+
 ;; :AFTER so BILLBOARD's tick handler (view selection) still runs.
 (define-handler (creature tick :after) (dt)
   (unless (frozen-p)
@@ -539,7 +664,8 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
                                             (- (float (sprite-height creature) 0f0) 0.05)
                                             creature))))
           (revive creature)))))
-  (update-creature-look creature))
+  (update-creature-look creature)
+  (update-death-glow creature))
 
 ;;; The imp.
 
@@ -570,3 +696,46 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
    (attack-damage :initform '(6 10))
    (chase-speed :initform 2.6)
    (max-health :initform 30)))
+
+;;; The acolyte: a robed caster that keeps its distance and throws cinders (spells.lisp).
+;;; It has no walk: it glides in the standing pose, the robe hiding its feet.
+
+(defparameter *acolyte-height* 1.8 "Acolyte height in metres, cowl tip to hem.")
+
+;; Sliced at 115 px tall, so its art pixels are the imp's size (96 px for 1.5 m).
+(define-asset (hexmaw acolyte-turnaround) image
+    #p"sprites/acolyte/turnaround.png"
+  :min-filter :nearest :mag-filter :nearest)
+
+;; The cast: wind-up (a flame kindles in the hand), raised hand (a fireball held beside
+;; the cowl), release, recover; four frames per view. Its cells are 125 px tall to fit
+;; the fire, with the standing acolyte 115 px like the turnaround. The frames run on
+;; ATTACK-FRAME-TIMES, so :FPS is unused.
+(define-fx-animation acolyte-cast "sprites/acolyte/cast" :size (* *acolyte-height* 125/115))
+;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*. Its cells
+;; are 116 px tall, at the turnaround's scale.
+(define-fx-animation acolyte-hurt "sprites/acolyte/hurt" :size (* *acolyte-height* 116/115))
+;; The fire inside burns it away, leaving the empty robe as the corpse. Its cells are
+;; 133 px tall to fit the flames, the jolted acolyte in frame 1 115 px.
+(define-fx-animation acolyte-death "sprites/acolyte/death" :fps 10 :size (* *acolyte-height* 133/115))
+
+(define-shader-entity acolyte (creature)
+  ((texture :initform (// 'hexmaw 'acolyte-turnaround))
+   (atlas :initform (read-atlas "data/sprites/acolyte/turnaround.lisp"))
+   (sprite-height :initform *acolyte-height*)
+   (attack-animation :initform 'acolyte-cast)
+   (hurt-animation :initform 'acolyte-hurt)
+   (death-animation :initform 'acolyte-death)
+   ;; Up with the fire bursting out (frame 2), fading as the robe burns down (frames 5 to 8).
+   (death-glow :initform (vec 1.4 0.55 0.2))
+   (attack-spell :initform 'cinder)
+   (attack-range :initform 12.0)
+   (keep-away :initform 4.0)
+   (cast-offset :initform 0.25)
+   ;; The fireball is held up longest, as the warning; it leaves on the release frame.
+   (attack-frame-times :initform '(0.35 0.4 0.3 0.3))
+   (attack-pause :initform 1.2)
+   (walk-speed :initform 1.2)
+   (chase-speed :initform 1.8)
+   (wander-radius :initform 2.0)
+   (max-health :initform 24)))

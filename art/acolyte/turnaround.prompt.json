@@ -1,0 +1,33 @@
+{
+  "prompt": "Pixel-art character turnaround sheet for a monster in a Doom/Hexen-style first-person dark-fantasy dungeon game, where monsters are drawn as sprites seen from several camera angles: the ACOLYTE, a hooded cultist spellcaster who keeps its distance and hurls balls of fire.\n\nREFERENCE IMAGE: a turnaround sheet of another monster from the same game (a red imp). Use it ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of the imp's design.\n\nTHE ACOLYTE\n- A tall, gaunt human figure, about a fifth taller than the imp would be beside it, shoulders hunched forward and head bowed slightly, menacing and still.\n- A heavy, floor-length robe in deep oxblood red, darkening to soot black at the hem and inside the folds. The hem is ragged and brushes the floor, hiding the feet entirely.\n- Tarnished bronze trim in angular, rune-like bands: down the front opening of the robe, around the wide sleeve cuffs, and across a stiff mantle over the shoulders.\n- A tall, pointed cowl that hangs forward over the face. The face inside is lost in black shadow except for two small ember-orange eyes, glowing faintly.\n- Long, wide sleeves. The hands are bony and ash-grey, with long fingers.\n- In its left hand it holds a short chain, and from it hangs a small, dented bronze censer with a dull orange glow inside its vents.\n- Its right hand is empty, held a little forward at waist height, fingers curled, a faint ember glow in the palm.\n- A rope belt knotted at the waist, with three small bone charms hanging from it on cords.\n- A muted, grimy palette: oxblood, soot, tarnished bronze, ash grey, and orange only for the eyes, the palm and the censer.\n\nLAYOUT\n- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).\n- In the front three-quarter, side and rear three-quarter views the acolyte faces IMAGE-LEFT.\n- The censer stays in the same hand in every view, so it is on the opposite side of the body in the front and back views.\n- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.\n- The whole figure, including the cowl's tip and the censer, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No text, labels, numbers, frame borders, sparks, smoke or effects outside the figure.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\n",
+  "prompt_file": "art/prompts/acolyte-turnaround.txt",
+  "refs": [
+    "Pixel Demon Character Turnaround.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 3,
+  "created": 1793205352,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art character turnaround sheet for a monster in a Doom/Hexen-style first-person dark-fantasy dungeon game, where monsters are drawn as sprites seen from several camera angles: the ACOLYTE, a hooded cultist spellcaster who keeps its distance and hurls balls of fire.\n\nREFERENCE IMAGE: a turnaround sheet of another monster from the same game (a red imp). Use it ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of the imp's design.\n\nTHE ACOLYTE\n- A tall, gaunt human figure, about a fifth taller than the imp would be beside it, shoulders hunched forward and head bowed slightly, menacing and still.\n- A heavy, floor-length robe in deep oxblood red, darkening to soot black at the hem and inside the folds. The hem is ragged and brushes the floor, hiding the feet entirely.\n- Tarnished bronze trim in angular, rune-like bands: down the front opening of the robe, around the wide sleeve cuffs, and across a stiff mantle over the shoulders.\n- A tall, pointed cowl that hangs forward over the face. The face inside is lost in black shadow except for two small ember-orange eyes, glowing faintly.\n- Long, wide sleeves. The hands are bony and ash-grey, with long fingers.\n- In its left hand it holds a short chain, and from it hangs a small, dented bronze censer with a dull orange glow inside its vents.\n- Its right hand is empty, held a little forward at waist height, fingers curled, a faint ember glow in the palm.\n- A rope belt knotted at the waist, with three small bone charms hanging from it on cords.\n- A muted, grimy palette: oxblood, soot, tarnished bronze, ash grey, and orange only for the eyes, the palm and the censer.\n\nLAYOUT\n- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).\n- In the front three-quarter, side and rear three-quarter views the acolyte faces IMAGE-LEFT.\n- The censer stays in the same hand in every view, so it is on the opposite side of the body in the front and back views.\n- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.\n- The whole figure, including the cowl's tip and the censer, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No text, labels, numbers, frame borders, sparks, smoke or effects outside the figure.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a1835b-8694-77b0-bd00-a2fb2f5e824d",
+    "01a1835c-60ee-77c1-a8b5-dac0cc4764a2",
+    "01a1835d-4b68-76b2-b610-26740cb3abc2"
+  ],
+  "sizes": [
+    [
+      1774,
+      887
+    ],
+    [
+      1774,
+      887
+    ],
+    [
+      1774,
+      887
+    ]
+  ]
+}

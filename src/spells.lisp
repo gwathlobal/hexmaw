@@ -26,6 +26,9 @@
                          :documentation "Effect animation the projectile flies as.")
    (impact-animation :initarg :impact-animation :initform NIL :reader impact-animation
                      :documentation "Effect animation played where the projectile hits, or NIL.")
+   (light-color :initarg :light-color :initform *bolt-light-color* :reader light-color
+                :documentation "Colour of the glow the projectile and its impact cast.")
+   (light-radius :initarg :light-radius :initform *bolt-light-radius* :reader light-radius)
    (effects :initarg :effects :reader spell-effects)))
 
 (defvar *spells* (make-hash-table :test 'eq))
@@ -90,31 +93,42 @@ it (a SPELL-PROJECTILE for projectile spells)."))
 
 (define-shader-entity spell-projectile (fx-sprite)
   ((spell :initarg :spell :initform NIL :reader spell)
+   (caster :initarg :caster :initform NIL :reader caster
+           :documentation "Who fired it (the player or a creature), whom it never hits.")
    (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)))
 
 ;; Knockback pushes along the direction the projectile was flying.
 (defmethod apply-effect ((kind (eql :knockback)) effect (target creature) (source spell-projectile))
   (push-creature target (projectile-velocity source) (float (roll (effect-magnitude effect)) 0f0)))
 
-(defun launch-projectile (spell origin direction container)
-  "Fire SPELL from ORIGIN along unit vector DIRECTION."
+(defun launch-projectile (spell origin direction container caster)
+  "Fire SPELL from ORIGIN along unit vector DIRECTION, on behalf of CASTER."
   (let ((projectile (make-instance 'spell-projectile
-                                  :spell spell :location (vcopy origin)
+                                  :spell spell :caster caster :location (vcopy origin)
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
     (nv* (projectile-velocity projectile) (float (projectile-speed spell) 0f0))
     (enter projectile container)
-    (attach-glow projectile *bolt-light-color* *bolt-light-radius*)
+    (attach-glow projectile (light-color spell) (light-radius spell))
     projectile))
 
 (defun impact (projectile)
   "Play the spell's impact where PROJECTILE hit, and remove it."
-  (let ((name (impact-animation (spell projectile))))
+  (let* ((spell (spell projectile))
+         (name (impact-animation spell)))
     (when (and name (container projectile))
       (let* ((velocity (projectile-velocity projectile))
              (at (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
-        (attach-glow (spawn-fx name at (container projectile)) *bolt-light-color* *bolt-light-radius*))))
+        (attach-glow (spawn-fx name at (container projectile)) (light-color spell) (light-radius spell)))))
   (despawn projectile))
+
+;; The player's own projectiles never hit them, nor a creature's that creature.
+(defun projectile-victim (projectile point margin)
+  "The body PROJECTILE hits at POINT, MARGIN metres around it: a live creature or the player."
+  (let ((caster (caster projectile)))
+    (or (creature-at point margin caster)
+        (and *player* (not (eq caster *player*)) (player-at-p *player* point margin)
+             *player*))))
 
 ;; After FX-SPRITE's tick, which animates and ages it.
 (define-handler (spell-projectile tick :after) (dt)
@@ -122,7 +136,7 @@ it (a SPELL-PROJECTILE for projectile spells)."))
     (let* ((loc (location spell-projectile))
            (r (* 0.5 (float *projectile-size* 0f0))))
       (nv+* loc (projectile-velocity spell-projectile) dt)
-      (let ((victim (creature-at loc r)))
+      (let ((victim (projectile-victim spell-projectile loc r)))
         (cond (victim
                (apply-spell (spell spell-projectile) victim spell-projectile)
                (impact spell-projectile))
@@ -131,10 +145,11 @@ it (a SPELL-PROJECTILE for projectile spells)."))
               ((< *projectile-lifetime* (age spell-projectile))
                (despawn spell-projectile)))))))
 
-(defun cast-spell (spell origin direction container)
-  "Deliver SPELL from ORIGIN along unit vector DIRECTION. Mana is the caster's business."
+(defun cast-spell (spell origin direction container &key caster)
+  "Deliver SPELL from ORIGIN along unit vector DIRECTION for CASTER, the player or a
+creature. Mana is the caster's business."
   (ecase (spell-delivery spell)
-    (:projectile (launch-projectile spell origin direction container))))
+    (:projectile (launch-projectile spell origin direction container caster))))
 
 ;;; The spells.
 
@@ -156,3 +171,12 @@ it (a SPELL-PROJECTILE for projectile spells)."))
                     :projectile-animation 'bolt-flight :impact-animation 'bolt-burst)
   (:damage :magnitude '(6 10))
   (:knockback :magnitude '(4 4)))
+
+;; The acolyte's spell (creature.lisp): slower than the bolt, so a sidestep dodges it.
+;; It flies on the bolt's frames, bigger and redder, until it has its own.
+(define-fx-animation cinder-flight "sprites/bolt/flight" :fps 9 :loop T :size 0.55)
+
+(define-spell cinder (:delivery :projectile :projectile-speed 9.0
+                      :projectile-animation 'cinder-flight :impact-animation 'bolt-burst
+                      :light-color (vec 1.8 0.35 0.12) :light-radius 4.5)
+  (:damage :magnitude '(5 8)))

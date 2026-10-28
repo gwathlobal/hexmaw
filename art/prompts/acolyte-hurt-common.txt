@@ -1,0 +1,23 @@
+Pixel-art sprite sheet: the pain (flinch) animation of the ACOLYTE, a hooded cultist spellcaster, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles. It plays for a third of a second when the acolyte is struck by a sword or a fire bolt.
+
+REFERENCE IMAGES, in the order attached:
+1. The acolyte's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: the oxblood robe darkening to soot at the ragged hem, the tarnished bronze rune trim and shoulder mantle, the tall pointed cowl with a black face and two ember-orange eyes, the bony ash-grey hands, the rope belt with bone charms, the bronze censer on its chain, and the shading style.
+2. The acolyte standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The CASTING HAND is the empty hand with the ember glow in its palm in reference 2. The other hand keeps holding the censer by its chain in every frame. Never swap hands, and never draw a third hand.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right, each cell as wide as reference 2.
+- Cell 1 is a plain copy of reference 2: the acolyte standing, exactly as tall, in exactly the same pose. It sets the scale for the other two.
+- Cells 2 and 3 are the two pain frames described below, drawn at the same scale as cell 1.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The hem rests on the same ground line in every cell. The acolyte does not hop, float or step off the ground.
+- The whole figure, including flung-out arms, flaring sleeves and the swinging censer, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, sparks, blood, wounds, burns, smoke or impact effects. Only the acolyte; the game adds the hit flash itself.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE FLINCH: a sharp, readable reaction to being hit in the chest from in front of the acolyte, in the spirit of a Doom pain frame. The body is knocked backward, away from the way it faces.
+- Cell 2, JOLT: the instant of the hit. The cowl snaps back, the eyes flare wide and bright. The chest caves in and the shoulders jerk up. Both arms fly up and out to the sides at shoulder height, the wide sleeves flaring open, the bony fingers splayed. The upper body bends backward, away from the way it faces, while the hem stays planted. The censer swings out on its chain.
+- Cell 3, STAGGER: a moment later. The acolyte doubles over forward, hunched low, the cowl bowed down between the shoulders, the eyes narrowed to slits. The casting hand clutches its chest; the other arm hangs out loose, the censer dangling low and swinging. This must read as clearly hurt, not as a spell or an attack.
+

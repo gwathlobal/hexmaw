@@ -36,6 +36,8 @@
           do (add-torch container x 2.4 z))
     ;; An imp in the middle of the hall, facing the spawn point.
     (spawn-creature (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
+    ;; An acolyte up on the platform, facing the spawn point.
+    (spawn-creature (make-instance 'acolyte :location (vec 7.5 1.2 -7.5) :facing -2.6) container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))
       (add-box container -1.5 -0.5 z1  1.5 0 z0 :color *floor-color*)

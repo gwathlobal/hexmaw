@@ -87,7 +87,7 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
   "Fire the pending spell from just below the eye toward where the player looks now."
   (let* ((dir (look-direction player))
          (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
-    (cast-spell (pending-spell player) origin dir (container player))
+    (cast-spell (pending-spell player) origin dir (container player) :caster player)
     (setf (pending-spell player) NIL)))
 
 ;;; Clicks in a menu belong to the menu (menu.lisp), as does Esc.
@@ -272,6 +272,27 @@ from FROM and hit-stop. At zero health the run starts over."
       ;; No death screen yet. Not now: this runs inside a creature's tick, and
       ;; RESET-RUN despawns entities.
       (queue-menu-action 'reset-run))))
+
+(defun player-at-p (player point margin)
+  "True if POINT lies in PLAYER's body, grown by MARGIN metres."
+  (let ((feet (feet player))
+        (r (+ *player-radius* margin)))
+    (and (< (abs (- (vx point) (vx feet))) r)
+         (< (abs (- (vz point) (vz feet))) r)
+         (< (- (vy feet) margin) (vy point) (+ (vy feet) *player-height* margin)))))
+
+;; A creature's spell, hitting the player: the shove follows the projectile's flight.
+(defmethod apply-effect ((kind (eql :damage)) effect (target player) (source spell-projectile))
+  (hurt-player target (roll (effect-magnitude effect)) (v- (location source) (projectile-velocity source))))
+
+(defmethod apply-effect ((kind (eql :knockback)) effect (target player) (source spell-projectile))
+  (let* ((flight (projectile-velocity source))
+         (len (sqrt (+ (expt (vx flight) 2) (expt (vz flight) 2))))
+         (speed (float (roll (effect-magnitude effect)) 0f0))
+         (vel (velocity target)))
+    (when (< 1f-4 len)
+      (incf (vx vel) (* speed (/ (vx flight) len)))
+      (incf (vz vel) (* speed (/ (vz flight) len))))))
 
 (defun respawn (player)
   (let ((feet (feet player)))
