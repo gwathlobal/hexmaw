@@ -19,8 +19,15 @@
   (add-hud scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)
-  (setf *render-pass* (make-instance 'render-pass))
-  (enter *render-pass* scene))
+  (enter (make-instance 'menu-controller) scene)
+  ;; The game draws into one pass and the menus (Alloy) into another; the blend
+  ;; puts the menus on top and is what reaches the screen.
+  (let ((ui (make-instance 'menu-ui))
+        (blend (make-instance 'blend-pass)))
+    (setf *render-pass* (make-instance 'render-pass)
+          *output-pass* blend)
+    (connect (port *render-pass* 'color) (port blend 'a-pass) scene)
+    (connect (port ui 'color) (port blend 'b-pass) scene)))
 
 (defmethod update :around ((main main) tt dt fc)
   (setf *game-thread* (bt:current-thread))
@@ -28,7 +35,8 @@
     (call-next-method)))
 
 (defmethod update :after ((main main) tt dt fc)
-  (when (frozen-p)
+  ;; Hit-stop runs out only in play, so a menu opened mid-hit doesn't eat it.
+  (when (eq *game-state* :playing)
     (setf *hit-stop* (max 0.0 (- *hit-stop* dt))))
   ;; Clear to the fog colour so geometry fades into the background.
   (when *render-pass*
@@ -46,8 +54,12 @@
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a hp ~d mana ~d; ~
+        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a hp ~d mana ~d; ~
                      creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
+                (case *game-state*
+                  (:title "main menu up, world frozen (start with (game (start-game)))")
+                  (:paused "paused, world frozen (resume with (game (resume-game)))")
+                  (T "playing"))
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
                 (health *player*) (floor (mana *player*))
                 (map 'list (lambda (c)
@@ -74,6 +86,7 @@
   "Entry point for run.sh: eval server (and Swank if asked), then the game.
 Quits the process when the window closes."
   (start-eval-server)
+  (setf *game-state* (if (eql 1 (env-integer "HEXMAW_SKIP_MENU")) :playing :title))
   (let ((swank-port (env-integer "HEXMAW_SWANK_PORT")))
     (when swank-port
       (ql:quickload :swank :silent T)

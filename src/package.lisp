@@ -2,5 +2,10 @@
   (:use #:cl+trial)
   (:shadow #:main #:launch)
   (:local-nicknames
-   (#:v #:org.shirakumo.verbose))
+   (#:v #:org.shirakumo.verbose)
+   (#:alloy #:org.shirakumo.alloy)
+   (#:trial-alloy #:org.shirakumo.fraf.trial.alloy)
+   (#:simple #:org.shirakumo.alloy.renderers.simple)
+   (#:presentations #:org.shirakumo.alloy.renderers.simple.presentations)
+   (#:chroma #:org.shirakumo.alloy.chroma))
   (:export #:main #:launch))

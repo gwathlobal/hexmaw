@@ -68,15 +68,17 @@ the cooldown allow. Returns true if it was cast."
         (cast-spell spell origin dir (container player)))
       T)))
 
+;;; Clicks in a menu belong to the menu (menu.lisp), as does Esc.
+
 (define-handler (player mouse-press) (button)
-  (cond ((not (mouse-look player))
-         (capture-mouse player))
-        ((eq button :left)
-         (player-cast player 'bolt))))
+  (when (eq *game-state* :playing)
+    (cond ((not (mouse-look player))
+           (capture-mouse player))
+          ((eq button :left)
+           (player-cast player 'bolt)))))
 
 (define-handler (player key-press) (key)
   (case key
-    (:escape (release-mouse player))
     (:f12 (screenshot))))
 
 (define-handler (player mouse-move) (old-pos pos)
@@ -147,8 +149,18 @@ On a step the eye keeps its height and eases to the new one."
         (incf (eye player) (- y0 (vy feet)))
         (setf (vy feet) y0 (vy vel) vy0))))
 
+(defun place-camera (player)
+  "Put the camera at the player's eye."
+  (let ((loc (location player))
+        (feet (feet player)))
+    (setf (vx loc) (vx feet)
+          (vy loc) (+ (vy feet) (float (eye player) 0f0))
+          (vz loc) (vz feet))))
+
 (define-handler (player tick) (dt)
   (when (frozen-p)
+    ;; Still place the camera, so a game that starts frozen (the main menu) shows the level.
+    (place-camera player)
     (return))
   (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
         (cast-timer player) (max 0.0 (- (cast-timer player) dt)))
@@ -190,11 +202,7 @@ On a step the eye keeps its height and eases to the new one."
     ;; Ease the eye toward standing or crouching height, then place the camera.
     (let ((target (if crouching *crouch-eye-height* *eye-height*)))
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
-    (let ((loc (location player))
-          (feet (feet player)))
-      (setf (vx loc) (vx feet)
-            (vy loc) (+ (vy feet) (float (eye player) 0f0))
-            (vz loc) (vz feet)))))
+    (place-camera player)))
 
 (defun respawn (player)
   (let ((feet (feet player)))

@@ -19,8 +19,13 @@
 (defvar *creatures* (make-array 0 :adjustable T :fill-pointer T)
   "Creatures in the level, for hit tests. The level rebuilds it.")
 
+(defvar *game-state* :title
+  "What the game is doing: :TITLE (main menu), :PLAYING or :PAUSED. Menus (menu.lisp)
+change it; anything but :PLAYING freezes the world.")
+
 (defun frozen-p ()
-  (< 0.0 *hit-stop*))
+  (or (< 0.0 *hit-stop*)
+      (not (eq *game-state* :playing))))
 
 (defun hit-stop (&optional (time *hit-stop-time*))
   (setf *hit-stop* (max *hit-stop* (float time 0f0))))

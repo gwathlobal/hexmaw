@@ -19,11 +19,13 @@
 (define-shader-entity hud-element () ())
 
 (defmethod render :around ((element hud-element) (program shader-program))
-  (with-pushed-matrix ((view-matrix :identity)
-                       (projection-matrix :identity))
-    ;; Pixel coordinates with the origin at the bottom left; z 0 is the near plane.
-    (orthographic-projection 0 (width *context*) 0 (height *context*) 0 10)
-    (call-next-method)))
+  ;; No HUD on the main menu; the pause menu dims it instead.
+  (unless (eq *game-state* :title)
+    (with-pushed-matrix ((view-matrix :identity)
+                         (projection-matrix :identity))
+      ;; Pixel coordinates with the origin at the bottom left; z 0 is the near plane.
+      (orthographic-projection 0 (width *context*) 0 (height *context*) 0 10)
+      (call-next-method))))
 
 (defun place (entity x y)
   (let ((loc (location entity)))

@@ -12,10 +12,12 @@
                (:file "spells")
                (:file "player")
                (:file "hud")
+               (:file "menu")
                (:file "level")
                (:file "main"))
   :depends-on (:trial
                :trial-glfw
                :trial-png
                :trial-gltf
+               :trial-alloy
                :sb-bsd-sockets))

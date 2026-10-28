@@ -7,7 +7,8 @@
 (defparameter *eval-port* 7171)
 (defvar *eval-server* NIL)
 (defvar *game-thread* NIL)
-(defvar *render-pass* NIL)
+(defvar *render-pass* NIL "The pass the game world draws into.")
+(defvar *output-pass* NIL "The last pass, what reaches the screen: the world with the menus over it.")
 
 (defun root ()
   (asdf:system-source-directory :hexmaw))
@@ -253,7 +254,7 @@ with the runtime errors if the game starts failing once it is loaded."
             Restore it (tools/hd '(show-window)') and try again."))
   (let ((file (merge-pathnames (or file (format NIL "screenshots/~a.png" (timestamp))) (root))))
     (ensure-directories-exist file)
-    (call-in-game (lambda () (capture *render-pass* :file file)))
+    (call-in-game (lambda () (capture (or *output-pass* *render-pass*) :file file)))
     (namestring file)))
 
 ;;; The eval server. One request per connection: the client sends a single

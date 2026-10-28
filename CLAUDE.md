@@ -15,6 +15,8 @@ one bolt spell with a hit reaction.
 Opens the game window and an eval server on `127.0.0.1:7171` (`HEXMAW_EVAL_PORT` to
 change it). `HEXMAW_SWANK_PORT=4005 ./run.sh` also starts Swank for an editor.
 The game opens in a 1280×720 window; `HEXMAW_FULLSCREEN=1 ./run.sh` starts it fullscreen.
+It starts on the main menu with the world frozen; `HEXMAW_SKIP_MENU=1 ./run.sh` starts
+straight in play, or run `tools/hd '(game (start-game))'` after launching.
 The process exits when the window closes.
 
 Every Lisp session on this project goes through `boot.lisp`:
@@ -46,7 +48,7 @@ next edit's reload tells you whether the whole change works.
 
 | Command | What it does |
 | --- | --- |
-| `tools/hd status` | Player position and view, runtime errors firing now |
+| `tools/hd status` | Game state (menu, paused, playing), player position and view, runtime errors firing now |
 | `tools/hd screenshot` | Saves the current frame, prints the PNG path. Read it to check visual changes |
 | `tools/hd errors` | Recent runtime errors with backtraces |
 | `tools/hd reset` | Rebuilds the scene from `setup-scene`; the player keeps position and view |
@@ -76,6 +78,8 @@ thread. Check the game's output, then restart `./run.sh`.
 - A slot added to a live class gets its `:initform`, but `initialize-instance :after`
   doesn't run again, so slots it fills stay unbound on existing objects (expect
   "slot is unbound" runtime errors). Run `tools/hd reset`.
+- Menu panels (Alloy) build their layout when created. After changing a panel class
+  or `panel-buttons`, run `tools/hd reset`, which recreates the panel on screen.
 - Something spawned mid-game (projectiles) needs `(preload 'class scene)` in
   `setup-scene`, or its shader isn't loaded when it first appears.
 - A subclass's `define-handler` replaces the parent's handler for that event. Use a
@@ -113,6 +117,12 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 - `src/hud.lisp`: HP and mana bars in the lower-left corner. HUD pieces are `hud-element`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
   on whole pixels, since a half-pixel position drops an edge row.
+- `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
+  toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
+  (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
+  anything but `:playing` makes `frozen-p` true, which stops everything that moves.
+  Transitions: `start-game`, `pause-game`, `resume-game`, `show-title`, `exit-game`.
+  A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons`.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
@@ -123,7 +133,7 @@ A walking player steps up and down ledges of up to `*step-height*` (0.45 m); any
 taller needs a jump (0.45 m is also the most a block can rise per step in level design).
 On a step the camera holds its height and eases to the new one.
 
-To test movement without a mouse or keyboard, hold keys from the eval server:
+To test movement without a mouse or keyboard (in play, not on a menu), hold keys from the eval server:
 `tools/hd '(game (setf (vy (rotation *player*)) 0.0 (retained :w) t))'`, wait, then
 `(setf (retained :w) nil)` and check `tools/hd status`. Yaw 0 faces −Z, π/2 faces +X.
 
@@ -178,7 +188,8 @@ block so that connector sits at `point`, opening toward `:south`, and returns th
 connectors in world space for the next block or `seal-connector`. Blocks turn in quarter
 turns only. Re-saving a `.glb` and running `tools/hd reset` picks up the new version.
 
-Controls: click the window to capture the mouse, Esc to release. WASD, Shift to run,
+Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
+the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, left click to cast the bolt, F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
