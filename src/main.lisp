@@ -13,11 +13,14 @@
     (when old
       (v<- (feet new) (feet old))
       (v<- (rotation new) (rotation old))
-      (setf (mouse-look new) (mouse-look old)))
+      (setf (mouse-look new) (mouse-look old)
+            (weapon new) (wanted-weapon old)
+            (wanted-weapon new) (wanted-weapon old)))
     (setf *player* new)
     (enter new scene))
   (add-hud scene)
   (add-hands scene)
+  (add-sword scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)
   (enter (make-instance 'menu-controller) scene)
@@ -55,14 +58,14 @@
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a hp ~d mana ~d; ~
+        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a hp ~d mana ~d weapon ~(~a~); ~
                      creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
                 (case *game-state*
                   (:title "main menu up, world frozen (start with (game (start-game)))")
                   (:paused "paused, world frozen (resume with (game (resume-game)))")
                   (T "playing"))
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
-                (health *player*) (floor (mana *player*))
+                (health *player*) (floor (mana *player*)) (weapon *player*)
                 (map 'list (lambda (c)
                              (format NIL "~(~a~) ~:[~d/~d hp~;dead~*~*~] at (~,2f ~,2f)"
                                      (type-of c) (dead c) (health c) (max-health c)

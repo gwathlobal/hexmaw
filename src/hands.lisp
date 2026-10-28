@@ -72,19 +72,24 @@ fire, so for now it borrows the cast's rest poses (its first and last two frames
          (- 1.0 (- position (ffloor position))))
         (T 1.0)))
 
-(defun update-hands-bob (hands dt)
-  "Advance the sway with the distance walked; it fades out when standing or airborne."
+(defun update-bob (weapon dt)
+  "Advance WEAPON's sway (the hands or the sword) with the distance walked; it fades
+out when standing or airborne."
   (let* ((vel (velocity *player*))
          (speed (sqrt (+ (* (vx vel) (vx vel)) (* (vz vel) (vz vel)))))
          (target (if (grounded *player*) (min 1.0 (/ speed *walk-speed*)) 0.0)))
-    (incf (bob-amount hands) (* (- target (bob-amount hands)) (min 1.0 (* *hands-bob-ease* dt))))
-    (setf (bob-phase hands) (mod (+ (bob-phase hands) (* speed dt *hands-bob-rate* #.(float (* 2 pi) 0f0)))
-                                 #.(float (* 2 pi) 0f0)))))
+    (incf (bob-amount weapon) (* (- target (bob-amount weapon)) (min 1.0 (* *hands-bob-ease* dt))))
+    (setf (bob-phase weapon) (mod (+ (bob-phase weapon) (* speed dt *hands-bob-rate* #.(float (* 2 pi) 0f0)))
+                                  #.(float (* 2 pi) 0f0)))))
+
+(defmethod render :around ((hands hands) (program shader-program))
+  (when (and *player* (eq (weapon *player*) :hands))
+    (call-next-method)))
 
 (defun layout-hands (hands)
   "Put this hand's half of the frame beside the screen's centre line, apart by the
-spread, sunk below the bottom edge and offset by the sway. The sway only ever dips,
-so the arms' cut-off ends stay below the screen."
+spread, sunk below the bottom edge, lowered while switching weapons and offset by the
+sway. The sway only ever dips, so the arms' cut-off ends stay below the screen."
   (let* ((atlas (animation-atlas (sprite-animation hands)))
          (cell-w (getf atlas :cell-width))
          (cell-h (getf atlas :cell-height))
@@ -101,13 +106,15 @@ so the arms' cut-off ends stay below the screen."
     (place hands
            (+ (if (eq (side hands) :left) (- centre half-w out) (+ centre out))
               (round (* bob sx (cos phase))))
-           (- (+ (* *hands-drop* sy) (round (* bob sy (abs (sin phase)))))))))
+           (- (+ (* *hands-drop* sy)
+                 (round (* bob sy (abs (sin phase))))
+                 (round (* sy cell-h (weapon-drop *player*))))))))
 
 (define-handler (hands tick) (dt)
   (unless (frozen-p)
     (incf (age hands) dt)
     (when *player*
-      (update-hands-bob hands dt)))
+      (update-bob hands dt)))
   (let* ((atlas (animation-atlas (sprite-animation hands)))
          (position (cast-position))
          (frame (hands-frame hands position))

@@ -13,6 +13,7 @@
                (:file "player")
                (:file "hud")
                (:file "hands")
+               (:file "sword")
                (:file "menu")
                (:file "level")
                (:file "main"))

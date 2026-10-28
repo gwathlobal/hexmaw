@@ -134,6 +134,12 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
   whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
   to `*cast-release*`.
+- `src/sword.lisp`: the sword and weapon switching. The player holds one weapon (`*weapons*`:
+  1 the sword, 2 the casting hands); switching lowers one off screen and raises the next.
+  The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
+  so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
+  blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
+  `*sword-arc*`, not behind a wall.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
@@ -185,6 +191,19 @@ cyan line between:
 python3 tools/slice_frames.py "Fire Hands Sheet.png" data/sprites/hands --pixel 4 --anchor bottom hands:12
 ```
 
+The sword is one 12-frame strip (4 idle, then an 8-frame slash), one whole 4:3 screen per
+cell. Its sheet, `Sword Sheet.png`, is a generated idle row stacked on a generated 2 × 4 slash
+sheet, the idle frames shifted 17 px left to line up with the slash's last frame (its return
+to rest), so the swing flows back into the idle:
+
+```bash
+python3 tools/slice_frames.py "Sword Sheet.png" data/sprites/sword --pixel 2.5 --anchor bottom sword:12
+```
+
+Generators can't keep a motion sequence across a grid of first-person poses, and they draw
+a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
+attach the first as the design reference, and describe each pose in screen positions.
+
 Most of that idle row has no palm fire, so `*hands-idle-sequence*` loops the cast's rest
 frames instead. A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
 `tools/hd reload src/<file that defines it>.lisp` reloads it and rebuilds the scene.
@@ -216,9 +235,11 @@ turns only. Re-saving a `.glb` and running `tools/hd reset` picks up the new ver
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
-Space to jump, C or Ctrl to crouch, left click to cast the bolt, F12 for a screenshot.
+Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands, left click to
+attack (swing, or cast the bolt), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
-on the hands' release frame; `(hurt (aref *creatures* 0) 0)` triggers a hit reaction;
+on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
+0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction;
 `tools/hd status` shows mana and each creature's health.

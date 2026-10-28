@@ -45,7 +45,16 @@
    (cast-time :initform NIL :accessor cast-time
               :documentation "Seconds since the last cast began, or NIL before the first.")
    (pending-spell :initform NIL :accessor pending-spell
-                  :documentation "Spell being cast, launched at *CAST-RELEASE*.")))
+                  :documentation "Spell being cast, launched at *CAST-RELEASE*.")
+   (weapon :initform :hands :accessor weapon :documentation "Weapon on screen (sword.lisp).")
+   (wanted-weapon :initform :hands :accessor wanted-weapon
+                  :documentation "Weapon asked for; differs from WEAPON while switching.")
+   (weapon-lower :initform 0.0 :accessor weapon-lower
+                 :documentation "How far the weapon on screen is lowered: 0 up, 1 gone.")
+   (swing-time :initform NIL :accessor swing-time
+               :documentation "Seconds since the sword swing began, or NIL when not swinging.")
+   (swing-pending :initform NIL :accessor swing-pending
+                  :documentation "True until the swing's blow has landed.")))
 
 (defun capture-mouse (player)
   (lock-cursor (context +main+))
@@ -87,11 +96,13 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
     (cond ((not (mouse-look player))
            (capture-mouse player))
           ((eq button :left)
-           (player-cast player 'bolt)))))
+           (player-attack player)))))
 
 (define-handler (player key-press) (key)
   (case key
-    (:f12 (screenshot))))
+    (:f12 (screenshot))
+    (T (when (eq *game-state* :playing)
+         (select-weapon player key)))))
 
 (define-handler (player mouse-move) (old-pos pos)
   (when (mouse-look player)
@@ -180,6 +191,7 @@ On a step the eye keeps its height and eases to the new one."
     (incf (cast-time player) dt)
     (when (and (pending-spell player) (<= *cast-release* (cast-time player)))
       (release-spell player)))
+  (update-weapons player dt)
   (let* ((dt (min dt 0.05))
          (vel (velocity player))
          (yaw (vy (rotation player)))
