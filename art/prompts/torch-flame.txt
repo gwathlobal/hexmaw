@@ -1,0 +1,20 @@
+Pixel-art sprite sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game: the 8-frame looping FLAME of a wall torch, the fire that burns on top of a pitch-soaked torch head. The torch itself is a separate sprite; draw only the fire.
+
+REFERENCE IMAGES, in the order attached:
+1. A fire effect sheet from the same game (a fireball spell). Match its pixel size, outline-free fire shapes and colours, but this is a different fire: a tall, steady torch flame, not a round ball.
+2. A monster turnaround sheet from the same game. Use it ONLY for the overall pixel-art style and scale of pixels.
+
+THE FLAME
+- A torch flame rising from a wide base that sits on an unseen torch head: wide and round at the bottom, narrowing upward into two or three licking tongues that end in points. About one and a half times as tall as it is wide at its base.
+- Solid fire shapes with hard pixel edges: a bright pale-yellow core low in the flame, then yellow, orange, and a deep red rim on the outside and at the tips.
+- The 8 frames loop seamlessly: the tongues sway and lick up in turn, one tip breaks off as a small separate wisp of flame and rises in a couple of frames, the base stays the same width and in the same place in every frame. One or two tiny ember sparks may rise above the tips.
+- Gentle motion: from frame to frame only the upper half of the flame changes much.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- In every cell the flame's base sits at the same height near the bottom of the cell and is centred horizontally. The same scale in every frame.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, smoke or haze.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- The whole flame, its tips and sparks fit inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No torch, no handle, no text, labels, numbers or frame borders.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

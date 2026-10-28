@@ -1,0 +1,20 @@
+Pixel-art sprite for a Doom/Hexen-style first-person dark-fantasy dungeon game: a WALL TORCH SCONCE, seen straight on, as if standing in front of the dungeon wall it hangs on. It is drawn as a flat sprite laid on the wall.
+
+REFERENCE IMAGES, in the order attached:
+1. A monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, outline weight, shading, palette mood. Do not draw the monster.
+2. A fire effect sheet from the same game. Use it ONLY for how fire is drawn; there is no fire in this image.
+
+THE SCONCE
+- A small, heavy backplate of dark wrought iron bolted to the wall: a vertical shield or diamond shape with four round rivet heads and a little rust at the edges.
+- From the plate, a forged iron arm curls forward and holds a ring collar, and the collar grips a wooden torch handle standing upright.
+- The torch handle is rough dark oak, a little thicker toward the top, about four times as tall as it is wide.
+- On top of the handle, the torch head: rags wrapped around it and soaked in pitch, charred black with dull ember-red flecks in the folds. It is UNLIT: no flame, no smoke, no glow. A flame will be added on top of it separately.
+- A short iron drip cup under the collar. A thin, pointed iron spike or curl at the bottom of the backplate.
+- The whole object is about twice as tall as it is wide. Seen from the front, the torch is vertical and centred on the plate.
+- A muted, grimy palette: black iron with cold grey highlights, rust brown, dark oak, charred black; only the ember flecks are red.
+
+LAYOUT
+- One single sprite, centred, filling most of the image height, with a clear magenta margin all round. Nothing touches the image edge, and nothing is cropped.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, wall, vignette, glow or cast shadow. Do not draw the wall itself.
+- No text, labels, numbers, frame borders or effects.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

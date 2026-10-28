@@ -19,7 +19,14 @@ the hall about as bright as with Trial's renderer at 0.5.")
 (defparameter *torch-color* (vec 1.3 0.8 0.4))
 (defparameter *torch-radius* 7.0)
 (defparameter *torch-flicker* 0.12 "How far a torch's brightness wavers, as a fraction.")
-(defparameter *torch-flame-size* 0.35 "Height of the flame drawn at a torch, in metres.")
+(defparameter *torch-size* 0.96
+  "Height of the torch sprite, flame tip to handle end, in metres. 0.96 makes the unlit
+torch 0.69 m, at about 135 art pixels per metre.")
+(defparameter *torch-stand-off* 0.1
+  "Metres from the wall to the torch's centre line: more than half the sprite's width, so
+the sprite, which turns to face the camera, doesn't sink into the wall seen from the side.")
+(defparameter *torch-wall-reach* 1.0
+  "How far from where a torch is placed ADD-TORCH looks for a wall to hang it on.")
 (defparameter *bolt-light-color* (vec 1.5 0.8 0.3))
 (defparameter *bolt-light-radius* 4.0)
 
@@ -54,17 +61,54 @@ the hall about as bright as with Trial's renderer at 0.5.")
     (vector-push-extend lamp *lamps*)
     lamp))
 
-;;; Torches: a steady, flickering lamp with a flame drawn where it hangs.
+;;; Torches: a burning torch in an iron collar, one camera-facing sprite standing off the
+;;; wall, and a flickering lamp in the flame. Like the effects, it is fullbright.
 
-(define-shader-entity torch-flame (fx-sprite) ()
-  (:documentation "The flame drawn at a torch. Unlike other effects, it stays through RESET-RUN."))
+(define-fx-animation torch "sprites/torch/torch" :fps 10 :loop T :size *torch-size*)
+
+(define-shader-entity torch (fx-sprite) ()
+  (:documentation "A wall torch. Unlike other effects, it stays through RESET-RUN."))
+
+;; Turned only about +Y, as a billboard is, so it stands upright when the view tilts.
+(define-handler (torch tick :after) ()
+  (let ((camera (camera (scene +main+))))
+    (when (typep camera 'fps-camera)
+      (!qfrom-angle (orientation torch) +vy+ (- (vy (rotation camera)))))))
+
+(defun wall-near (x y z reach)
+  "The wall face nearest X Y Z along +-X or +-Z within REACH metres: its distance and the
+X and Z of its outward normal, or NIL."
+  (let ((best reach) nx nz)
+    (loop for s across *solids*
+          do (when (< (aref s 1) y (aref s 4))
+               (when (< (aref s 2) z (aref s 5))
+                 (let ((west (- x (aref s 3))) (east (- (aref s 0) x)))
+                   (when (< 0 west best) (setf best west nx 1.0 nz 0.0))
+                   (when (< 0 east best) (setf best east nx -1.0 nz 0.0))))
+               (when (< (aref s 0) x (aref s 3))
+                 (let ((north (- z (aref s 5))) (south (- (aref s 2) z)))
+                   (when (< 0 north best) (setf best north nx 0.0 nz 1.0))
+                   (when (< 0 south best) (setf best south nx 0.0 nz -1.0))))))
+    (when nx (values best nx nz))))
 
 (defun add-torch (container x y z)
-  (add-lamp (vec x y z) *torch-color* *torch-radius* :flicker *torch-flicker*)
-  (let* ((animation (find-fx-animation 'bolt-flight))
-         (flame (make-instance 'torch-flame :animation animation :location (vec x y z))))
-    (nv* (scaling flame) (/ *torch-flame-size* (animation-size animation)))
-    (enter flame container)))
+  "A torch whose flame stands on X Y Z, moved to *TORCH-STAND-OFF* from the nearest wall
+within *TORCH-WALL-REACH*, if there is one."
+  (multiple-value-bind (distance nx nz) (wall-near x y z *torch-wall-reach*)
+    (when distance
+      (setf x (+ x (* nx (- *torch-stand-off* distance)))
+            z (+ z (* nz (- *torch-stand-off* distance)))))
+    ;; The sprite is centred on its location; the flame's base is :OVERLAY-BOTTOM rows
+    ;; down from its top (tools/overlay_strip.py), and the lamp halfway up the flame.
+    (let* ((animation (find-fx-animation 'torch))
+           (atlas (animation-atlas animation))
+           (base (/ (getf atlas :overlay-bottom) (getf atlas :cell-height)))
+           (torch (make-instance 'torch :animation animation
+                                        :location (vec x (+ y (* (- base 0.5) *torch-size*)) z))))
+      (add-lamp (vec x (+ y (* 0.5 base *torch-size*)) z) *torch-color* *torch-radius*
+                :flicker *torch-flicker*)
+      (enter torch container)
+      torch)))
 
 (defun attach-glow (source color radius)
   "Light SOURCE, an entity, with a lamp that follows it until it leaves the scene."

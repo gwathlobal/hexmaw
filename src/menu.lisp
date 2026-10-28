@@ -181,7 +181,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))
         ;; Projectiles and impacts; effect sprites drawn on the HUD stay.
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch-flame))))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch))))
           (push entity leftovers)))
       (mapc #'despawn leftovers))))
 

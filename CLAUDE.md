@@ -124,7 +124,11 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   and `lit-entity`, the shader mixin whose `light_at` lights the level and billboards from
   the `lamp-block` uniform buffer.
 - `src/lights.lisp`: point lights (`lamp`s in `*lamps*`, which `build-level` empties).
-  `add-torch` places a flickering lamp and a flame sprite; `attach-glow` gives an entity a
+  `add-torch x y z` places a `torch` whose flame stands on y, `*torch-stand-off*` out from
+  the nearest wall within `*torch-wall-reach*` (`wall-near`), with a flickering lamp in the
+  flame. The torch is one sprite, torch and flame together, turned about +Y to face the
+  camera like a billboard but fullbright like an effect. The stand-off is more than half
+  its width, so it never sinks into the wall. `attach-glow` gives an entity a
   lamp that follows it and goes out when it leaves the scene (the bolt and its burst).
   Each frame `gather-lights` (from `main`'s render) drops the lamps that could only light
   fogged-out surfaces (further than `*fog-end*` plus their radius), sorts the rest nearest
@@ -465,6 +469,24 @@ python3 tools/slice_frames.py "Imp Death Sheet.webp" data/sprites/imp --pixel 3.
 
 Hook a strip up with `define-fx-animation` (fps, loop, height in metres) and name it in
 a spell's `:projectile-animation` / `:impact-animation`.
+
+The wall torch is two generated images: `art/torch/unlit-2.png` (the unlit torch in its
+iron collar, front view, from `art/prompts/torch-unlit.txt`) and `art/torch/flame-2.png`
+(an 8-frame flame loop, 2 × 4, from `torch-flame.txt`). The flame references the imp's
+turnaround and the bolt sheet for style. The torch references the turnaround and
+`sconce-2.png`, an earlier sconce with a backplate (`torch-sconce.txt`), for the torch's
+look. Drop the plate: the sprite floats off the wall. Each is sliced into
+`art/torch/strips/`, then `tools/overlay_strip.py` lays the flame on the torch head
+(`--sink`: how far into it) as the game's 8-frame strip. The index's `:overlay-bottom`,
+the flame's base row, is what `add-torch` stands on y. The `--pixel` values give both about
+135 art pixels per metre at `*torch-size*` 0.96 m. That's twice the monsters' density: any
+coarser and the collar and rag wrapping turn to mush.
+
+```bash
+python3 tools/slice_frames.py art/torch/unlit-2.png art/torch/strips --pixel 14 --filter box --colors 32 --anchor bottom unlit:1
+python3 tools/slice_frames.py art/torch/flame-2.png art/torch/strips --pixel 9 --filter box --colors 16 --anchor bottom flame:8
+tools/overlay_strip.py art/torch/strips/unlit art/torch/strips/flame data/sprites/torch/torch --sink 0.11
+```
 
 ## Level blocks
 
