@@ -22,9 +22,10 @@
           (scaling sprite) (vec (* h (/ (getf atlas :cell-width) (getf atlas :cell-height))) h 1))))
 
 (defun spawn-fx (name location container)
-  "Play effect animation NAME once at LOCATION."
-  (enter (make-instance 'fx-sprite :animation (find-fx-animation name) :location (vcopy location))
-         container))
+  "Play effect animation NAME once at LOCATION. Returns the effect sprite."
+  (let ((sprite (make-instance 'fx-sprite :animation (find-fx-animation name) :location (vcopy location))))
+    (enter sprite container)
+    sprite))
 
 (defun despawn (entity)
   (when (container entity)

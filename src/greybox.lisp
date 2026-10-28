@@ -1,15 +1,51 @@
 (in-package #:hexmaw)
 
 ;;; Untextured level geometry. Faces are shaded by which axis they face
-;;; (Doom/Quake style), a 1 m grid shows scale, and distance fog hides the far
-;;; end. Every parameter here is a DEFPARAMETER so it can be tuned live.
+;;; (Doom/Quake style), lit by the lights in lights.lisp, a 1 m grid shows scale,
+;;; and distance fog hides the far end. Every parameter here is a DEFPARAMETER so
+;;; it can be tuned live.
 
 (defparameter *fog-color* (vec 0.06 0.05 0.07))
 (defparameter *fog-start* 3.0)
 (defparameter *fog-end* 12.0)
 (defparameter *grid-strength* 0.25)
 
-(define-shader-entity greybox (vertex-entity colored-entity transformed-entity)
+;;; Lighting shared by every lit shader (the level, billboards): LIGHT_AT gives the
+;;; light falling on a world position, ambient plus the lights UPLOAD-LIGHTS sent
+;;; (lights.lisp). Each light fades to nothing at its radius. Positions snap to a
+;;; world grid and brightness to a few bands, so pools of light come out blocky and
+;;; stepped like the sprites rather than smooth. No shadows: light goes through walls.
+
+(define-shader-entity lit-entity () ())
+
+(define-class-shader (lit-entity :fragment-shader)
+  "const int MAX_LIGHTS = 16;
+uniform vec3 ambient_light;
+uniform vec3 camera_position;
+uniform int light_count;
+uniform vec4 light_sphere[MAX_LIGHTS];
+uniform vec3 light_color[MAX_LIGHTS];
+uniform float light_snap;
+uniform float light_bands;
+
+// FACING 1 lights a surface with normal N by the angle to each light; 0 ignores the
+// angle, for sprites, which are flat cards standing in for round bodies.
+vec3 light_at(vec3 p, vec3 n, float facing){
+  p = (floor(p / light_snap) + 0.5) * light_snap;
+  vec3 total = ambient_light;
+  for(int i = 0; i < light_count; ++i){
+    vec3 d = light_sphere[i].xyz - p;
+    float dist = length(d);
+    float k = clamp(1.0 - dist / light_sphere[i].w, 0.0, 1.0);
+    float angle = mix(1.0, max(dot(n, d / max(dist, 0.001)), 0.0), facing);
+    total += light_color[i] * k * k * angle;
+  }
+  float level = max(total.r, max(total.g, total.b));
+  float banded = ceil(level * light_bands) / light_bands;
+  return total * (banded / max(level, 0.0001));
+}")
+
+(define-shader-entity greybox (lit-entity vertex-entity colored-entity transformed-entity)
   ((vertex-array :initform (// 'trial 'unit-cube))))
 
 (defun set-fog-uniforms (program)
@@ -20,6 +56,7 @@
 
 (defmethod render :before ((box greybox) (program shader-program))
   (set-fog-uniforms program)
+  (upload-lights program)
   (setf (uniform program "grid_strength") (float *grid-strength* 0f0)))
 
 (define-class-shader (greybox :fragment-shader)
@@ -34,14 +71,17 @@ out vec4 color;
 void main(){
   maybe_call_next_method();
   // Flat face normal from screen-space derivatives; no mesh normals needed.
-  vec3 n = abs(normalize(cross(dFdx(v_world_position), dFdy(v_world_position))));
+  // Turned toward the camera, since the visible side is the one being lit.
+  vec3 face = normalize(cross(dFdx(v_world_position), dFdy(v_world_position)));
+  if(dot(face, camera_position - v_world_position) < 0.0) face = -face;
+  vec3 n = abs(face);
   float shade = n.y * 1.0 + n.x * 0.75 + n.z * 0.6;
   // 1 m grid on the two axes that lie in the face.
   vec3 g = abs(fract(v_world_position + 0.5) - 0.5);
   vec3 tangent = step(n, vec3(0.5));
   float d = min(min(mix(1.0, g.x, tangent.x), mix(1.0, g.y, tangent.y)), mix(1.0, g.z, tangent.z));
   float line = 1.0 - smoothstep(0.0, 0.02, d);
-  color.rgb *= shade * (1.0 - grid_strength * line);
+  color.rgb *= shade * (1.0 - grid_strength * line) * light_at(v_world_position, face, 1.0);
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);
 }")

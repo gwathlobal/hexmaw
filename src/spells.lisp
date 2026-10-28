@@ -103,7 +103,9 @@ it (a SPELL-PROJECTILE for projectile spells)."))
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
     (nv* (projectile-velocity projectile) (float (projectile-speed spell) 0f0))
-    (enter projectile container)))
+    (enter projectile container)
+    (attach-glow projectile *bolt-light-color* *bolt-light-radius*)
+    projectile))
 
 (defun impact (projectile)
   "Play the spell's impact where PROJECTILE hit, and remove it."
@@ -111,7 +113,7 @@ it (a SPELL-PROJECTILE for projectile spells)."))
     (when (and name (container projectile))
       (let* ((velocity (projectile-velocity projectile))
              (at (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
-        (spawn-fx name at (container projectile)))))
+        (attach-glow (spawn-fx name at (container projectile)) *bolt-light-color* *bolt-light-radius*))))
   (despawn projectile))
 
 ;; After FX-SPRITE's tick, which animates and ages it.

@@ -50,7 +50,7 @@ the STRIP.png and STRIP.lisp that tools/slice_frames.py writes."
                                         :atlas (read-atlas ,(format NIL "data/~a.lisp" strip))
                                         :fps ,fps :loop ,loop :size ,size))))
 
-(define-shader-entity billboard (vertex-entity textured-entity transformed-entity listener)
+(define-shader-entity billboard (lit-entity vertex-entity textured-entity transformed-entity listener)
   ((vertex-array :initform (// 'hexmaw 'billboard-quad))
    (atlas :initarg :atlas :accessor atlas)
    (facing :initarg :facing :initform 0.0 :accessor facing
@@ -112,6 +112,7 @@ side; negative du mirrors."
 
 (defmethod render :before ((sprite billboard) (program shader-program))
   (set-fog-uniforms program)
+  (upload-lights program)
   (setf (uniform program "frame_uv") (frame-uv sprite))
   (setf (uniform program "tint") (tint sprite)))
 
@@ -127,6 +128,7 @@ void main(){
 
 (define-class-shader (billboard :fragment-shader)
   "in vec3 v_view_position;
+in vec3 v_world_position;
 uniform vec3 fog_color;
 uniform float fog_start;
 uniform float fog_end;
@@ -136,6 +138,7 @@ out vec4 color;
 void main(){
   maybe_call_next_method();
   if(color.a < 0.5) discard;
+  color.rgb *= light_at(v_world_position, vec3(0), 0.0);
   color.rgb = mix(color.rgb, tint.rgb, tint.a);
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);

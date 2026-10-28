@@ -10,6 +10,7 @@
                (:file "creature")
                (:file "blocks")
                (:file "fx")
+               (:file "lights")
                (:file "spells")
                (:file "player")
                (:file "hud")

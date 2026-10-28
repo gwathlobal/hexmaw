@@ -12,7 +12,8 @@
 
 (defun build-level (container)
   (setf (fill-pointer *solids*) 0
-        (fill-pointer *creatures*) 0)
+        (fill-pointer *creatures*) 0
+        (fill-pointer *lamps*) 0)
   (let ((h 4.0) (w 0.5))
     ;; Hall: floor, ceiling, east/west/south walls, north wall with a doorway.
     (add-box container -10 -0.5 -10  10 0 10 :color *floor-color*)
@@ -30,6 +31,9 @@
     (add-box container 5 0 -9.5  9.5 1.2 -5 :color *platform-color*)
     (add-box container 5 0 -5  6.5 0.8 -3.5 :color *platform-color*)
     (add-box container 6.5 0 -5  8 0.4 -3.5 :color *platform-color*)
+    ;; Torches on the hall walls, two of them flanking the doorway.
+    (loop for (x z) in '((-9.5 0) (9.5 0) (0 9.5) (-5 -9.5) (5 -9.5))
+          do (add-torch container x 2.4 z))
     ;; An imp in the middle of the hall, facing the spawn point.
     (spawn-creature (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
@@ -38,11 +42,15 @@
       (add-box container -1.5 3 z1  1.5 3.5 z0 :color *ceiling-color*)
       (add-box container (- -1.5 w) 0 z1  -1.5 3 z0 :color *wall-color*)
       (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :color *wall-color*)
+      (add-torch container -1.0 2.2 -18)
       ;; The test block (data/blocks/test-room.glb) at the corridor's end, attached by
       ;; its south doorway. Its other doorways are walled off for now.
       (dolist (c (attach-block 'test-room container "connector_south" :at (vec 0 0 z1) :facing :south))
         (destructuring-bind (name position direction) c
           (unless (string-equal name "connector_south")
-            (seal-connector container position direction))))))
+            (seal-connector container position direction))))
+      ;; Two torches on the test room's side walls.
+      (add-torch container -4.5 2.6 -30.5)
+      (add-torch container 4.5 2.6 -30.5)))
   ;; Last, once every solid is in.
   (build-nav-grid))

@@ -59,6 +59,10 @@ Wrap anything that changes the scene, entities or GL state in `(game ...)` so it
 runs on the game thread between frames, for example
 `tools/hd '(game (respawn *player*))'`. Reads such as `(feet *player*)` don't need it.
 
+`tools/compare_shots.sh DIR` saves a fixed set of views (spawn, the imp from several
+angles, a bolt in flight, the corridor, the test room) to `DIR/<shot>.png`, for comparing
+rendering changes; `SHOTS="spawn bolt"` limits it. It leaves the game paused.
+
 **Verify visual work with a screenshot, not just a clean reload.** A shader can
 compile and render garbage. If `screenshot` says the window is minimised, run
 `tools/hd '(show-window)'` first.
@@ -109,10 +113,20 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 ## Layout and conventions
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
-- `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`).
+- `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`),
+  and `lit-entity`, the shader mixin whose `light_at` lights the level and billboards.
+- `src/lights.lisp`: point lights (`lamp`s in `*lamps*`, which `build-level` empties).
+  `add-torch` places a flickering lamp and a flame sprite; `attach-glow` gives an entity a
+  lamp that follows it and goes out when it leaves the scene (the bolt and its burst).
+  Each frame `gather-lights` (from `main`'s render) picks the `*max-lights*` (16, as
+  `MAX_LIGHTS` in the shader) nearest the camera, and `upload-lights` sends them to each lit
+  program once. Light is ambient (`*ambient-color*`) plus each lamp fading to nothing at
+  its radius, worked out on a `*light-snap*` world grid and stepped into `*light-bands*`
+  bands, so pools come out blocky. Walls take the angle to the light; sprites don't. No
+  shadows: light goes through walls. Effects and the HUD stay unlit.
 - `src/nav.lisp`: the nav grid, where creatures can stand and how they get around; see
   "Creature movement" below.
-- `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint), and
+- `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint, lit), and
   frame animations from `tools/slice_frames.py` strips (`define-fx-animation`).
   Assets live in `data/` (Trial pool `hexmaw`).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;

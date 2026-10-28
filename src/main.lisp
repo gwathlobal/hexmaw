@@ -48,6 +48,10 @@
     (let ((clear (clear-color *render-pass*)))
       (setf (vx clear) (vx *fog-color*) (vy clear) (vy *fog-color*) (vz clear) (vz *fog-color*) (vw clear) 1.0))))
 
+(defmethod render :before ((main main) target)
+  ;; The nearest lights, for every lit shader this frame (lights.lisp).
+  (gather-lights))
+
 (defmethod render :around ((main main) target)
   (handler-bind ((error (lambda (e) (guard-runtime-error e :render))))
     (call-next-method)))
