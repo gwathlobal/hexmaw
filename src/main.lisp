@@ -43,6 +43,7 @@
   ;; Hit-stop runs out only in play, so a menu opened mid-hit doesn't eat it.
   (when (eq *game-state* :playing)
     (setf *hit-stop* (max 0.0 (- *hit-stop* dt))))
+  (advance-light-clock dt)
   ;; Clear to the fog colour so geometry fades into the background.
   (when *render-pass*
     (let ((clear (clear-color *render-pass*)))

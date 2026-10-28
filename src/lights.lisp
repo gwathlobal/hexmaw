@@ -2,15 +2,20 @@
 
 ;;; Point lights for the lit shaders (LIT-ENTITY in greybox.lisp): the level and
 ;;; billboards. Effects and the HUD stay unlit; fire is its own light. A light is a
-;;; LAMP in *LAMPS*, which the level rebuilds. Each frame GATHER-LIGHTS picks the
-;;; *MAX-LIGHTS* nearest the camera, and UPLOAD-LIGHTS sends them to each lit shader
-;;; program once. A lamp fades linearly-squared to nothing at its radius.
+;;; LAMP in *LAMPS*, which the level rebuilds. Each frame GATHER-LIGHTS drops the lamps
+;;; the fog hides, sorts the rest nearest first, and writes up to *MAX-LIGHTS* of them
+;;; into the LAMP-BLOCK uniform buffer that every lit shader reads.
 
 (defparameter *ambient-color* (vec 0.65 0.63 0.67)
   "Light on every surface, from no direction. It multiplies the face shading, so 0.65 keeps
 the hall about as bright as with Trial's renderer at 0.5.")
-(defparameter *light-snap* 0.0625 "World grid, in metres, the light is worked out on: blocky pools.")
-(defparameter *light-bands* 6.0 "Brightness steps per unit of light.")
+(defparameter *light-falloff* 2.0 "Metres from a light at which it is down to half.")
+;; Retro looks, per kind of surface: the world grid, in metres, light is worked out on
+;; (blocky pools), and brightness steps per unit of light (rings). 0 turns either off.
+(defparameter *wall-light-snap* 0.0)
+(defparameter *wall-light-bands* 0.0)
+(defparameter *sprite-light-snap* 0.0)
+(defparameter *sprite-light-bands* 0.0)
 (defparameter *torch-color* (vec 1.3 0.8 0.4))
 (defparameter *torch-radius* 7.0)
 (defparameter *torch-flicker* 0.12 "How far a torch's brightness wavers, as a fraction.")
@@ -18,9 +23,8 @@ the hall about as bright as with Trial's renderer at 0.5.")
 (defparameter *bolt-light-color* (vec 1.5 0.8 0.3))
 (defparameter *bolt-light-radius* 4.0)
 
-;; Must match MAX_LIGHTS in the LIT-ENTITY shader. The arrays below are sized from it
-;; when first loaded, so a change needs a restart.
-(defparameter *max-lights* 16)
+;; The size of LAMP-BLOCK's light array (greybox.lisp); change both together and restart.
+(defparameter *max-lights* 128)
 
 (defclass lamp ()
   ((location :initarg :location :accessor location)
@@ -30,7 +34,9 @@ the hall about as bright as with Trial's renderer at 0.5.")
             :documentation "How far the brightness wavers, as a fraction; 0 for steady.")
    (flicker-phase :initform (random 100.0) :reader flicker-phase)
    (source :initarg :source :initform NIL :reader source
-           :documentation "Entity the lamp follows; it goes out when the entity leaves the scene.")))
+           :documentation "Entity the lamp follows; it goes out when the entity leaves the scene.")
+   (camera-distance :initform 0.0 :accessor camera-distance
+                    :documentation "Metres from the camera, as of the last GATHER-LIGHTS.")))
 
 (defvar *lamps* (make-array 0 :adjustable T :fill-pointer T)
   "Every light in the level. BUILD-LEVEL empties it.")
@@ -58,19 +64,32 @@ the hall about as bright as with Trial's renderer at 0.5.")
   "Light SOURCE, an entity, with a lamp that follows it until it leaves the scene."
   (add-lamp (location source) color radius :source source))
 
-;;; Each frame: follow sources, drop lamps whose source has gone, pick the nearest.
+;;; Flicker runs on its own clock, wrapped at 2 pi: the flicker's frequencies are whole
+;;; numbers, so the wrap doesn't show, and the clock stays a small single-float.
 
-(defvar *light-count* 0)
-(defvar *light-spheres* (coerce (loop repeat *max-lights* collect (vec4)) 'simple-vector)
-  "Position and radius of each light sent this frame.")
-(defvar *light-colors* (coerce (loop repeat *max-lights* collect (vec3)) 'simple-vector))
-(defvar *light-picked* (make-array *max-lights* :initial-element NIL))
-(defvar *light-frame* 0 "Counts frames, so each program gets the lights once per frame.")
-(defvar *light-uploads* (make-hash-table :test 'eq) "Shader program -> frame it last got the lights.")
-(defvar *light-uniform-names*
-  (coerce (loop for i below *max-lights*
-                collect (cons (format NIL "light_sphere[~d]" i) (format NIL "light_color[~d]" i)))
-          'simple-vector))
+(defvar *light-clock* 0.0)
+
+(defun advance-light-clock (dt)
+  (incf *light-clock* (float dt 0f0))
+  (when (< #.(float (* 2 pi) 0f0) *light-clock*)
+    (decf *light-clock* #.(float (* 2 pi) 0f0))))
+
+(defun lamp-brightness (lamp)
+  "How bright LAMP is now, from its flicker: steady while the world is frozen."
+  (let ((p (flicker-phase lamp))
+        (time *light-clock*))
+    (if (frozen-p)
+        1.0
+        (+ 1.0 (* (flicker lamp) (+ (* 0.6 (sin (+ (* time 9.0) p)))
+                                    (* 0.4 (sin (+ (* time 23.0) (* 2 p))))))))))
+
+;;; Each frame: follow sources, drop lamps whose source has gone or that the fog hides,
+;;; sort the rest by distance and send the nearest. Nothing here allocates once
+;;; *LIT-LAMPS* has grown to the level's lamp count.
+
+(defvar *lit-lamps* (make-array 0 :adjustable T :fill-pointer T)
+  "The lamps that can light something visible this frame, nearest first.")
+(defvar *light-color* (vec3) "Scratch: colour of the light being sent.")
 
 (defun update-lamps ()
   "Move lamps with a source onto it, and remove those whose source left the scene."
@@ -84,46 +103,63 @@ the hall about as bright as with Trial's renderer at 0.5.")
                     (setf (aref *lamps* j) lamp) (incf j))))
     (setf (fill-pointer *lamps*) j)))
 
-(defun lamp-distance (lamp camera)
-  (let ((a (location lamp)))
-    (+ (expt (- (vx a) (vx camera)) 2) (expt (- (vy a) (vy camera)) 2) (expt (- (vz a) (vz camera)) 2))))
+(defun sort-lit-lamps (camera)
+  "Fill *LIT-LAMPS* with the lamps that can reach a point closer than the fog's far end,
+nearest CAMERA first. A lamp further than that plus its radius only lights fogged-out
+surfaces. Insertion sort: the order barely changes from frame to frame."
+  (let ((lit *lit-lamps*)
+        (reach (float *fog-end* 0f0)))
+    (setf (fill-pointer lit) 0)
+    (loop for lamp across *lamps*
+          for at = (location lamp)
+          for d = (sqrt (+ (expt (- (vx at) (vx camera)) 2)
+                           (expt (- (vy at) (vy camera)) 2)
+                           (expt (- (vz at) (vz camera)) 2)))
+          do (setf (camera-distance lamp) d)
+             (when (< d (+ reach (radius lamp)))
+               (vector-push-extend lamp lit)
+               (loop for j downfrom (1- (fill-pointer lit)) above 0
+                     while (< (camera-distance (aref lit j)) (camera-distance (aref lit (1- j))))
+                     do (rotatef (aref lit j) (aref lit (1- j))))))
+    lit))
+
+(defun slot-offset (struct slot)
+  "Byte offset of SLOT in the buffer memory of gl-struct STRUCT."
+  (org.shirakumo.fraf.trial::slot-offset struct slot))
+
+;; Inline, so the raw memory pointer isn't boxed (allocated) to pass it in.
+(declaim (inline put-floats))
+(defun put-floats (memory offset vector)
+  "Write the X, Y and Z of VECTOR as floats at OFFSET bytes into MEMORY."
+  (setf (cffi:mem-ref memory :float offset) (vx vector)
+        (cffi:mem-ref memory :float (+ offset 4)) (vy vector)
+        (cffi:mem-ref memory :float (+ offset 8)) (vz vector)))
 
 (defun gather-lights ()
-  "Pick up to +MAX-LIGHTS+ lamps nearest the camera into the arrays UPLOAD-LIGHTS sends."
+  "Send the nearest lamps the fog doesn't hide to the LAMP-BLOCK uniform buffer."
   (update-lamps)
-  (let ((camera (location (camera (scene +main+))))
-        (time (float (current-time) 0f0))
-        (count (min *max-lights* (length *lamps*))))
-    (fill *light-picked* NIL)
-    (dotimes (i count)
-      ;; Selection: the nearest lamp not yet picked. Few lamps, so this is cheap.
-      (let ((best NIL) (best-d 0.0))
-        (loop for lamp across *lamps*
-              for d = (lamp-distance lamp camera)
-              do (when (and (or (null best) (< d best-d)) (not (find lamp *light-picked* :end i)))
-                   (setf best lamp best-d d)))
-        (setf (aref *light-picked* i) best)
-        (let* ((sphere (aref *light-spheres* i))
-               (color (aref *light-colors* i))
-               (p (flicker-phase best))
-               (k (+ 1.0 (* (flicker best) (+ (* 0.6 (sin (+ (* time 9.0) p))) (* 0.4 (sin (+ (* time 23.0) (* 2 p)))))))))
-          (let ((at (location best)))
-            (setf (vx sphere) (vx at) (vy sphere) (vy at) (vz sphere) (vz at) (vw sphere) (radius best)))
-          (v<- color (color best))
-          (nv* color k))))
-    (setf *light-count* count)
-    (incf *light-frame*)))
+  (let ((buffer (// 'hexmaw 'lamp-block))
+        (camera (location (camera (scene +main+)))))
+    (when (allocated-p buffer)
+      (let* ((lit (sort-lit-lamps camera))
+             (count (min *max-lights* (length lit))))
+        (with-buffer-tx (block buffer)
+          ;; Fields are written straight into the buffer's memory: setting them through
+          ;; SLOT-VALUE allocates, which a per-frame function mustn't.
+          (let ((memory (memory-region-pointer (storage block)))
+                (lights (slot-value block 'lights))
+                (color *light-color*))
+            (put-floats memory (slot-offset block 'ambient-light) *ambient-color*)
+            (put-floats memory (slot-offset block 'camera-position) camera)
+            (setf (cffi:mem-ref memory :float (slot-offset block 'light-falloff)) (float *light-falloff* 0f0)
+                  (cffi:mem-ref memory :int (slot-offset block 'light-count)) count)
+            (dotimes (i count)
+              (let ((lamp (aref lit i))
+                    (light (aref lights i)))
+                (let ((offset (slot-offset light 'sphere)))
+                  (put-floats memory offset (location lamp))
+                  (setf (cffi:mem-ref memory :float (+ offset 12)) (radius lamp)))
+                (v<- color (color lamp))
+                (nv* color (lamp-brightness lamp))
+                (put-floats memory (slot-offset light 'color) color)))))))))
 
-(defun upload-lights (program)
-  "Send this frame's lights to PROGRAM, unless it already has them."
-  (unless (eql *light-frame* (gethash program *light-uploads*))
-    (setf (gethash program *light-uploads*) *light-frame*)
-    (setf (uniform program "ambient_light") *ambient-color*)
-    (setf (uniform program "camera_position") (location (camera (scene +main+))))
-    (setf (uniform program "light_snap") (float *light-snap* 0f0))
-    (setf (uniform program "light_bands") (float *light-bands* 0f0))
-    (setf (uniform program "light_count") *light-count*)
-    (dotimes (i *light-count*)
-      (let ((names (aref *light-uniform-names* i)))
-        (setf (uniform program (car names)) (aref *light-spheres* i))
-        (setf (uniform program (cdr names)) (aref *light-colors* i))))))

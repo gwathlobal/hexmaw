@@ -60,7 +60,8 @@ runs on the game thread between frames, for example
 `tools/hd '(game (respawn *player*))'`. Reads such as `(feet *player*)` don't need it.
 
 `tools/compare_shots.sh DIR` saves a fixed set of views (spawn, the imp from several
-angles, a bolt in flight, the corridor, the test room) to `DIR/<shot>.png`, for comparing
+angles, a bolt in flight, the corridor, the imp under a torch, the test room) to
+`DIR/<shot>.png`, for comparing
 rendering changes; `SHOTS="spawn bolt"` limits it. It leaves the game paused.
 
 **Verify visual work with a screenshot, not just a clean reload.** A shader can
@@ -114,16 +115,23 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
 - `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`),
-  and `lit-entity`, the shader mixin whose `light_at` lights the level and billboards.
+  and `lit-entity`, the shader mixin whose `light_at` lights the level and billboards from
+  the `lamp-block` uniform buffer.
 - `src/lights.lisp`: point lights (`lamp`s in `*lamps*`, which `build-level` empties).
   `add-torch` places a flickering lamp and a flame sprite; `attach-glow` gives an entity a
   lamp that follows it and goes out when it leaves the scene (the bolt and its burst).
-  Each frame `gather-lights` (from `main`'s render) picks the `*max-lights*` (16, as
-  `MAX_LIGHTS` in the shader) nearest the camera, and `upload-lights` sends them to each lit
-  program once. Light is ambient (`*ambient-color*`) plus each lamp fading to nothing at
-  its radius, worked out on a `*light-snap*` world grid and stepped into `*light-bands*`
-  bands, so pools come out blocky. Walls take the angle to the light; sprites don't. No
-  shadows: light goes through walls. Effects and the HUD stay unlit.
+  Each frame `gather-lights` (from `main`'s render) drops the lamps that could only light
+  fogged-out surfaces (further than `*fog-end*` plus their radius), sorts the rest nearest
+  first, and writes up to `*max-lights*` of them (128, the size of `lamp-block`'s array in
+  greybox.lisp) into the `lamp-block` uniform buffer that every lit shader reads. It writes
+  the buffer's memory directly: setting a gl-struct field through `slot-value` allocates.
+  Light is ambient (`*ambient-color*`) plus each lamp, down to half at `*light-falloff*`
+  metres and fading smoothly to nothing at its radius; the shader skips lamps out of reach.
+  Walls take the angle to the light; sprites ignore it, so the side of the imp nearer a
+  torch is brighter. A world grid (`*wall-light-snap*`, `*sprite-light-snap*`) and
+  brightness bands (`*wall-light-bands*`, `*sprite-light-bands*`) give a blocky retro look
+  instead; 0, the default, turns them off. Torches stop flickering while the world is
+  frozen. No shadows: light goes through walls. Effects and the HUD stay unlit.
 - `src/nav.lisp`: the nav grid, where creatures can stand and how they get around; see
   "Creature movement" below.
 - `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint, lit), and

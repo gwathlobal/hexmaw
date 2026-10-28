@@ -112,7 +112,8 @@ side; negative du mirrors."
 
 (defmethod render :before ((sprite billboard) (program shader-program))
   (set-fog-uniforms program)
-  (upload-lights program)
+  (setf (uniform program "light_snap") (float *sprite-light-snap* 0f0))
+  (setf (uniform program "light_bands") (float *sprite-light-bands* 0f0))
   (setf (uniform program "frame_uv") (frame-uv sprite))
   (setf (uniform program "tint") (tint sprite)))
 
@@ -138,7 +139,7 @@ out vec4 color;
 void main(){
   maybe_call_next_method();
   if(color.a < 0.5) discard;
-  color.rgb *= light_at(v_world_position, vec3(0), 0.0);
+  color.rgb *= band_light(light_at(snap_position(v_world_position), vec3(0), 0.0));
   color.rgb = mix(color.rgb, tint.rgb, tint.a);
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);

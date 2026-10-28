@@ -11,38 +11,64 @@
 (defparameter *grid-strength* 0.25)
 
 ;;; Lighting shared by every lit shader (the level, billboards): LIGHT_AT gives the
-;;; light falling on a world position, ambient plus the lights UPLOAD-LIGHTS sent
-;;; (lights.lisp). Each light fades to nothing at its radius. Positions snap to a
-;;; world grid and brightness to a few bands, so pools of light come out blocky and
-;;; stepped like the sprites rather than smooth. No shadows: light goes through walls.
+;;; light falling on a world position, ambient plus the lights in the LAMP-BLOCK uniform
+;;; buffer, which GATHER-LIGHTS (lights.lisp) fills once a frame for every lit shader. A light is down to half at LIGHT_FALLOFF metres and fades smoothly to
+;;; nothing at its radius. Callers may snap the position (SNAP_POSITION) or step the
+;;; result into bands (BAND_LIGHT) for a retro look. No shadows: light goes through walls.
 
-(define-shader-entity lit-entity () ())
+;; Up to 128 lights, the nearest first. The 128 must match *MAX-LIGHTS* (lights.lisp).
+(define-gl-struct lamp-light
+  (sphere :vec4)
+  (color :vec3))
+
+(define-gl-struct lamp-block
+  (ambient-light :vec3)
+  (camera-position :vec3)
+  (light-falloff :float)
+  (light-count :int)
+  (lights (:array (:struct lamp-light) 128)))
+
+(define-asset (hexmaw lamp-block) uniform-block
+    'lamp-block
+  :binding NIL)
+
+(define-shader-entity lit-entity () ()
+  (:buffers (hexmaw lamp-block)))
 
 (define-class-shader (lit-entity :fragment-shader)
-  "const int MAX_LIGHTS = 16;
-uniform vec3 ambient_light;
-uniform vec3 camera_position;
-uniform int light_count;
-uniform vec4 light_sphere[MAX_LIGHTS];
-uniform vec3 light_color[MAX_LIGHTS];
-uniform float light_snap;
+  "uniform float light_snap;
 uniform float light_bands;
 
 // FACING 1 lights a surface with normal N by the angle to each light; 0 ignores the
 // angle, for sprites, which are flat cards standing in for round bodies.
 vec3 light_at(vec3 p, vec3 n, float facing){
-  p = (floor(p / light_snap) + 0.5) * light_snap;
   vec3 total = ambient_light;
   for(int i = 0; i < light_count; ++i){
-    vec3 d = light_sphere[i].xyz - p;
+    vec3 d = lights[i].sphere.xyz - p;
     float dist = length(d);
-    float k = clamp(1.0 - dist / light_sphere[i].w, 0.0, 1.0);
+    // Most lights reach only part of the view; skip them everywhere else.
+    if(dist >= lights[i].sphere.w) continue;
+    float edge = dist / lights[i].sphere.w;
+    // Inverse-square-like near the light, windowed to reach zero at the radius.
+    float window = clamp(1.0 - edge * edge * edge * edge, 0.0, 1.0);
+    float k = window * window / (1.0 + (dist * dist) / (light_falloff * light_falloff));
     float angle = mix(1.0, max(dot(n, d / max(dist, 0.001)), 0.0), facing);
-    total += light_color[i] * k * k * angle;
+    total += lights[i].color * k * angle;
   }
-  float level = max(total.r, max(total.g, total.b));
+  return total;
+}
+
+// P snapped to the centre of its cell in a LIGHT_SNAP world grid; P itself when it's 0.
+vec3 snap_position(vec3 p){
+  return (light_snap <= 0.0) ? p : (floor(p / light_snap) + 0.5) * light_snap;
+}
+
+// LIGHT with its brightness stepped into LIGHT_BANDS steps per unit; unchanged when 0.
+vec3 band_light(vec3 light){
+  if(light_bands <= 0.0) return light;
+  float level = max(light.r, max(light.g, light.b));
   float banded = ceil(level * light_bands) / light_bands;
-  return total * (banded / max(level, 0.0001));
+  return light * (banded / max(level, 0.0001));
 }")
 
 (define-shader-entity greybox (lit-entity vertex-entity colored-entity transformed-entity)
@@ -56,7 +82,8 @@ vec3 light_at(vec3 p, vec3 n, float facing){
 
 (defmethod render :before ((box greybox) (program shader-program))
   (set-fog-uniforms program)
-  (upload-lights program)
+  (setf (uniform program "light_snap") (float *wall-light-snap* 0f0))
+  (setf (uniform program "light_bands") (float *wall-light-bands* 0f0))
   (setf (uniform program "grid_strength") (float *grid-strength* 0f0)))
 
 (define-class-shader (greybox :fragment-shader)
@@ -81,7 +108,7 @@ void main(){
   vec3 tangent = step(n, vec3(0.5));
   float d = min(min(mix(1.0, g.x, tangent.x), mix(1.0, g.y, tangent.y)), mix(1.0, g.z, tangent.z));
   float line = 1.0 - smoothstep(0.0, 0.02, d);
-  color.rgb *= shade * (1.0 - grid_strength * line) * light_at(v_world_position, face, 1.0);
+  color.rgb *= shade * (1.0 - grid_strength * line) * band_light(light_at(snap_position(v_world_position), face, 1.0));
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);
 }")

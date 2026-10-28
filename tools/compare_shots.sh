@@ -49,6 +49,7 @@ shot pillar       "$(player -2.2 0.0 -2.2 0.15 5.4978)" "$(weapon :hands)"
 shot bolt         "$(player 0.0 0.0 1.0 0.0 0.0)" "$(imp 0 0.0 -3.0 3.1416)" "$(weapon :hands)" \
                   "(cast-spell (find-spell 'bolt) (vec 0.0 1.3 -0.6) (vec 0 0 -1) (scene +main+))"
 shot corridor     "$(player 0.0 0.0 -8.5 0.0 0.0)" "$(weapon :hands)"
+shot imp-torch    "$(player 5.6 0.0 0.3 0.0 1.5708)" "$(imp 0 8.9 0.5 4.7124)" "$(weapon :hands)"
 shot test-room    "$(player 0.0 0.0 -26.0 0.05 0.0)" "$(imp 1 2.0 -31.0 3.1416)" "$(weapon :hands)"
 
 "$hd" "(game (setf *hit-stop* 0.0 *game-state* :paused) T)" >/dev/null
