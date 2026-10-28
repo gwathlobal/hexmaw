@@ -107,7 +107,7 @@
 
 (defclass pause-menu (menu-panel) ())
 (defmethod panel-title ((panel pause-menu)) "Paused")
-(defmethod panel-buttons ((panel pause-menu)) '(("Resume game" resume-game) ("Exit game" exit-game)))
+(defmethod panel-buttons ((panel pause-menu)) '(("Resume game" resume-game) ("Exit to main menu" exit-to-title)))
 
 (defun state-menu ()
   "The panel class that belongs on screen in the current state, or NIL."
@@ -142,8 +142,17 @@
   (setf *game-state* :title)
   (when *player* (release-mouse *player*)))
 
+(defun exit-to-title ()
+  "Abandon the run: back to the main menu over a freshly built level, seen from the
+spawn point as at launch."
+  (show-title)
+  (when *player*
+    (respawn *player*)
+    (let ((rot (rotation *player*))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0)))
+  ;; Queued, so it happens between frames; the new player takes the spawn position.
+  (maybe-reload-scene))
+
 (defun exit-game ()
-  (v:info :hexmaw "Exit game chosen from the ~(~a~) menu." *game-state*)
   (quit *context*))
 
 ;;; The controller: Esc, deferred button actions, and the shown panel.

@@ -121,7 +121,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
   (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
-  Transitions: `start-game`, `pause-game`, `resume-game`, `show-title`, `exit-game`.
+  Transitions: `start-game`, `pause-game`, `resume-game`, `show-title`,
+  `exit-to-title` (the pause menu's exit: back to the main menu over a rebuilt level)
+  and `exit-game` (quits; main menu only).
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons`.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
