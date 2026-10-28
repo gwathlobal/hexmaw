@@ -8,31 +8,6 @@
 (define-asset (hexmaw centered-quad) mesh
     (make-rectangle-mesh 1 1))
 
-(defclass fx-animation ()
-  ((texture :initarg :texture :reader animation-texture)
-   (atlas :initarg :atlas :reader animation-atlas)
-   (fps :initarg :fps :reader animation-fps)
-   (loop-p :initarg :loop :reader animation-loop-p
-           :documentation "Loop forever; otherwise the sprite leaves after the last frame.")
-   (size :initarg :size :reader animation-size :documentation "Frame height in metres.")))
-
-(defvar *fx-animations* (make-hash-table :test 'eq))
-
-(defun find-fx-animation (name)
-  (or (gethash name *fx-animations*) (error "No effect animation named ~s." name)))
-
-(defmacro define-fx-animation (name strip &key (fps 12) loop (size 1.0))
-  "Define effect animation NAME from STRIP, a path under data/ without extension:
-the STRIP.png and STRIP.lisp that tools/slice_frames.py writes."
-  `(progn
-     (define-asset (hexmaw ,name) image
-         ,(pathname (format NIL "~a.png" strip))
-       :min-filter :nearest :mag-filter :nearest)
-     (setf (gethash ',name *fx-animations*)
-           (make-instance 'fx-animation :texture (// 'hexmaw ',name)
-                                        :atlas (read-atlas ,(format NIL "data/~a.lisp" strip))
-                                        :fps ,fps :loop ,loop :size ,size))))
-
 (define-shader-entity fx-sprite (vertex-entity textured-entity transformed-entity listener)
   ((vertex-array :initform (// 'hexmaw 'centered-quad))
    (animation :initarg :animation :reader sprite-animation)

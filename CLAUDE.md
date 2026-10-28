@@ -107,14 +107,17 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
 - `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`).
-- `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint).
+- `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint), and
+  frame animations from `tools/slice_frames.py` strips (`define-fx-animation`).
   Assets live in `data/` (Trial pool `hexmaw`).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
-  death and revival), `*creatures*` for hit tests, and the `imp`.
+  death and revival), `*creatures*` for hit tests, and the `imp`. A creature's
+  `death-animation` plays once on death, front view from every angle, and its last frame
+  stays as the corpse until revival; without one it collapses into the floor.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
-- `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `define-fx-animation`,
-  `spawn-fx`); fullbright, no fog. Projectiles are effect sprites.
+- `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
+  no fog. Projectiles are effect sprites.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, and the `bolt`. A new effect kind is a method on `apply-effect`.
 - `src/hud.lisp`: HP and mana bars in the lower-left corner. HUD pieces are `hud-element`
@@ -221,6 +224,16 @@ Most of that idle row has no palm fire, so `*hands-idle-sequence*` loops the cas
 frames instead. A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
 `tools/hd reload src/<file that defines it>.lisp` reloads it and rebuilds the scene.
 
+A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
+whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
+tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
+corpse's blood pool reaches below the ground line, so `--ground-like 8:7` puts frame 8 on
+frame 7's ground instead of the pool's edge:
+
+```bash
+python3 tools/slice_frames.py "Imp Death Sheet.webp" data/sprites/imp --pixel 3.64 --anchor bottom --ground-like 8:7 death:8
+```
+
 Hook a strip up with `define-fx-animation` (fps, loop, height in metres) and name it in
 a spell's `:projectile-animation` / `:impact-animation`.
 
@@ -255,7 +268,9 @@ attack (swing, or cast the bolt), F12 for a screenshot.
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
-0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction;
+0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction (100 kills); to look at one death
+frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
+frame at that time;
 `tools/hd status` shows mana and each creature's health.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (next weapon).
