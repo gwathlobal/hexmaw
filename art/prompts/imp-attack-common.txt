@@ -1,0 +1,26 @@
+Pixel-art sprite sheet: a 4-frame melee attack animation of the red imp demon, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The imp's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: proportions, palette, horn shape, pointed ears, glowing yellow eyes, dark grey claws, arrow-tipped tail and shading style.
+2. The imp's walk cycle for THIS sheet's camera view. Match its camera angle, the direction the imp faces, its pixel size, outline weight, scale, framing and ground line exactly.
+3. The finished attack animation seen from the FRONT.
+4. The finished attack animation seen from the FRONT THREE-QUARTER.
+Sheets 3 and 4 are the same attack this sheet must show: same 4 poses, same timing, same arm, same tail motion, same snarl. Only the camera angle changes, to the one in reference 2.
+The imp has exactly ONE tail, growing from the base of its spine, with one arrowhead tip. Count it in every frame: never draw a second tail, a second arrowhead, or the tail in two places at once.
+
+LAYOUT
+- One horizontal row of 4 equal cells, read left to right, laid out exactly like references 2, 3 and 4.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- Cells separated by thin vertical lines of pure cyan (#00FFFF), running the full height of the image.
+- The imp is drawn at the same scale in all 4 cells, as tall as in reference 2 when standing upright.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. The imp does not hop or float.
+- The whole body, including raised claws and the tail tip, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, blood or impact effects. Only the imp.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE ATTACK: a vicious overhead claw swipe with one arm, as in references 3 and 4.
+- Frame 1, WIND-UP: the imp crouches slightly with knees bent and leans back a little. The swinging arm is cocked high above the head, claws spread and hooked. The other arm hangs low and forward for balance. Mouth open in a fanged snarl, tail raised.
+- Frame 2, LUNGE: the body leans forward and the front foot plants. The swinging arm has come down and is sweeping across the chest, claws leading.
+- Frame 3, STRIKE: the swing is fully extended, the lowest and most forward point of the attack and the frame where the blow lands. The arm has crossed the body and ends low on the far side, claws out. The torso twists into the swing, the head thrusts forward, and the tail whips the other way as a counterbalance.
+- Frame 4, RECOVER: the imp is back near its hunched walking stance, arms at its sides, knees slightly bent, so it can return to walking without a jump.
+

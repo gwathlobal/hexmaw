@@ -116,8 +116,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   frame animations from `tools/slice_frames.py` strips (`define-fx-animation`).
   Assets live in `data/` (Trial pool `hexmaw`).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
-  death and revival; wandering and the walk animation), `*creatures*` for hit tests, bodies
-  (collision between actors), and the `imp`. A creature's
+  death and revival; wandering, hunting and attacking the player, and the walk and attack
+  animations), `*creatures*` for hit tests, bodies (collision between actors), and the `imp`. A creature's
   `death-animation` plays once on death, front view from every angle, and its last frame
   stays as the corpse until revival; without one it collapses into the floor.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
@@ -126,7 +126,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   no fog. Projectiles are effect sprites.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, and the `bolt`. A new effect kind is a method on `apply-effect`.
-- `src/hud.lisp`: HP and mana bars in the lower-left corner. HUD pieces are `hud-element`
+- `src/hud.lisp`: HP and mana bars in the lower-left corner, and the red pain flash over
+  the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
   on whole pixels, since a half-pixel position drops an edge row. Overlapping elements
   take a depth in `place` (below 0 is further back). `hud-top` is where the bars end.
@@ -193,10 +194,22 @@ afresh. It slides along any body in its way (`move-creature`, which also moves k
 blocked for `*stuck-time*`, it gives up the path and plans another after `*stuck-pause*`.
 The nav grid ignores bodies, so paths still run through them.
 
+A creature with `attack-damage` also hunts (`think`). It notices the player in front of it
+within `*sight-range*` with nothing solid between them, or anywhere within `*hearing-range*`,
+and whenever it's hit; it stays alert for `*alert-time*` after the last time. While alert it
+runs at `chase-speed`, straight at the player when the nav grid allows a straight walk, else
+along `nav-path-to`, replanned every `*chase-replan*`. Within `*attack-start-reach*` of its
+`attack-reach` it stops and attacks: the frames run on `attack-frame-times` (it turns to
+follow the player through the first), and on `attack-hit-frame` the blow lands if the player
+is still within `attack-reach`, inside `attack-arc` and not behind a wall (`hurt-player`:
+damage, a shove, the pain flash, hit-stop). Backing off during the wind-up dodges it, and a
+hit breaks the attack off. Then it stands `attack-pause` and hunts on. At zero health the
+player's run starts over (`reset-run`); there's no death screen yet.
+
 `tools/hd '(game (show-nav))'` lays green tiles on the cells within 8 m of the player that
 an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
 `(hide-nav)` or a reset clears them. `tools/hd status` shows each creature's `brain`
-(`idle` or `walking`).
+(`idle`, `walking` or `attacking`).
 
 ## Generating art
 
@@ -304,6 +317,19 @@ The creature's `walk-animation` names it. The billboard picks the view as for st
 and the frame follows the distance walked (`stride` metres per frame), so the feet keep
 pace with `walk-speed`.
 
+The attack (a claw swipe: wind-up, lunge, strike, recover) is built the same way from
+`art/imp/Red Imp Four-Frame Claw Attack (frame N).png`. The front two were made by hand;
+the other three came from `tools/gen_image.py` with `art/prompts/imp-attack-common.txt`
+plus the view's file, referencing the turnaround, that view's walk sheet and the two
+finished attack sheets. `stack_views.py` scales by the tallest frame, here the raised
+claw, which stands about 1.15 times the imp's height, so the stack is taller than the
+walk's to keep the standing imp at 96 px (cells come out 110 px tall):
+
+```bash
+python3 tools/stack_views.py "art/imp/Imp Attack Sheet.png" "art/imp/Red Imp Four-Frame Claw Attack (frame "{1,2,3,4,5}").png" --height 880 --mirror 4
+python3 tools/slice_frames.py "art/imp/Imp Attack Sheet.png" data/sprites/imp --pixel 8 --anchor bottom --filter box attack:20
+```
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -350,7 +376,8 @@ starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
 0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction (100 kills); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
-frame at that time;
+frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
+attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting;
 `tools/hd status` shows mana and each creature's health.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (next weapon).

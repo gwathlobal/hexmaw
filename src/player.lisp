@@ -24,6 +24,8 @@
 (defparameter *cast-cooldown* 0.35 "Seconds between casts.")
 (defparameter *cast-release* 0.2
   "Seconds from the click until the spell leaves the hands: the cast animation's release frame.")
+(defparameter *player-knockback* 3.0 "Speed in m/s a blow shoves the player away from it.")
+(defparameter *pain-time* 0.35 "Seconds the screen flashes red after the player is hurt.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
 
@@ -38,6 +40,7 @@
    (eye :initform *eye-height* :accessor eye)
    (mouse-look :initform NIL :accessor mouse-look)
    (health :initform *player-max-health* :accessor health)
+   (pain :initform 0.0 :accessor pain :documentation "Seconds of the pain flash left.")
    (mana :initform *max-mana* :accessor mana)
    (cast-timer :initform 0.0 :accessor cast-timer)
    (cast-time :initform NIL :accessor cast-time
@@ -199,7 +202,8 @@ On a step the eye keeps its height and eases to the new one."
     (place-camera player)
     (return))
   (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
-        (cast-timer player) (max 0.0 (- (cast-timer player) dt)))
+        (cast-timer player) (max 0.0 (- (cast-timer player) dt))
+        (pain player) (max 0.0 (- (pain player) dt)))
   (when (cast-time player)
     (incf (cast-time player) dt)
     (when (and (pending-spell player) (<= *cast-release* (cast-time player)))
@@ -248,6 +252,26 @@ On a step the eye keeps its height and eases to the new one."
     (let ((target (if crouching *crouch-eye-height* *eye-height*)))
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
     (place-camera player)))
+
+(defun hurt-player (player amount from)
+  "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
+from FROM and hit-stop. At zero health the run starts over."
+  (when (< 0 (health player))
+    (decf (health player) amount)
+    (setf (pain player) *pain-time*)
+    (let* ((feet (feet player))
+           (vel (velocity player))
+           (dx (- (vx feet) (vx from)))
+           (dz (- (vz feet) (vz from)))
+           (len (sqrt (+ (* dx dx) (* dz dz)))))
+      (when (< 1f-4 len)
+        (incf (vx vel) (* *player-knockback* (/ dx len)))
+        (incf (vz vel) (* *player-knockback* (/ dz len)))))
+    (hit-stop)
+    (when (<= (health player) 0)
+      ;; No death screen yet. Not now: this runs inside a creature's tick, and
+      ;; RESET-RUN despawns entities.
+      (queue-menu-action 'reset-run))))
 
 (defun respawn (player)
   (let ((feet (feet player)))

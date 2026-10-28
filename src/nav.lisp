@@ -277,6 +277,28 @@ walking away. A list of points ending at the spot, smoothed; NIL if there is non
                                        collect (multiple-value-bind (j i) (floor c w) (nav-point i j grid)))
                                  radius height step grid)))))))))
 
+(defun nav-path-to (from to radius height step &key (max-walk 15.0) (grid *nav-grid*))
+  "A path for a body standing at point FROM to point TO, walking at most MAX-WALK
+metres: a list of points ending at TO, smoothed; NIL if TO's cell (or the nearest one
+the body fits) can't be reached."
+  (when grid
+    (multiple-value-bind (si sj) (nav-nearest-fitting from radius height :grid grid)
+      (multiple-value-bind (gi gj) (nav-nearest-fitting to radius height :grid grid)
+        (when (and si gi)
+          (multiple-value-bind (dist parent) (nav-flood si sj max-walk radius height step grid)
+            (let* ((w (nav-width grid))
+                   (goal (+ gi (* gj w))))
+              (when (< (aref dist goal) most-positive-single-float)
+                (let ((cells ()))
+                  (loop for c = goal then (aref parent c)
+                        until (= c -1)
+                        do (push c cells))
+                  (nav-smooth-path from
+                                   (append (loop for c in (rest cells)
+                                                 collect (multiple-value-bind (j i) (floor c w) (nav-point i j grid)))
+                                           (list (vcopy to)))
+                                   radius height step grid))))))))))
+
 ;;; Looking at it.
 
 (defvar *nav-tiles* () "Tiles SHOW-NAV put in the scene.")

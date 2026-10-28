@@ -137,6 +137,7 @@ cut loose from the old scene's passes."
   "PLAYER back at the spawn point, looking north, with full health and mana."
   (respawn player)
   (setf (health player) *player-max-health*
+        (pain player) 0.0
         (mana player) *max-mana*
         (cast-timer player) 0.0
         ;; No cast in progress, or its bolt would leave at the start of the next game.

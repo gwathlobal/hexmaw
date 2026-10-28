@@ -20,6 +20,16 @@
 (defparameter *settle-speed* 3.0 "Metres per second a creature rises or sinks to the floor under it.")
 (defparameter *stuck-time* 0.5 "Seconds a walking creature stays blocked before it gives up its path.")
 (defparameter *stuck-pause* 0.3 "Seconds it stands after giving up before it plans another walk.")
+(defparameter *sight-range* 10.0 "Metres within which a creature sees the player in front of it.")
+(defparameter *hearing-range* 3.0 "Metres within which it notices the player behind it.")
+(defparameter *alert-time* 6.0 "Seconds a creature hunts after it last noticed the player or was hit.")
+(defparameter *look-interval* 0.25 "Seconds between a creature's looks for the player.")
+(defparameter *chase-replan* 0.5 "Seconds between a hunting creature's fresh paths to the player.")
+(defparameter *chase-pause* 0.1 "Seconds a hunting creature stands at the end of a path before the next.")
+(defparameter *chase-max-walk* 15.0 "Longest path, in metres, a creature takes to reach the player.")
+(defparameter *attack-start-reach* 0.5
+  "Fraction of its ATTACK-REACH within which a creature starts an attack. The rest
+leaves the player room to back out of the blow during the wind-up.")
 
 (defvar *hit-stop* 0.0 "Seconds of hit-stop left. While positive, nothing in the world moves.")
 (defvar *creatures* (make-array 0 :adjustable T :fill-pointer T)
@@ -48,7 +58,31 @@ change it; anything but :PLAYING freezes the world.")
    (walk-speed :initarg :walk-speed :initform 1.4 :accessor walk-speed :documentation "Metres per second.")
    (wander-radius :initarg :wander-radius :initform 4.0 :accessor wander-radius
                   :documentation "How far from home, in metres, it wanders to random spots.")
-   (brain :initform :idle :accessor brain :documentation ":IDLE (standing) or :WALKING along PATH.")
+   (chase-speed :initarg :chase-speed :initform NIL :accessor chase-speed
+                :documentation "Metres per second while hunting; NIL for WALK-SPEED.")
+   (brain :initform :idle :accessor brain
+          :documentation ":IDLE (standing), :WALKING along PATH or :ATTACKING.")
+   (alert :initform 0.0 :accessor alert
+          :documentation "Seconds it keeps hunting the player; it wanders at 0.")
+   (look-timer :initform 0.0 :accessor look-timer :documentation "Seconds until it next looks for the player.")
+   (replan-timer :initform 0.0 :accessor replan-timer :documentation "Seconds until a hunt plans a fresh path.")
+   (attack-damage :initarg :attack-damage :initform NIL :accessor attack-damage
+                  :documentation "Least and most health a blow takes; NIL for a creature that never attacks.")
+   (attack-reach :initarg :attack-reach :initform 0.6 :accessor attack-reach
+                 :documentation "Metres from its body's edge to the player's that a blow reaches.")
+   (attack-arc :initarg :attack-arc :initform 0.8 :accessor attack-arc
+               :documentation "Radians either side of its facing that a blow reaches.")
+   (attack-frame-times :initarg :attack-frame-times :initform '(0.4 0.1 0.25 0.3) :accessor attack-frame-times
+                       :documentation "Seconds each attack animation frame shows.")
+   (attack-hit-frame :initarg :attack-hit-frame :initform 2 :accessor attack-hit-frame
+                     :documentation "Frame (from 0) on which the blow lands.")
+   (attack-pause :initarg :attack-pause :initform 0.5 :accessor attack-pause
+                 :documentation "Seconds it stands after an attack before the next move.")
+   (attack-animation :initarg :attack-animation :initform NIL :accessor attack-animation
+                     :documentation "Frame animation of the attack, one sequence per view like
+WALK-ANIMATION; NIL to attack in the standing pose.")
+   (attack-time :initform NIL :accessor attack-time :documentation "Seconds into the attack, or NIL.")
+   (attack-pending :initform NIL :accessor attack-pending :documentation "True until the attack's blow has landed.")
    (idle-timer :initform (wander-pause) :accessor idle-timer :documentation "Seconds left standing.")
    (path :initform () :accessor path :documentation "Points still to walk to, nearest first.")
    (stuck :initform 0.0 :accessor stuck :documentation "Seconds its walk has been blocked.")
@@ -78,7 +112,7 @@ corpse; NIL to collapse into the floor instead.")
 
 ;; Only the current texture gets loaded with the scene; the other strips have to be too.
 (defmethod stage :after ((creature creature) (area staging-area))
-  (dolist (name (list (death-animation creature) (walk-animation creature)))
+  (dolist (name (list (death-animation creature) (walk-animation creature) (attack-animation creature)))
     (when name
       (stage (animation-texture (find-fx-animation name)) area))))
 
@@ -173,8 +207,10 @@ whether the X move and whether the Z move were blocked."
   (unless (dead creature)
     (decf (health creature) amount)
     (setf (flash creature) *flash-time*
-          (stagger creature) *stagger-time*)
-    ;; Stop, and plan afresh once the flinch is over: knockback moves it off its path.
+          (stagger creature) *stagger-time*
+          (alert creature) *alert-time*)
+    ;; Stop (a hit breaks off an attack too), and plan afresh once the flinch is over:
+    ;; knockback moves it off its path.
     (stop-walking creature *hurt-pause*)
     (hit-stop)
     (when (<= (health creature) 0)
@@ -200,10 +236,15 @@ whether the X move and whether the Z move were blocked."
           (setf (vx kb) 0.0 (vz kb) 0.0)
           (setf (vx kb) (* (vx kb) (/ slower speed)) (vz kb) (* (vz kb) (/ slower speed)))))))
 
-(defun stop-walking (creature &optional (pause (wander-pause)))
+(defun hunting-p (creature)
+  (and (attack-damage creature) (< 0 (alert creature))))
+
+(defun stop-walking (creature &optional (pause (if (hunting-p creature) *chase-pause* (wander-pause))))
+  "Stand still, walking or attacking, for PAUSE seconds."
   (setf (brain creature) :idle
         (path creature) ()
         (stuck creature) 0.0
+        (attack-time creature) NIL
         (idle-timer creature) pause))
 
 (defun walk-path (creature dt)
@@ -214,7 +255,8 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
          (dx (- (vx target) (vx loc)))
          (dz (- (vz target) (vz loc)))
          (distance (sqrt (+ (* dx dx) (* dz dz))))
-         (step (min distance (* (walk-speed creature) dt)))
+         (speed (if (hunting-p creature) (or (chase-speed creature) (walk-speed creature)) (walk-speed creature)))
+         (step (min distance (* speed dt)))
          (x0 (vx loc))
          (z0 (vz loc)))
     (when (< 1f-4 distance)
@@ -229,24 +271,155 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
             ((< *stuck-time* (stuck creature))
              (stop-walking creature *stuck-pause*))))))
 
-(defun wander (creature dt)
-  "Stand a while, then walk to a random spot it can reach within WANDER-RADIUS of home."
-  (ecase (brain creature)
-    (:idle
-     (when (<= (decf (idle-timer creature) dt) 0)
-       (let* ((loc (location creature))
-              (path (flet ((spot (around)
-                             (nav-reachable-spot loc (body-radius creature) (sprite-height creature)
-                                                 (step-height creature)
-                                                 :around around :within (wander-radius creature))))
-                      ;; Somewhere near home; if it got pushed too far for that, near itself.
-                      (or (spot (home creature)) (spot loc)))))
-         (if path
-             (setf (path creature) path
-                   (brain creature) :walking)
-             (setf (idle-timer creature) (wander-pause))))))
-    (:walking
-     (walk-path creature dt))))
+(defun plan-wander (creature)
+  "Set off for a random spot it can reach within WANDER-RADIUS of home."
+  (let* ((loc (location creature))
+         (path (flet ((spot (around)
+                        (nav-reachable-spot loc (body-radius creature) (sprite-height creature)
+                                            (step-height creature)
+                                            :around around :within (wander-radius creature))))
+                 ;; Somewhere near home; if it got pushed too far for that, near itself.
+                 (or (spot (home creature)) (spot loc)))))
+    (if path
+        (setf (path creature) path
+              (brain creature) :walking)
+        (setf (idle-timer creature) (wander-pause)))))
+
+;;; Hunting: a creature that can attack notices the player in front of it within
+;;; *SIGHT-RANGE* (or close behind it), and when hit. While alert it chases the player
+;;; along the nav grid and attacks within reach; the blow lands on ATTACK-HIT-FRAME if
+;;; the player is still in reach and in front of it.
+
+(defun player-within-p (creature reach)
+  "True if the player's body is within REACH metres of CREATURE's, and level with it."
+  (let* ((loc (location creature))
+         (feet (feet *player*))
+         (dx (- (vx feet) (vx loc)))
+         (dz (- (vz feet) (vz loc)))
+         (r (+ (body-radius creature) *player-radius* reach)))
+    (and (< (+ (* dx dx) (* dz dz)) (* r r))
+         (< (vy feet) (+ (vy loc) (sprite-height creature)))
+         (< (vy loc) (+ (vy feet) *player-height*)))))
+
+(defun player-angle (creature)
+  "Radians between the way CREATURE faces and the direction to the player."
+  (let* ((loc (location creature))
+         (feet (feet *player*))
+         (dx (- (vx feet) (vx loc)))
+         (dz (- (vz feet) (vz loc)))
+         (distance (sqrt (+ (* dx dx) (* dz dz)))))
+    (if (< distance 1f-4)
+        0.0
+        (acos (max -1.0 (min 1.0 (/ (+ (* dx (sin (facing creature))) (* dz (- (cos (facing creature))))) distance)))))))
+
+(defun face-player (creature)
+  (let ((loc (location creature))
+        (feet (feet *player*)))
+    (setf (facing creature) (float (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet))) 0f0))))
+
+(defun sees-player-p (creature)
+  (let* ((loc (location creature))
+         (feet (feet *player*))
+         (distance (sqrt (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2)))))
+    (and (< 0 (health *player*))
+         (< (abs (- (vy feet) (vy loc))) 3.0)
+         (or (< distance *hearing-range*)
+             (and (< distance *sight-range*)
+                  (< (player-angle creature) #.(float (/ pi 2) 0f0))))
+         (clear-path-p loc feet (* 0.8 (sprite-height creature))))))
+
+(defun notice-player (creature dt)
+  (setf (alert creature) (max 0.0 (- (alert creature) dt)))
+  (when (<= (decf (look-timer creature) dt) 0)
+    (setf (look-timer creature) *look-interval*)
+    (when (sees-player-p creature)
+      (when (<= (alert creature) 0)
+        ;; Just noticed: cut a wander's pause short, and turn a wander's walk into a chase.
+        (setf (idle-timer creature) (min (idle-timer creature) *chase-pause*)
+              (replan-timer creature) 0.0))
+      (setf (alert creature) *alert-time*))))
+
+(defun chase-path (creature)
+  "A path to the player: straight at them when nothing is in the way, else along the nav grid."
+  (let ((loc (location creature))
+        (feet (feet *player*))
+        (r (body-radius creature))
+        (h (sprite-height creature))
+        (step (step-height creature)))
+    (when *nav-grid*
+      (if (nav-line-clear-p loc feet r h step)
+          (list (vcopy feet))
+          (nav-path-to loc feet r h step :max-walk *chase-max-walk*)))))
+
+(defun start-attack (creature)
+  (face-player creature)
+  (setf (brain creature) :attacking
+        (path creature) ()
+        (attack-time creature) 0.0
+        (attack-pending creature) T))
+
+(defun hunt (creature)
+  "Attack the player if within reach, or set off along a fresh path toward them."
+  (if (player-within-p creature (* *attack-start-reach* (attack-reach creature)))
+      (start-attack creature)
+      (let ((route (chase-path creature)))
+        (setf (replan-timer creature) *chase-replan*)
+        (if route
+            (setf (path creature) route
+                  (brain creature) :walking)
+            (stop-walking creature *chase-replan*)))))
+
+(defun attack-hit-time (creature)
+  (loop for time in (attack-frame-times creature)
+        repeat (attack-hit-frame creature)
+        sum time))
+
+(defun attack-frame (creature)
+  "The attack animation frame showing ATTACK-TIME seconds in."
+  (loop with end = 0.0
+        for time in (attack-frame-times creature)
+        for frame from 0
+        do (incf end time)
+        when (< (attack-time creature) end)
+          return frame
+        finally (return frame)))
+
+(defun attack (creature dt)
+  (let ((time (incf (attack-time creature) dt))
+        (times (attack-frame-times creature)))
+    ;; It turns to follow the player through the wind-up; after that the blow is committed.
+    (when (< time (first times))
+      (face-player creature))
+    (when (and (attack-pending creature) (<= (attack-hit-time creature) time))
+      (setf (attack-pending creature) NIL)
+      (when (and (player-within-p creature (attack-reach creature))
+                 (< (player-angle creature) (attack-arc creature))
+                 (clear-path-p (location creature) (feet *player*) 1.0))
+        (hurt-player *player* (roll (attack-damage creature)) (location creature))))
+    (when (<= (reduce #'+ times) time)
+      (stop-walking creature (attack-pause creature)))))
+
+(defun think (creature dt)
+  "Hunt the player while alert, wander otherwise."
+  (when (attack-damage creature)
+    (notice-player creature dt))
+  (let ((hunting (hunting-p creature)))
+    (ecase (brain creature)
+      (:attacking
+       (attack creature dt))
+      (:idle
+       (when hunting
+         (face-player creature))
+       (when (<= (decf (idle-timer creature) dt) 0)
+         (if hunting (hunt creature) (plan-wander creature))))
+      (:walking
+       (cond ((and hunting (player-within-p creature (* *attack-start-reach* (attack-reach creature))))
+              (start-attack creature))
+             (T
+              (when (and hunting (<= (decf (replan-timer creature) dt) 0))
+                (hunt creature))
+              (when (eq (brain creature) :walking)
+                (walk-path creature dt))))))))
 
 (defun settle (creature dt)
   "Ease CREATURE up or down to the floor under it: steps, and knockback off a ledge.
@@ -261,6 +434,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
           (setf (vy loc) y))))))
 
 (defun revive (creature)
+  (setf (alert creature) 0.0)
   (stop-walking creature)
   (setf (walk-distance creature) 0.0)
   (setf (dead creature) NIL
@@ -275,8 +449,26 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 (defun creature-walking-p (creature)
   (and (eq (brain creature) :walking) (not (dead creature)) (walk-animation creature)))
 
+(defun creature-attacking-p (creature)
+  (and (eq (brain creature) :attacking) (not (dead creature)) (attack-animation creature)))
+
+(defun show-view-frame (creature name frame squash)
+  "Show FRAME of the view the billboard tick picked, from animation NAME: one sequence
+per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
+  (let* ((animation (find-fx-animation name))
+         (atlas (animation-atlas animation))
+         (count (getf atlas :frames))
+         (cycle (floor count (length (getf (atlas creature) :views))))
+         (h (animation-size animation))
+         (scale (scaling creature)))
+    (setf (texture creature) (animation-texture animation))
+    (strip-uv (frame-uv creature) atlas (+ (* (view-index creature) cycle) (mod frame cycle))
+              count (mirrored creature))
+    (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)) (+ 1 (* squash *stagger-squash* 0.7)))
+          (vy scale) (* h (- 1 (* squash *stagger-squash*))))))
+
 (defun update-creature-look (creature)
-  "Set texture, frame, tint and scaling from walking, flash, stagger and death."
+  "Set texture, frame, tint and scaling from walking, attacking, flash, stagger and death."
   (let ((tint (tint creature))
         (base (base-scaling creature))
         (scale (scaling creature))
@@ -288,21 +480,12 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
     (setf (vx scale) (* (vx base) (+ 1 (* s *stagger-squash* 0.7)))
           (vy scale) (* (vy base) (- 1 (* s *stagger-squash*)))
           (vz scale) (vz base))
-    (when (creature-walking-p creature)
-      ;; One cycle per view, in the turnaround's view order; the billboard tick has
-      ;; picked the view. The frame follows the distance walked, so feet don't skate.
-      (let* ((animation (find-fx-animation (walk-animation creature)))
-             (atlas (animation-atlas animation))
-             (count (getf atlas :frames))
-             (cycle (floor count (length (getf (atlas creature) :views))))
-             (h (animation-size animation)))
-        (setf (texture creature) (animation-texture animation))
-        (strip-uv (frame-uv creature) atlas
-                  (+ (* (view-index creature) cycle)
-                     (mod (floor (walk-distance creature) (stride creature)) cycle))
-                  count (mirrored creature))
-        (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)) (+ 1 (* s *stagger-squash* 0.7)))
-              (vy scale) (* h (- 1 (* s *stagger-squash*))))))
+    (cond ((creature-attacking-p creature)
+           (show-view-frame creature (attack-animation creature) (attack-frame creature) s))
+          ((creature-walking-p creature)
+           ;; The frame follows the distance walked, so feet don't skate.
+           (show-view-frame creature (walk-animation creature)
+                            (floor (walk-distance creature) (stride creature)) s)))
     (let ((d (dead creature)))
       (cond ((null d))
             ((death-animation creature)
@@ -331,7 +514,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
       (slide creature dt)
       (unless (dead creature)
         (when (<= (stagger creature) 0)
-          (wander creature dt))
+          (think creature dt))
         (settle creature dt))
       (when (dead creature)
         (incf (dead creature) dt)
@@ -355,6 +538,10 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 ;; Four frames per view, every view scaled to a turnaround cell's height. The frame
 ;; follows the distance walked (STRIDE), so :FPS is unused.
 (define-fx-animation imp-walk "sprites/imp/walk" :loop T :size *imp-height*)
+;; The claw swipe: wind-up, lunge, strike, recover, four frames per view. Its cells are
+;; 110 px tall to fit the raised claw, with the standing imp 96 px like the walk's.
+;; The frames run on the imp's ATTACK-FRAME-TIMES, so :FPS is unused.
+(define-fx-animation imp-attack "sprites/imp/attack" :size (* *imp-height* 110/96))
 
 (define-shader-entity imp (creature)
   ((texture :initform (// 'hexmaw 'imp-turnaround))
@@ -362,4 +549,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
    (sprite-height :initform *imp-height*)
    (death-animation :initform 'imp-death)
    (walk-animation :initform 'imp-walk)
+   (attack-animation :initform 'imp-attack)
+   (attack-damage :initform '(6 10))
+   (chase-speed :initform 2.6)
    (max-health :initform 30)))

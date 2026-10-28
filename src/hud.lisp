@@ -91,6 +91,32 @@ void main(){
   (make-instance 'hud-text :text text :font-size (float +glyph-height+ 0f0)
                            :foreground *hud-text-color* :background (vec4 0 0 0 0)))
 
+;;; Pain: the whole view flashes red when the player is hurt.
+
+(defparameter *pain-color* (vec4 0.75 0.0 0.0 0.4) "RGB and peak opacity of the pain flash.")
+
+(define-shader-entity pain-flash (hud-element vertex-entity transformed-entity)
+  ((vertex-array :initform (// 'hexmaw 'hud-quad))
+   (strength :initform 0.0 :accessor strength :documentation "0 to 1.")))
+
+(defmethod render :around ((flash pain-flash) (program shader-program))
+  ;; Writing depth would hide whatever the scene draws after it, such as projectiles.
+  (when (< 0 (strength flash))
+    (with-depth-mask NIL
+      (call-next-method))))
+
+(defmethod render :before ((flash pain-flash) (program shader-program))
+  (let ((c *pain-color*))
+    (setf (uniform program "pain_color") (vec4 (vx c) (vy c) (vz c) (* (vw c) (strength flash))))))
+
+(define-class-shader (pain-flash :fragment-shader)
+  "uniform vec4 pain_color;
+out vec4 color;
+
+void main(){
+  color = pain_color;
+}")
+
 ;;; The HUD: owns the elements, keeps them in place and in sync with the player.
 
 (defclass hud (entity listener)
@@ -101,11 +127,14 @@ void main(){
    (mana-label :initform (make-hud-text "MP") :reader mana-label)
    (mana-bar :initform (make-instance 'hud-bar :fill-color *mana-bar-color*) :reader mana-bar)
    (mana-text :initform (make-hud-text) :reader mana-text)
+   (pain-flash :initform (make-instance 'pain-flash) :reader pain-flash)
    (shown-health :initform NIL :accessor shown-health)
    (shown-mana :initform NIL :accessor shown-mana)))
 
 (defun hud-elements (hud)
-  (list (health-label hud) (health-bar hud) (health-text hud)
+  ;; The flash first, so the bars draw over it.
+  (list (pain-flash hud)
+        (health-label hud) (health-bar hud) (health-text hud)
         (mana-label hud) (mana-bar hud) (mana-text hud)))
 
 (defun add-hud (container)
@@ -135,13 +164,20 @@ void main(){
                    (vy (scaling bar)) (float *hud-bar-height* 0f0))
              (place value (+ bar-x *hud-bar-width* 8) y)))
       (row (hud-row-y 0) (mana-label hud) (mana-bar hud) (mana-text hud))
-      (row (hud-row-y 1) (health-label hud) (health-bar hud) (health-text hud)))))
+      (row (hud-row-y 1) (health-label hud) (health-bar hud) (health-text hud))))
+  ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
+  ;; be within the near plane's 5 cm.
+  (let ((flash (pain-flash hud)))
+    (place flash 0 0 -0.5)
+    (setf (vx (scaling flash)) (float (width *context*) 0f0)
+          (vy (scaling flash)) (float (height *context*) 0f0))))
 
 (define-handler (hud tick) ()
   (when *player*
     (let ((hp (max 0 (health *player*)))
           (mp (floor (mana *player*))))
-      (setf (fill-fraction (health-bar hud)) (/ (float hp) *player-max-health*)
+      (setf (strength (pain-flash hud)) (/ (pain *player*) *pain-time*)
+            (fill-fraction (health-bar hud)) (/ (float hp) *player-max-health*)
             (fill-fraction (mana-bar hud)) (/ (mana *player*) *max-mana*))
       ;; Re-uploading text costs a buffer update, so only when the number changes.
       (unless (eql hp (shown-health hud))

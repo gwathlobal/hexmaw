@@ -55,9 +55,10 @@ def cells(img):
 
 
 def sprite_height(img):
-    w, h = img.size
+    # Inside the cells only: a separator's anti-aliased end can miss is_cyan.
+    xs = [x for x0, x1 in cells(img) for x in range(x0 + 3, x1 - 3, 2)]
     px = img.load()
-    rows = [y for y in range(h) if any(not is_background(*px[x, y]) for x in range(0, w, 2))]
+    rows = [y for y in range(img.height) if any(not is_background(*px[x, y]) for x in xs)]
     return rows[-1] - rows[0] + 1
 
 
