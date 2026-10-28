@@ -79,7 +79,10 @@ thread. Check the game's output, then restart `./run.sh`.
   doesn't run again, so slots it fills stay unbound on existing objects (expect
   "slot is unbound" runtime errors). Run `tools/hd reset`.
 - Menu panels (Alloy) build their layout when created. After changing a panel class
-  or `panel-buttons`, run `tools/hd reset`, which recreates the panel on screen.
+  or `panel-buttons`, run `tools/hd reset`, which recreates the panel on screen. The
+  menu pass itself survives resets (`persistent-menu-ui`): a fresh one re-reads every
+  font from disk, about 300 ms. A reset still freezes for about 0.3 s, because Trial
+  runs a full GC whenever it swaps scenes.
 - Something spawned mid-game (projectiles) needs `(preload 'class scene)` in
   `setup-scene`, or its shader isn't loaded when it first appears.
 - A subclass's `define-handler` replaces the parent's handler for that event. Use a
@@ -122,7 +125,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game`, `pause-game`, `resume-game`, `show-title`,
-  `exit-to-title` (the pause menu's exit: back to the main menu over a rebuilt level)
+  `exit-to-title` (the pause menu's exit: back to the main menu, with the level put back
+  in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons`.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom

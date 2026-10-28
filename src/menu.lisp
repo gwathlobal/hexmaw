@@ -14,6 +14,22 @@
 
 (define-shader-pass menu-ui (trial-alloy:base-ui) ())
 
+(defvar *menu-ui* NIL "The menu pass, reused by every scene; see PERSISTENT-MENU-UI.")
+
+(defun persistent-menu-ui ()
+  "The menu pass for a new scene. Alloy keeps its fonts on the pass, and a fresh pass
+re-reads every font from disk (about 300 ms), so a scene rebuild reuses the old one,
+cut loose from the old scene's passes."
+  (let ((ui *menu-ui*))
+    (cond (ui
+           ;; A node lives in one container at a time; the old scene is being replaced.
+           (when (container ui)
+             (leave ui (container ui)))
+           (org.shirakumo.flow:sever ui)
+           ui)
+          (T
+           (setf *menu-ui* (make-instance 'menu-ui))))))
+
 ;;; Panels.
 
 (defclass menu-backdrop (alloy:grid-layout) ()
@@ -117,15 +133,24 @@
 
 ;;; Transitions.
 
+(defun reset-player (player)
+  "PLAYER back at the spawn point, looking north, with full health and mana."
+  (respawn player)
+  (setf (health player) *player-max-health*
+        (mana player) *max-mana*
+        (cast-timer player) 0.0
+        ;; No cast in progress, or its bolt would leave at the start of the next game.
+        (cast-time player) NIL
+        (pending-spell player) NIL
+        (eye player) *eye-height*)
+  (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
+  (place-camera player))
+
 (defun start-game ()
   "Leave the main menu: a fresh player at the spawn point, and play."
-  (let ((player *player*))
-    (when player
-      (respawn player)
-      (setf (health player) *player-max-health*
-            (mana player) *max-mana*)
-      (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
-      (capture-mouse player)))
+  (when *player*
+    (reset-player *player*)
+    (capture-mouse *player*))
   (setf *game-state* :playing))
 
 (defun pause-game ()
@@ -142,15 +167,27 @@
   (setf *game-state* :title)
   (when *player* (release-mouse *player*)))
 
+(defun reset-run ()
+  "Put the level back as it was built, in place: the player at the spawn point, every
+creature alive at home, no spells or effects in flight. Rebuilding the scene would do
+the same but freezes for half a second (a forced full GC, reloaded resources)."
+  (when *player* (reset-player *player*))
+  (setf *hit-stop* 0.0)
+  (loop for creature across *creatures*
+        do (revive creature)
+           (update-creature-look creature))
+  (when (and +main+ (scene +main+))
+    (let ((leftovers ()))
+      (for:for ((entity over (scene +main+)))
+        ;; Projectiles and impacts; effect sprites drawn on the HUD stay.
+        (when (and (typep entity 'fx-sprite) (not (typep entity 'hud-element)))
+          (push entity leftovers)))
+      (mapc #'despawn leftovers))))
+
 (defun exit-to-title ()
-  "Abandon the run: back to the main menu over a freshly built level, seen from the
-spawn point as at launch."
-  (show-title)
-  (when *player*
-    (respawn *player*)
-    (let ((rot (rotation *player*))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0)))
-  ;; Queued, so it happens between frames; the new player takes the spawn position.
-  (maybe-reload-scene))
+  "Abandon the run: back to the main menu, the level reset as at launch."
+  (reset-run)
+  (show-title))
 
 (defun exit-game ()
   (quit *context*))
@@ -166,7 +203,10 @@ spawn point as at launch."
   (setf *menu-action* action))
 
 (defclass menu-controller (entity listener)
-  ((name :initform :menu-controller)))
+  ((name :initform :menu-controller)
+   (fresh :initform T :accessor fresh
+          :documentation "True until the first tick. The menu pass outlives scenes, so a new
+scene's controller rebuilds whatever panel it finds, picking up changed panel code.")))
 
 (define-handler (menu-controller key-press) (key)
   (when (eq key :escape)
@@ -179,6 +219,9 @@ spawn point as at launch."
     (when action
       (setf *menu-action* NIL)
       (funcall action)))
+  (when (fresh menu-controller)
+    (setf (fresh menu-controller) NIL)
+    (trial-alloy:hide-panel 'menu-panel))
   (let ((wanted (state-menu))
         (shown (trial-alloy:find-panel 'menu-panel)))
     (unless (and shown (eq (type-of shown) wanted))

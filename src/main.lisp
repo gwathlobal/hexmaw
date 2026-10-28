@@ -23,7 +23,7 @@
   (enter (make-instance 'menu-controller) scene)
   ;; The game draws into one pass and the menus (Alloy) into another; the blend
   ;; puts the menus on top and is what reaches the screen.
-  (let ((ui (make-instance 'menu-ui))
+  (let ((ui (persistent-menu-ui))
         (blend (make-instance 'blend-pass)))
     (setf *render-pass* (make-instance 'render-pass)
           *output-pass* blend)
