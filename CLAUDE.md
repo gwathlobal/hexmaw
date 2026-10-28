@@ -107,11 +107,13 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
 - `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`).
+- `src/nav.lisp`: the nav grid, where creatures can stand and how they get around; see
+  "Creature movement" below.
 - `src/sprite.lisp`: Doom-style `billboard` sprites (view by angle, mirroring, tint), and
   frame animations from `tools/slice_frames.py` strips (`define-fx-animation`).
   Assets live in `data/` (Trial pool `hexmaw`).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
-  death and revival), `*creatures*` for hit tests, and the `imp`. A creature's
+  death and revival; wandering and the walk animation), `*creatures*` for hit tests, and the `imp`. A creature's
   `death-animation` plays once on death, front view from every angle, and its last frame
   stays as the corpse until revival; without one it collapses into the floor.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
@@ -161,6 +163,29 @@ On a step the camera holds its height and eases to the new one.
 To test movement without a mouse or keyboard (in play, not on a menu), hold keys from the eval server:
 `tools/hd '(game (setf (vy (rotation *player*)) 0.0 (retained :w) t))'`, wait, then
 `(setf (retained :w) nil)` and check `tools/hd status`. Yaw 0 faces −Z, π/2 faces +X.
+
+## Creature movement
+
+`build-level` ends with `build-nav-grid`, which cuts the level into 0.5 m cells
+(`*nav-cell*`) and records for each its floor height, headroom and clearance (the widest
+body that fits, to 0.125 m, up to 2 m; solids less than 0.45 m above the floor don't count,
+so steps aren't walls). A creature fits a cell when clearance ≥ its `body-radius` and
+headroom ≥ its `sprite-height`, and moves to a neighbour when the floors differ by at most
+its `step-height`, so one grid serves every size. Each cell holds one floor, the lowest
+with room above it; under a pillar, that's the roof above it. The geometry questions
+go through `floor-candidates`, `ceiling-above` and `fits-at-p`, the only code that knows solids
+are boxes.
+
+A creature wanders: it stands for `*wander-pause*` seconds, then `nav-reachable-spot` picks
+a random cell it can walk to within `wander-radius` of its home (or of itself, if knocked
+too far away), and it follows the smoothed path at `walk-speed`, facing the way it goes.
+`settle` eases it onto the floor under it. A hit stops it for `*hurt-pause*`, then it plans
+afresh. It doesn't collide with the player or other creatures yet.
+
+`tools/hd '(game (show-nav))'` lays green tiles on the cells within 8 m of the player that
+an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
+`(hide-nav)` or a reset clears them. `tools/hd status` shows each creature's `brain`
+(`idle` or `walking`).
 
 ## Monster sprites
 
@@ -228,6 +253,21 @@ attach the first as the design reference, and describe each pose in screen posit
 Most of that idle row has no palm fire, so `*hands-idle-sequence*` loops the cast's rest
 frames instead. A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
 `tools/hd reload src/<file that defines it>.lisp` reloads it and rebuilds the scene.
+
+A monster's walk is one strip of 4 frames per view, in the turnaround's view order. It
+comes as one generated sheet per view (`art/imp/*walk*.png`, view number in the name), each
+drawing the imp at its own size. `tools/stack_views.py` scales every sheet to one sprite
+height, mirrors the views that face right frame by frame (here the back-quarter), and stacks
+them; slicing it at `--pixel` = height / 96 makes the imp as tall as a turnaround cell:
+
+```bash
+python3 tools/stack_views.py "art/imp/Imp Walk Sheet.png" "art/imp/Four-frame pixel imp walk cycle (frame 1).png" "art/imp/Four-Frame Imp Walk Cycle (frame 2).png" "art/imp/Side-Profile Imp Walk Cycle (frame 3).png" "art/imp/Rear Three-Quarter Imp Walk Cycle (frame 4).png" "art/imp/Pixel-art imp rear-view walk cycle (frame 5).png" --height 768 --mirror 4
+python3 tools/slice_frames.py "art/imp/Imp Walk Sheet.png" data/sprites/imp --pixel 8 --anchor bottom --filter box walk:20
+```
+
+The creature's `walk-animation` names it. The billboard picks the view as for standing,
+and the frame follows the distance walked (`stride` metres per frame), so the feet keep
+pace with `walk-speed`.
 
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as

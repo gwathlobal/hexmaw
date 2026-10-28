@@ -15,6 +15,9 @@
 (defparameter *knockback-friction* 14.0 "Deceleration of knockback, in m/s².")
 (defparameter *death-time* 0.5 "Seconds a creature without a death animation takes to collapse.")
 (defparameter *revive-time* 3.0 "Seconds a corpse lies still before it comes back; NIL to stay dead.")
+(defparameter *wander-pause* '(1.0 3.0) "Least and most seconds a wandering creature stands before moving on.")
+(defparameter *hurt-pause* 0.4 "Seconds a creature stands after a hit before it plans a new walk.")
+(defparameter *settle-speed* 3.0 "Metres per second a creature rises or sinks to the floor under it.")
 
 (defvar *hit-stop* 0.0 "Seconds of hit-stop left. While positive, nothing in the world moves.")
 (defvar *creatures* (make-array 0 :adjustable T :fill-pointer T)
@@ -36,6 +39,21 @@ change it; anything but :PLAYING freezes the world.")
    (health :accessor health)
    (body-radius :initarg :body-radius :initform 0.35 :accessor body-radius
                 :documentation "Half-width of the hit and collision box, in metres.")
+   (step-height :initarg :step-height :initform 0.45 :accessor step-height
+                :documentation "Tallest ledge it walks up or down; the player's is *STEP-HEIGHT*.")
+   (walk-speed :initarg :walk-speed :initform 1.4 :accessor walk-speed :documentation "Metres per second.")
+   (wander-radius :initarg :wander-radius :initform 4.0 :accessor wander-radius
+                  :documentation "How far from home, in metres, it wanders to random spots.")
+   (brain :initform :idle :accessor brain :documentation ":IDLE (standing) or :WALKING along PATH.")
+   (idle-timer :initform (wander-pause) :accessor idle-timer :documentation "Seconds left standing.")
+   (path :initform () :accessor path :documentation "Points still to walk to, nearest first.")
+   (walk-distance :initform 0.0 :accessor walk-distance
+                  :documentation "Metres walked so far; picks the walk animation's frame.")
+   (walk-animation :initarg :walk-animation :initform NIL :accessor walk-animation
+                   :documentation "Frame animation of the walk: one cycle per view, in the
+billboard's view order. NIL to glide in the standing pose.")
+   (stride :initarg :stride :initform 0.35 :accessor stride
+           :documentation "Metres walked per walk animation frame.")
    (knockback :initform (vec 0 0 0) :reader knockback)
    (stagger :initform 0.0 :accessor stagger)
    (flash :initform 0.0 :accessor flash)
@@ -43,7 +61,7 @@ change it; anything but :PLAYING freezes the world.")
    (death-animation :initarg :death-animation :initform NIL :accessor death-animation
                     :documentation "Frame animation played once on death, its last frame the
 corpse; NIL to collapse into the floor instead.")
-   (body-texture :reader body-texture :documentation "The atlas texture, put back on revival.")
+   (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
    (base-scaling :reader base-scaling)))
 
@@ -53,10 +71,15 @@ corpse; NIL to collapse into the floor instead.")
   (setf (slot-value creature 'body-texture) (texture creature))
   (setf (slot-value creature 'base-scaling) (vcopy (scaling creature))))
 
-;; Only the current texture gets loaded with the scene; the death strip has to be too.
+;; Only the current texture gets loaded with the scene; the other strips have to be too.
 (defmethod stage :after ((creature creature) (area staging-area))
-  (when (death-animation creature)
-    (stage (animation-texture (find-fx-animation (death-animation creature))) area)))
+  (dolist (name (list (death-animation creature) (walk-animation creature)))
+    (when name
+      (stage (animation-texture (find-fx-animation name)) area))))
+
+(defun wander-pause ()
+  (destructuring-bind (lo hi) *wander-pause*
+    (+ lo (random (float (- hi lo) 0f0)))))
 
 (defun death-duration (creature)
   "Seconds from death until the corpse lies still."
@@ -86,6 +109,8 @@ corpse; NIL to collapse into the floor instead.")
     (decf (health creature) amount)
     (setf (flash creature) *flash-time*
           (stagger creature) *stagger-time*)
+    ;; Stop, and plan afresh once the flinch is over: knockback moves it off its path.
+    (stop-walking creature *hurt-pause*)
     (hit-stop)
     (when (<= (health creature) 0)
       (setf (dead creature) 0.0))))
@@ -117,7 +142,65 @@ corpse; NIL to collapse into the floor instead.")
           (setf (vx kb) 0.0 (vz kb) 0.0)
           (setf (vx kb) (* (vx kb) (/ slower speed)) (vz kb) (* (vz kb) (/ slower speed)))))))
 
+(defun stop-walking (creature &optional (pause (wander-pause)))
+  (setf (brain creature) :idle
+        (path creature) ()
+        (idle-timer creature) pause))
+
+(defun walk-path (creature dt)
+  "Walk DT seconds toward the next point of the path, facing the way it goes."
+  (let* ((loc (location creature))
+         (target (first (path creature)))
+         (dx (- (vx target) (vx loc)))
+         (dz (- (vz target) (vz loc)))
+         (distance (sqrt (+ (* dx dx) (* dz dz))))
+         (step (* (walk-speed creature) dt)))
+    (when (< 1f-4 distance)
+      (setf (facing creature) (float (atan dx (- dz)) 0f0)))
+    (cond ((<= distance step)
+           (setf (vx loc) (vx target) (vz loc) (vz target))
+           (incf (walk-distance creature) distance)
+           (unless (setf (path creature) (rest (path creature)))
+             (stop-walking creature)))
+          (T
+           (incf (vx loc) (* step (/ dx distance)))
+           (incf (vz loc) (* step (/ dz distance)))
+           (incf (walk-distance creature) step)))))
+
+(defun wander (creature dt)
+  "Stand a while, then walk to a random spot it can reach within WANDER-RADIUS of home."
+  (ecase (brain creature)
+    (:idle
+     (when (<= (decf (idle-timer creature) dt) 0)
+       (let* ((loc (location creature))
+              (path (flet ((spot (around)
+                             (nav-reachable-spot loc (body-radius creature) (sprite-height creature)
+                                                 (step-height creature)
+                                                 :around around :within (wander-radius creature))))
+                      ;; Somewhere near home; if it got pushed too far for that, near itself.
+                      (or (spot (home creature)) (spot loc)))))
+         (if path
+             (setf (path creature) path
+                   (brain creature) :walking)
+             (setf (idle-timer creature) (wander-pause))))))
+    (:walking
+     (walk-path creature dt))))
+
+(defun settle (creature dt)
+  "Ease CREATURE up or down to the floor under it: steps, and knockback off a ledge.
+It only sinks while its body has room below, so it never sinks into a ledge it overhangs."
+  (let* ((loc (location creature))
+         (floor (and *nav-grid* (nav-floor-at (vx loc) (vz loc)))))
+    (when floor
+      (let* ((most (* *settle-speed* dt))
+             (y (+ (vy loc) (max (- most) (min most (- floor (vy loc)))))))
+        (when (or (<= (vy loc) y)
+                  (fits-at-p (vx loc) y (vz loc) (body-radius creature) (sprite-height creature)))
+          (setf (vy loc) y))))))
+
 (defun revive (creature)
+  (stop-walking creature)
+  (setf (walk-distance creature) 0.0)
   (setf (dead creature) NIL
         (health creature) (max-health creature)
         (stagger creature) 0.0
@@ -127,8 +210,11 @@ corpse; NIL to collapse into the floor instead.")
   (let ((kb (knockback creature)))
     (setf (vx kb) 0.0 (vz kb) 0.0)))
 
+(defun creature-walking-p (creature)
+  (and (eq (brain creature) :walking) (not (dead creature)) (walk-animation creature)))
+
 (defun update-creature-look (creature)
-  "Set tint and scaling from flash, stagger and death."
+  "Set texture, frame, tint and scaling from walking, flash, stagger and death."
   (let ((tint (tint creature))
         (base (base-scaling creature))
         (scale (scaling creature))
@@ -136,9 +222,25 @@ corpse; NIL to collapse into the floor instead.")
         (s (/ (stagger creature) *stagger-time*)))
     (setf (vx tint) (vx *flash-color*) (vy tint) (vy *flash-color*) (vz tint) (vz *flash-color*)
           (vw tint) (* f (vw *flash-color*)))
+    (setf (texture creature) (body-texture creature))
     (setf (vx scale) (* (vx base) (+ 1 (* s *stagger-squash* 0.7)))
           (vy scale) (* (vy base) (- 1 (* s *stagger-squash*)))
           (vz scale) (vz base))
+    (when (creature-walking-p creature)
+      ;; One cycle per view, in the turnaround's view order; the billboard tick has
+      ;; picked the view. The frame follows the distance walked, so feet don't skate.
+      (let* ((animation (find-fx-animation (walk-animation creature)))
+             (atlas (animation-atlas animation))
+             (count (getf atlas :frames))
+             (cycle (floor count (length (getf (atlas creature) :views))))
+             (h (animation-size animation)))
+        (setf (texture creature) (animation-texture animation))
+        (strip-uv (frame-uv creature) atlas
+                  (+ (* (view-index creature) cycle)
+                     (mod (floor (walk-distance creature) (stride creature)) cycle))
+                  count (mirrored creature))
+        (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)) (+ 1 (* s *stagger-squash* 0.7)))
+              (vy scale) (* h (- 1 (* s *stagger-squash*))))))
     (let ((d (dead creature)))
       (cond ((null d))
             ((death-animation creature)
@@ -165,6 +267,10 @@ corpse; NIL to collapse into the floor instead.")
       (setf (flash creature) (max 0.0 (- (flash creature) dt))
             (stagger creature) (max 0.0 (- (stagger creature) dt)))
       (slide creature dt)
+      (unless (dead creature)
+        (when (<= (stagger creature) 0)
+          (wander creature dt))
+        (settle creature dt))
       (when (dead creature)
         (incf (dead creature) dt)
         (when (and *revive-time* (< (+ (death-duration creature) *revive-time*) (dead creature)))
@@ -178,10 +284,14 @@ corpse; NIL to collapse into the floor instead.")
 
 ;; Sliced so the standing imp in its first frame is as tall as a turnaround cell.
 (define-fx-animation imp-death "sprites/imp/death" :fps 10 :size *imp-height*)
+;; Four frames per view, every view scaled to a turnaround cell's height. The frame
+;; follows the distance walked (STRIDE), so :FPS is unused.
+(define-fx-animation imp-walk "sprites/imp/walk" :loop T :size *imp-height*)
 
 (define-shader-entity imp (creature)
   ((texture :initform (// 'hexmaw 'imp-turnaround))
    (atlas :initform (read-atlas "data/sprites/imp/turnaround.lisp"))
    (sprite-height :initform *imp-height*)
    (death-animation :initform 'imp-death)
+   (walk-animation :initform 'imp-walk)
    (max-health :initform 30)))

@@ -5,6 +5,7 @@
   :components ((:file "package")
                (:file "dev")
                (:file "greybox")
+               (:file "nav")
                (:file "sprite")
                (:file "creature")
                (:file "blocks")

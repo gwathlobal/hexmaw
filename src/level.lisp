@@ -43,4 +43,6 @@
       (dolist (c (attach-block 'test-room container "connector_south" :at (vec 0 0 z1) :facing :south))
         (destructuring-bind (name position direction) c
           (unless (string-equal name "connector_south")
-            (seal-connector container position direction)))))))
+            (seal-connector container position direction))))))
+  ;; Last, once every solid is in.
+  (build-nav-grid))

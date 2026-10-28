@@ -68,8 +68,8 @@
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
                 (health *player*) (floor (mana *player*)) (weapon *player*)
                 (map 'list (lambda (c)
-                             (format NIL "~(~a~) ~:[~d/~d hp~;dead~*~*~] at (~,2f ~,2f)"
-                                     (type-of c) (dead c) (health c) (max-health c)
+                             (format NIL "~(~a~) ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)"
+                                     (type-of c) (dead c) (health c) (max-health c) (brain c)
                                      (vx (location c)) (vz (location c))))
                      *creatures*)
                 active (length *runtime-errors*)))
