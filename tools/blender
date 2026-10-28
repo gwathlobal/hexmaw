@@ -1,0 +1,23 @@
+#!/bin/bash
+# Run Blender with the given arguments: the one on PATH if there is one, otherwise the
+# flatpak (org.blender.Blender) with this project folder shared into its sandbox.
+# Paths outside the project aren't visible to the flatpak, and its launcher changes
+# directory, so relative paths among the arguments are made absolute first.
+# The PRIME variables put it on the NVIDIA GPU of a hybrid laptop; without them the
+# flatpak falls back to software OpenGL, about 30 times slower in EEVEE.
+root=$(cd "$(dirname "$0")/.." && pwd)
+args=()
+for arg in "$@"; do
+    case $arg in
+        /* | -*) ;;
+        */*) if [ -d "$(dirname "$arg")" ]; then arg=$PWD/$arg; fi ;;
+        *) if [ -e "$arg" ]; then arg=$PWD/$arg; fi ;;
+    esac
+    args+=("$arg")
+done
+export __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia
+if command -v blender >/dev/null 2>&1; then
+    exec blender "${args[@]}"
+fi
+exec flatpak run --env=__NV_PRIME_RENDER_OFFLOAD=1 --env=__GLX_VENDOR_LIBRARY_NAME=nvidia \
+     --filesystem="$root" org.blender.Blender "${args[@]}"

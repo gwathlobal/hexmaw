@@ -30,6 +30,7 @@ blend inside the sprite (pink edges, mauve smoke) is despilled.
 """
 
 import argparse
+import math
 from pathlib import Path
 
 from PIL import Image
@@ -121,7 +122,14 @@ def main():
     ap.add_argument("--pixel", type=float, default=1.0, help="source pixels per art pixel (default 1)")
     ap.add_argument("--anchor", choices=("center", "bottom"), default="center",
                     help="keep each frame's cell centre in place, or put its lowest solid row on the bottom edge")
+    ap.add_argument("--ground-like", action="append", default=[], metavar="FRAME:REF",
+                    help="with --anchor bottom, put frame FRAME (numbered from 1 over the whole sheet) on the "
+                         "ground of frame REF in the same row instead of its own solid bottom, for a frame "
+                         "with something (a blood pool) reaching below the ground line; repeatable")
     ap.add_argument("--margin", type=int, default=4, help="source pixels to skip next to each separator")
+    ap.add_argument("--exact", action="store_true",
+                    help="the sheet is a render on pure magenta (255, 0, 255): key only that, with no "
+                         "rim cut or despill, which would eat a render's outlines and bluish steel")
     ap.add_argument("--min-pixels", type=int, default=50,
                     help="cells with fewer opaque pixels than this after keying are empty")
     args = ap.parse_args()
@@ -139,15 +147,16 @@ def main():
     for y in range(h):
         for x in range(w):
             r, g, b, _ = px[x, y]
-            if is_background(r, g, b):
+            if ((r, g, b) == (255, 0, 255) or is_cyan(r, g, b)) if args.exact else is_background(r, g, b):
                 px[x, y] = (0, 0, 0, 0)
-    cut_rims(src)
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a and b > g:
-                # Despill: edges and smoke blended with magenta turn pink; pull blue down to green.
-                px[x, y] = (r, g, g, 255)
+    if not args.exact:
+        cut_rims(src)
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = px[x, y]
+                if a and b > g:
+                    # Despill: edges and smoke blended with magenta turn pink; pull blue down to green.
+                    px[x, y] = (r, g, g, 255)
 
     frames = []
     for box in found:
@@ -160,34 +169,42 @@ def main():
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    # Ground row of every frame, in sheet coordinates, for --anchor bottom.
+    grounds = [t + solid_bottom(src.crop((l, t, r + 1, b + 1))) for l, t, r, b in frames]
+    for spec in args.ground_like:
+        frame, _, ref = spec.partition(":")
+        frame, ref = int(frame) - 1, int(ref) - 1
+        grounds[frame] = frames[frame][1] + grounds[ref] - frames[ref][1]
+
     start = 0
     for name, count in animations:
         boxes = frames[start:start + count]
+        bottoms = grounds[start:start + count]
         start += count
         # Shared crop: the largest extent from the cell centre over all frames, or
         # with --anchor bottom, the tallest frame above its solid bottom.
         half_w = half_h = 0
-        bottoms = []
-        for l, t, r, b in boxes:
+        for i, (l, t, r, b) in enumerate(boxes):
             cell = src.crop((l, t, r + 1, b + 1))
             bbox = cell.getbbox()
-            cx, cy = (r - l) / 2, (b - t) / 2
+            cx, cy = (r - l + 1) / 2, (b - t + 1) / 2   # bounds are inclusive
             half_w = max(half_w, cx - bbox[0], bbox[2] - cx)
             if args.anchor == "bottom":
-                bottom = solid_bottom(cell)
-                bottoms.append(t + bottom)
-                half_h = max(half_h, (bottom + 1 - bbox[1]) / 2)
+                half_h = max(half_h, (bottoms[i] - t + 1 - bbox[1]) / 2)
             else:
                 half_h = max(half_h, cy - bbox[1], bbox[3] - cy)
-        half_w, half_h = int(half_w) + 1, int(half_h) + 1
+        half_w, half_h = math.ceil(half_w), math.ceil(half_h)
         cell_w = max(1, round(2 * half_w / args.pixel))
         cell_h = max(1, round(2 * half_h / args.pixel))
         strip = Image.new("RGBA", (count * cell_w + (count - 1) * GAP, cell_h), (0, 0, 0, 0))
         for i, (l, t, r, b) in enumerate(boxes):
-            cx, cy = l + (r - l) // 2, t + (b - t) // 2
+            cx, cy = (l + r + 1) // 2, (t + b + 1) // 2
             if args.anchor == "bottom":
                 cy = bottoms[i] + 1 - half_h
-            frame = src.crop((cx - half_w, cy - half_h, cx + half_w, cy + half_h))
+            # Take pixels from this cell only: a crop taller than the cell would
+            # otherwise pick up the frame in the row above.
+            frame = Image.new("RGBA", (2 * half_w, 2 * half_h), (0, 0, 0, 0))
+            frame.paste(src.crop((l, t, r + 1, b + 1)), (l - (cx - half_w), t - (cy - half_h)))
             strip.paste(frame.resize((cell_w, cell_h), Image.NEAREST), (i * (cell_w + GAP), 0))
         strip.save(out / f"{name}.png")
         (out / f"{name}.lisp").write_text(

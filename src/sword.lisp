@@ -26,9 +26,11 @@
 (defparameter *sword-damage* '(10 16))
 (defparameter *sword-knockback* 3.0 "Speed in m/s a hit slides the creature away.")
 
-(defparameter *sword-height* 0.6
+(defparameter *sword-height* 1.04
   "Vertical art scale: the strip's cell height times the scale is about this fraction
-of the window height. Snaps to whole screen pixels per art pixel.")
+of the window height. Snaps to whole screen pixels per art pixel. The strip is a
+render framed to reach the screen's top edge (250 art pixels tall, 3 screen pixels
+each at 720), so the swing is cut only by the screen.")
 (defparameter *sword-stretch* 1.25 "Width over height of an art pixel on screen, as for the hands.")
 (defparameter *sword-drop* 6 "Art pixels the sword sits below the bottom edge.")
 (defparameter *sword-overhang* 6

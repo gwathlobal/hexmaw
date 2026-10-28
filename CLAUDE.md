@@ -196,14 +196,22 @@ cyan line between:
 python3 tools/slice_frames.py "Fire Hands Sheet.png" data/sprites/hands --pixel 4 --anchor bottom hands:12
 ```
 
-The sword is one 12-frame strip (4 idle, then an 8-frame slash), one whole 4:3 screen per
-cell. Its sheet, `Sword Sheet.png`, is a generated idle row stacked on a generated 2 × 4 slash
-sheet, the idle frames shifted 17 px left to line up with the slash's last frame (its return
-to rest), so the swing flows back into the idle:
+The sword is one 12-frame strip (4 idle, then an 8-frame slash), each cell a whole 16:9
+screen (about 328 × 250 art pixels, the size `*sword-height*` expects). It starts as a 3D
+model posed in Blender: `art/sword.blend`, rigged and rendered by `tools/blender_sword.py`
+(its docstring covers build, update, reframe and render; `tools/blender` runs the flatpak on
+the NVIDIA GPU). Close the Blender window, or File → Revert, after a script changes the
+.blend, or the window's next save undoes it. The render at art scale is a 4 × 3 sheet,
+which an image generator restyles; `art/Sword Sheet.webp` is that restyle:
 
 ```bash
-python3 tools/slice_frames.py "Sword Sheet.png" data/sprites/sword --pixel 2.5 --anchor bottom sword:12
+tools/blender -b --python tools/blender_sword.py -- render art/sword.blend art/sword-pixel --height 250
+python3 tools/slice_frames.py "art/Sword Sheet.webp" data/sprites/sword --pixel 1.25 --margin 2 sword:12
 ```
+
+`--pixel` scales the restyled cells back to the render's size. To use the raw render instead,
+slice `art/sword-pixel/sheet.png` with `--exact --margin 0`; `--exact` keys only pure magenta
+and keeps the render's outlines and bluish steel.
 
 Generators can't keep a motion sequence across a grid of first-person poses, and they draw
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
