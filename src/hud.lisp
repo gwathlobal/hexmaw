@@ -27,9 +27,10 @@
       (orthographic-projection 0 (width *context*) 0 (height *context*) 0 10)
       (call-next-method))))
 
-(defun place (entity x y)
+(defun place (entity x y &optional (z 0))
+  "Put ENTITY at pixel X, Y. Z below 0 (down to -10) puts it behind elements nearer 0."
   (let ((loc (location entity)))
-    (setf (vx loc) (float x 0f0) (vy loc) (float y 0f0) (vz loc) 0f0)))
+    (setf (vx loc) (float x 0f0) (vy loc) (float y 0f0) (vz loc) (float z 0f0))))
 
 ;;; Bars.
 
@@ -113,6 +114,14 @@ void main(){
     (dolist (element (hud-elements hud) hud)
       (enter element container))))
 
+(defun hud-row-y (row)
+  "Pixels from the bottom edge to the bottom of ROW, counted from 0 at the bottom."
+  (+ *hud-margin* (* row (+ +glyph-height+ *hud-row-gap*))))
+
+(defun hud-top ()
+  "Pixels from the bottom edge to the top of the bars, for what stacks above them."
+  (+ (hud-row-y 1) +glyph-height+))
+
 (defun layout-hud (hud)
   "Rows from the bottom: mana, then health. Each row is a label, a bar and the numbers."
   (let* ((margin *hud-margin*)
@@ -125,8 +134,8 @@ void main(){
              (setf (vx (scaling bar)) (float *hud-bar-width* 0f0)
                    (vy (scaling bar)) (float *hud-bar-height* 0f0))
              (place value (+ bar-x *hud-bar-width* 8) y)))
-      (row margin (mana-label hud) (mana-bar hud) (mana-text hud))
-      (row (+ margin +glyph-height+ *hud-row-gap*) (health-label hud) (health-bar hud) (health-text hud)))))
+      (row (hud-row-y 0) (mana-label hud) (mana-bar hud) (mana-text hud))
+      (row (hud-row-y 1) (health-label hud) (health-bar hud) (health-text hud)))))
 
 (define-handler (hud tick) ()
   (when *player*

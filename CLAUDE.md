@@ -119,7 +119,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   projectile delivery, and the `bolt`. A new effect kind is a method on `apply-effect`.
 - `src/hud.lisp`: HP and mana bars in the lower-left corner. HUD pieces are `hud-element`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
-  on whole pixels, since a half-pixel position drops an edge row.
+  on whole pixels, since a half-pixel position drops an edge row. Overlapping elements
+  take a depth in `place` (below 0 is further back). `hud-top` is where the bars end.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
   (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
@@ -139,7 +140,11 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
   so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
   blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
-  `*sword-arc*`, not behind a wall.
+  `*sword-arc*`, not behind a wall. Number keys pick a weapon, the mouse wheel cycles
+  (`cycle-weapon`). The weapon slots above the HP bar (`weapon-bar`) show one icon per
+  weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
+  frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
+  `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
@@ -235,7 +240,8 @@ turns only. Re-saving a `.glb` and running `tools/hd reset` picks up the new ver
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
-Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands, left click to
+Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands (or the mouse
+wheel to cycle them), left click to
 attack (swing, or cast the bolt), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
@@ -243,3 +249,5 @@ starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
 0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction;
 `tools/hd status` shows mana and each creature's health.
+`(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
+the wheel one notch down (next weapon).

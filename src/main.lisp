@@ -19,6 +19,7 @@
     (setf *player* new)
     (enter new scene))
   (add-hud scene)
+  (add-weapon-bar scene)
   (add-hands scene)
   (add-sword scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.

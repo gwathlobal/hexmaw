@@ -53,6 +53,13 @@ cut, so this must be more than the sway, or the cut-off end shows.")
       (setf (wanted-weapon player) weapon)
       T)))
 
+(defun cycle-weapon (player step)
+  "Ask for the weapon STEP places after the one asked for last, wrapping around
+*WEAPONS*; a negative STEP goes back."
+  (let* ((weapons (loop for (nil weapon) on *weapons* by #'cddr collect weapon))
+         (index (or (position (wanted-weapon player) weapons) 0)))
+    (setf (wanted-weapon player) (nth (mod (+ index step) (length weapons)) weapons))))
+
 (defun weapon-drop (player)
   "Fraction of its height the weapon on screen is lowered, eased."
   (let ((k (weapon-lower player)))
@@ -194,3 +201,116 @@ while switching, and offset by the sway. As with the hands, the sway only ever d
                     (mod (floor (* (age sword) (animation-fps animation))) *sword-idle-frames*))
                 (getf atlas :frames)))
     (layout-sword sword)))
+
+;;; The weapon slots: one square per weapon in *WEAPONS*, in a row above the health
+;;; and mana bars, each with the weapon's icon and its key number in the top-left
+;;; corner. The weapon asked for is framed in gold and lit; the others are dimmed.
+;;; Icons come from data/sprites/icons/weapons (tools/draw_weapon_icons.py).
+
+(define-fx-animation weapon-icons "sprites/icons/weapons")
+
+(defparameter *weapon-icons* '(:sword 0 :hands 1) "Frame of each weapon's icon in the strip.")
+(defparameter *weapon-icon-scale* 2 "Screen pixels per icon art pixel. Whole numbers only.")
+(defparameter *weapon-slot-padding* 3 "Pixels between a slot's edge and its icon.")
+(defparameter *weapon-slot-gap* 6 "Pixels between slots, and between the slots and the bars.")
+(defparameter *weapon-slot-color* (vec4 0.06 0.05 0.06 0.8))
+(defparameter *weapon-slot-active-color* (vec4 0.24 0.17 0.07 0.85))
+(defparameter *weapon-slot-border* (vec4 0 0 0 1))
+(defparameter *weapon-slot-active-border* (vec4 0.95 0.78 0.30 1))
+(defparameter *weapon-icon-dim* 0.45 "Brightness of the icons of the weapons not asked for.")
+
+(define-shader-entity weapon-slot (hud-element vertex-entity transformed-entity)
+  ((vertex-array :initform (// 'hexmaw 'hud-quad))
+   (active :initform NIL :accessor active)))
+
+(defmethod render :before ((slot weapon-slot) (program shader-program))
+  (let ((active (active slot)))
+    (setf (uniform program "back_color") (if active *weapon-slot-active-color* *weapon-slot-color*))
+    (setf (uniform program "border_color") (if active *weapon-slot-active-border* *weapon-slot-border*))
+    (setf (uniform program "border_width") (if active 2.0 1.0))))
+
+(define-class-shader (weapon-slot :vertex-shader)
+  "layout (location = TRIAL_V_UV) in vec2 in_uv;
+out vec2 slot_uv;
+
+void main(){
+  maybe_call_next_method();
+  slot_uv = in_uv;
+}")
+
+(define-class-shader (weapon-slot :fragment-shader)
+  "in vec2 slot_uv;
+uniform vec4 back_color;
+uniform vec4 border_color;
+uniform float border_width;
+out vec4 color;
+
+void main(){
+  // Distance to the nearest edge in screen pixels.
+  vec2 edge = min(slot_uv, 1.0 - slot_uv) / fwidth(slot_uv);
+  color = min(edge.x, edge.y) < border_width ? border_color : back_color;
+}")
+
+(define-shader-entity weapon-icon (hud-element fx-sprite)
+  ((vertex-array :initform (// 'hexmaw 'hud-quad))
+   (animation :initform (find-fx-animation 'weapon-icons))
+   (frame :initarg :frame :initform 0 :accessor frame)
+   (active :initform NIL :accessor active)))
+
+;; Replaces FX-SPRITE's tick, which would face it into the world and end the strip.
+(define-handler (weapon-icon tick) ()
+  (let ((atlas (animation-atlas (sprite-animation weapon-icon))))
+    (strip-uv (frame-uv weapon-icon) atlas (frame weapon-icon) (getf atlas :frames))))
+
+(defmethod render :before ((icon weapon-icon) (program shader-program))
+  (setf (uniform program "brightness") (if (active icon) 1.0 (float *weapon-icon-dim* 0f0))))
+
+(define-class-shader (weapon-icon :fragment-shader)
+  "uniform float brightness;
+out vec4 color;
+
+void main(){
+  maybe_call_next_method();
+  color.rgb *= brightness;
+}")
+
+(defclass weapon-bar (entity listener)
+  ((name :initform :weapon-bar)
+   (slots :initform () :accessor slots :documentation "(weapon slot icon label) per weapon.")))
+
+(defun add-weapon-bar (container)
+  (let ((bar (make-instance 'weapon-bar)))
+    (setf (slots bar)
+          (loop for (key weapon) on *weapons* by #'cddr
+                collect (list weapon
+                              (make-instance 'weapon-slot)
+                              (make-instance 'weapon-icon :frame (getf *weapon-icons* weapon))
+                              (make-hud-text (string key)))))
+    (enter bar container)
+    ;; Slot, icon and number overlap: entered back to front, and placed at depths to match.
+    (loop for (nil . parts) in (slots bar)
+          do (dolist (part parts) (enter part container)))
+    bar))
+
+(define-handler (weapon-bar tick) ()
+  (let* ((atlas (animation-atlas (find-fx-animation 'weapon-icons)))
+         (scale *weapon-icon-scale*)
+         (icon-w (* scale (getf atlas :cell-width)))
+         (icon-h (* scale (getf atlas :cell-height)))
+         (pad *weapon-slot-padding*)
+         (slot-w (+ icon-w pad pad))
+         (slot-h (+ icon-h pad pad))
+         (y (+ (hud-top) *weapon-slot-gap*))
+         (wanted (and *player* (wanted-weapon *player*))))
+    (loop for (weapon slot icon label) in (slots weapon-bar)
+          for x from *hud-margin* by (+ slot-w *weapon-slot-gap*)
+          for active = (eq weapon wanted)
+          do (setf (active slot) active
+                   (active icon) active
+                   (vx (scaling slot)) (float slot-w 0f0)
+                   (vy (scaling slot)) (float slot-h 0f0)
+                   (vx (scaling icon)) (float icon-w 0f0)
+                   (vy (scaling icon)) (float icon-h 0f0))
+             (place slot x y -0.2)
+             (place icon (+ x pad) (+ y pad) -0.1)
+             (place label (+ x pad) (- (+ y slot-h) pad +glyph-height+)))))
