@@ -27,8 +27,6 @@
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
 
-(defvar *player* NIL "The player in the current scene.")
-
 (defclass player (fps-camera)
   ((name :initform :player)
    (fov :initform 75.0)
@@ -116,10 +114,20 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
       (setf (vx rot) (max -1.55 (min 1.55 (- (vx rot) (* *mouse-sensitivity* (- (vy pos) (vy old-pos)))))))
       (setf (vy rot) (mod (+ (vy rot) (* *mouse-sensitivity* (- (vx pos) (vx old-pos)))) #.(float (* 2 pi) 0f0))))))
 
+(defmethod body-feet ((player player)) (feet player))
+(defmethod body-radius ((player player)) *player-radius*)
+(defmethod body-height ((player player)) *player-height*)
+(defmethod body-solid-p ((player player)) T)
+
+(defvar *walk-through-bodies* NIL
+  "True while the player already overlaps a body (something revived on it), so it can walk out.")
+
 (defun overlapping-solid (feet)
-  "Return the first solid the player box at FEET overlaps, or NIL."
-  (solid-overlapping (vx feet) (vy feet) (vz feet)
-                     (float *player-radius* 0f0) (float *player-height* 0f0)))
+  "Return the first solid or body the player box at FEET overlaps, or NIL."
+  (let ((r (float *player-radius* 0f0)) (h (float *player-height* 0f0)))
+    (or (solid-overlapping (vx feet) (vy feet) (vz feet) r h)
+        (unless *walk-through-bodies*
+          (body-overlapping (vx feet) (vy feet) (vz feet) r h *player*)))))
 
 (defun move-axis (player axis delta)
   "Move along AXIS (0 x, 1 y, 2 z) by DELTA, stopping flush against solids."
@@ -224,7 +232,11 @@ On a step the eye keeps its height and eases to the new one."
       (setf (vy vel) (float *jump-speed* 0f0)))
     (decf (vy vel) (* *gravity* dt))
     ;; Steps only while walking: not mid-air, and not on the frame a jump starts.
-    (let ((walking (and (grounded player) (<= (vy vel) 0))))
+    (let ((walking (and (grounded player) (<= (vy vel) 0)))
+          (*walk-through-bodies* (let ((feet (feet player)))
+                                   (body-overlapping (vx feet) (vy feet) (vz feet)
+                                                     (float *player-radius* 0f0) (float *player-height* 0f0)
+                                                     player))))
       (setf (grounded player) NIL)
       (move-horizontal player (* (vx vel) dt) (* (vz vel) dt) walking)
       (move-axis player 1 (* (vy vel) dt))

@@ -113,7 +113,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   frame animations from `tools/slice_frames.py` strips (`define-fx-animation`).
   Assets live in `data/` (Trial pool `hexmaw`).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
-  death and revival; wandering and the walk animation), `*creatures*` for hit tests, and the `imp`. A creature's
+  death and revival; wandering and the walk animation), `*creatures*` for hit tests, bodies
+  (collision between actors), and the `imp`. A creature's
   `death-animation` plays once on death, front view from every angle, and its last frame
   stays as the corpse until revival; without one it collapses into the floor.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
@@ -156,6 +157,11 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
 (north). Collision is axis-aligned boxes in `*solids*`, resolved one axis at a time.
+Actors (the player and live creatures, not corpses) are bodies: upright boxes that block
+each other the same way, found by `body-overlapping` rather than kept in `*solids*`,
+since they move. A new kind of actor gives methods on `body-feet`, `body-radius`,
+`body-height` and `body-solid-p`. An actor already inside another body (a revival on
+top of the player, say) may walk out of it; a corpse waits to revive until its spawn point is clear.
 A walking player steps up and down ledges of up to `*step-height*` (0.45 m); anything
 taller needs a jump (0.45 m is also the most a block can rise per step in level design).
 On a step the camera holds its height and eases to the new one.
@@ -180,7 +186,9 @@ A creature wanders: it stands for `*wander-pause*` seconds, then `nav-reachable-
 a random cell it can walk to within `wander-radius` of its home (or of itself, if knocked
 too far away), and it follows the smoothed path at `walk-speed`, facing the way it goes.
 `settle` eases it onto the floor under it. A hit stops it for `*hurt-pause*`, then it plans
-afresh. It doesn't collide with the player or other creatures yet.
+afresh. It slides along any body in its way (`move-creature`, which also moves knockback);
+blocked for `*stuck-time*`, it gives up the path and plans another after `*stuck-pause*`.
+The nav grid ignores bodies, so paths still run through them.
 
 `tools/hd '(game (show-nav))'` lays green tiles on the cells within 8 m of the player that
 an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
@@ -201,7 +209,6 @@ The game assumes the three turned views face image-left and mirrors them for the
 other side. Generated sheets aren't always consistent (the imp's back-quarter faced
 right), so look at each view and pass the odd ones to `--mirror`. To check angle
 selection in game, orbit the camera around the sprite and screenshot each 45°.
-Billboards have no collision yet.
 
 Effect animations (projectiles, impacts) start as a grid of frames, same magenta and
 cyan convention; rows and cell sizes may be uneven, and empty cells are skipped.

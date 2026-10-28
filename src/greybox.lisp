@@ -57,18 +57,20 @@ void main(){
           (aref box 3) (float (max x0 x1) 0f0) (aref box 4) (float (max y0 y1) 0f0) (aref box 5) (float (max z0 z1) 0f0))
     box))
 
+(defun box-overlaps-p (s x y z half-width height)
+  "True if box S overlaps an upright box standing at X Y Z, HALF-WIDTH out from its
+centre line on X and Z and HEIGHT tall. Touching faces don't count."
+  (let ((eps 1f-4))
+    (and (< (- x half-width) (- (aref s 3) eps)) (> (+ x half-width) (+ (aref s 0) eps))
+         (< y (- (aref s 4) eps)) (> (+ y height) (+ (aref s 1) eps))
+         (< (- z half-width) (- (aref s 5) eps)) (> (+ z half-width) (+ (aref s 2) eps)))))
+
 (defun solid-overlapping (x y z half-width height)
   "The first solid overlapped by an upright box standing at X Y Z, HALF-WIDTH out from
 its centre line on X and Z and HEIGHT tall, or NIL. Touching faces don't count."
-  (let ((x0 (- x half-width)) (x1 (+ x half-width))
-        (y0 y) (y1 (+ y height))
-        (z0 (- z half-width)) (z1 (+ z half-width))
-        (eps 1f-4))
-    (loop for s across *solids*
-          when (and (< x0 (- (aref s 3) eps)) (> x1 (+ (aref s 0) eps))
-                    (< y0 (- (aref s 4) eps)) (> y1 (+ (aref s 1) eps))
-                    (< z0 (- (aref s 5) eps)) (> z1 (+ (aref s 2) eps)))
-          return s)))
+  (loop for s across *solids*
+        when (box-overlaps-p s x y z half-width height)
+          return s))
 
 (defun add-box (container x0 y0 z0 x1 y1 z1 &key (color (vec 0.6 0.6 0.6)) (solid T))
   "Add a box spanning the two corners, in metres, to CONTAINER."

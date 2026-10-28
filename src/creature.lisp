@@ -18,10 +18,14 @@
 (defparameter *wander-pause* '(1.0 3.0) "Least and most seconds a wandering creature stands before moving on.")
 (defparameter *hurt-pause* 0.4 "Seconds a creature stands after a hit before it plans a new walk.")
 (defparameter *settle-speed* 3.0 "Metres per second a creature rises or sinks to the floor under it.")
+(defparameter *stuck-time* 0.5 "Seconds a walking creature stays blocked before it gives up its path.")
+(defparameter *stuck-pause* 0.3 "Seconds it stands after giving up before it plans another walk.")
 
 (defvar *hit-stop* 0.0 "Seconds of hit-stop left. While positive, nothing in the world moves.")
 (defvar *creatures* (make-array 0 :adjustable T :fill-pointer T)
   "Creatures in the level, for hit tests. The level rebuilds it.")
+
+(defvar *player* NIL "The player in the current scene.")
 
 (defvar *game-state* :title
   "What the game is doing: :TITLE (main menu), :PLAYING or :PAUSED. Menus (menu.lisp)
@@ -47,6 +51,7 @@ change it; anything but :PLAYING freezes the world.")
    (brain :initform :idle :accessor brain :documentation ":IDLE (standing) or :WALKING along PATH.")
    (idle-timer :initform (wander-pause) :accessor idle-timer :documentation "Seconds left standing.")
    (path :initform () :accessor path :documentation "Points still to walk to, nearest first.")
+   (stuck :initform 0.0 :accessor stuck :documentation "Seconds its walk has been blocked.")
    (walk-distance :initform 0.0 :accessor walk-distance
                   :documentation "Metres walked so far; picks the walk animation's frame.")
    (walk-animation :initarg :walk-animation :initform NIL :accessor walk-animation
@@ -103,6 +108,66 @@ corpse; NIL to collapse into the floor instead.")
                   (< (- (vy loc) margin) (vy point) (+ (vy loc) (sprite-height c) margin)))
           return c))
 
+;;; Bodies: the player and live creatures block each other, as upright boxes like the
+;;; solids. Corpses don't. Bodies move, so they aren't in *SOLIDS*, and the nav grid
+;;; ignores them.
+
+(defgeneric body-feet (thing) (:documentation "The bottom centre of THING's box."))
+(defgeneric body-height (thing))
+(defgeneric body-solid-p (thing) (:documentation "True while THING blocks other bodies."))
+
+(defmethod body-feet ((creature creature)) (location creature))
+(defmethod body-height ((creature creature)) (sprite-height creature))
+(defmethod body-solid-p ((creature creature)) (not (dead creature)))
+
+(defvar *body-box* (make-array 6 :element-type 'single-float)
+  "The box BODY-OVERLAPPING returns, reused by every call.")
+
+(defun body-overlapping (x y z half-width height &optional ignore)
+  "The first body other than IGNORE overlapped by an upright box standing at X Y Z,
+HALF-WIDTH out from its centre line and HEIGHT tall, or NIL. Returns its box, like a
+solid's (*BODY-BOX*, good until the next call), and the body."
+  (flet ((hit (thing)
+           (when (and thing (not (eq thing ignore)) (body-solid-p thing))
+             (let ((feet (body-feet thing))
+                   (r (float (body-radius thing) 0f0))
+                   (box *body-box*))
+               (setf (aref box 0) (- (vx feet) r) (aref box 1) (vy feet) (aref box 2) (- (vz feet) r)
+                     (aref box 3) (+ (vx feet) r) (aref box 5) (+ (vz feet) r)
+                     (aref box 4) (+ (vy feet) (float (body-height thing) 0f0)))
+               (box-overlaps-p box x y z half-width height)))))
+    (cond ((hit *player*) (values *body-box* *player*))
+          (T (loop for c across *creatures*
+                   when (hit c) return (values *body-box* c))))))
+
+(defun creature-body-overlapping (creature)
+  "The first other body CREATURE overlaps where it stands, as for BODY-OVERLAPPING."
+  (let ((loc (location creature)))
+    (body-overlapping (vx loc) (+ (vy loc) 0.05) (vz loc)
+                      (float (body-radius creature) 0f0) (- (float (sprite-height creature) 0f0) 0.05)
+                      creature)))
+
+(defun move-creature (creature dx dz lift)
+  "Move CREATURE by DX, DZ, one axis at a time, each step undone if it runs into a solid
+(ignoring the LIFT metres above its feet: steps it can climb) or another body. Returns
+whether the X move and whether the Z move were blocked."
+  (let* ((loc (location creature))
+         (r (float (body-radius creature) 0f0))
+         (h (float (sprite-height creature) 0f0))
+         ;; Already inside a body (revived under the player, say): let it walk out.
+         (bodies (not (creature-body-overlapping creature))))
+    (flet ((blocked ()
+             (or (solid-overlapping (vx loc) (+ (vy loc) lift) (vz loc) r (- h lift))
+                 (and bodies (creature-body-overlapping creature)))))
+      (values (unless (= 0 dx)
+                (let ((old (vx loc)))
+                  (incf (vx loc) dx)
+                  (when (blocked) (setf (vx loc) old) T)))
+              (unless (= 0 dz)
+                (let ((old (vz loc)))
+                  (incf (vz loc) dz)
+                  (when (blocked) (setf (vz loc) old) T)))))))
+
 (defun hurt (creature amount)
   "Take AMOUNT health from CREATURE with the full hit reaction."
   (unless (dead creature)
@@ -124,18 +189,11 @@ corpse; NIL to collapse into the floor instead.")
             (vz kb) (* speed (/ (vz direction) len))))))
 
 (defun slide (creature dt)
-  "Apply knockback for DT seconds, stopping at solids, then slow it by friction."
-  (let ((kb (knockback creature))
-        (loc (location creature))
-        (r (float (body-radius creature) 0f0))
-        (h (float (sprite-height creature) 0f0)))
-    (flet ((blocked () (solid-overlapping (vx loc) (+ (vy loc) 0.05) (vz loc) r (- h 0.05))))
-      (let ((old (vx loc)))
-        (incf (vx loc) (* (vx kb) dt))
-        (when (blocked) (setf (vx loc) old (vx kb) 0.0)))
-      (let ((old (vz loc)))
-        (incf (vz loc) (* (vz kb) dt))
-        (when (blocked) (setf (vz loc) old (vz kb) 0.0))))
+  "Apply knockback for DT seconds, stopping at solids and bodies, then slow it by friction."
+  (let ((kb (knockback creature)))
+    (multiple-value-bind (x-blocked z-blocked) (move-creature creature (* (vx kb) dt) (* (vz kb) dt) 0.05)
+      (when x-blocked (setf (vx kb) 0.0))
+      (when z-blocked (setf (vz kb) 0.0)))
     (let* ((speed (sqrt (+ (expt (vx kb) 2) (expt (vz kb) 2))))
            (slower (max 0.0 (- speed (* *knockback-friction* dt)))))
       (if (< speed 1f-4)
@@ -145,27 +203,31 @@ corpse; NIL to collapse into the floor instead.")
 (defun stop-walking (creature &optional (pause (wander-pause)))
   (setf (brain creature) :idle
         (path creature) ()
+        (stuck creature) 0.0
         (idle-timer creature) pause))
 
 (defun walk-path (creature dt)
-  "Walk DT seconds toward the next point of the path, facing the way it goes."
+  "Walk DT seconds toward the next point of the path, facing the way it goes. Blocked
+by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
   (let* ((loc (location creature))
          (target (first (path creature)))
          (dx (- (vx target) (vx loc)))
          (dz (- (vz target) (vz loc)))
          (distance (sqrt (+ (* dx dx) (* dz dz))))
-         (step (* (walk-speed creature) dt)))
+         (step (min distance (* (walk-speed creature) dt)))
+         (x0 (vx loc))
+         (z0 (vz loc)))
     (when (< 1f-4 distance)
-      (setf (facing creature) (float (atan dx (- dz)) 0f0)))
-    (cond ((<= distance step)
-           (setf (vx loc) (vx target) (vz loc) (vz target))
-           (incf (walk-distance creature) distance)
-           (unless (setf (path creature) (rest (path creature)))
-             (stop-walking creature)))
-          (T
-           (incf (vx loc) (* step (/ dx distance)))
-           (incf (vz loc) (* step (/ dz distance)))
-           (incf (walk-distance creature) step)))))
+      (setf (facing creature) (float (atan dx (- dz)) 0f0))
+      (move-creature creature (* step (/ dx distance)) (* step (/ dz distance)) (step-height creature)))
+    (let ((moved (sqrt (+ (expt (- (vx loc) x0) 2) (expt (- (vz loc) z0) 2)))))
+      (incf (walk-distance creature) moved)
+      (setf (stuck creature) (if (< moved (* 0.25 step)) (+ (stuck creature) dt) 0.0))
+      (cond ((< (+ (expt (- (vx target) (vx loc)) 2) (expt (- (vz target) (vz loc)) 2)) 1f-6)
+             (unless (setf (path creature) (rest (path creature)))
+               (stop-walking creature)))
+            ((< *stuck-time* (stuck creature))
+             (stop-walking creature *stuck-pause*))))))
 
 (defun wander (creature dt)
   "Stand a while, then walk to a random spot it can reach within WANDER-RADIUS of home."
@@ -273,7 +335,13 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
         (settle creature dt))
       (when (dead creature)
         (incf (dead creature) dt)
-        (when (and *revive-time* (< (+ (death-duration creature) *revive-time*) (dead creature)))
+        (when (and *revive-time* (< (+ (death-duration creature) *revive-time*) (dead creature))
+                   ;; Wait for whoever stands on its spawn point to move.
+                   (let ((home (home creature)))
+                     (not (body-overlapping (vx home) (+ (vy home) 0.05) (vz home)
+                                            (float (body-radius creature) 0f0)
+                                            (- (float (sprite-height creature) 0f0) 0.05)
+                                            creature))))
           (revive creature)))))
   (update-creature-look creature))
 
