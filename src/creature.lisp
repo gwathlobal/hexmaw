@@ -26,7 +26,9 @@
 (defparameter *look-interval* 0.25 "Seconds between a creature's looks for the player.")
 (defparameter *chase-replan* 0.5 "Seconds between a hunting creature's fresh paths to the player.")
 (defparameter *chase-pause* 0.1 "Seconds a hunting creature stands at the end of a path before the next.")
-(defparameter *chase-max-walk* 15.0 "Longest path, in metres, a creature takes to reach the player.")
+(defparameter *chase-max-walk* 25.0
+  "Longest path, in metres, a creature takes to reach the player. A room above or below
+is a long walk round by the stairs.")
 (defparameter *retreat-step* 3.0 "Metres a ranged creature backs off at a time when the player is too close.")
 (defparameter *cast-aim-height* 1.1 "Height above the player's feet a creature's spell is aimed at.")
 (defparameter *attack-start-reach* 0.5
@@ -515,7 +517,7 @@ allows a straight walk. Returns NIL if every way back is blocked."
   "Ease CREATURE up or down to the floor under it: steps, and knockback off a ledge.
 It only sinks while its body has room below, so it never sinks into a ledge it overhangs."
   (let* ((loc (location creature))
-         (floor (and *nav-grid* (nav-floor-at (vx loc) (vz loc)))))
+         (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc)))))
     (when floor
       (let* ((most (* *settle-speed* dt))
              (y (+ (vy loc) (max (- most) (min most (- floor (vy loc)))))))

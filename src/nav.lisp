@@ -2,19 +2,23 @@
 
 ;;; Nav grid: where creatures can stand and how they get from one place to another,
 ;;; built from *SOLIDS*. It is the grid cousin of a navmesh: the level is cut into
-;;; square cells, and each cell records how much room it has rather than whether one
-;;; particular body fits, so creatures of every size share one grid:
+;;; square columns, and each column holds one cell per floor in it (its layers: a room
+;;; and the room above it, or a hall and its roof), lowest first. Each cell records how
+;;; much room it has rather than whether one particular body fits, so creatures of every
+;;; size share one grid:
 ;;;
-;;;  - floor: the height of the surface to stand on (one per cell, the lowest one
-;;;    with room above it, so a hall's roof never counts);
+;;;  - floor: the height of the surface to stand on (any solid top with room above it);
 ;;;  - headroom: from the floor up to the lowest solid above it;
 ;;;  - clearance: the widest body (half-width, as for collision boxes) that fits
 ;;;    standing there. Solids lower than *NAV-WALL-ABOVE* above the floor don't count,
 ;;;    so steps and low ledges aren't walls.
 ;;;
-;;; A body of radius R, height H fits a cell when clearance >= R and headroom >= H. It
-;;; can move to a neighbouring cell (diagonals too, without cutting corners) when the
-;;; floors differ by no more than its step height. Every query takes those three.
+;;; A cell is I J K: column I J, layer K. A body of radius R, height H fits a cell when
+;;; clearance >= R and headroom >= H. It can move to a cell in a neighbouring column
+;;; (diagonals too, without cutting corners) when the floors differ by no more than its
+;;; step height, so stairs join the layers. Every query takes those three. A point in
+;;; the world is in the layer under it: the highest floor no more than *NAV-LAYER-ABOVE*
+;;; above it (NAV-LAYER).
 ;;;
 ;;; The geometry questions go through FLOOR-CANDIDATES, CEILING-ABOVE and FITS-AT-P,
 ;;; so nothing else here depends on solids being axis-aligned boxes.
@@ -28,6 +32,9 @@
 (defparameter *nav-clearance-height* 2.0
   "Clearance is measured up to this height above the floor, or up to the headroom if lower.")
 (defparameter *nav-open-headroom* 100.0 "Headroom of a cell with nothing above it.")
+(defparameter *nav-layer-above* 0.5
+  "A point is on a floor up to this far above it: a body stepping up is already on the
+step, and its feet may sit a little below the floor it settles onto.")
 
 (defvar *nav-grid* NIL "The current level's nav grid. BUILD-LEVEL rebuilds it.")
 
@@ -37,8 +44,10 @@
    (cell :initarg :cell :reader nav-cell-size)
    (width :initarg :width :reader nav-width :documentation "Cells along X.")
    (depth :initarg :depth :reader nav-depth :documentation "Cells along Z.")
+   (layers :initarg :layers :reader nav-layers :documentation "The most floors any column has.")
    (floors :initarg :floors :reader nav-floors
-           :documentation "Floor height per cell, or MOST-NEGATIVE-SINGLE-FLOAT for none.")
+           :documentation "Floor height per cell I J K, or MOST-NEGATIVE-SINGLE-FLOAT for none.
+A column's floors come first, lowest first.")
    (headroom :initarg :headroom :reader nav-headroom)
    (clearance :initarg :clearance :reader nav-clearance)))
 
@@ -82,6 +91,15 @@
           maximize r into widest
           finally (return (float (or widest 0.0) 0f0)))))
 
+(defun column-floors (x z)
+  "The floors over the point X Z, lowest first: every solid top with room for the
+shortest body above it, once (boxes side by side share a top)."
+  (let ((floors ()))
+    (dolist (y (floor-candidates x z) (nreverse floors))
+      (when (and (or (null floors) (< (+ (first floors) 1f-3) y))
+                 (fits-at-p x y z 0.0 *nav-min-height*))
+        (push y floors)))))
+
 (defun build-nav-grid ()
   "Measure every cell of the level in *SOLIDS* and make the result *NAV-GRID*."
   (when (= 0 (length *solids*))
@@ -94,102 +112,151 @@
            (z0 (* cell (floor bz0 cell)))
            (width (ceiling (- bx1 x0) cell))
            (depth (ceiling (- bz1 z0) cell))
-           (floors (make-array (list width depth) :element-type 'single-float
-                                                  :initial-element most-negative-single-float))
-           (headroom (make-array (list width depth) :element-type 'single-float :initial-element 0f0))
-           (clearance (make-array (list width depth) :element-type 'single-float :initial-element 0f0)))
-      (dotimes (i width)
-        (dotimes (j depth)
-          (let* ((x (+ x0 (* (+ i 0.5) cell)))
-                 (z (+ z0 (* (+ j 0.5) cell)))
-                 (y (find-if (lambda (y) (fits-at-p x y z 0.0 *nav-min-height*))
-                             (floor-candidates x z))))
-            (when y
-              (let ((room (let ((top (ceiling-above x y z)))
-                            (if top (- top y) *nav-open-headroom*))))
-                (setf (aref floors i j) y
-                      (aref headroom i j) (float room 0f0)
-                      (aref clearance i j) (measure-clearance x y z room)))))))
-      (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
-                                                :floors floors :headroom headroom :clearance clearance)))))
+           (columns (make-array (list width depth)))
+           (layers 0))
+      (flet ((centre-x (i) (+ x0 (* (+ i 0.5) cell)))
+             (centre-z (j) (+ z0 (* (+ j 0.5) cell))))
+        ;; Find every column's floors first: the deepest column sizes the layers.
+        (dotimes (i width)
+          (dotimes (j depth)
+            (let ((floors (column-floors (centre-x i) (centre-z j))))
+              (setf (aref columns i j) floors
+                    layers (max layers (length floors))))))
+        (let ((floors (make-array (list width depth layers) :element-type 'single-float
+                                                            :initial-element most-negative-single-float))
+              (headroom (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
+              (clearance (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0)))
+          (dotimes (i width)
+            (dotimes (j depth)
+              (let ((x (centre-x i)) (z (centre-z j)))
+                (loop for y in (aref columns i j)
+                      for k from 0
+                      do (let ((room (let ((top (ceiling-above x y z)))
+                                       (if top (- top y) *nav-open-headroom*))))
+                           (setf (aref floors i j k) y
+                                 (aref headroom i j k) (float room 0f0)
+                                 (aref clearance i j k) (measure-clearance x y z room)))))))
+          (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
+                                                    :layers layers :floors floors
+                                                    :headroom headroom :clearance clearance)))))))
 
 ;;; Cells.
 
 (defun nav-cell (x z &optional (grid *nav-grid*))
-  "The cell I J containing the world point X Z, or NIL outside the grid."
+  "The column I J containing the world point X Z, or NIL outside the grid."
   (let ((i (floor (- x (nav-x0 grid)) (nav-cell-size grid)))
         (j (floor (- z (nav-z0 grid)) (nav-cell-size grid))))
     (when (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)))
       (values i j))))
 
-(defun nav-floor (i j &optional (grid *nav-grid*))
-  "Floor height of cell I J, or NIL if it has none."
-  (let ((y (aref (nav-floors grid) i j)))
+(defun nav-floor (i j k &optional (grid *nav-grid*))
+  "Floor height of cell I J K, or NIL if column I J has no layer K."
+  (let ((y (aref (nav-floors grid) i j k)))
     (when (< most-negative-single-float y) y)))
 
-(defun nav-fits-p (i j radius height &optional (grid *nav-grid*))
-  "True if a body RADIUS out from its centre and HEIGHT tall can stand in cell I J."
-  (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid))
-       (nav-floor i j grid)
-       (<= radius (aref (nav-clearance grid) i j))
-       (<= height (aref (nav-headroom grid) i j))))
+(defun nav-layer (i j y &optional (grid *nav-grid*))
+  "The layer of column I J that a point at height Y is in: the highest floor at most
+*NAV-LAYER-ABOVE* above it. NIL if there is none."
+  (let ((limit (+ y *nav-layer-above*)) (found NIL))
+    (dotimes (k (nav-layers grid) found)
+      (let ((floor (nav-floor i j k grid)))
+        (if (and floor (<= floor limit))
+            (setf found k)
+            (return found))))))
 
-(defun nav-point (i j &optional (grid *nav-grid*))
-  "A new vector at the centre of cell I J, on its floor."
+(defun nav-fits-p (i j k radius height &optional (grid *nav-grid*))
+  "True if a body RADIUS out from its centre and HEIGHT tall can stand in cell I J K."
+  (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)) (< -1 k (nav-layers grid))
+       (nav-floor i j k grid)
+       (<= radius (aref (nav-clearance grid) i j k))
+       (<= height (aref (nav-headroom grid) i j k))))
+
+(defun nav-layer-near (i j floor radius height step &optional (grid *nav-grid*))
+  "The layer of column I J that a body standing at height FLOOR can step onto: one it
+fits, whose floor is at most STEP away, the nearest if several. NIL if there is none.
+Path searches ask this for every neighbour, so it reads the arrays directly."
+  (when (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)))
+    (let ((floors (nav-floors grid)) (clearance (nav-clearance grid)) (headroom (nav-headroom grid))
+          (best NIL) (best-d 0.0))
+      (declare (type (simple-array single-float (* * *)) floors clearance headroom))
+      (dotimes (k (nav-layers grid) best)
+        (let ((y (aref floors i j k)))
+          ;; A column's floors come first, so the first missing one ends them.
+          (when (= y most-negative-single-float)
+            (return best))
+          (let ((d (abs (- y floor))))
+            (when (and (<= d step) (or (null best) (< d best-d))
+                       (<= radius (aref clearance i j k)) (<= height (aref headroom i j k)))
+              (setf best k best-d d))))))))
+
+(defun nav-point (i j k &optional (grid *nav-grid*))
+  "A new vector at the centre of cell I J K, on its floor."
   (let ((cell (nav-cell-size grid)))
     (vec (+ (nav-x0 grid) (* (+ i 0.5) cell))
-         (nav-floor i j grid)
+         (nav-floor i j k grid)
          (+ (nav-z0 grid) (* (+ j 0.5) cell)))))
 
-(defun nav-floor-at (x z &optional (grid *nav-grid*))
-  "Floor height under the world point X Z, or NIL."
+(defun nav-floor-at (x y z &optional (grid *nav-grid*))
+  "Floor height of the layer under the world point X Y Z, or NIL."
   (multiple-value-bind (i j) (nav-cell x z grid)
-    (when i (nav-floor i j grid))))
+    (when i
+      (let ((k (nav-layer i j y grid)))
+        (when k (nav-floor i j k grid))))))
 
 (defun nav-nearest-fitting (point radius height &key (search 2) (reach 1.0) (grid *nav-grid*))
-  "The cell I J under POINT if the body fits there, else the nearest cell within SEARCH
-cells that it fits, or NIL. Knockback can push a creature into a cell too tight for it.
-Only floors within REACH metres of POINT's height count: a pillar's cells have the roof
-above it for a floor."
-  (flet ((ok (i j)
-           (and (nav-fits-p i j radius height grid)
-                (<= (abs (- (nav-floor i j grid) (vy point))) reach))))
-    (multiple-value-bind (ci cj) (nav-cell (vx point) (vz point) grid)
-      (when ci
-        (if (ok ci cj)
-            (values ci cj)
-            (let ((best NIL) (bi 0) (bj 0))
+  "The cell I J K under POINT if the body fits there, else the nearest cell within SEARCH
+columns that it fits, or NIL. Knockback can push a creature into a cell too tight for it.
+Only floors within REACH metres of POINT's height count, the nearest in each column."
+  (multiple-value-bind (ci cj) (nav-cell (vx point) (vz point) grid)
+    (when ci
+      (let ((ck (nav-layer-near ci cj (vy point) radius height reach grid)))
+        (if ck
+            (values ci cj ck)
+            (let ((best NIL) (bi 0) (bj 0) (bk 0))
               (loop for i from (- ci search) to (+ ci search)
                     do (loop for j from (- cj search) to (+ cj search)
                              for d = (+ (expt (- i ci) 2) (expt (- j cj) 2))
-                             when (and (ok i j) (or (null best) (< d best)))
-                               do (setf best d bi i bj j)))
-              (when best (values bi bj))))))))
+                             for k = (nav-layer-near i j (vy point) radius height reach grid)
+                             when (and k (or (null best) (< d best)))
+                               do (setf best d bi i bj j bk k)))
+              (when best (values bi bj bk))))))))
 
-(defun nav-step-p (i j ni nj radius height step &optional (grid *nav-grid*))
-  "True if a body can move from cell I J to the neighbouring cell NI NJ."
-  (and (nav-fits-p ni nj radius height grid)
-       (<= (abs (- (nav-floor ni nj grid) (nav-floor i j grid))) step)
-       ;; A diagonal step needs both cells beside it, so it never cuts a corner.
-       (or (= i ni) (= j nj)
-           (and (nav-fits-p ni j radius height grid)
-                (nav-fits-p i nj radius height grid)))))
+(defun nav-step (i j k ni nj radius height step &optional (grid *nav-grid*))
+  "The layer of the neighbouring column NI NJ that a body in cell I J K can move to, or NIL."
+  (let* ((floor (nav-floor i j k grid))
+         (nk (nav-layer-near ni nj floor radius height step grid)))
+    (when (and nk
+               ;; A diagonal step needs both columns beside it, so it never cuts a corner.
+               (or (= i ni) (= j nj)
+                   (and (nav-layer-near ni j floor radius height step grid)
+                        (nav-layer-near i nj floor radius height step grid))))
+      nk)))
 
 ;;; Searching.
 
-(defun nav-flood (si sj max-distance radius height step &optional (grid *nav-grid*))
-  "Shortest path lengths from cell SI SJ to every cell within MAX-DISTANCE metres of
-walking. Returns two arrays indexed by I + J * WIDTH: distances (infinity where not
+(defun nav-index (i j k &optional (grid *nav-grid*))
+  "Cell I J K's index in NAV-FLOOD's arrays."
+  (+ i (* (nav-width grid) (+ j (* (nav-depth grid) k)))))
+
+(defun nav-unindex (c &optional (grid *nav-grid*))
+  "The cell I J K at index C in NAV-FLOOD's arrays."
+  (multiple-value-bind (jk i) (floor c (nav-width grid))
+    (multiple-value-bind (k j) (floor jk (nav-depth grid))
+      (values i j k))))
+
+(defun nav-flood (si sj sk max-distance radius height step &optional (grid *nav-grid*))
+  "Shortest path lengths from cell SI SJ SK to every cell within MAX-DISTANCE metres of
+walking. Returns two arrays indexed by NAV-INDEX: distances (infinity where not
 reached) and each cell's previous cell on its path (-1 for none)."
-  (let* ((w (nav-width grid))
-         (n (* w (nav-depth grid)))
+  (let* ((n (* (nav-width grid) (nav-depth grid) (nav-layers grid)))
          (cell (nav-cell-size grid))
          (dist (make-array n :element-type 'single-float :initial-element most-positive-single-float))
          (parent (make-array n :element-type 'fixnum :initial-element -1))
          (done (make-array n :element-type 'bit :initial-element 0))
-         (open (make-array 64 :adjustable T :fill-pointer 0)))
-    (setf (aref dist (+ si (* sj w))) 0.0)
-    (vector-push-extend (+ si (* sj w)) open)
+         (open (make-array 64 :adjustable T :fill-pointer 0))
+         (start (nav-index si sj sk grid)))
+    (setf (aref dist start) 0.0)
+    (vector-push-extend start open)
     ;; Dijkstra with a plain list of open cells: a wander radius reaches a few hundred.
     (loop while (< 0 (fill-pointer open))
           do (let* ((best (loop with best = 0
@@ -202,37 +269,37 @@ reached) and each cell's previous cell on its path (-1 for none)."
                (decf (fill-pointer open))
                (unless (= 1 (aref done c))
                  (setf (aref done c) 1)
-                 (multiple-value-bind (j i) (floor c w)
+                 (multiple-value-bind (i j k) (nav-unindex c grid)
                    (loop for di from -1 to 1
                          do (loop for dj from -1 to 1
                                   for ni = (+ i di) for nj = (+ j dj)
-                                  for nc = (+ ni (* nj w))
                                   for d = (+ (aref dist c) (* cell (if (or (= di 0) (= dj 0)) 1.0 1.4142135)))
-                                  when (and (not (and (= di 0) (= dj 0)))
-                                            (<= d max-distance)
-                                            (nav-step-p i j ni nj radius height step grid)
-                                            (< d (aref dist nc)))
-                                    do (setf (aref dist nc) d
-                                             (aref parent nc) c)
-                                       (vector-push-extend nc open)))))))
+                                  for nk = (unless (or (and (= di 0) (= dj 0)) (< max-distance d))
+                                             (nav-step i j k ni nj radius height step grid))
+                                  when nk
+                                    do (let ((nc (nav-index ni nj nk grid)))
+                                         (when (< d (aref dist nc))
+                                           (setf (aref dist nc) d
+                                                 (aref parent nc) c)
+                                           (vector-push-extend nc open)))))))))
     (values dist parent)))
 
 (defun nav-line-clear-p (a b radius height step &optional (grid *nav-grid*))
-  "True if a body can walk the straight line from point A to point B: it fits every
-cell along it, and no floor change between them is more than STEP."
+  "True if a body standing at point A can walk the straight line to point B: it fits
+every cell along it, no floor change between them is more than STEP, and it arrives on
+the floor B is on, not one above or below it."
   (let* ((dx (- (vx b) (vx a))) (dz (- (vz b) (vz a)))
          (samples (max 1 (ceiling (sqrt (+ (* dx dx) (* dz dz))) (/ (nav-cell-size grid) 4))))
-         (floor NIL))
-    (loop for k from 0 to samples
-          for f = (/ k samples)
-          do (multiple-value-bind (i j) (nav-cell (+ (vx a) (* f dx)) (+ (vz a) (* f dz)) grid)
-               (unless (and i (nav-fits-p i j radius height grid))
-                 (return NIL))
-               (let ((y (nav-floor i j grid)))
-                 (when (and floor (< step (abs (- y floor))))
-                   (return NIL))
-                 (setf floor y)))
-          finally (return T))))
+         (floor (nav-floor-at (vx a) (vy a) (vz a) grid)))
+    (when floor
+      (loop for s from 0 to samples
+            for f = (/ s samples)
+            do (multiple-value-bind (i j) (nav-cell (+ (vx a) (* f dx)) (+ (vz a) (* f dz)) grid)
+                 (let ((k (and i (nav-layer-near i j floor radius height step grid))))
+                   (unless k
+                     (return NIL))
+                   (setf floor (nav-floor i j k grid))))
+            finally (return (eql floor (nav-floor-at (vx b) (vy b) (vz b) grid)))))))
 
 (defun nav-smooth-path (start points radius height step &optional (grid *nav-grid*))
   "Drop waypoints from POINTS that a straight walk from the previous one can skip,
@@ -248,20 +315,24 @@ starting at START, so the path doesn't zig-zag along the grid."
                      k (1+ furthest))))
     (nreverse path)))
 
+(defun nav-path-points (cells grid)
+  "The points of a path through CELLS, a list of NAV-INDEX indices."
+  (loop for c in cells
+        collect (multiple-value-bind (i j k) (nav-unindex c grid) (nav-point i j k grid))))
+
 (defun nav-reachable-spot (from radius height step &key (around from) (within 4.0) (max-walk (* 2 within))
                                                    (min-distance 1.0) (grid *nav-grid*))
   "A path to a random spot that a body standing at point FROM can walk to: within
 WITHIN metres of point AROUND, at least MIN-DISTANCE and at most MAX-WALK metres of
 walking away. A list of points ending at the spot, smoothed; NIL if there is none."
   (when grid
-    (multiple-value-bind (si sj) (nav-nearest-fitting from radius height :grid grid)
+    (multiple-value-bind (si sj sk) (nav-nearest-fitting from radius height :grid grid)
       (when si
-        (multiple-value-bind (dist parent) (nav-flood si sj max-walk radius height step grid)
-          (let* ((w (nav-width grid))
-                 (cell (nav-cell-size grid))
+        (multiple-value-bind (dist parent) (nav-flood si sj sk max-walk radius height step grid)
+          (let* ((cell (nav-cell-size grid))
                  (spots (loop for c from 0 below (length dist)
                               when (and (<= min-distance (aref dist c) max-walk)
-                                        (multiple-value-bind (j i) (floor c w)
+                                        (multiple-value-bind (i j) (nav-unindex c grid)
                                           (< (+ (expt (- (+ (nav-x0 grid) (* (+ i 0.5) cell)) (vx around)) 2)
                                                 (expt (- (+ (nav-z0 grid) (* (+ j 0.5) cell)) (vz around)) 2))
                                              (* within within))))
@@ -272,31 +343,25 @@ walking away. A list of points ending at the spot, smoothed; NIL if there is non
                       until (= c -1)
                       do (push c cells))
                 ;; The first cell is the one the body stands in; walk from where it is.
-                (nav-smooth-path from
-                                 (loop for c in (rest cells)
-                                       collect (multiple-value-bind (j i) (floor c w) (nav-point i j grid)))
-                                 radius height step grid)))))))))
+                (nav-smooth-path from (nav-path-points (rest cells) grid) radius height step grid)))))))))
 
 (defun nav-path-to (from to radius height step &key (max-walk 15.0) (grid *nav-grid*))
   "A path for a body standing at point FROM to point TO, walking at most MAX-WALK
 metres: a list of points ending at TO, smoothed; NIL if TO's cell (or the nearest one
 the body fits) can't be reached."
   (when grid
-    (multiple-value-bind (si sj) (nav-nearest-fitting from radius height :grid grid)
-      (multiple-value-bind (gi gj) (nav-nearest-fitting to radius height :grid grid)
+    (multiple-value-bind (si sj sk) (nav-nearest-fitting from radius height :grid grid)
+      (multiple-value-bind (gi gj gk) (nav-nearest-fitting to radius height :grid grid)
         (when (and si gi)
-          (multiple-value-bind (dist parent) (nav-flood si sj max-walk radius height step grid)
-            (let* ((w (nav-width grid))
-                   (goal (+ gi (* gj w))))
+          (multiple-value-bind (dist parent) (nav-flood si sj sk max-walk radius height step grid)
+            (let ((goal (nav-index gi gj gk grid)))
               (when (< (aref dist goal) most-positive-single-float)
                 (let ((cells ()))
                   (loop for c = goal then (aref parent c)
                         until (= c -1)
                         do (push c cells))
                   (nav-smooth-path from
-                                   (append (loop for c in (rest cells)
-                                                 collect (multiple-value-bind (j i) (floor c w) (nav-point i j grid)))
-                                           (list (vcopy to)))
+                                   (append (nav-path-points (rest cells) grid) (list (vcopy to)))
                                    radius height step grid))))))))))
 
 ;;; Looking at it.
@@ -311,18 +376,20 @@ the body fits) can't be reached."
 
 (defun show-nav (&key (within 8.0) (radius 0.35) (height 1.5) (grid *nav-grid*))
   "Lay a thin green tile on every cell within WITHIN metres of the player where a body
-RADIUS wide and HEIGHT tall fits. Run in GAME. HIDE-NAV, or a scene reset, removes them."
+RADIUS wide and HEIGHT tall fits, on every floor. Run in GAME. HIDE-NAV, or a scene
+reset, removes them."
   (hide-nav)
   (let ((feet (feet *player*))
         (half (* 0.4 (nav-cell-size grid)))
         (scene (scene +main+)))
     (dotimes (i (nav-width grid))
       (dotimes (j (nav-depth grid))
-        (when (nav-fits-p i j radius height grid)
-          (let ((p (nav-point i j grid)))
-            (when (< (+ (expt (- (vx p) (vx feet)) 2) (expt (- (vz p) (vz feet)) 2)) (* within within))
-              (push (add-box scene (- (vx p) half) (vy p) (- (vz p) half)
-                             (+ (vx p) half) (+ (vy p) 0.03) (+ (vz p) half)
-                             :color (vec 0.2 0.8 0.3) :solid NIL)
-                    *nav-tiles*))))))
+        (dotimes (k (nav-layers grid))
+          (when (nav-fits-p i j k radius height grid)
+            (let ((p (nav-point i j k grid)))
+              (when (< (vsqrdistance p feet) (* within within))
+                (push (add-box scene (- (vx p) half) (vy p) (- (vz p) half)
+                               (+ (vx p) half) (+ (vy p) 0.03) (+ (vz p) half)
+                               :color (vec 0.2 0.8 0.3) :solid NIL)
+                      *nav-tiles*)))))))
     (length *nav-tiles*)))

@@ -208,10 +208,16 @@ To test movement without a mouse or keyboard (in play, not on a menu), hold keys
 body that fits, to 0.125 m, up to 2 m; solids less than 0.45 m above the floor don't count,
 so steps aren't walls). A creature fits a cell when clearance ≥ its `body-radius` and
 headroom ≥ its `sprite-height`, and moves to a neighbour when the floors differ by at most
-its `step-height`, so one grid serves every size. Each cell holds one floor, the lowest
-with room above it; under a pillar, that's the roof above it. The geometry questions
+its `step-height`, so one grid serves every size. The grid is layered: each 0.5 m column
+keeps every floor with room above it, lowest first (a room and the room above it, or a
+hall and its roof), so a cell is `i j k`, and stairs join the layers because neighbouring
+floors are a step apart. A point is in the layer under it, the highest floor at most
+`*nav-layer-above*` above its feet (`nav-layer`, `nav-floor-at x y z`), so anything that
+asks about a place passes its height too. A straight walk (`nav-line-clear-p`) must also end
+on the floor its target is on, not the one above or below. The geometry questions
 go through `floor-candidates`, `ceiling-above` and `fits-at-p`, the only code that knows solids
-are boxes.
+are boxes. The test level's annex, east of the hall through its east doorway, is a lower room
+with an upper room right on top of it and a stair shaft joining them; an imp lives upstairs.
 
 A creature wanders: it stands for `*wander-pause*` seconds, then `nav-reachable-spot` picks
 a random cell it can walk to within `wander-radius` of its home (or of itself, if knocked
@@ -225,7 +231,9 @@ A creature with `attack-damage` also hunts (`think`). It notices the player in f
 within `*sight-range*` with nothing solid between them, or anywhere within `*hearing-range*`,
 and whenever it's hit; it stays alert for `*alert-time*` after the last time. While alert it
 runs at `chase-speed`, straight at the player when the nav grid allows a straight walk, else
-along `nav-path-to`, replanned every `*chase-replan*`. Within `*attack-start-reach*` of its
+along `nav-path-to`, replanned every `*chase-replan*`, as long as the walk is at most
+`*chase-max-walk*` (25 m: a room overhead is a long way round by the stairs). A path search
+costs a few milliseconds in an open hall, so keep the limit no longer than levels need. Within `*attack-start-reach*` of its
 `attack-reach` it stops and attacks: the frames run on `attack-frame-times` (it turns to
 follow the player through the first), and on `attack-hit-frame` the blow lands if the player
 is still within `attack-reach`, inside `attack-arc` and not behind a wall (`hurt-player`:
