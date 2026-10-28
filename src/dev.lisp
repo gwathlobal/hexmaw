@@ -115,6 +115,18 @@ after it; otherwise only those that were already happening before it and still a
 (defun game-running-p ()
   (and +main+ (eq (state +main+) 'org.shirakumo.fraf.trial::render-loop)))
 
+(defun changing-scene-p ()
+  (and +main+ (eq (state +main+) 'org.shirakumo.fraf.trial::change-scene)))
+
+(defun wait-for-scene-change (&key (timeout 10))
+  "Return once the game isn't in the middle of swapping scenes. A swap takes the game
+thread a moment (setup, loading, a full GC), and the game isn't running meanwhile."
+  (loop with deadline = (+ (get-internal-real-time) (* timeout internal-time-units-per-second))
+        while (changing-scene-p)
+        do (when (< deadline (get-internal-real-time))
+             (reload-failed "The game has been changing scenes for ~d s; check its terminal output." timeout))
+           (sleep 0.02)))
+
 (defun call-capturing (function)
   "Call FUNCTION. Return (:values . values) or (:error condition backtrace)."
   (let ((backtrace NIL))
@@ -128,8 +140,11 @@ after it; otherwise only those that were already happening before it and still a
 
 (defun call-in-game (function &key (timeout 30))
   "Call FUNCTION on the game thread between frames and return its values.
-If the game is not running, call it directly. Errors are re-signalled in the
-caller as GAME-ERROR, with the backtrace from where they happened."
+If the game is not running, call it directly; if it is swapping scenes, wait for
+that first, since GL calls only work on the game thread. Errors are re-signalled in
+the caller as GAME-ERROR, with the backtrace from where they happened."
+  (unless (eq (bt:current-thread) *game-thread*)
+    (wait-for-scene-change))
   (let ((result (if (or (not (game-running-p)) (eq (bt:current-thread) *game-thread*))
                     (call-capturing function)
                     (let ((semaphore (sb-thread:make-semaphore))
@@ -219,24 +234,45 @@ with the runtime errors if the game starts failing once it is loaded."
               (T result))))))
 
 (defun defines-assets-p (source)
-  (let ((text (uiop:read-file-string source)))
-    (or (search "(define-asset " text :test #'char-equal)
-        ;; Defines an image asset (fx.lisp).
-        (search "(define-fx-animation " text :test #'char-equal))))
+  "True if SOURCE has a top-level asset definition: one that starts a line, so a mention
+in a string or comment (as in this file) doesn't count."
+  (let ((text (uiop:read-file-string source))
+        (nl (string #\Newline)))
+    (or (search (concatenate 'string nl "(define-asset ") text :test #'char-equal)
+        ;; Defines an image asset (creature.lisp, spells.lisp).
+        (search (concatenate 'string nl "(define-fx-animation ") text :test #'char-equal))))
 
 (defun reload-system ()
-  "Reload the whole system through ASDF, for changes that affect other files (macros, the .asd)."
-  (let ((log (make-string-output-stream)))
-    (load-and-check (lambda ()
-                      (let ((*standard-output* log) (*error-output* log))
-                        (asdf:load-system :hexmaw)))
-                    "hexmaw (whole system)"
-                    (get-output-stream-string log))))
+  "Reload the whole system through ASDF, for changes that affect other files (macros, the .asd).
+ASDF reloads every file after the first changed one, which redefines the assets in them,
+so the scene is rebuilt afterwards, as RELOAD-FILE does for one such file."
+  (let* ((log (make-string-output-stream))
+         (result (load-and-check (lambda ()
+                                   (let ((*standard-output* log) (*error-output* log))
+                                     (asdf:load-system :hexmaw)))
+                                 "hexmaw (whole system)"
+                                 (get-output-stream-string log))))
+    (cond ((game-running-p)
+           (reload-scene)
+           (format NIL "~a~%Scene reloaded, since the reload redefines assets." result))
+          (T result))))
 
-(defun reload-scene ()
-  "Rebuild the scene from SETUP-SCENE. The player keeps position and view."
-  (maybe-reload-scene)
-  "Scene reload requested.")
+(defun reload-scene (&key (timeout 10))
+  "Rebuild the scene from SETUP-SCENE and wait until the new one is up. The player keeps
+position and view."
+  (let ((old (and +main+ (scene +main+))))
+    (maybe-reload-scene)
+    (when (game-running-p)
+      ;; The game thread handles the request on its next frame and makes a new scene.
+      (loop with deadline = (+ (get-internal-real-time) (* timeout internal-time-units-per-second))
+            until (and (not (eq old (scene +main+))) (game-running-p))
+            do (when (< deadline (get-internal-real-time))
+                 (reload-failed "The scene didn't reload within ~d s; check the game's terminal output." timeout))
+               (sleep 0.02))
+      ;; Let the new scene draw a frame, so a screenshot taken next shows it.
+      (call-in-game (constantly NIL))
+      (call-in-game (constantly NIL)))
+    "Scene reloaded."))
 
 ;;; Screenshots.
 

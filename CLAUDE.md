@@ -51,8 +51,8 @@ next edit's reload tells you whether the whole change works.
 | `tools/hd status` | Game state (menu, paused, playing), player position and view, runtime errors firing now |
 | `tools/hd screenshot` | Saves the current frame, prints the PNG path. Read it to check visual changes |
 | `tools/hd errors` | Recent runtime errors with backtraces |
-| `tools/hd reset` | Rebuilds the scene from `setup-scene`; the player keeps position and view |
-| `tools/hd reload-system` | Reloads everything through ASDF (after changing a macro or the .asd) |
+| `tools/hd reset` | Rebuilds the scene from `setup-scene` and waits until it has drawn; the player keeps position and view |
+| `tools/hd reload-system` | Reloads everything through ASDF (after changing a macro or the .asd), then rebuilds the scene |
 | `tools/hd '(form)'` | Evaluates a form in package `hexmaw` on the server thread |
 
 Wrap anything that changes the scene, entities or GL state in `(game ...)` so it
@@ -93,7 +93,10 @@ thread. Check the game's output, then restart `./run.sh`.
 - Reloading a file that contains `define-asset` makes Trial reload those assets, which
   stops entities already using them from drawing. The reload tool rebuilds the scene
   automatically for such files and says so ("Scene reloaded because this file defines
-  assets"); creatures reset with it.
+  assets"); creatures reset with it. `reload-system` always rebuilds it, since ASDF
+  reloads every file after the first changed one. Anything else that loads such a file
+  (an editor's compile-file over Swank) leaves the HUD, weapons and creatures invisible
+  until `tools/hd reset`. Only a definition at the start of a line counts.
 - Trial shadows some CL symbols with its own generics, `load` among them. Use
   `cl:load` for files.
 
