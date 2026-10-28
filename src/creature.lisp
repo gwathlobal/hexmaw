@@ -31,6 +31,8 @@
 is a long walk round by the stairs.")
 (defparameter *retreat-step* 3.0 "Metres a ranged creature backs off at a time when the player is too close.")
 (defparameter *cast-aim-height* 1.1 "Height above the player's feet a creature's spell is aimed at.")
+(defparameter *block-time* 0.3 "Seconds a shielded creature shows its block pose after a spell hits the shield.")
+(defparameter *block-hit-stop* 0.04 "Seconds of hit-stop when a spell hits a shield.")
 (defparameter *attack-start-reach* 0.5
   "Fraction of its ATTACK-REACH within which a creature starts an attack. The rest
 leaves the player room to back out of the blow during the wind-up.")
@@ -64,6 +66,21 @@ change it; anything but :PLAYING freezes the world.")
                   :documentation "How far from home, in metres, it wanders to random spots.")
    (chase-speed :initarg :chase-speed :initform NIL :accessor chase-speed
                 :documentation "Metres per second while hunting; NIL for WALK-SPEED.")
+   (turn-speed :initarg :turn-speed :initform NIL :accessor turn-speed
+               :documentation "Radians per second it turns; NIL to turn at once. A slow turner
+can be got behind.")
+   (knockback-scale :initarg :knockback-scale :initform 1.0 :accessor knockback-scale
+                    :documentation "How far blows knock it back, 1 for the usual distance.")
+   (shield-views :initarg :shield-views :initform NIL :accessor shield-views
+                 :documentation "The last billboard view (0 front .. 4 back) its shield covers: a
+spell coming from where that view or a nearer one is seen is deflected (spells.lisp). NIL
+for no shield.")
+   (shield-reflects :initarg :shield-reflects :initform T :accessor shield-reflects
+                    :documentation "True if its shield sends spells back the way they came; NIL to stop them.")
+   (block-animation :initarg :block-animation :initform NIL :accessor block-animation
+                    :documentation "Frame animation of the block pose, one sequence per view like
+WALK-ANIMATION, spread over *BLOCK-TIME*; NIL to show nothing.")
+   (brace :initform 0.0 :accessor brace :documentation "Seconds left of the block pose.")
    (brain :initform :idle :accessor brain
           :documentation ":IDLE (standing), :WALKING along PATH or :ATTACKING.")
    (alert :initform 0.0 :accessor alert
@@ -124,6 +141,9 @@ corpse; NIL to collapse into the floor instead.")
                      :documentation "Seconds into the death that the glow starts, is at full
 strength, starts to fade and is out, to match the fire in the death animation.")
    (death-lamp :initform NIL :accessor death-lamp :documentation "The lamp lit while its death glows.")
+   (bleeds :initarg :bleeds :initform T :reader bleeds :documentation "True if a hit sprays blood (gore.lisp).")
+   (death-blood :initarg :death-blood :initform NIL :reader death-blood
+                :documentation "Drops of blood its death bursts out; NIL for *DEATH-BLOOD*.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
    (base-scaling :reader base-scaling)))
@@ -137,7 +157,7 @@ strength, starts to fade and is out, to match the fire in the death animation.")
 ;; Only the current texture gets loaded with the scene; the other strips have to be too.
 (defmethod stage :after ((creature creature) (area staging-area))
   (dolist (name (list (death-animation creature) (walk-animation creature) (attack-animation creature)
-                    (hurt-animation creature)))
+                    (hurt-animation creature) (block-animation creature)))
     (when name
       (stage (animation-texture (find-fx-animation name)) area))))
 
@@ -229,10 +249,13 @@ whether the X move and whether the Z move were blocked."
                   (incf (vz loc) dz)
                   (when (blocked) (setf (vz loc) old) T)))))))
 
-(defun hurt (creature amount)
-  "Take AMOUNT health from CREATURE with the full hit reaction."
+(defun hurt (creature amount &key from)
+  "Take AMOUNT health from CREATURE with the full hit reaction, struck from point FROM
+(NIL: from the player), which the blood sprays away from."
   (unless (dead creature)
     (decf (health creature) amount)
+    (when (bleeds creature)
+      (bleed creature amount from))
     (setf (flash creature) *flash-time*
           (stagger creature) *stagger-time*
           (alert creature) *alert-time*)
@@ -241,11 +264,32 @@ whether the X move and whether the Z move were blocked."
     (stop-walking creature *hurt-pause*)
     (hit-stop)
     (when (<= (health creature) 0)
+      (when (bleeds creature)
+        (bleed-out creature))
       (setf (dead creature) 0.0))))
 
+(defun shielded-p (creature from)
+  "True if CREATURE's shield covers it against a blow from point FROM: the view of it
+seen from FROM is one its shield covers."
+  (and (shield-views creature)
+       (not (dead creature))
+       (<= (billboard-view creature from) (shield-views creature))))
+
+(defun block-hit (creature)
+  "React to a spell striking CREATURE's shield: no damage, a faint flash, the block pose
+and a moment's brace, unless it's in the middle of an attack."
+  (setf (flash creature) (max (flash creature) (* 0.4 *flash-time*))
+        (alert creature) *alert-time*)
+  (unless (eq (brain creature) :attacking)
+    (setf (brace creature) *block-time*)
+    (stop-walking creature *block-time*))
+  (hit-stop *block-hit-stop*))
+
 (defun push-creature (creature direction speed)
-  "Knock CREATURE along DIRECTION (only its horizontal part counts) at SPEED m/s."
-  (let ((len (sqrt (+ (expt (vx direction) 2) (expt (vz direction) 2))))
+  "Knock CREATURE along DIRECTION (only its horizontal part counts) at SPEED m/s, scaled
+by its KNOCKBACK-SCALE."
+  (let ((len (/ (sqrt (+ (expt (vx direction) 2) (expt (vz direction) 2)))
+                (float (knockback-scale creature) 0f0)))
         (kb (knockback creature)))
     (when (< 1f-4 len)
       (setf (vx kb) (* speed (/ (vx direction) len))
@@ -290,7 +334,7 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
          (x0 (vx loc))
          (z0 (vz loc)))
     (when (< 1f-4 distance)
-      (setf (facing creature) (float (atan dx (- dz)) 0f0))
+      (turn-to creature (atan dx (- dz)) dt)
       (move-creature creature (* step (/ dx distance)) (* step (/ dz distance)) (step-height creature)))
     (let ((moved (sqrt (+ (expt (- (vx loc) x0) 2) (expt (- (vz loc) z0) 2)))))
       (incf (walk-distance creature) moved)
@@ -344,10 +388,24 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
         0.0
         (acos (max -1.0 (min 1.0 (/ (+ (* dx (sin (facing creature))) (* dz (- (cos (facing creature))))) distance)))))))
 
-(defun face-player (creature)
+(defun turn-to (creature yaw dt)
+  "Turn CREATURE toward YAW, at once or, with a TURN-SPEED, by as much as DT seconds allow."
+  (let ((rate (turn-speed creature)))
+    (setf (facing creature)
+          (float (if rate
+                     ;; The short way round, kept within -pi..pi so it doesn't wind up.
+                     (let* ((now (facing creature))
+                            (diff (- (mod (+ (- yaw now) pi) (* 2 pi)) pi))
+                            (most (* rate dt)))
+                       (- (mod (+ now (max (- most) (min most diff)) pi) (* 2 pi)) pi))
+                     yaw)
+                 0f0))))
+
+(defun face-player (creature &optional (dt 0.0))
+  "Turn CREATURE toward the player: at once, or for a slow turner, DT seconds' worth."
   (let ((loc (location creature))
         (feet (feet *player*)))
-    (setf (facing creature) (float (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet))) 0f0))))
+    (turn-to creature (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet))) dt)))
 
 (defun sees-player-p (creature)
   (let* ((loc (location creature))
@@ -478,7 +536,7 @@ allows a straight walk. Returns NIL if every way back is blocked."
     ;; It turns to follow the player through the wind-up (a caster, until it casts);
     ;; after that the blow is committed.
     (when (< time (if (attack-spell creature) (attack-hit-time creature) (first times)))
-      (face-player creature))
+      (face-player creature dt))
     (when (and (attack-pending creature) (<= (attack-hit-time creature) time))
       (setf (attack-pending creature) NIL)
       (cond ((attack-spell creature)
@@ -500,7 +558,7 @@ allows a straight walk. Returns NIL if every way back is blocked."
        (attack creature dt))
       (:idle
        (when hunting
-         (face-player creature))
+         (face-player creature dt))
        (when (<= (decf (idle-timer creature) dt) 0)
          (if hunting (hunt creature) (plan-wander creature))))
       (:walking
@@ -532,6 +590,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
   (setf (dead creature) NIL
         (health creature) (max-health creature)
         (stagger creature) 0.0
+        (brace creature) 0.0
         (flash creature) 0.0
         (texture creature) (body-texture creature))
   (v<- (location creature) (home creature))
@@ -544,16 +603,23 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 (defun creature-hurting-p (creature)
   (and (< 0 (stagger creature)) (not (dead creature)) (hurt-animation creature)))
 
+;; The block strip only has the views the shield covers: a deflected spell comes from
+;; one of them. Seen from elsewhere, it braces in the standing pose.
+(defun creature-blocking-p (creature)
+  (and (< 0 (brace creature)) (not (dead creature)) (block-animation creature)
+       (<= (view-index creature) (shield-views creature))))
+
 (defun creature-attacking-p (creature)
   (and (eq (brain creature) :attacking) (not (dead creature)) (attack-animation creature)))
 
-(defun show-view-frame (creature name frame squash)
+(defun show-view-frame (creature name frame squash &optional (views (length (getf (atlas creature) :views))))
   "Show FRAME of the view the billboard tick picked, from animation NAME: one sequence
-per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
+per view, in the turnaround's view order, for the first VIEWS views. SQUASH is the
+flinch, 0 to 1."
   (let* ((animation (find-fx-animation name))
          (atlas (animation-atlas animation))
          (count (getf atlas :frames))
-         (cycle (floor count (length (getf (atlas creature) :views))))
+         (cycle (floor count views))
          (h (animation-size animation))
          (scale (scaling creature)))
     (setf (texture creature) (animation-texture animation))
@@ -581,6 +647,13 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
                                 (length (getf (atlas creature) :views)))))
              (show-view-frame creature (hurt-animation creature)
                               (min (1- frames) (floor (* (- 1 s) frames))) 0.0)))
+          ((and (creature-blocking-p creature) (not (creature-attacking-p creature)))
+           (let* ((views (1+ (shield-views creature)))
+                  (frames (floor (getf (animation-atlas (find-fx-animation (block-animation creature))) :frames)
+                                 views)))
+             (show-view-frame creature (block-animation creature)
+                              (min (1- frames) (floor (* (- 1 (/ (brace creature) *block-time*)) frames))) 0.0
+                              views)))
           ((creature-attacking-p creature)
            (show-view-frame creature (attack-animation creature) (attack-frame creature) s))
           ((creature-walking-p creature)
@@ -650,7 +723,8 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
   (unless (frozen-p)
     (let ((dt (min dt 0.05)))
       (setf (flash creature) (max 0.0 (- (flash creature) dt))
-            (stagger creature) (max 0.0 (- (stagger creature) dt)))
+            (stagger creature) (max 0.0 (- (stagger creature) dt))
+            (brace creature) (max 0.0 (- (brace creature) dt)))
       (slide creature dt)
       (unless (dead creature)
         (when (<= (stagger creature) 0)
@@ -730,6 +804,8 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
    (death-animation :initform 'acolyte-death)
    ;; Up with the fire bursting out (frame 2), fading as the robe burns down (frames 5 to 8).
    (death-glow :initform (vec 1.4 0.55 0.2))
+   ;; It burns from inside rather than bleeding out.
+   (death-blood :initform 0)
    (attack-spell :initform 'cinder)
    (attack-range :initform 12.0)
    (keep-away :initform 4.0)
@@ -741,3 +817,34 @@ per view, in the turnaround's view order. SQUASH is the flinch, 0 to 1."
    (chase-speed :initform 1.8)
    (wander-radius :initform 2.0)
    (max-health :initform 24)))
+
+;;; The knight: slow, in heavy plate, behind a tower shield from its feet to its helm.
+;;; The shield turns spells away from the front and front-quarter views (and reflects
+;;; them back), so the player gets behind it, where it turns only slowly, or closes in
+;;; with the sword, which the shield doesn't stop.
+
+(defparameter *knight-height* 1.95 "Knight height in metres, helm to sabatons, about the shield's height.")
+
+;; Sliced at 125 px tall, so its art pixels are the imp's size (96 px for 1.5 m).
+(define-asset (hexmaw knight-turnaround) image
+    #p"sprites/knight/turnaround.png"
+  :min-filter :nearest :mag-filter :nearest)
+
+(define-shader-entity knight (creature)
+  ((texture :initform (// 'hexmaw 'knight-turnaround))
+   (atlas :initform (read-atlas "data/sprites/knight/turnaround.lisp"))
+   (sprite-height :initform *knight-height*)
+   (body-radius :initform 0.45)
+   (shield-views :initform 1)
+   (turn-speed :initform 1.6)
+   (knockback-scale :initform 0.35)
+   (attack-damage :initform '(12 18))
+   (attack-reach :initform 0.8)
+   (attack-arc :initform 0.7)
+   ;; A slow, heavy blow: a long wind-up to back out of.
+   (attack-frame-times :initform '(0.6 0.15 0.25 0.45))
+   (attack-pause :initform 0.9)
+   (walk-speed :initform 0.9)
+   (chase-speed :initform 1.4)
+   (wander-radius :initform 2.0)
+   (max-health :initform 60)))

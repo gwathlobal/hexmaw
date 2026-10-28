@@ -18,6 +18,7 @@
             (wanted-weapon new) (wanted-weapon old)))
     (setf *player* new)
     (enter new scene))
+  (add-blood-pool scene)
   (add-hud scene)
   (add-weapon-bar scene)
   (add-hands scene)

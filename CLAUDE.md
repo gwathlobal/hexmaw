@@ -176,10 +176,34 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   is the ranged one (`attack-spell`), with a cast, flinch and death but no walk: it glides
   in the standing pose, its robe hiding its feet. Its death burns, so it has a `death-glow`:
   a lamp that rises and fades with the fire on `death-glow-times`, then leaves `*lamps*`.
+  The `knight` is slow and heavy (`knockback-scale`), behind a tower shield: `shield-views`
+  is the last billboard view (0 front .. 4 back) the shield covers, so what the player sees
+  decides it. A spell whose flight comes from a covered view (`shielded-p`, the same
+  `billboard-view` that picks the sprite) is deflected in the projectile's tick
+  (`deflects-p`, `deflect` in spells.lisp) before any effect applies: mirrored off the
+  shield's face and sent back as the knight's own (`shield-reflects`; NIL just stops it),
+  with `block-hit` (a faint flash, the `block-animation` pose for `*block-time*`, a brace).
+  The block strip has only the covered views. The sword isn't stopped. `turn-speed`
+  (radians per second, NIL for instant) is what lets the player get behind it: `turn-to`
+  limits every facing change, in walks, idle hunting and an attack's wind-up.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites.
+- `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
+  passes the player's feet, a projectile its flight; NIL means the player), and `bleed`
+  sprays drops from the wound away from it, `*blood-back-spray*` of them back toward the
+  attacker, `*blood-per-damage*` per point within `*blood-drops*`. A death adds `bleed-out`,
+  a burst every way (`death-blood`, 0 for the acolyte, which burns; `bleeds` NIL for no
+  blood at all). Drops fly under `*blood-gravity*` and stick where they cross a solid's face
+  as splats, flat on the floor or a wall (a ceiling only stops their rise). Every drop and
+  splat is a slot in one `blood-pool` (`*blood-pool*`, entered by `setup-scene`): plain
+  arrays, the oldest reused once `*max-blood*` are in use, written each frame into one
+  stream-draw vertex buffer and drawn in one call. Drops face the camera plane, offset in
+  view space by the shader; splats lie on their face, lit and shaded like it. `reset-run`
+  clears it (`clear-blood`). `(spray-blood (vec x y z) dx dz count)` throws drops by hand.
+  The frames are `data/sprites/blood/blood`, drawn by `tools/draw_blood.py` (4 drops, then
+  the splat each leaves), at the monsters' 64 px per metre.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, the player's `bolt` and the acolyte's `cinder`. A new effect kind is
   a method on `apply-effect`, for a `creature` target and (in player.lisp, loaded later) a
@@ -521,7 +545,7 @@ attack (swing, or cast the bolt), F12 for a screenshot.
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
-0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction (100 kills); to look at one death
+0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills; `:from point` aims the spray); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);

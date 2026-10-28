@@ -174,6 +174,7 @@ creature alive at home, no spells or effects in flight. Rebuilding the scene wou
 the same but freezes for half a second (a forced full GC, reloaded resources)."
   (when *player* (reset-player *player*))
   (setf *hit-stop* 0.0)
+  (clear-blood)
   (loop for creature across *creatures*
         do (revive creature)
            (update-creature-look creature))

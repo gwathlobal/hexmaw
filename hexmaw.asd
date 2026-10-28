@@ -12,6 +12,7 @@
                (:file "blocks")
                (:file "fx")
                (:file "lights")
+               (:file "gore")
                (:file "spells")
                (:file "player")
                (:file "hud")

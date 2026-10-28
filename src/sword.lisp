@@ -132,7 +132,7 @@ the arc around where the player faces, level with the player, and not behind a w
 (defun swing-hit (player)
   (let ((target (swing-target player)))
     (when target
-      (hurt target (roll *sword-damage*))
+      (hurt target (roll *sword-damage*) :from (feet player))
       (push-creature target (v- (location target) (feet player)) (float *sword-knockback* 0f0)))))
 
 (defun update-weapons (player dt)

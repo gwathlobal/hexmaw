@@ -77,7 +77,10 @@ it (a SPELL-PROJECTILE for projectile spells)."))
   (v:warn :hexmaw "No ~s effect for ~a; ignored." kind target))
 
 (defmethod apply-effect ((kind (eql :damage)) effect (target creature) source)
-  (hurt target (roll (effect-magnitude effect))))
+  (hurt target (roll (effect-magnitude effect))
+        ;; Blood sprays along the projectile's flight.
+        :from (when (typep source 'spell-projectile)
+                (v- (location source) (projectile-velocity source)))))
 
 (defun apply-spell (spell target source)
   (dolist (effect (spell-effects spell))
@@ -93,7 +96,7 @@ it (a SPELL-PROJECTILE for projectile spells)."))
 
 (define-shader-entity spell-projectile (fx-sprite)
   ((spell :initarg :spell :initform NIL :reader spell)
-   (caster :initarg :caster :initform NIL :reader caster
+   (caster :initarg :caster :initform NIL :accessor caster
            :documentation "Who fired it (the player or a creature), whom it never hits.")
    (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)))
 
@@ -130,6 +133,36 @@ it (a SPELL-PROJECTILE for projectile spells)."))
         (and *player* (not (eq caster *player*)) (player-at-p *player* point margin)
              *player*))))
 
+;;; Shields. A spell striking a shield from the front (SHIELDED-P, creature.lisp: the
+;;; views of the sprite its shield covers) does nothing to the bearer. A shield that
+;;; reflects sends it back the way it came, mirrored off the shield's face, as the
+;;; bearer's own; one that doesn't, stops it.
+
+(defgeneric deflects-p (target projectile)
+  (:documentation "True if TARGET turns PROJECTILE aside instead of taking its effects.")
+  (:method (target projectile) NIL))
+
+(defmethod deflects-p ((target creature) (projectile spell-projectile))
+  (shielded-p target (v- (location target) (projectile-velocity projectile))))
+
+(defun deflect (target projectile)
+  "TARGET's shield takes PROJECTILE: reflect it, or stop it if the shield doesn't reflect."
+  (block-hit target)
+  (cond ((shield-reflects target)
+         ;; Mirror the flight off the shield's face, whose normal is the way TARGET faces,
+         ;; and send it back up or down too: straight on, it returns to its caster.
+         (let* ((v (projectile-velocity projectile))
+                (nx (sin (facing target)))
+                (nz (- (cos (facing target))))
+                (d (+ (* (vx v) nx) (* (vz v) nz))))
+           (setf (vx v) (- (vx v) (* 2 d nx))
+                 (vz v) (- (vz v) (* 2 d nz))
+                 (vy v) (- (vy v))))
+         (setf (caster projectile) target
+               (age projectile) 0.0))
+        (T
+         (impact projectile))))
+
 ;; After FX-SPRITE's tick, which animates and ages it.
 (define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
@@ -137,7 +170,9 @@ it (a SPELL-PROJECTILE for projectile spells)."))
            (r (* 0.5 (float *projectile-size* 0f0))))
       (nv+* loc (projectile-velocity spell-projectile) dt)
       (let ((victim (projectile-victim spell-projectile loc r)))
-        (cond (victim
+        (cond ((and victim (deflects-p victim spell-projectile))
+               (deflect victim spell-projectile))
+              (victim
                (apply-spell (spell spell-projectile) victim spell-projectile)
                (impact spell-projectile))
               ((solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))
