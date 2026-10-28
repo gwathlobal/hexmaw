@@ -830,12 +830,39 @@ flinch, 0 to 1."
     #p"sprites/knight/turnaround.png"
   :min-filter :nearest :mag-filter :nearest)
 
+;; The block: impact (the shield's face lit by the splash), then the brace, crouched
+;; behind the raised shield; two frames for each of the views the shield covers (front
+;; and front-quarter), over *BLOCK-TIME*. Its cells are 112 px tall, at the turnaround's
+;; scale.
+(define-fx-animation knight-block "sprites/knight/block" :size (* *knight-height* 112/125))
+;; A slow, heavy stride, four frames per view, the shield held up in front. Its cells are
+;; 132 px tall for the rise on the passing frames, the standing knight 125 px. The frame
+;; follows the distance walked (STRIDE), so :FPS is unused.
+(define-fx-animation knight-walk "sprites/knight/walk" :loop T :size (* *knight-height* 132/125))
+;; The mace blow over the shield: wind-up, swing, strike, recover, four frames per view.
+;; Its cells are 157 px tall to fit the raised mace. The frames run on
+;; ATTACK-FRAME-TIMES, so :FPS is unused.
+(define-fx-animation knight-attack "sprites/knight/attack" :size (* *knight-height* 157/125))
+;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*. Its cells
+;; are 124 px tall, at the turnaround's scale.
+(define-fx-animation knight-hurt "sprites/knight/hurt" :size (* *knight-height* 124/125))
+;; It kneels, topples onto its hands and crashes down, its eyes and runes going dark;
+;; the heap of armour is the corpse. Front view only, the jolted knight in frame 1
+;; 125 px tall.
+(define-fx-animation knight-death "sprites/knight/death" :fps 9 :size *knight-height*)
+
 (define-shader-entity knight (creature)
   ((texture :initform (// 'hexmaw 'knight-turnaround))
    (atlas :initform (read-atlas "data/sprites/knight/turnaround.lisp"))
    (sprite-height :initform *knight-height*)
+   (walk-animation :initform 'knight-walk)
+   (attack-animation :initform 'knight-attack)
+   (hurt-animation :initform 'knight-hurt)
+   (death-animation :initform 'knight-death)
+   (stride :initform 0.3)
    (body-radius :initform 0.45)
    (shield-views :initform 1)
+   (block-animation :initform 'knight-block)
    (turn-speed :initform 1.6)
    (knockback-scale :initform 0.35)
    (attack-damage :initform '(12 18))

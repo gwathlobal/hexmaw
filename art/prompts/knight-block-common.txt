@@ -1,0 +1,22 @@
+Pixel-art sprite sheet: the BLOCK animation of the KNIGHT, a slow, heavily armoured warrior behind a huge tower shield, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles. It plays for a third of a second when a spell (a fire bolt) strikes the shield and splashes off it. It must read at a glance as "the shield stopped it", not as being hurt.
+
+REFERENCE IMAGES, in the order attached:
+1. The knight's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: the blackened fantasy plate with spiked pauldrons, the HORNED HELM with its narrow eye slit and two glowing pale-blue eyes, the steel tassets over chainmail, the tall all-metal TOWER SHIELD with its riveted rim, central ridge and columns of carved runes glowing pale blue on the LEFT arm, the flanged iron mace in the RIGHT hand, and the shading style.
+2. The knight standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The shield stays on the left arm, its runes and design unchanged, and the mace in the right hand in every frame. Never swap them, and never draw a second shield or a third arm.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right, each cell as wide as reference 2.
+- Cell 1 is a plain copy of reference 2: the knight standing, exactly as tall, in exactly the same pose. It sets the scale for the other two.
+- Cells 2 and 3 are the two block frames described below, drawn at the same scale as cell 1.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The feet and the shield's bottom edge rest on the same ground line in every cell. The knight does not hop, float or step off the ground.
+- The whole figure, including the shield's top and the mace, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, sparks, fire, smoke or impact effects. Only the knight; the game draws the spell and its splash itself.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE BLOCK: the spell strikes the shield's face from in front of the knight.
+- Cell 2, IMPACT: the instant of the hit. The knight hunkers down behind the shield, knees bent, the shield pushed forward and a little up, braced on the left forearm and with the right shoulder driven against its back; the helm ducks down so only its horns, its crown and the glowing eye slit show over the shield's top edge. The runes on the shield's face FLARE bright white-blue, and its rim and ridge are lit hot orange, as if the fire just splashed off it (light on the steel only, no flames or sparks in the air). The mace arm is pulled in tight behind the shield.
+- Cell 3, BRACE: a moment later. Still crouched low behind the raised shield, firm and unshaken, the shield's face back to its normal colours, the runes back to their faint glow, the eyes glowing over the rim, the mace arm still tucked in. The knight is a little lower than standing in both frames.

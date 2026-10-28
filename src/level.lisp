@@ -93,6 +93,8 @@ upstairs."
     (spawn-creature (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
     ;; An acolyte up on the platform, facing the spawn point.
     (spawn-creature (make-instance 'acolyte :location (vec 7.5 1.2 -7.5) :facing -2.6) container)
+    ;; A knight by the west pillars, its shield toward the spawn point.
+    (spawn-creature (make-instance 'knight :location (vec -6 0 0) :facing pi) container)
     (build-annex container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))

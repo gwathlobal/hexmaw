@@ -1,0 +1,23 @@
+Pixel-art sprite sheet: a 4-frame melee attack animation of the KNIGHT, a slow, heavily armoured warrior behind a huge rune-carved tower shield, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles. The knight smashes its mace down at the player over its shield, which stays up in front of it.
+
+REFERENCE IMAGES, in the order attached:
+1. The knight's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a broad humanoid in blackened, angular fantasy plate with spiked pauldrons, a closed HORNED HELM with two glowing pale-blue eyes in its narrow slit, steel tassets over dark chainmail, an all-metal TOWER SHIELD as tall as the knight (riveted rim, a central ridge, columns of carved runes glowing faint pale blue) on its LEFT arm, and a heavy flanged, spiked steel mace in its RIGHT hand. Also the shading style.
+2. The knight standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The shield stays on the left arm and the mace in the right hand in every frame. Never swap them, never draw a second shield, a second mace or a third arm. The horns, the glowing eyes and the runes look the same in every frame.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 5 the 4 attack frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the knight standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. The knight does not hop or float.
+- The whole figure, including the horns, the shield and the mace, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, blood or impact effects. Only the knight.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE ATTACK: a slow, crushing overhead mace blow. The shield stays up in front of the body in every frame, covering it as in reference 2; only the mace arm moves, swinging over and beside the shield.
+- Frame 2 (cell 2), WIND-UP: the mace raised high above and behind the helm, the right arm cocked back, the body leaning back a little behind the shield, the knees bent. This is held longest, as the warning.
+- Frame 3 (cell 3), SWING: the mace coming down over the top of the shield, past the helm, the body leaning forward into it.
+- Frame 4 (cell 4), STRIKE: the mace at the end of the blow, low and forward past the shield's edge, at knee height in front of the knight; the body leaning far forward, the shield pushed forward with it. The frame where the blow lands.
+- Frame 5 (cell 5), RECOVER: back near the standing pose of reference 2, the mace hanging at the side again.

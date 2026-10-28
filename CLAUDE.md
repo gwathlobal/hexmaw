@@ -481,6 +481,41 @@ acolyte away and leaves its empty robe as the corpse. Frame 1, the jolted acolyt
 python3 tools/slice_frames.py art/acolyte/death-1.png data/sprites/acolyte --pixel 3.54 --anchor bottom --filter box death:8
 ```
 
+The knight (horned helm, blackened plate, a steel tower shield carved with glowing runes) is
+`art/knight/runic-turnaround-3.png` (`art/prompts/knight-turnaround.txt`, the imp's and
+acolyte's sheets as style references), sliced at `--height 125` for its 1.95 m, horns
+included. The `art/knight/` files without `runic-` are an earlier crusader design, dropped.
+Its views needed no mirroring. Its block (impact, then brace) exists only for the front and
+front-quarter, the views its shield covers, made like the acolyte's flinch: the prompt is
+`knight-block-common.txt` plus `knight-block-<view>.txt` (the quarter adds
+`knight-block-follow.txt` and references `runic-block-front-2.png`), passed as
+`--prompt "$(cat ...)"`, with the turnaround and `art/knight/runic-stand-<view>.png` (its
+standing cells) as references. The generator turns the quarter view only a little.
+
+```bash
+python3 tools/stack_views.py art/knight/runic-block-sheet.png art/knight/runic-block-front-2.png art/knight/runic-block-front-quarter-2.png --height 1000 --frame 1 --blank 1
+python3 tools/slice_frames.py art/knight/runic-block-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box block:4
+```
+
+Its walk, attack (the mace over the shield, which stays up) and flinch are made the same way,
+one sheet per view opening with a copy of the standing pose: `knight-<anim>-common.txt` plus
+`knight-view-<view>.txt`, and for the side and back views `knight-follow.txt` with the front
+sheet (`runic-<anim>-front-1.png`) as the third reference. The front-quarter can't take the
+front sheet as a reference: the generator copies it and draws a front view. It is
+`knight-view-front-quarter.txt` plus `knight-view-front-quarter-strict.txt` with only the
+turnaround and its standing cell (`runic-<anim>-front-quarter-b-1.png`). The death
+(`knight-death.txt`, front only, `runic-death-b-2.png`) kneels, topples onto its hands and
+crashes down; frame 1 is 409 px tall, so `--pixel 3.27` makes it 125 px. The stacked
+sheets are big: `--filter box` takes a minute or two each.
+
+```bash
+K=art/knight; for a in walk attack hurt; do python3 tools/stack_views.py $K/runic-$a-sheet.png $K/runic-$a-front-1.png $K/runic-$a-front-quarter-b-1.png $K/runic-$a-side.png $K/runic-$a-back-quarter.png $K/runic-$a-back.png --height 1000 --frame 1 --blank 1; done
+python3 tools/slice_frames.py art/knight/runic-walk-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box walk:20
+python3 tools/slice_frames.py art/knight/runic-attack-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box attack:20
+python3 tools/slice_frames.py art/knight/runic-hurt-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box hurt:10
+python3 tools/slice_frames.py art/knight/runic-death-b-2.png data/sprites/knight --pixel 3.27 --anchor bottom --filter box death:8
+```
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -549,6 +584,8 @@ on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack 
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);
-`tools/hd status` shows mana and each creature's health.
+`tools/hd status` shows mana and each creature's health. The knight stands by the west
+pillars; a bolt at its front comes back at the player, one at its back hurts it, and
+`(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (next weapon).

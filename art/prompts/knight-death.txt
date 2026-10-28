@@ -1,0 +1,25 @@
+Pixel-art sprite sheet: the 8-frame death animation of the KNIGHT, a slow, heavily armoured warrior behind a huge rune-carved tower shield, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The death is seen from the front only. The last frame is the corpse, which stays on the floor.
+
+REFERENCE IMAGES, in the order attached:
+1. The knight's turnaround sheet. It is the character design: a broad humanoid in blackened, angular fantasy plate with spiked pauldrons, a closed HORNED HELM with two glowing pale-blue eyes in its narrow slit, steel tassets over dark chainmail, an all-metal TOWER SHIELD as tall as the knight (riveted rim, a central ridge, columns of carved runes glowing faint pale blue) on its LEFT arm, and a heavy flanged, spiked steel mace in its RIGHT hand. Also the shading style.
+2. The knight standing, seen from the front. Match its pixel size, outline weight and scale exactly: frame 1 is exactly as tall as reference 2.
+
+THE DEATH: whatever animates the armour goes out. The eyes and the runes fade from bright to dark as it falls, and the armour collapses with a crash.
+- Frame 1, HIT: standing as in reference 2 but jolted back, the helm snapped back, the eyes flaring bright, the shield arm swung out from the body.
+- Frame 2, REELING: it staggers back a step, the shield dropping away from the body and tilting outward, the mace arm hanging loose, the eyes flickering.
+- Frame 3, BUCKLING: the knees give way, the body sags lower, the mace slipping from the hand, the shield tipping away to image-right.
+- Frame 4, KNEELING: the knight down on its knees, half the standing height, the upper body upright, helm bowed, arms limp; the shield leaning against its side; the eyes and runes dim.
+- Frame 5, TOPPLING: still on its knees, the knees and shins exactly where they were in frame 4, the upper body tips forward and down toward the viewer, the hands dropping onto the floor in front to catch it; the shield sliding down flat beside it. The knees and hands rest on the ground line; nothing floats or leaves the floor.
+- Frame 6, CRASHING: the knees slide back and the armour falls flat face down from that same spot, the pauldrons and horned helm hitting the floor, the mace lying beside it.
+- Frame 7, STILL: the armour lying in a low heap on the floor, the helm on its side with one horn up, the eyes dark, the shield flat beside it with its runes barely glowing.
+- Frame 8, CORPSE: the same low heap of dark armour, the horned helm, the mace and the flat shield with dark runes. No glow anywhere. This frame stays on screen.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Each frame follows on smoothly from the one before: the knight falls in one place, without jumps between frames, and from frame 4 on it never leaves the floor.
+- The same scale in every frame. In every frame the knight or the heap rests on the same ground line near the bottom of its cell; nothing reaches below it, and nothing floats.
+- The whole figure, the shield and the mace fit inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, dust, sparks, blood or gore.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

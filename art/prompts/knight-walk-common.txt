@@ -1,0 +1,24 @@
+Pixel-art sprite sheet: the WALK cycle of the KNIGHT, a slow, heavily armoured warrior behind a huge rune-carved tower shield, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The knight's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a broad humanoid in blackened, angular fantasy plate with spiked pauldrons, a closed HORNED HELM with two glowing pale-blue eyes in its narrow slit, steel tassets over dark chainmail, an all-metal TOWER SHIELD as tall as the knight (riveted rim, a central ridge, columns of carved runes glowing faint pale blue) on its LEFT arm, and a heavy flanged, spiked steel mace in its RIGHT hand. Also the shading style.
+2. The knight standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The shield stays on the left arm and the mace in the right hand in every frame. Never swap them, never draw a second shield, a second mace or a third arm. The horns, the glowing eyes and the runes look the same in every frame.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 5 the 4 walk frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the knight standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. The knight does not hop or float.
+- The whole figure, including the horns, the shield and the mace, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, blood or impact effects. Only the knight.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE WALK: a slow, heavy, deliberate stride, the weight of the armour in every step. The shield stays held up in front of the body the whole time (it moves only a little with the steps, its bottom edge just off the ground); the mace hangs at the side and swings a little, opposite to the right leg. The body rises a little on the passing frames and sinks on the contact frames; the stride is short.
+- Frame 2 (cell 2), LEFT CONTACT: the left foot forward and planted, the right foot back, the legs at their widest.
+- Frame 3 (cell 3), PASSING: the right leg swinging forward past the planted left one, knee bent, foot just off the ground; the body at its highest.
+- Frame 4 (cell 4), RIGHT CONTACT: the right foot forward and planted, the left foot back, the legs at their widest.
+- Frame 5 (cell 5), PASSING: the left leg swinging forward past the planted right one; the body at its highest.
+The four frames loop: after frame 5 comes frame 2 again.

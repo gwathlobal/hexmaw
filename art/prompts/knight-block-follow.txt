@@ -1,0 +1,1 @@
+REFERENCE IMAGE 3 is the finished block animation seen from the FRONT, laid out the same way (cell 1 standing, then the impact and the brace). It is the same block this sheet must show: the same 2 poses, the same crouch, the same flare of the runes. Only the camera angle changes, to the one in reference 2.
