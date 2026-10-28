@@ -125,6 +125,11 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   `exit-to-title` (the pause menu's exit: back to the main menu over a rebuilt level)
   and `exit-game` (quits; main menu only).
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons`.
+- `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
+  edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
+  frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
+  whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
+  to `*cast-release*`.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: the greybox test level.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
@@ -165,6 +170,21 @@ of one art pixel in the source:
 python3 tools/slice_frames.py "Bolt Spell Sheet.webp" data/sprites/bolt --pixel 5 flight:5 burst:7
 ```
 
+First-person HUD sprites (the hands) have arms cut off by the screen edge, wherever the
+generator happened to cut them; `--anchor bottom` puts each frame's lowest solid row on
+the strip's bottom edge instead of keeping the cell centre. The hands are one 12-frame
+strip (4 idle, then 8 cast), so every frame shares one crop. Their sheet,
+`Fire Hands Sheet.png`, is two generated sheets (idle row, then the cast) stacked with a
+cyan line between:
+
+```bash
+python3 tools/slice_frames.py "Fire Hands Sheet.png" data/sprites/hands --pixel 4 --anchor bottom hands:12
+```
+
+Most of that idle row has no palm fire, so `*hands-idle-sequence*` loops the cast's rest
+frames instead. A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
+`tools/hd reload src/<file that defines it>.lisp` reloads it and rebuilds the scene.
+
 Hook a strip up with `define-fx-animation` (fps, loop, height in metres) and name it in
 a spell's `:projectile-animation` / `:impact-animation`.
 
@@ -195,5 +215,6 @@ the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, left click to cast the bolt, F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
-fires from the player's view; `(hurt (aref *creatures* 0) 0)` triggers a hit reaction;
+starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
+on the hands' release frame; `(hurt (aref *creatures* 0) 0)` triggers a hit reaction;
 `tools/hd status` shows mana and each creature's health.

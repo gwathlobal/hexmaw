@@ -14,14 +14,19 @@ writes, for each animation,
   <out>/<name>.lisp  index the game reads: cell size, gap, frame count
 
 Every frame of an animation is cut with the same crop around its cell's centre,
-so the sprite doesn't jitter when the game steps through them. --pixel is the
+so the sprite doesn't jitter when the game steps through them. --anchor bottom is
+for first-person HUD sprites (hands, weapons) whose arms are cut off by the screen
+edge: each frame is still centred horizontally on its cell, but its lowest solid row
+goes on the strip's bottom edge, wherever the generator happened to cut the arms. --pixel is the
 size of one art pixel in the sheet (generated pixel art is upscaled); the frames
 are downscaled by it with nearest-neighbour, the same for all animations, so
 their sizes stay comparable.
 
 Keying removes the magenta and the soft glow that generators paint into it:
 fire, embers and smoke never have much more blue than green, a magenta blend
-always does. What's left of the blend (pink edges, mauve smoke) is despilled.
+always does. A bright magenta-tinted rim still touching the background (the halo
+of a glow the generator blended into it) is cut away too, and what's left of the
+blend inside the sprite (pink edges, mauve smoke) is despilled.
 """
 
 import argparse
@@ -38,6 +43,28 @@ def is_cyan(r, g, b):
 
 def is_background(r, g, b):
     return is_cyan(r, g, b) or b > g + 40
+
+
+def is_spill(r, g, b):
+    """Bright pink: the outer halo of a glow painted into the background. Fire keeps
+    blue far below green, pale highlights keep red near green, and dark outlines
+    (which stop the cut) are too dark."""
+    return b > 120 and b >= g - 16 and r > g + 24
+
+
+def cut_rims(img):
+    """Clear spill pixels reachable from the cleared background."""
+    w, h = img.size
+    px = img.load()
+    todo = [(x, y) for y in range(h) for x in range(w) if px[x, y][3] == 0]
+    while todo:
+        x, y = todo.pop()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h:
+                r, g, b, a = px[nx, ny]
+                if a and is_spill(r, g, b):
+                    px[nx, ny] = (0, 0, 0, 0)
+                    todo.append((nx, ny))
 
 
 def runs(indices):
@@ -73,6 +100,18 @@ def cells(img):
     return out
 
 
+def solid_bottom(frame):
+    """Index of the lowest row of FRAME with a solid run of opaque pixels, ignoring
+    stray specks left by keying."""
+    w, h = frame.size
+    alpha = frame.getchannel("A").load()
+    need = max(3, w // 50)
+    for y in range(h - 1, -1, -1):
+        if sum(1 for x in range(w) if alpha[x, y]) >= need:
+            return y
+    return h - 1
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sheet")
@@ -80,6 +119,8 @@ def main():
     ap.add_argument("animations", nargs="+", metavar="NAME:FRAMES",
                     help="animations in sheet order, with their frame counts")
     ap.add_argument("--pixel", type=float, default=1.0, help="source pixels per art pixel (default 1)")
+    ap.add_argument("--anchor", choices=("center", "bottom"), default="center",
+                    help="keep each frame's cell centre in place, or put its lowest solid row on the bottom edge")
     ap.add_argument("--margin", type=int, default=4, help="source pixels to skip next to each separator")
     ap.add_argument("--min-pixels", type=int, default=50,
                     help="cells with fewer opaque pixels than this after keying are empty")
@@ -100,7 +141,11 @@ def main():
             r, g, b, _ = px[x, y]
             if is_background(r, g, b):
                 px[x, y] = (0, 0, 0, 0)
-            elif b > g:
+    cut_rims(src)
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a and b > g:
                 # Despill: edges and smoke blended with magenta turn pink; pull blue down to green.
                 px[x, y] = (r, g, g, 255)
 
@@ -119,19 +164,29 @@ def main():
     for name, count in animations:
         boxes = frames[start:start + count]
         start += count
-        # Shared crop: the largest extent from the cell centre over all frames.
+        # Shared crop: the largest extent from the cell centre over all frames, or
+        # with --anchor bottom, the tallest frame above its solid bottom.
         half_w = half_h = 0
+        bottoms = []
         for l, t, r, b in boxes:
-            bbox = src.crop((l, t, r + 1, b + 1)).getbbox()
+            cell = src.crop((l, t, r + 1, b + 1))
+            bbox = cell.getbbox()
             cx, cy = (r - l) / 2, (b - t) / 2
             half_w = max(half_w, cx - bbox[0], bbox[2] - cx)
-            half_h = max(half_h, cy - bbox[1], bbox[3] - cy)
+            if args.anchor == "bottom":
+                bottom = solid_bottom(cell)
+                bottoms.append(t + bottom)
+                half_h = max(half_h, (bottom + 1 - bbox[1]) / 2)
+            else:
+                half_h = max(half_h, cy - bbox[1], bbox[3] - cy)
         half_w, half_h = int(half_w) + 1, int(half_h) + 1
         cell_w = max(1, round(2 * half_w / args.pixel))
         cell_h = max(1, round(2 * half_h / args.pixel))
         strip = Image.new("RGBA", (count * cell_w + (count - 1) * GAP, cell_h), (0, 0, 0, 0))
         for i, (l, t, r, b) in enumerate(boxes):
             cx, cy = l + (r - l) // 2, t + (b - t) // 2
+            if args.anchor == "bottom":
+                cy = bottoms[i] + 1 - half_h
             frame = src.crop((cx - half_w, cy - half_h, cx + half_w, cy + half_h))
             strip.paste(frame.resize((cell_w, cell_h), Image.NEAREST), (i * (cell_w + GAP), 0))
         strip.save(out / f"{name}.png")

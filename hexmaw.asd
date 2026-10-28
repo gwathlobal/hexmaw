@@ -12,6 +12,7 @@
                (:file "spells")
                (:file "player")
                (:file "hud")
+               (:file "hands")
                (:file "menu")
                (:file "level")
                (:file "main"))

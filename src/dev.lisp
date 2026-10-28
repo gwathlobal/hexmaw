@@ -219,7 +219,10 @@ with the runtime errors if the game starts failing once it is loaded."
               (T result))))))
 
 (defun defines-assets-p (source)
-  (search "(define-asset " (uiop:read-file-string source) :test #'char-equal))
+  (let ((text (uiop:read-file-string source)))
+    (or (search "(define-asset " text :test #'char-equal)
+        ;; Defines an image asset (fx.lisp).
+        (search "(define-fx-animation " text :test #'char-equal))))
 
 (defun reload-system ()
   "Reload the whole system through ASDF, for changes that affect other files (macros, the .asd)."

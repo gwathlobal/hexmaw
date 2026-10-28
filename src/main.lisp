@@ -17,6 +17,7 @@
     (setf *player* new)
     (enter new scene))
   (add-hud scene)
+  (add-hands scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)
   (enter (make-instance 'menu-controller) scene)

@@ -22,6 +22,8 @@
 (defparameter *max-mana* 50.0)
 (defparameter *mana-regen* 8.0 "Mana per second.")
 (defparameter *cast-cooldown* 0.35 "Seconds between casts.")
+(defparameter *cast-release* 0.2
+  "Seconds from the click until the spell leaves the hands: the cast animation's release frame.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
 
@@ -39,7 +41,11 @@
    (mouse-look :initform NIL :accessor mouse-look)
    (health :initform *player-max-health* :accessor health)
    (mana :initform *max-mana* :accessor mana)
-   (cast-timer :initform 0.0 :accessor cast-timer)))
+   (cast-timer :initform 0.0 :accessor cast-timer)
+   (cast-time :initform NIL :accessor cast-time
+              :documentation "Seconds since the last cast began, or NIL before the first.")
+   (pending-spell :initform NIL :accessor pending-spell
+                  :documentation "Spell being cast, launched at *CAST-RELEASE*.")))
 
 (defun capture-mouse (player)
   (lock-cursor (context +main+))
@@ -56,17 +62,23 @@
     (vec (* (sin yaw) (cos pitch)) (- (sin pitch)) (- (* (cos yaw) (cos pitch))))))
 
 (defun player-cast (player name)
-  "Cast spell NAME from just below the eye toward where the player looks, if mana and
-the cooldown allow. Returns true if it was cast."
+  "Start casting spell NAME, if mana and the cooldown allow. The hands wind up and the
+spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it was cast."
   (let* ((spell (find-spell name))
          (cost (spell-cost spell)))
     (when (and (<= (cast-timer player) 0) (<= cost (mana player)))
       (decf (mana player) cost)
-      (setf (cast-timer player) *cast-cooldown*)
-      (let* ((dir (look-direction player))
-             (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
-        (cast-spell spell origin dir (container player)))
+      (setf (cast-timer player) *cast-cooldown*
+            (cast-time player) 0.0
+            (pending-spell player) spell)
       T)))
+
+(defun release-spell (player)
+  "Fire the pending spell from just below the eye toward where the player looks now."
+  (let* ((dir (look-direction player))
+         (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
+    (cast-spell (pending-spell player) origin dir (container player))
+    (setf (pending-spell player) NIL)))
 
 ;;; Clicks in a menu belong to the menu (menu.lisp), as does Esc.
 
@@ -164,6 +176,10 @@ On a step the eye keeps its height and eases to the new one."
     (return))
   (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
         (cast-timer player) (max 0.0 (- (cast-timer player) dt)))
+  (when (cast-time player)
+    (incf (cast-time player) dt)
+    (when (and (pending-spell player) (<= *cast-release* (cast-time player)))
+      (release-spell player)))
   (let* ((dt (min dt 0.05))
          (vel (velocity player))
          (yaw (vy (rotation player)))
