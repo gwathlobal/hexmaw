@@ -1,0 +1,34 @@
+{
+  "prompt": "Pixel-art TEXTURE STRIP for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the textures of Hexen or Daggerfall: the LONG SIDE of a carved stone SARCOPHAGUS in a crypt.\n\nREFERENCE IMAGES\n1. A monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, shading with a few hard-edged tones. Do not draw the monster.\n2. The stone the sarcophagus is carved from: its colour and surface. Do not copy its layout.\n\nTHE IMAGE\n- One wide horizontal strip, exactly 2.5 times as wide as it is tall, filling the image's full width from the left edge to the right edge and centred vertically. Above and below the strip, the image is pure flat magenta (#FF00FF), nothing else.\n- The strip is the side seen dead-on and perfectly flat: no perspective, no top or end of the sarcophagus visible, no floor, no shadow on the ground.\n- From bottom to top:\n  - The bottom fifth: a plain, slightly projecting PLINTH band with a moulded top edge.\n  - The middle: a row of exactly FOUR IDENTICAL CARVED PANELS side by side, all the same width. Each is a sunken rectangular panel framed by a raised stone border, carved with the same simple gothic motif: a pointed trefoil arch. The left and right edges of the strip cut exactly through the middle of the raised border between two panels, so strips placed side by side continue seamlessly.\n  - The top sixth: the thick edge of the heavy stone LID, a moulded band that overhangs the panels slightly, with a thin dark shadow line under it.\n- Cold grey stone with a faint green-grey cast, weathered: a few chips and hairline cracks, darker grime in the recesses.\n- Even, flat lighting: no light source, no gradient across the strip, no glow. Only the local shading of the carving: lighter upper edges, darker recesses.\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients.\n- No text, runes, letters, numbers, skulls, figures or other objects. Just the carved side.\n",
+  "prompt_file": "art/prompts/texture-sarcophagus-side.txt",
+  "refs": [
+    "Pixel Demon Character Turnaround.png",
+    "art/textures/stone-2.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 3,
+  "created": 1793249753,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art TEXTURE STRIP for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the textures of Hexen or Daggerfall: the LONG SIDE of a carved stone SARCOPHAGUS in a crypt.\n\nREFERENCE IMAGES\n1. A monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, shading with a few hard-edged tones. Do not draw the monster.\n2. The stone the sarcophagus is carved from: its colour and surface. Do not copy its layout.\n\nTHE IMAGE\n- One wide horizontal strip, exactly 2.5 times as wide as it is tall, filling the image's full width from the left edge to the right edge and centred vertically. Above and below the strip, the image is pure flat magenta (#FF00FF), nothing else.\n- The strip is the side seen dead-on and perfectly flat: no perspective, no top or end of the sarcophagus visible, no floor, no shadow on the ground.\n- From bottom to top:\n  - The bottom fifth: a plain, slightly projecting PLINTH band with a moulded top edge.\n  - The middle: a row of exactly FOUR IDENTICAL CARVED PANELS side by side, all the same width. Each is a sunken rectangular panel framed by a raised stone border, carved with the same simple gothic motif: a pointed trefoil arch. The left and right edges of the strip cut exactly through the middle of the raised border between two panels, so strips placed side by side continue seamlessly.\n  - The top sixth: the thick edge of the heavy stone LID, a moulded band that overhangs the panels slightly, with a thin dark shadow line under it.\n- Cold grey stone with a faint green-grey cast, weathered: a few chips and hairline cracks, darker grime in the recesses.\n- Even, flat lighting: no light source, no gradient across the strip, no glow. Only the local shading of the carving: lighter upper edges, darker recesses.\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients.\n- No text, runes, letters, numbers, skulls, figures or other objects. Just the carved side.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a18601-e012-74d3-813d-af617674d9b0",
+    "01a18602-95d4-7361-900d-5cebc84ca78b",
+    "01a18603-3675-7b01-a02d-a592d550c710"
+  ],
+  "sizes": [
+    [
+      1536,
+      1024
+    ],
+    [
+      1983,
+      793
+    ],
+    [
+      1983,
+      793
+    ]
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "prompt": "Pixel-art SURFACE TEXTURE for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the wall and floor textures of Hexen or Daggerfall.\n\nREFERENCE IMAGE: a monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, how shading is done with a few hard-edged tones. Do not draw the monster or anything from the sheet.\n\nTHE IMAGE\n- One square image, filled edge to edge with the surface, seen dead-on and perfectly flat: no perspective, no vanishing point, no curvature, no frame, no border, no vignette.\n- It must TILE SEAMLESSLY: the left edge continues into the right edge and the top into the bottom. Nothing big crosses an edge in a way that would not continue; no feature sits only at the centre.\n- Even, flat lighting across the whole image: no light source, no gradient from one side to the other, no cast shadows from outside, no glow. Lighting comes from the game. Only small local shading inside each stone or plank (a lighter top edge, darker cracks and gaps).\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no photographic texture, no dithering gradients.\n- Muted, grimy dungeon colours, a little desaturated, of medium brightness, so it can be lit darker or brighter in game.\n- No text, symbols, runes, labels, numbers, characters, torches, doors, windows, moss clumps or other objects. Just the surface.\nTHE SURFACE: SOLID DRESSED STONE, as a carved sarcophagus or altar is made of: one smooth monolithic face of pale cold grey stone, with no masonry courses and no blocks.\n- Faint parallel chisel tooling marks, subtle mottling in the stone, a few darker weathered patches and hairline cracks, small chips. All of it small and spread evenly over the whole image.\n- Pale grey with a faint green-grey cast, lighter than a dungeon wall, low contrast, so it reads as one block of fine stone.",
+  "prompt_file": null,
+  "refs": [
+    "Pixel Demon Character Turnaround.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1793248307,
+  "size_request": "1024x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art SURFACE TEXTURE for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the wall and floor textures of Hexen or Daggerfall.\n\nREFERENCE IMAGE: a monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, how shading is done with a few hard-edged tones. Do not draw the monster or anything from the sheet.\n\nTHE IMAGE\n- One square image, filled edge to edge with the surface, seen dead-on and perfectly flat: no perspective, no vanishing point, no curvature, no frame, no border, no vignette.\n- It must TILE SEAMLESSLY: the left edge continues into the right edge and the top into the bottom. Nothing big crosses an edge in a way that would not continue; no feature sits only at the centre.\n- Even, flat lighting across the whole image: no light source, no gradient from one side to the other, no cast shadows from outside, no glow. Lighting comes from the game. Only small local shading inside each stone or plank (a lighter top edge, darker cracks and gaps).\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no photographic texture, no dithering gradients.\n- Muted, grimy dungeon colours, a little desaturated, of medium brightness, so it can be lit darker or brighter in game.\n- No text, symbols, runes, labels, numbers, characters, torches, doors, windows, moss clumps or other objects. Just the surface.\nTHE SURFACE: SOLID DRESSED STONE, as a carved sarcophagus or altar is made of: one smooth monolithic face of pale cold grey stone, with no masonry courses and no blocks.\n- Faint parallel chisel tooling marks, subtle mottling in the stone, a few darker weathered patches and hairline cracks, small chips. All of it small and spread evenly over the whole image.\n- Pale grey with a faint green-grey cast, lighter than a dungeon wall, low contrast, so it reads as one block of fine stone.\nImage size: 1024x1024 pixels (square).",
+  "codex_threads": [
+    "01a185ec-3e14-7151-8e27-13d3cb0b70a9",
+    "01a185ed-2200-7931-9e67-6e66032eb769"
+  ],
+  "sizes": [
+    [
+      1254,
+      1254
+    ],
+    [
+      1254,
+      1254
+    ]
+  ]
+}
