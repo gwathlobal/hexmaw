@@ -436,8 +436,8 @@ and ceilings by x and z), at `*texels-per-metre*` (64, the monsters' density). A
 pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and walls line up
 across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
 sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
-`:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`, and for the
-blueprints `:stair`, `:stone`, `:beam`), tinted by `:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
+`:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`), tinted by
+`:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
 
 A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
 from `data/textures/<name>.png`. It starts as a generated square:
@@ -805,7 +805,8 @@ or south wall and 3 rows on an east or west one. Nothing inside a block can be t
 than 1 m north to south. Other header lines: `storeys N` (one `plan K` each, K from 0),
 `ceiling H` (inside height of the top storey, default 4; corridors use 3), `material NAME
 R G B` (defaults `floor`, `wall`, `ceiling`, `stair`; a material named after a surface in
-`*surfaces*` is drawn with its textures, the rest flat in their colour), `mirror yes` (also builds
+`*surfaces*` is drawn with its textures, the rest flat in their colour, so a material
+still waiting for its texture stands out), `mirror yes` (also builds
 `<name>-mirror`, flipped west to east, for pieces a turn can't make: `cell`, `tower`) and
 `grid free` (skips the grid checks).
 
@@ -817,9 +818,10 @@ border wall it goes just inside the room). Legend actions: `wall [material]`, `f
 storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
 [material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
 `torch Y` and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight), picked as the block is placed (`spawn-choice`, from
-`*block-random*`, which the generator binds to its own state). They combine with commas: `I box 0 0.8 dais, spawn
-acolyte south` stands the acolyte on the dais. Each connected group of one spawn character
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight and harpy 1 each), picked as the
+block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
+own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
+acolyte on the dais. Each connected group of one spawn character
 is one monster at its centre, so `ii` centres one on a 1 m spot. Characters with the same
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
@@ -830,7 +832,7 @@ The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-
 niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
 `arch` (beams and torches, the way into a room), `narrow` and `narrowing` (to a narrow
 doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
-rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight), `crypt`
+rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte or harpy), `crypt`
 (sarcophagi) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
 up to it). Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip.

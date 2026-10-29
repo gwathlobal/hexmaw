@@ -273,7 +273,7 @@ CONTAINER, and add its solid to *SOLIDS*."
                (min (vmin a b)) (max (vmax a b)))
           (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)) *solids*))))))
 
-(defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1))
+(defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1))
   "What a block's spawn_any picks from, each monster with its weight.")
 
 (defvar *block-random* (make-random-state T)

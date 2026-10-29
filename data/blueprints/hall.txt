@@ -5,7 +5,7 @@ weight 2
 material pillar 0.62 0.36 0.30
 legend
   o box 0 top pillar
-  i spawn knight|acolyte south
+  i spawn knight|acolyte|harpy south
 
 plan 0
 #################nnnnnn#################

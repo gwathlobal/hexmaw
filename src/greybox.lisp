@@ -39,11 +39,7 @@
     (:ceiling wall-stone floor-flags ceiling-stone)
     (:pillar pillar-stone pillar-stone pillar-stone)
     (:platform planks planks planks)
-    (:dais pillar-stone floor-flags pillar-stone)
-    ;; The blueprints' stairs, sarcophagi and beams (data/blueprints/).
-    (:stair planks planks planks)
-    (:stone pillar-stone pillar-stone pillar-stone)
-    (:beam planks planks planks)))
+    (:dais pillar-stone floor-flags pillar-stone)))
 
 (defun surface-textures (name)
   "The textures of surface NAME (a keyword, or a material's name) as a list (SIDE TOP
