@@ -461,7 +461,8 @@ the way it was going; a bigger one may run down a wall."
                  (ny (+ (aref p (+ b 1)) (* dt (aref v (+ b 1)))))
                  (nz (+ (aref p (+ b 2)) (* dt (aref v (+ b 2)))))
                  (s (solid-at nx ny nz)))
-            (cond (s (land-drop pool i s nx ny nz))
+            (cond ((liquid-at nx ny nz) (setf (aref state i) 0)) ; Sunk, or burnt off.
+                  (s (land-drop pool i s nx ny nz))
                   ((< *blood-drop-life* (aref ages i)) (setf (aref state i) 0))
                   (T (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz)))))))))
 
@@ -584,7 +585,9 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
            (ny (+ (aref p (+ b 1)) (* dt (aref v (+ b 1)))))
            (nz (+ (aref p (+ b 2)) (* dt (aref v (+ b 2)))))
            (s (solid-at nx ny nz)))
-      (cond ((null s)
+      (cond ((liquid-at nx ny nz)
+             (setf (aref (pool-state pool) i) 0))
+            ((null s)
              (if (< *blood-drop-life* (aref ages i))
                  (setf (aref (pool-state pool) i) 0)
                  (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz)))

@@ -156,9 +156,14 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
                     for k from 0
                     do (let ((room (let ((top (ceiling-above x y z)))
                                      (if top (- top y) *nav-open-headroom*))))
+                         ;; A floor under lava (liquids.lisp) has no room for anyone, so
+                         ;; nothing paths or walks straight through it, and a creature
+                         ;; knocked in finds the nearest dry cell.
                          (setf (aref floors i j k) y
                                (aref headroom i j k) (float room 0f0)
-                               (aref clearance i j k) (measure-clearance x y z room))))))
+                               (aref clearance i j k) (if (< 0 (hazard-at x (+ y 0.05) z))
+                                                          0f0
+                                                          (measure-clearance x y z room)))))))
           (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
                                                     :layers layers :floors floors
                                                     :headroom headroom :clearance clearance)))))))

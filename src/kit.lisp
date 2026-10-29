@@ -29,7 +29,7 @@
   (let* ((names (kit-blocks))
          (rooms (remove-if-not (lambda (n) (member :room (block-tags n))) names))
          (pieces (set-difference names rooms :test #'string=))
-         (west -4.0) (east west))
+         (west -4.0) (east west) (footprints ()))
     (loop for row in (list (sort pieces #'string<) (sort rooms #'string<))
           for south in *gallery-rows*
           do (let ((x west))
@@ -39,16 +39,35 @@
                         (turns (turns-between (getf door :direction) :south)))
                    (multiple-value-bind (low high) (block-world-bounds name (vec 0 0 0) turns)
                      (let ((at (vec (- x (vx low)) 0 (- south (vz high)))))
+                       (push (list (+ (vx at) (vx low)) (+ (vz at) (vz low)) (+ (vx at) (vx high)) (+ (vz at) (vz high)))
+                             footprints)
                        (dolist (c (place-block name container :at at :turns turns))
                          (if (string-equal (connector-name c) (getf door :name))
                              (setf (gethash name *gallery*) (connector-location c))
                              (seal-connector container c)))
                        (setf x (+ x (- (vx high) (vx low)) *gallery-gap*))))))
                (setf east (max east x))))
-    ;; Ground between and under the blocks, just below their floors so it doesn't
-    ;; fight with them.
-    (add-box container (- west *gallery-gap*) -0.55 (- (car (last *gallery-rows*)) 30)
-             east -0.05 12 :surface :floor)))
+    ;; Ground between the blocks, just below their floors so it doesn't fight with them
+    ;; where they meet. Not under them: it would fill a lava pit (liquids.lisp).
+    (add-ground container (- west *gallery-gap*) (- (car (last *gallery-rows*)) 30) east 12 footprints)))
+
+(defun add-ground (container x0 z0 x1 z1 holes)
+  "Floor the rectangle X0 Z0 to X1 Z1 at just below 0, except under HOLES, each a
+rectangle (X0 Z0 X1 Z1), in as few boxes as it takes."
+  (let* ((xs (sort (remove-duplicates (list* x0 x1 (loop for (a nil b) in holes collect a collect b))) #'<))
+         (zs (sort (remove-duplicates (list* z0 z1 (loop for (nil a nil b) in holes collect a collect b))) #'<))
+         (grid (make-array (list (1- (length zs)) (1- (length xs))) :initial-element NIL)))
+    (loop for (za zb) on zs while zb for r from 0
+          do (loop for (xa xb) on xs while xb for c from 0
+                   for mx = (/ (+ xa xb) 2) for mz = (/ (+ za zb) 2)
+                   do (setf (aref grid r c)
+                            (and (< x0 mx x1) (< z0 mz z1)
+                                 (notany (lambda (h) (destructuring-bind (hx0 hz0 hx1 hz1) h
+                                                       (and (< hx0 mx hx1) (< hz0 mz hz1))))
+                                         holes)))))
+    (loop for (r0 c0 r1 c1) in (hexmaw.blueprint::merge-rectangles grid)
+          do (add-box container (nth c0 xs) -0.55 (nth r0 zs) (nth (1+ c1) xs) -0.05 (nth (1+ r1) zs)
+                      :surface :floor))))
 
 (defun kit-goto (name)
   "Stand the player outside gallery block NAME's open doorway, facing in. Run it in GAME."

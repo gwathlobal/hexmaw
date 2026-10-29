@@ -125,10 +125,11 @@
     (cdr (first (sort faces #'< :key #'car)))))
 
 (defun read-block (path)
-  "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :BOUNDS
+  "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :LIQUIDS
+(each :KIND and :BOUNDS), :BOUNDS
 (min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist of :NAME
 :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
-  (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (tags ()) (weight 1.0)
+  (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (liquids ()) (tags ()) (weight 1.0)
         (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
         (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (org.shirakumo.fraf.gltf:with-gltf (gltf path)
@@ -146,11 +147,15 @@
                                               :material (primitive-material-name primitive)
                                               :transform transform
                                               :bounds bounds
-                                              :solid (not (prefixp "deco_" name)))
+                                              :solid (not (or (prefixp "deco_" name) (prefixp "lava_" name))))
                             do (setf low (vmin low (first bounds)) high (vmax high (second bounds)))
-                               (if (prefixp "plug_" name)
-                                   (push (cons (subseq name (length "plug_")) piece) plugs)
-                                   (push piece pieces))))
+                               (cond ((prefixp "plug_" name)
+                                      (push (cons (subseq name (length "plug_")) piece) plugs))
+                                     ;; A liquid's mesh is only its volume; LIQUID-SURFACE draws it.
+                                     ((prefixp "lava_" name)
+                                      (push (list :kind :lava :bounds bounds) liquids))
+                                     (T
+                                      (push piece pieces)))))
                      ((prefixp "connector_" name)
                       (let ((rest (subseq name (length "connector_"))))
                         (push (list :name name :rest rest :kind (connector-name-kind rest)
@@ -180,7 +185,7 @@
           unless (find rest connectors :key (lambda (c) (getf c :rest)) :test #'string-equal)
           do (v:warn :hexmaw "~a: plug_~a has no connector_~:*~a." (file-namestring path) rest))
     (list :pieces (nreverse pieces) :connectors (nreverse connectors) :spawns (nreverse spawns)
-          :torches (nreverse torches) :bounds (list low high) :tags tags :weight weight)))
+          :torches (nreverse torches) :liquids (nreverse liquids) :bounds (list low high) :tags tags :weight weight)))
 
 (defvar *blocks* (make-hash-table :test 'equal)
   "Read blocks by file name: (file-date . definition).")
@@ -308,6 +313,11 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
                                                        (getf c :kind)))))
         (dolist (piece (getf def :pieces))
           (enter-piece piece container #'world rotation))
+        (dolist (liquid (getf def :liquids))
+          (destructuring-bind (lo hi) (getf liquid :bounds)
+            (let ((a (world lo)) (b (world hi)))
+              (add-liquid container (getf liquid :kind)
+                          (vx a) (vy a) (vz a) (vx b) (vy b) (vz b)))))
         ;; After the solids, so ADD-TORCH finds the walls.
         (dolist (p (getf def :torches))
           (let ((w (world p)))

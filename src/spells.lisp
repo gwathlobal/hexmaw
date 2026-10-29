@@ -233,7 +233,8 @@ seconds, keeping its speed."
               (victim
                (apply-spell (spell spell-projectile) victim spell-projectile)
                (impact spell-projectile))
-              ((solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))
+              ((or (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))
+                   (liquid-at (vx loc) (vy loc) (vz loc)))
                (impact spell-projectile))
               ((< (or (spell-lifetime (spell spell-projectile)) *projectile-lifetime*) (age spell-projectile))
                (despawn spell-projectile)))))))
