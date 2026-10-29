@@ -3,9 +3,9 @@ cells 5 3
 ceiling 3
 tags room
 weight 2
-material stone 0.40 0.40 0.42
+material sarcophagus 0.40 0.40 0.42
 legend
-  % box 0 0.8 stone
+  % box 0 0.8 sarcophagus
   i spawn imp|knight east
 
 plan 0
