@@ -488,9 +488,9 @@ whose wingtips hang below the talons, lifts the body a little.
 
 ```bash
 python3 tools/stack_views.py art/harpy/dive-sheet.png art/harpy/dive-front-2.png art/harpy/dive-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1
-python3 tools/slice_frames.py art/harpy/dive-sheet.png data/sprites/harpy --pixel 8 --anchor bottom dive:10
+python3 tools/slice_frames.py art/harpy/dive-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box dive:10
 python3 tools/stack_views.py art/harpy/flap-sheet.png art/harpy/flap-front-c-1.png art/harpy/flap-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --grid
-python3 tools/slice_frames.py art/harpy/flap-sheet.png data/sprites/harpy --pixel 8 --anchor bottom flap:20
+python3 tools/slice_frames.py art/harpy/flap-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box flap:20
 ```
 
 Its flinch (`harpy-hurt-common.txt`, jolt then stagger) is made like the dive, the side and back
@@ -498,7 +498,7 @@ views following `hurt-front-1.png`:
 
 ```bash
 python3 tools/stack_views.py art/harpy/hurt-sheet.png art/harpy/hurt-front-1.png art/harpy/hurt-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1
-python3 tools/slice_frames.py art/harpy/hurt-sheet.png data/sprites/harpy --pixel 8 --anchor bottom hurt:10
+python3 tools/slice_frames.py art/harpy/hurt-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box hurt:10
 ```
 
 Knocked down (`harpy-downed.txt`, front only, `downed-2.png`) is a 2 x 4 grid whose first cell is
@@ -506,7 +506,7 @@ a copy of the hovering pose, to set the scale: it is 494 px tall, so `--pixel 4.
 116 px. It is sliced as an animation of its own and deleted:
 
 ```bash
-python3 tools/slice_frames.py art/harpy/downed-2.png data/sprites/harpy --pixel 4.26 --anchor bottom scale:1 downed:6 && rm data/sprites/harpy/scale.*
+python3 tools/slice_frames.py art/harpy/downed-2.png data/sprites/harpy --pixel 4.26 --anchor bottom --filter box scale:1 downed:6 && rm data/sprites/harpy/scale.*
 ```
 
 The game assumes the three turned views face image-left and mirrors them for the
