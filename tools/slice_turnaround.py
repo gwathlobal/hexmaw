@@ -23,11 +23,11 @@ whole atlas onto one N-colour palette taken from its own pixels.
 """
 
 import argparse
-import math
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
+
+from pixelart import box_downscale, reduce_colors
 
 VIEWS = ["front", "front-quarter", "side", "back-quarter", "back"]
 GAP = 2
@@ -38,36 +38,6 @@ def is_background(r, g, b):
     magenta = min(r, b) > 60 and g < 0.5 * min(r, b) and abs(r - b) < 0.35 * max(r, b)
     cyan = b > 150 and g > 150 and r < 120
     return magenta or cyan
-
-
-def box_downscale(img, size):
-    """Average the source pixels under each output pixel. A pixel is opaque when at least
-    half the source under it is, and takes the mean colour of the opaque ones."""
-    src = np.asarray(img, dtype=np.float64)
-    (w, h), (sw, sh) = size, img.size
-    out = np.zeros((h, w, 4), dtype=np.uint8)
-    for y in range(h):
-        y0, y1 = int(y * sh / h), max(int(y * sh / h) + 1, math.ceil((y + 1) * sh / h))
-        for x in range(w):
-            x0, x1 = int(x * sw / w), max(int(x * sw / w) + 1, math.ceil((x + 1) * sw / w))
-            block = src[y0:y1, x0:x1].reshape(-1, 4)
-            solid = block[block[:, 3] > 0]
-            if len(solid) * 2 >= len(block):
-                out[y, x, :3] = solid[:, :3].mean(axis=0).round()
-                out[y, x, 3] = 255
-    return Image.fromarray(out, "RGBA")
-
-
-def reduce_colors(img, colors):
-    """Map the opaque pixels onto one palette of COLORS colours taken from them."""
-    rgba = np.asarray(img).copy()
-    solid = rgba[:, :, 3] > 0
-    pixels = Image.fromarray(rgba[solid][:, :3].reshape(1, -1, 3), "RGB")
-    palette = pixels.quantize(colors=colors, method=Image.MEDIANCUT)
-    mapped = Image.fromarray(rgba[:, :, :3], "RGB").quantize(palette=palette, dither=Image.NONE)
-    rgba[:, :, :3] = np.asarray(mapped.convert("RGB"))
-    rgba[~solid] = 0
-    return Image.fromarray(rgba, "RGBA")
 
 
 def separator_columns(img):
