@@ -2,11 +2,12 @@
 """Draw the blood particle sprites, one strip in the format tools/slice_frames.py
 writes, so the game reads it like any other animation strip:
 
-  tools/draw_blood.py data/sprites/blood/blood
+  tools/draw_blood.py data/sprites/blood/blood --gibs imp=art/gibs/strips/imp
 
 writes blood.png (frames left to right, 2 px transparent gaps) and blood.lisp.
-Every cell is SIZE art pixels square, at the monsters' density (64 px per metre), and
-the point of impact is its middle. Frames, in order, each group smallest to largest:
+Every cell is SIZE art pixels square (more if a gib needs it), at the monsters' density
+(64 px per metre), and the point of impact is its middle. Frames, in order, each group
+smallest to largest:
 
   0-3    flying drops, in the four drop sizes
   4-27   round splats on a floor or wall, three variants of eight sizes: drop N leaves
@@ -14,15 +15,22 @@ the point of impact is its middle. Frames, in order, each group smallest to larg
          it into. Every size of a variant has the same outline, so a pool spreads.
   28-31  streaks, a fast drop's smear on the floor, running toward image right
   32-35  drips on a wall, a splat whose blood runs toward image bottom
+  36-    each --gibs set NAME=STRIP in turn: STRIP is a tools/slice_frames.py strip
+         (STRIP.png and STRIP.lisp) of a creature's gib pieces at the monsters' density,
+         each lying on the ground. Every piece takes four frames: as drawn, then turned a
+         quarter clockwise at a time, for tumbling. The index records each set's first
+         frame and piece count under :gibs, and under :bottoms, per frame, the empty rows
+         below what is drawn, so a resting gib stands on the floor.
 
 ROUND_RADII must match *SPLAT-RADII* in src/gore.lisp.
 
 Shapes are drawn pixel by pixel from fixed seeds, so a rerun gives the same strip.
 """
 
+import argparse
 import math
 import random
-import sys
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -187,12 +195,55 @@ def frames():
     return drops + rounds + streaks + drips
 
 
+def read_strip(strip):
+    """The pieces of a tools/slice_frames.py strip, each cropped to what is drawn."""
+    index = strip.with_suffix(".lisp").read_text()
+    field = lambda name: int(re.search(rf":{name} (\d+)", index).group(1))
+    cw, ch, gap, count = field("cell-width"), field("cell-height"), field("gap"), field("frames")
+    image = Image.open(strip.with_suffix(".png")).convert("RGBA")
+    pieces = []
+    for i in range(count):
+        cell = image.crop((i * (cw + gap), 0, i * (cw + gap) + cw, ch))
+        box = cell.getchannel("A").point(lambda a: 255 if a >= 128 else 0).getbbox()
+        if box:
+            pieces.append(cell.crop(box))
+    return pieces
+
+
+def placed(piece):
+    """PIECE centred in a cell: its pixels, and the empty rows below it."""
+    x0, y0 = (SIZE - piece.width) // 2, (SIZE - piece.height) // 2
+    px = {(x0 + x, y0 + y): piece.getpixel((x, y))
+          for y in range(piece.height) for x in range(piece.width)
+          if piece.getpixel((x, y))[3] >= 128}
+    return px, SIZE - (y0 + piece.height)
+
+
 def main():
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
-    out = Path(sys.argv[1])
-    out.parent.mkdir(parents=True, exist_ok=True)
+    global SIZE
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("out", type=Path)
+    ap.add_argument("--gibs", action="append", default=[], metavar="NAME=STRIP")
+    args = ap.parse_args()
+    sets = []
+    for spec in args.gibs:
+        name, strip = spec.split("=", 1)
+        sets.append((name, read_strip(Path(strip))))
+    # Cells grow to fit the biggest gib, turned either way, with a pixel to spare.
+    SIZE = max([SIZE] + [max(g.width, g.height) + 2 for _, pieces in sets for g in pieces])
+    SIZE += SIZE % 2
     cells = frames()
+    bottoms = [0] * len(cells)
+    gibs = []
+    for name, pieces in sets:
+        gibs.append(f":{name} (:first {len(cells)} :count {len(pieces)})")
+        for piece in pieces:
+            for turn in range(4):
+                px, bottom = placed(piece.rotate(-90 * turn, expand=True))
+                cells.append(px)
+                bottoms.append(bottom)
+    out = args.out
+    out.parent.mkdir(parents=True, exist_ok=True)
     sheet = Image.new("RGBA", (len(cells) * SIZE + (len(cells) - 1) * GAP, SIZE), (0, 0, 0, 0))
     for i, px in enumerate(cells):
         for (x, y), colour in px.items():
@@ -203,8 +254,10 @@ def main():
         ";;; Written by tools/draw_blood.py; do not edit.\n"
         f'(:image "{out.name}.png"\n'
         f" :cell-width {SIZE} :cell-height {SIZE} :gap {GAP}\n"
-        f" :frames {len(cells)})\n")
-    print(f"wrote {out.with_suffix('.png')} ({len(cells)} frames)")
+        f" :frames {len(cells)}\n"
+        f" :gibs ({' '.join(gibs)})\n"
+        f" :bottoms ({' '.join(map(str, bottoms))}))\n")
+    print(f"wrote {out.with_suffix('.png')} ({len(cells)} frames, {SIZE} px cells)")
 
 
 if __name__ == "__main__":

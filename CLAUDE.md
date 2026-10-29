@@ -218,6 +218,26 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   The frames are `data/sprites/blood/blood`, drawn by `tools/draw_blood.py` (drops, round
   splats and puddles, streaks, drips; its docstring has the layout), at the monsters' 64 px
   per metre. Its `ROUND_RADII` must match `*splat-radii*`.
+  Gibs: a killing blow that leaves health below 0 by `*gib-overkill*` of the most (0.3)
+  tears a creature with `gibs` apart instead (`gib-p`, `burst-gibs`): it vanishes
+  (`gibbed`, until revival) and its pieces fly out with a burst of blood, tumbling a quarter
+  turn at a time and trailing drops, bounce off what they hit (`*gib-bounce*`, leaving a
+  splat), and come to rest on the floor once slower than `*gib-rest-speed*`, standing
+  upright and turned to face the camera like a billboard. They are slots in the same pool;
+  a level keeps `*max-gibs*` at rest and dissolves the oldest. A creature's `gibs` is its
+  set's name in the blood strip and a piece number per gib (the imp: head, two arms, two
+  legs, tail, ribs and five chunks). A set starts as a generated sheet of pieces, each
+  lying on the ground (`art/gibs/imp-gibs-1.png`, from `art/prompts/imp-gibs.txt` with the
+  imp's turnaround and death sheet as references), sliced by `tools/slice_frames.py` into
+  `art/gibs/strips/<set>`, which `tools/draw_blood.py --gibs <set>=<strip>` appends to the
+  blood strip with the turned frames; cells grow to fit the biggest piece. The generator
+  draws the pieces bigger than asked, so `--pixel` is set by eye to the imp's scale (the
+  head about 30 px across):
+
+  ```bash
+  python3 tools/slice_frames.py art/gibs/imp-gibs-1.png art/gibs/strips --pixel 9 --filter box --colors 32 imp:8
+  tools/draw_blood.py data/sprites/blood/blood --gibs imp=art/gibs/strips/imp
+  ```
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, the player's `bolt` and the acolyte's `cinder`. A new effect kind is
   a method on `apply-effect`, for a `creature` target and (in player.lisp, loaded later) a
@@ -594,7 +614,7 @@ attack (swing, or cast the bolt), F12 for a screenshot.
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
-0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills; `:from point` aims the spray); to look at one death
+0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);

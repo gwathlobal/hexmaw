@@ -1,0 +1,26 @@
+Pixel-art sprite sheet: the gibs of the red imp demon, the pieces it bursts into when a blow tears it apart, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The pieces fly through the air and then lie on the floor, so each is drawn on its own, lying on the ground and seen from the side.
+
+REFERENCE IMAGES, in the order attached:
+1. The imp's turnaround sheet. It is the character design: the brick-red skin, horn shape, pointed ears, dark grey claws, arrow-tipped tail, and the shading style.
+2. The imp's death sheet. Match its pixel size, outline weight and scale exactly: every piece is drawn at the scale of the imp in frame 1 of reference 2, so a severed head is as big as the imp's head there, a forearm as long as its forearm.
+
+THE PIECES, one per cell:
+- Cell 1, HEAD: the severed horned head lying on its side, both horns and a pointed ear showing, the jaw hanging slack, the eyes dull and dark (no glow, it is dead), a ragged bloody stump of neck.
+- Cell 2, ARM: a severed forearm and clawed hand lying on the ground, the dark grey claws curled, a bloody stump at the elbow with a bit of bone showing.
+- Cell 3, LEG: a severed lower leg and clawed foot lying on its side, a bloody stump at the knee with a bit of bone showing.
+- Cell 4, TAIL: a severed length of the tail with its arrow tip, lying in a loose curve, a bloody stump at the cut end.
+- Cell 5, RIBS: a torn piece of the torso, brick-red skin on one side, the other side raw meat with three or four curved off-white ribs sticking out.
+- Cell 6, BIG CHUNK: a big lump of torn flesh, brick-red skin on top, raw dark red meat underneath, one splintered bone sticking out.
+- Cell 7, CHUNK: a smaller lump of torn flesh, half skin, half raw meat.
+- Cell 8, SCRAP: a small scrap of raw meat, about the size of the imp's hand.
+
+COLOURS: the imp's own skin colours. Blood and raw meat are dark crimson and oxblood, not bright red or pink. Bone is dull off-white, shaded grey.
+
+LAYOUT
+- The image is 1536 x 1024 pixels: a grid of 2 rows of 4 equal cells, cells 1 to 4 in the top row and 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Every piece lies on the same ground line near the bottom of its cell, at the same scale. Each piece is centred in its cell with a wide magenta margin all round. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No blood pool, splash or drops under or around the pieces: just the pieces.
+- No text, labels, numbers, frame borders, speed lines or motion blur.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

@@ -146,6 +146,10 @@ strength, starts to fade and is out, to match the fire in the death animation.")
                 :documentation "Drops of blood its death bursts out; NIL for *DEATH-BLOOD*. At 0
 its corpse doesn't bleed either.")
    (bleeding :initform 0f0 :accessor bleeding :documentation "Seconds it keeps dripping blood.")
+   (gibs :initarg :gibs :initform NIL :reader gibs
+         :documentation "What a blow that overkills it tears it into (gore.lisp): its gib set's
+name in the blood strip, then a piece number for each gib. NIL never tears apart.")
+   (gibbed :initform NIL :accessor gibbed :documentation "True while it lies torn apart.")
    (drip-timer :initform 0f0 :accessor drip-timer :documentation "Seconds until its next drip.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
@@ -267,8 +271,11 @@ whether the X move and whether the Z move were blocked."
     (stop-walking creature *hurt-pause*)
     (hit-stop)
     (when (<= (health creature) 0)
-      (when (bleeds creature)
-        (bleed-out creature))
+      (cond ((gib-p creature amount)
+             (setf (gibbed creature) T)
+             (burst-gibs creature from))
+            ((bleeds creature)
+             (bleed-out creature)))
       (setf (dead creature) 0.0))))
 
 (defun shielded-p (creature from)
@@ -588,7 +595,8 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 
 (defun revive (creature)
   (setf (alert creature) 0.0
-        (bleeding creature) 0f0)
+        (bleeding creature) 0f0
+        (gibbed creature) NIL)
   (stop-walking creature)
   (setf (walk-distance creature) 0.0)
   (setf (dead creature) NIL
@@ -666,6 +674,9 @@ flinch, 0 to 1."
                             (floor (walk-distance creature) (stride creature)) s)))
     (let ((d (dead creature)))
       (cond ((null d))
+            ((gibbed creature)
+             ;; Its pieces are in the blood pool; nothing of it stays.
+             (setf (vx scale) 0.0 (vy scale) 0.0))
             ((death-animation creature)
              ;; Play the death strip once, then hold its last frame. It replaces
              ;; the flinch, so it isn't squashed.
@@ -774,6 +785,8 @@ flinch, 0 to 1."
    (walk-animation :initform 'imp-walk)
    (attack-animation :initform 'imp-attack)
    (hurt-animation :initform 'imp-hurt)
+   ;; Head, two arms, two legs, the tail, ribs, a big chunk, two chunks, two scraps.
+   (gibs :initform '(:imp 0 1 1 2 2 3 4 5 6 6 7 7))
    (attack-damage :initform '(6 10))
    (chase-speed :initform 2.6)
    (max-health :initform 30)))

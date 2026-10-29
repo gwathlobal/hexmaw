@@ -1,0 +1,34 @@
+{
+  "prompt": "Pixel-art sprite sheet: the gibs of the red imp demon, the pieces it bursts into when a blow tears it apart, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The pieces fly through the air and then lie on the floor, so each is drawn on its own, lying on the ground and seen from the side.\n\nREFERENCE IMAGES, in the order attached:\n1. The imp's turnaround sheet. It is the character design: the brick-red skin, horn shape, pointed ears, dark grey claws, arrow-tipped tail, and the shading style.\n2. The imp's death sheet. Match its pixel size, outline weight and scale exactly: every piece is drawn at the scale of the imp in frame 1 of reference 2, so a severed head is as big as the imp's head there, a forearm as long as its forearm.\n\nTHE PIECES, one per cell:\n- Cell 1, HEAD: the severed horned head lying on its side, both horns and a pointed ear showing, the jaw hanging slack, the eyes dull and dark (no glow, it is dead), a ragged bloody stump of neck.\n- Cell 2, ARM: a severed forearm and clawed hand lying on the ground, the dark grey claws curled, a bloody stump at the elbow with a bit of bone showing.\n- Cell 3, LEG: a severed lower leg and clawed foot lying on its side, a bloody stump at the knee with a bit of bone showing.\n- Cell 4, TAIL: a severed length of the tail with its arrow tip, lying in a loose curve, a bloody stump at the cut end.\n- Cell 5, RIBS: a torn piece of the torso, brick-red skin on one side, the other side raw meat with three or four curved off-white ribs sticking out.\n- Cell 6, BIG CHUNK: a big lump of torn flesh, brick-red skin on top, raw dark red meat underneath, one splintered bone sticking out.\n- Cell 7, CHUNK: a smaller lump of torn flesh, half skin, half raw meat.\n- Cell 8, SCRAP: a small scrap of raw meat, about the size of the imp's hand.\n\nCOLOURS: the imp's own skin colours. Blood and raw meat are dark crimson and oxblood, not bright red or pink. Bone is dull off-white, shaded grey.\n\nLAYOUT\n- The image is 1536 x 1024 pixels: a grid of 2 rows of 4 equal cells, cells 1 to 4 in the top row and 5 to 8 in the bottom row, each read left to right.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.\n- Every piece lies on the same ground line near the bottom of its cell, at the same scale. Each piece is centred in its cell with a wide magenta margin all round. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No blood pool, splash or drops under or around the pieces: just the pieces.\n- No text, labels, numbers, frame borders, speed lines or motion blur.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\n",
+  "prompt_file": "art/prompts/imp-gibs.txt",
+  "refs": [
+    "Pixel Demon Character Turnaround.png",
+    "Imp Death Sheet.webp"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 3,
+  "created": 1793232791,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art sprite sheet: the gibs of the red imp demon, the pieces it bursts into when a blow tears it apart, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The pieces fly through the air and then lie on the floor, so each is drawn on its own, lying on the ground and seen from the side.\n\nREFERENCE IMAGES, in the order attached:\n1. The imp's turnaround sheet. It is the character design: the brick-red skin, horn shape, pointed ears, dark grey claws, arrow-tipped tail, and the shading style.\n2. The imp's death sheet. Match its pixel size, outline weight and scale exactly: every piece is drawn at the scale of the imp in frame 1 of reference 2, so a severed head is as big as the imp's head there, a forearm as long as its forearm.\n\nTHE PIECES, one per cell:\n- Cell 1, HEAD: the severed horned head lying on its side, both horns and a pointed ear showing, the jaw hanging slack, the eyes dull and dark (no glow, it is dead), a ragged bloody stump of neck.\n- Cell 2, ARM: a severed forearm and clawed hand lying on the ground, the dark grey claws curled, a bloody stump at the elbow with a bit of bone showing.\n- Cell 3, LEG: a severed lower leg and clawed foot lying on its side, a bloody stump at the knee with a bit of bone showing.\n- Cell 4, TAIL: a severed length of the tail with its arrow tip, lying in a loose curve, a bloody stump at the cut end.\n- Cell 5, RIBS: a torn piece of the torso, brick-red skin on one side, the other side raw meat with three or four curved off-white ribs sticking out.\n- Cell 6, BIG CHUNK: a big lump of torn flesh, brick-red skin on top, raw dark red meat underneath, one splintered bone sticking out.\n- Cell 7, CHUNK: a smaller lump of torn flesh, half skin, half raw meat.\n- Cell 8, SCRAP: a small scrap of raw meat, about the size of the imp's hand.\n\nCOLOURS: the imp's own skin colours. Blood and raw meat are dark crimson and oxblood, not bright red or pink. Bone is dull off-white, shaded grey.\n\nLAYOUT\n- The image is 1536 x 1024 pixels: a grid of 2 rows of 4 equal cells, cells 1 to 4 in the top row and 5 to 8 in the bottom row, each read left to right.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.\n- Every piece lies on the same ground line near the bottom of its cell, at the same scale. Each piece is centred in its cell with a wide magenta margin all round. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No blood pool, splash or drops under or around the pieces: just the pieces.\n- No text, labels, numbers, frame borders, speed lines or motion blur.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a184fe-3c09-78f3-bbce-44cade95b4c9",
+    "01a184ff-0cb6-7450-be17-d2dd1aed892b",
+    "01a18500-1205-7ff0-8dfe-320a37c44e0a"
+  ],
+  "sizes": [
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ]
+  ]
+}
