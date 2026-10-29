@@ -27,6 +27,15 @@ least 2 GB of heap. Dependencies come from the project-local Quicklisp in `.ql/`
 (Shirakumo dist, not checked in), and ASDF is limited to this folder because other
 projects under `~/common-lisp/` ship conflicting copies of Trial's dependencies.
 
+A git worktree (`.claude/worktrees/<name>`) has no `.ql/` of its own: symlink the main
+checkout's, `ln -s "$(git rev-parse --git-common-dir)/../.ql" .ql`, and leave the link there
+(`/.ql` in .gitignore covers it; don't delete it when done). Port 7171 is usually the
+main checkout's game, and `tools/hd` and the reload hook talk to it by default, so editing
+`src/` in a worktree reloads the main checkout's copy of that file into that game. Run the
+worktree's own game on a free port (`ss -ltnp` shows the taken ones) and pass the port to
+every command: `HEXMAW_EVAL_PORT=7181 ./run.sh`, `HEXMAW_EVAL_PORT=7181 tools/hd status`.
+`tools/hd '(namestring (root))'` says which checkout a game runs from.
+
 ## Live reload: how changes reach the game
 
 A PostToolUse hook (`.claude/settings.json` → `tools/claude-reload-hook.sh`) reloads
@@ -118,6 +127,24 @@ thread. Check the game's output, then restart `./run.sh`.
 Tick handlers and render methods run 100 times a second. Avoid allocating in them:
 no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`,
 `nv+`, or reuse preallocated ones. SBCL's GC pauses show up as hitches.
+
+Every GL call costs on the CPU: cl-opengl saves and restores the float modes around each
+one, and a uniform set by name is a string-hash lookup. An entity is about 20 calls a
+frame whatever its size, so the level's block boxes aren't entities (they're batched,
+see "Level blocks"), and a uniform that is the same for every entity of a program goes
+under `(when (first-this-frame-p program) ...)` in its render method, set by the first
+entity drawn with it each frame (greybox.lisp; `main`'s render counts `*render-frame*`).
+
+Measuring: vsync is on, so the frame rate stops at the monitor's (120 Hz here, 8.3 ms).
+For the real cost, turn it off for the measurement, `(game (setf (vsync *context*) :off))`
+(back with `:on`), and time the GPU with a GL timer query (`gl:begin-query :time-elapsed`
+inside one `(game ...)`, `gl:end-query` in a later one, divided by the frames between).
+`*show-fps*` shows the frame counter. `sb-sprof` (`(require :sb-sprof)`) profiles the
+`render-loop` thread; in `:cpu` mode it only sees CPU time, so time spent waiting on the
+driver (a foreign `ioctl`, the swap) shows only in `:time` mode. Frozen world (hit-stop),
+12 spots × 2 views, vsync off: seed 38 (no caves, 319 boxes) 3.3 ms a frame, 2.6 of them
+GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching they were
+11.9 and 20.0 ms.
 
 ## Layout and conventions
 
@@ -227,7 +254,10 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   (`hurt-player ... :shove NIL`: the pain flash, no shove or hit-stop) and by creatures
   (`burn`: a flash, no flinch or blood; one standing in it walks to the nearest dry cell,
   `escape-liquid`), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
-  hangs `*glow-height*` over it. The nav grid flags each cell under lava (`nav-hazard`), and
+  hangs `*glow-height*` over it, one per `:glow-spacing` of the pool's length. One nearer
+  than that to a lamp already hung over the same kind is left out and its colour added to
+  that lamp's: an irregular pool is many boxes, every lamp sent costs every lit pixel, and
+  lamps that close lit like one brighter one anyway. The nav grid flags each cell under lava (`nav-hazard`), and
   `*nav-hazards*` says what the nav questions make of it: `:avoid`, the default, keeps out
   (so wandering, retreat, `show-nav` and `check-reachable` stay dry, and a generated level
   always has a dry way); `:wade` lets a path through at `*nav-wade-cost*` (3) times the
@@ -561,7 +591,7 @@ pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and w
 across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
 sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
 `:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`, `:stair`, `:stone`,
-`:beam`, `:sarcophagus`), tinted by
+`:beam`, `:sarcophagus`, `:rock`, `:cave-floor`), tinted by
 `:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
 
 A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
@@ -592,7 +622,12 @@ tools/make_texture.py art/textures/stone-2.png data/textures/dressed-stone --met
 tools/make_texture.py art/textures/beam-2.png data/textures/timber --metres 2
 tools/make_texture.py art/textures/sarcophagus-side-3.png data/textures/sarcophagus-side --metres 2 --strip 0.8 --brightness 0.78
 tools/make_texture.py art/textures/sarcophagus-lid-1.png data/textures/sarcophagus-lid --metres 2 --brightness 0.78
+tools/make_texture.py art/textures/rock-1.png data/textures/rock --metres 4
+tools/make_texture.py art/textures/cave-floor-2.png data/textures/cave-floor --metres 4
 ```
+
+The caves' `rock` is fractured bedrock with no courses, for their walls and ceilings;
+`cave-floor` is bedrock, pebbles and packed earth, under rock sides.
 
 The stair's treads (`stair-tread`) are a straight 4 × 4 grid of slabs on 2 m, so their joints
 fall on the 0.5 m treads the stair pieces have; its risers and flanks are `stair-side`, small
@@ -968,6 +1003,16 @@ places one by its origin and quarter turns (`:spawns NIL` leaves its monsters ou
 before placing it. Blocks turn in quarter turns only. Re-saving a `.glb` and running
 `tools/hd reset` picks up the new version.
 
+While `build-level` runs (`with-block-batches`), placed pieces don't become entities:
+`enter-piece` adds each piece's triangles, turned into world space, to a batch per look
+(surface textures and colour), and `flush-block-batches` enters each batch as one
+`block-piece`, so a level is a handful of draws instead of hundreds. The greybox shader
+works in world space, so the picture is the same; what's lost is Trial's culling of each
+box against the view, which costs the GPU a little (0.4 ms on seed 38, 0.7 on seed 11). A piece
+placed outside `build-level` is entered on its own as before. `*blocks*` (the read
+blocks) outlives reloads, and pieces read before batching existed have no `:mesh`, so
+they are entered on their own too; `(clrhash *blocks*)` and a reset re-read them.
+
 ## Blueprints
 
 A blueprint, `data/blueprints/<name>.txt`, draws a block top-down in text; `tools/blueprint`
@@ -1008,8 +1053,10 @@ than 1 m north to south. Other header lines: `storeys N` (one `plan K` each, K f
 R G B` (defaults `floor`, `wall`, `ceiling`, `stair`; a material named after a surface in
 `*surfaces*` is drawn with its textures, the rest flat in their colour, so a material
 still waiting for its texture stands out), `mirror yes` (also builds
-`<name>-mirror`, flipped west to east, for pieces a turn can't make: `cell`, `tower`) and
-`grid free` (skips the grid checks).
+`<name>-mirror`, flipped west to east, for pieces a turn can't make: `cell`, `tower`),
+`remap FROM TO` (draws material TO wherever the block would draw FROM, built-in pieces
+included: `remap wall rock` makes every `#`, door lintel and plug rock, `remap floor
+cave-floor` the floor slab; not `lava`) and `grid free` (skips the grid checks).
 
 Built-in characters: `#` wall (from the storey's floor to the next storey's, or to the
 ceiling; on storey 0 down through the floor slab), `.` floor, space open (no floor slab: a drop to the storey below), `n e s w` a
@@ -1019,7 +1066,9 @@ border wall it goes just inside the room). Legend actions: `wall [material]`, `f
 storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
 [material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
 `lava [DEPTH SURFACE]` (that cell's floor slab sinks to DEPTH below the floor, 0.4 by
-default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `torch Y`
+default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `pit
+[DEPTH]` (the same sunken slab, 0.4 by default and less than the slab's 0.5, with no
+lava: a dry dip, under a step so it is walked through), `torch Y`
 and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy and necromancer 1 each), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
@@ -1038,8 +1087,19 @@ doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2
 rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
 bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
-up to it). Every piece must let the player walk between all its doorways (drops don't
+up to it); caves `cave` (shelves, a lava pool, a dry pit), `lava-lake` (a causeway across
+lava) and `cave-passage` (a corridor, 2 × 2 cells so it can wind), each with a mirror.
+Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip.
+
+Caves are blueprints like the rest: rock is wall characters inside the rectangle (every
+`#` is rock under `remap wall rock`), shelves are `box 0 H cave-floor`, low rock `box H
+top rock`, dips `pit` or `lava`. So they are blocky (walls step 0.5 m west to east per
+1 m row, nothing slopes), dips go no deeper than the slab (deeper hollows need the floor
+raised round them), their mouths are ordinary doorways on the grid, and each is one room
+for lighting: a passage that doubles back inside one block lights through the rock
+between, so keep a cave one open space. A jagged cave is 70 to 80 boxes, about four
+times a chamber: that many solids for collision, but drawn in the level's batches.
 
 To walk the kit: `tools/hd '(progn (setf *level* :gallery) (reload-scene))'` lays every
 block out in two rows, corridors and stairs in front, rooms behind, each with one doorway

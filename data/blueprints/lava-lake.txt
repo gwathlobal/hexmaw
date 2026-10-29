@@ -1,0 +1,32 @@
+; A cavern flooded with lava, crossed by a winding causeway of rock from the north
+; doorway to the south one, with a branch to the east.
+cells 3 3
+tags room
+weight 1
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ lava
+  o pit
+  v box 3 top rock
+  t torch 2.4
+  i spawn any west
+
+plan 0
+#########nnnnnn#########
+#######t.........t######
+####~~~~.......~~~~#####
+###~~~~~~~....~~~~~~~###
+##~~~~~~~~~....~~~~~~~##
+#~~~~~~~~~....~~~~~~~..e
+#~~~~~~~~~......vii....e
+#~~~~~~~~~~~....~~~~~..e
+##~~~~~~~~~~....~~~~~~##
+###~~~~~~~~....~~~~~~###
+####~~~~~~.....~~~~#####
+######t....oo....#######
+#########ssssss#########

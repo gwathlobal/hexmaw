@@ -60,6 +60,7 @@
       (setf (vx clear) (vx *fog-color*) (vy clear) (vy *fog-color*) (vz clear) (vz *fog-color*) (vw clear) 1.0))))
 
 (defmethod render :before ((main main) target)
+  (incf *render-frame*)
   ;; The nearest lights, for every lit shader this frame (lights.lisp).
   (gather-lights))
 

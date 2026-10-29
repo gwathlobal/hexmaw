@@ -1,0 +1,34 @@
+; A natural cavern: rock shelves, a lava pool, a dry pit and a hanging rock. With
+; every # remapped to rock, the rock inside the rectangle is just more wall.
+cells 3 3
+tags room
+weight 2
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  , box 0 0.4 cave-floor   ; a shelf, one step up
+  : box 0 0.8 cave-floor   ; a higher shelf, reached from ,
+  ~ lava
+  o pit                    ; dry, 0.4 m down
+  v box 3 top rock         ; rock hanging from the 4 m ceiling to 3 m
+  t torch 2.4              ; stood off the nearest rock
+  i spawn any south
+
+plan 0
+#########nnnnnn#########
+######...........,,#####
+####.::..........,,,,###
+###.....~~~......,,,,,##
+##.t...~~~~~o.....v....#
+w....~~~~~~oo....vv....e
+w....~~~~~~.....ii.....e
+w.....~~~~.........::..e
+##.....~~.....::::::..##
+###.........,,::::,,.###
+####t........,,,,......#
+#######............#####
+#########ssssss#########

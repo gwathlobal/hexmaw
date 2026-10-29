@@ -10,6 +10,7 @@
 ;;;;   ceiling 4          inside height of the top storey
 ;;;;   tags room start    for the generator, with WEIGHT
 ;;;;   material dais 0.58 0.47 0.30
+;;;;   remap wall rock    draw what would be wall (border, lintels, plugs) in rock
 ;;;;   legend             one indented line per character: char action[, action...]
 ;;;;     % box 0 0.8 dais
 ;;;;   plan 0             storey 0, north up, to the next blank line
@@ -86,6 +87,8 @@
    (grid-free :initform NIL :accessor grid-free :documentation "True to skip the grid checks.")
    (mirror :initform NIL :accessor mirror :documentation "True to also build <name>-mirror.")
    (materials :initform (copy-tree *materials*) :accessor materials)
+   (remaps :initform () :accessor remaps
+           :documentation "(FROM . TO) material names: the block draws TO wherever it would draw FROM.")
    (legend :initform (make-hash-table) :accessor legend
            :documentation "Character -> (line . actions), for the characters this file defines.")
    (plans :initform () :accessor plans :documentation "One plan per storey, storey 0 first.")))
@@ -153,6 +156,12 @@
             ((string-equal op "lava")
              (list :lava (if args (parse-number (first args) line) *lava-depth*)
                    (if (second args) (parse-number (second args) line) *lava-surface*)))
+            ((string-equal op "pit")
+             (let ((depth (if args (parse-number (first args) line) *lava-depth*)))
+               ;; The pit's floor is what is left of the slab.
+               (unless (< 0 depth *border*)
+                 (fail line NIL "A pit is more than 0 and less than ~a m deep, the floor slab." *border*))
+               (list :pit depth)))
             ((string-equal op "torch")
              (list :torch (if args (parse-number (first args) line) *torch-height*)))
             ((string-equal op "spawn")
@@ -189,6 +198,11 @@
              (setf (materials blueprint)
                    (cons (cons name (mapcar (lambda (w) (parse-number w line)) (rest args)))
                          (remove name (materials blueprint) :key #'first :test #'string=)))))
+          ((string-equal key "remap") (need 2)
+           (let ((from (string-downcase (first args))))
+             (when (string= from "lava") (fail line NIL "lava can't be remapped: its boxes are the liquid."))
+             (setf (remaps blueprint)
+                   (acons from (string-downcase (second args)) (remove from (remaps blueprint) :key #'car :test #'string=)))))
           ((string-equal key "grid") (need 1) (setf (grid-free blueprint) (string-equal (first args) "free")))
           ((string-equal key "mirror") (need 1) (setf (mirror blueprint) (string-equal (first args) "yes")))
           (T (fail line NIL "Unknown keyword ~s." key)))))
@@ -254,6 +268,10 @@
   (case char (#\n :north) (#\e :east) (#\s :south) (#\w :west)))
 
 (defun action (kind actions) (find kind actions :key #'first))
+
+(defun remapped (blueprint material)
+  "The material BLUEPRINT draws in place of MATERIAL."
+  (or (cdr (assoc material (remaps blueprint) :test #'string-equal)) material))
 
 (defun wall-like-p (actions)
   (or (action :wall actions) (action :torch actions)))
@@ -326,6 +344,9 @@
                      (when (and material (not (assoc material (materials blueprint) :test #'string-equal)))
                        (fail (car entry) NIL "No material ~s; add a material line." material)))))
                (legend blueprint))
+      (loop for (from . to) in (remaps blueprint)
+            unless (assoc to (materials blueprint) :test #'string-equal)
+              do (fail NIL NIL "remap ~a ~a: no material ~s; add a material line." from to to))
       (dolist (plan plans)
         (loop for row across (rows plan) for r from 0 for line from (line plan)
               do (loop for char across row for c from 0
@@ -423,7 +444,8 @@
          (w (block-width blueprint)) (d (block-depth blueprint)))
     (multiple-value-bind (nr nc) (plan-size blueprint)
       (labels ((box (prefix material solid x0 y0 z0 x1 y1 z1)
-                 (let ((name (format NIL "~a~a_~d" prefix material (incf (gethash (list prefix material) counts 0)))))
+                 (let* ((material (remapped blueprint material))
+                        (name (format NIL "~a~a_~d" prefix material (incf (gethash (list prefix material) counts 0)))))
                    (push (list name material solid x0 y0 z0 x1 y1 z1) boxes)))
                (cell-centre (r c)
                  (multiple-value-bind (x0 x1) (col-span blueprint c)
@@ -454,9 +476,10 @@
                          ;; and no two top faces share a plane.
                          (cap (if (slab-cell-p blueprint (1+ k) r c) (- top *border*) top)))
                     (when (slab-cell-p blueprint k r c)
-                      ;; Under lava the slab is the pit's floor, and the lava fills it.
-                      (let ((lava (action :lava actions)))
-                        (span r c (- base *border*) (if lava (- base (second lava)) base) "floor" T)
+                      ;; In a pit the slab is the pit's floor, and lava may fill it.
+                      (let* ((lava (action :lava actions))
+                             (pit (or lava (action :pit actions))))
+                        (span r c (- base *border*) (if pit (- base (second pit)) base) "floor" T)
                         (when lava
                           (span r c (- base (second lava)) (- base (third lava)) "lava" :liquid))))
                     (dolist (a actions)
@@ -566,7 +589,7 @@
                    (n (incf (gethash stem seen 0)))
                    (suffix (if (= n 1) stem (format NIL "~a_~d" stem n))))
               (push (list (format NIL "connector_~a" suffix) (getf door :position) NIL) empties)
-              (push (list* (format NIL "plug_~a" suffix) "wall" T (getf door :plug)) boxes))))
+              (push (list* (format NIL "plug_~a" suffix) (remapped blueprint "wall") T (getf door :plug)) boxes))))
         (values (nreverse boxes) (nreverse empties)
                 (let ((extras (make-hash-table :test 'equal)))
                   (setf (gethash "tags" extras) (coerce (tags blueprint) 'vector)
@@ -588,7 +611,7 @@
 
 (defun mirrored (blueprint)
   (let ((m (make-instance 'blueprint :name (format NIL "~a-mirror" (name blueprint)) :path (path blueprint))))
-    (dolist (slot '(cells storeys ceiling-height tags weight grid-free materials))
+    (dolist (slot '(cells storeys ceiling-height tags weight grid-free materials remaps))
       (setf (slot-value m slot) (slot-value blueprint slot)))
     (maphash (lambda (char entry)
                (setf (gethash (mirror-char char) (legend m))

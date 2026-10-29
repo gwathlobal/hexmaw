@@ -111,9 +111,10 @@ side; negative du mirrors."
 (defvar *light-probe* (vec3) "Scratch: the point a sprite's light is decided at.")
 
 (defmethod render :before ((sprite billboard) (program shader-program))
-  (set-fog-uniforms program)
-  (setf (uniform program "light_snap") (float *sprite-light-snap* 0f0))
-  (setf (uniform program "light_bands") (float *sprite-light-bands* 0f0))
+  (when (first-this-frame-p program)
+    (set-fog-uniforms program)
+    (setf (uniform program "light_snap") (float *sprite-light-snap* 0f0))
+    (setf (uniform program "light_bands") (float *sprite-light-bands* 0f0)))
   (setf (uniform program "frame_uv") (frame-uv sprite))
   (setf (uniform program "tint") (tint sprite))
   ;; Rooms decide the light at the middle of the body, so the whole sprite is lit alike.

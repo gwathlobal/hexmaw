@@ -45,6 +45,10 @@
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 (define-asset (hexmaw sarcophagus-lid) image #p"textures/sarcophagus-lid.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw rock) image #p"textures/rock.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw cave-floor) image #p"textures/cave-floor.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 
 ;; A surface is the textures of a box's sides, its top and its underside, as floors and
 ;; ceilings are flats in Doom. A block's material picks the surface of its name, so
@@ -60,7 +64,10 @@
     (:stone dressed-stone dressed-stone dressed-stone)
     (:beam timber timber timber)
     ;; Its side is a 0.8 m strip on a 1 m texture: a box 0.8 m tall standing on a floor.
-    (:sarcophagus sarcophagus-side sarcophagus-lid sarcophagus-side)))
+    (:sarcophagus sarcophagus-side sarcophagus-lid sarcophagus-side)
+    ;; Caves: natural rock, and a floor of rubble and packed earth.
+    (:rock rock rock rock)
+    (:cave-floor rock cave-floor rock)))
 
 (defun surface-textures (name)
   "The textures of surface NAME (a keyword, or a material's name) as a list (SIDE TOP
@@ -230,6 +237,17 @@ vec3 fog_lit(vec3 color, vec3 glow, float dist){
         for unit in '(:texture0 :texture1 :texture2)
         do (bind texture unit)))
 
+;; A program keeps its uniforms between draws, so what is the same for every entity
+;; drawn with it is set once a frame, by the first: every GL call costs.
+(defvar *render-frame* 0 "Frames drawn so far; MAIN's render counts them.")
+(defvar *programs-this-frame* (make-hash-table :test 'eq)
+  "Program -> the last *RENDER-FRAME* it was set up in.")
+
+(defun first-this-frame-p (program)
+  "True the first time it is asked about PROGRAM in a frame."
+  (unless (eql (gethash program *programs-this-frame*) *render-frame*)
+    (setf (gethash program *programs-this-frame*) *render-frame*)))
+
 (defun set-fog-uniforms (program)
   "Set the fog uniforms FOG_LIT reads (lit-entity), shared by every shader that fogs."
   (setf (uniform program "fog_color") *fog-color*)
@@ -239,15 +257,16 @@ vec3 fog_lit(vec3 color, vec3 glow, float dist){
   (setf (uniform program "lamp_fog_end") (float *lamp-fog-end* 0f0)))
 
 (defmethod render :before ((box greybox) (program shader-program))
-  (set-fog-uniforms program)
-  (setf (uniform program "light_snap") (float *wall-light-snap* 0f0))
-  (setf (uniform program "light_bands") (float *wall-light-bands* 0f0))
-  (setf (uniform program "grid_strength") (float *grid-strength* 0f0))
-  (setf (uniform program "textured") (if (face-textures box) 1 0))
-  (setf (uniform program "side_texture") 0)
-  (setf (uniform program "top_texture") 1)
-  (setf (uniform program "bottom_texture") 2)
-  (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0)))
+  (when (first-this-frame-p program)
+    (set-fog-uniforms program)
+    (setf (uniform program "light_snap") (float *wall-light-snap* 0f0))
+    (setf (uniform program "light_bands") (float *wall-light-bands* 0f0))
+    (setf (uniform program "grid_strength") (float *grid-strength* 0f0))
+    (setf (uniform program "side_texture") 0)
+    (setf (uniform program "top_texture") 1)
+    (setf (uniform program "bottom_texture") 2)
+    (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0)))
+  (setf (uniform program "textured") (if (face-textures box) 1 0)))
 
 (define-class-shader (greybox :fragment-shader)
   "in vec3 v_world_position;

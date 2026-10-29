@@ -142,6 +142,7 @@
                             for data in (gltf-mesh-data mesh)
                             for bounds = (primitive-bounds primitive transform)
                             for piece = (list :name name
+                                              :mesh data
                                               :vertex-array (make-vertex-array data NIL)
                                               :color (primitive-color primitive)
                                               :material (primitive-material-name primitive)
@@ -260,18 +261,93 @@ its origin and its quarter turns."
   "Every doorway of the blocks placed in the level, plugged or not. BUILD-LEVEL empties it,
 and CHECK-REACHABLE walks to each.")
 
+;;; Batching. Every entity costs about 20 GL calls a frame whatever its size, and a
+;;; jagged block is dozens of boxes, so while a level is built (WITH-BLOCK-BATCHES) the
+;;; pieces don't become entities: their triangles are gathered in world space, one batch
+;;; per look (textures and colour), and each batch is drawn as one BLOCK-PIECE. The
+;;; greybox shader works in world space, so nothing shows the difference.
+
+(defvar *block-batches* NIL
+  "While a level is built, the batches ENTER-PIECE adds to: (textures colour) -> a list
+of (vertex-data faces), newest first. NIL enters each piece on its own.")
+
+(defmacro with-block-batches ((container) &body body)
+  "Run BODY with the block pieces it places batched, then enter the batches into CONTAINER."
+  `(let ((*block-batches* (make-hash-table :test 'equal)))
+     (multiple-value-prog1 (progn ,@body)
+       (flush-block-batches ,container))))
+
+(defun batch-piece (piece textures color world rotation)
+  "Add PIECE's triangles, placed by WORLD and turned by ROTATION, to their batch."
+  (let* ((tf (getf piece :transform))
+         (mesh (getf piece :mesh))
+         (placed (transform (funcall world (tlocation tf)) (vcopy (tscaling tf)) (q* rotation (trotation tf))))
+         (attributes (vertex-attributes mesh))
+         (stride (vertex-attribute-stride mesh))
+         (location (vertex-attribute-offset 'location mesh))
+         (normal (and (member 'normal attributes) (vertex-attribute-offset 'normal mesh)))
+         (data (copy-seq (vertex-data mesh)))
+         (point (vec3)))
+    (loop for i from 0 below (length data) by stride
+          do (flet ((turn (offset place)
+                      (setf (vx point) (aref data (+ i offset))
+                            (vy point) (aref data (+ i offset 1))
+                            (vz point) (aref data (+ i offset 2)))
+                      (let ((p (if place (t*p placed point) (q* (trotation placed) point))))
+                        (setf (aref data (+ i offset)) (vx p)
+                              (aref data (+ i offset 1)) (vy p)
+                              (aref data (+ i offset 2)) (vz p)))))
+               (turn location T)
+               (when normal (turn normal NIL))))
+    (push (list data (faces mesh) attributes)
+          (gethash (list textures (list (vx color) (vy color) (vz color) (vw color))) *block-batches*))))
+
+(defun flush-block-batches (container)
+  "Enter each batch of *BLOCK-BATCHES* into CONTAINER as one BLOCK-PIECE, and empty it."
+  (maphash (lambda (key parts)
+             (destructuring-bind (textures (r g b a)) key
+               (let* ((parts (reverse parts))
+                      (attributes (third (first parts)))
+                      (stride (loop for a in attributes sum (vertex-attribute-size a)))
+                      (data (make-array (reduce #'+ parts :key (lambda (p) (length (first p))))
+                                        :element-type 'single-float))
+                      (faces (make-array (reduce #'+ parts :key (lambda (p) (length (second p))))
+                                         :element-type '(unsigned-byte 32)))
+                      (d 0) (f 0))
+                 (loop for (part-data part-faces) in parts
+                       for base = (floor d stride)
+                       do (replace data part-data :start1 d)
+                          (loop for index across part-faces
+                                do (setf (aref faces f) (+ base index)) (incf f))
+                          (incf d (length part-data)))
+                 (enter (make-instance 'block-piece
+                                       :vertex-array (make-vertex-array
+                                                      (make-instance 'mesh-data :vertex-data data :faces faces
+                                                                                :vertex-form :triangles
+                                                                                :vertex-attributes attributes)
+                                                      NIL)
+                                       :color (vec4 r g b a)
+                                       :face-textures textures)
+                        container))))
+           *block-batches*)
+  (clrhash *block-batches*))
+
 (defun enter-piece (piece container world rotation)
   "Enter PIECE of a block, its points placed by WORLD and turned by ROTATION, into
-CONTAINER, and add its solid to *SOLIDS*."
-  (let ((tf (getf piece :transform))
-        (textures (surface-textures (getf piece :material))))
-    (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
-                                       :color (if textures (vec4 1 1 1 1) (getf piece :color))
-                                       :face-textures textures
-                                       :location (funcall world (tlocation tf))
-                                       :orientation (q* rotation (trotation tf))
-                                       :scaling (vcopy (tscaling tf)))
-           container)
+CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*."
+  (let* ((tf (getf piece :transform))
+         (textures (surface-textures (getf piece :material)))
+         (color (if textures (vec4 1 1 1 1) (getf piece :color))))
+    ;; A block read before batching existed (*BLOCKS* outlives reloads) has no :MESH.
+    (if (and *block-batches* (getf piece :mesh))
+        (batch-piece piece textures color world rotation)
+        (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
+                                           :color color
+                                           :face-textures textures
+                                           :location (funcall world (tlocation tf))
+                                           :orientation (q* rotation (trotation tf))
+                                           :scaling (vcopy (tscaling tf)))
+               container))
     (when (getf piece :solid)
       (destructuring-bind (lo hi) (getf piece :bounds)
         (let* ((a (funcall world lo)) (b (funcall world hi))
