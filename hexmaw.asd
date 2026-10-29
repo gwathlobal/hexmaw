@@ -25,6 +25,7 @@
                (:file "level")
                (:file "kit")
                (:file "generate")
+               (:file "save")
                (:file "main"))
   :depends-on (:hexmaw-blueprints
                :trial
