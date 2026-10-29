@@ -23,6 +23,10 @@ the standing one, and give its height.
 --blank N empties frame N of every view after scaling, so slice_frames skips it: for a
 pose drawn only to set the scale. The acolyte's pain sheets open with a copy of the
 standing pose, which sets the scale with --frame 1 and is dropped with --blank 1.
+
+--grid reads each sheet as a grid of frames, cyan lines both ways, row by row, and lays
+it out as one row first: for poses too wide to fit a row of five (the harpy's spread
+wings come as a 2 x 2 grid).
 """
 
 import argparse
@@ -63,6 +67,28 @@ def cells(img):
     return [(a[1], b[0]) for a, b in zip(edges, edges[1:]) if b[0] - a[1] > 8]
 
 
+def cyan_rows(img):
+    """Y ranges of the cyan separator rows."""
+    return cyan_columns(img.transpose(Image.TRANSPOSE))
+
+
+def ungrid(img):
+    """A grid of frames as one row: its rows' cells side by side, cyan lines between."""
+    edges = [(0, 0)] + cyan_rows(img) + [(img.height, img.height)]
+    bands = [img.crop((0, a[1], img.width, b[0])) for a, b in zip(edges, edges[1:]) if b[0] - a[1] > 8]
+    frames = [band.crop((x0, 0, x1, band.height)) for band in bands for x0, x1 in cells(band)]
+    height = max(f.height for f in frames)
+    out = Image.new("RGB", (sum(f.width for f in frames) + LINE * (len(frames) - 1), height), MAGENTA)
+    x = 0
+    for k, frame in enumerate(frames):
+        if k:
+            out.paste(CYAN, (x, 0, x + LINE, height))
+            x += LINE
+        out.paste(frame, (x, 0))
+        x += frame.width
+    return out
+
+
 def sprite_height(img, frame=None):
     """Height of the tallest frame, or of FRAME (0-based) alone."""
     spans = cells(img) if frame is None else [cells(img)[frame]]
@@ -81,11 +107,14 @@ def main():
     ap.add_argument("--frame", type=int, help="1-based frame to scale by, at --height, instead of the tallest")
     ap.add_argument("--mirror", type=int, nargs="*", default=[], help="1-based inputs to mirror frame by frame")
     ap.add_argument("--blank", type=int, nargs="*", default=[], help="1-based frames to empty in every view")
+    ap.add_argument("--grid", action="store_true", help="each input is a grid of frames, read row by row")
     args = ap.parse_args()
 
     rows = []
     for n, path in enumerate(args.inputs, 1):
         img = Image.open(path).convert("RGB")
+        if args.grid:
+            img = ungrid(img)
         if n in args.mirror:
             for x0, x1 in cells(img):
                 img.paste(img.crop((x0, 0, x1, img.height)).transpose(Image.FLIP_LEFT_RIGHT), (x0, 0))

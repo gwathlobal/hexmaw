@@ -15,7 +15,9 @@
 ;;;    when the block is placed, and SEAL-CONNECTOR puts them in to shut it.
 ;;;  - Empties named "spawn_<monster>" place a monster facing the empty's -Z, and empties
 ;;;    named "torch_<anything>" a torch whose flame stands there (ADD-TORCH).
-;;;  - A material's base colour is the piece's colour (no textures yet).
+;;;  - A material named after a surface in *SURFACES* (wall, floor, ceiling, ...) draws
+;;;    that surface's textures; any other material is flat in its base colour. The
+;;;    textures come from the game, laid on in world space; a .glb's own aren't read.
 ;;;  - The scene's extras may give "tags" and a "weight", for the generator.
 ;;;  - Blender's duplicate suffix (".001") is ignored in every name.
 ;;;
@@ -96,6 +98,10 @@
         (vec4 (aref c 0) (aref c 1) (aref c 2) 1)
         (vec4 0.6 0.6 0.6 1))))
 
+(defun primitive-material-name (primitive)
+  (let ((material (org.shirakumo.fraf.gltf:material primitive)))
+    (and material (org.shirakumo.fraf.gltf:name material))))
+
 (defun primitive-bounds (primitive transform)
   "(MIN MAX) of PRIMITIVE's positions after TRANSFORM, as vectors."
   (let* ((positions (gethash :position (org.shirakumo.fraf.gltf:attributes primitive)))
@@ -137,6 +143,7 @@
                             for piece = (list :name name
                                               :vertex-array (make-vertex-array data NIL)
                                               :color (primitive-color primitive)
+                                              :material (primitive-material-name primitive)
                                               :transform transform
                                               :bounds bounds
                                               :solid (not (prefixp "deco_" name)))
@@ -251,9 +258,11 @@ and CHECK-REACHABLE walks to each.")
 (defun enter-piece (piece container world rotation)
   "Enter PIECE of a block, its points placed by WORLD and turned by ROTATION, into
 CONTAINER, and add its solid to *SOLIDS*."
-  (let ((tf (getf piece :transform)))
+  (let ((tf (getf piece :transform))
+        (textures (surface-textures (getf piece :material))))
     (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
-                                       :color (getf piece :color)
+                                       :color (if textures (vec4 1 1 1 1) (getf piece :color))
+                                       :face-textures textures
                                        :location (funcall world (tlocation tf))
                                        :orientation (q* rotation (trotation tf))
                                        :scaling (vcopy (tscaling tf)))
@@ -344,7 +353,7 @@ portal already fills it."
       (setf (aref *portals* at) (aref *portals* (1- (fill-pointer *portals*))))
       (decf (fill-pointer *portals*)))))
 
-(defun seal-connector (container connector &key (color *wall-color*))
+(defun seal-connector (container connector &key (surface :wall))
   "Shut CONNECTOR's doorway with the block's plug, and take away its portal so no light
 goes through. A block without a plug gets a wall outside it instead, which sticks into
 the next grid cell."
@@ -357,10 +366,10 @@ the next grid cell."
                (x (vx position)) (y (vy position)) (z (vz position))
                (half (/ width 2)) (top (+ y height)) (thick 0.5))
           (ecase (connector-direction connector)
-            (:north (add-box container (- x half) y (- z thick) (+ x half) top z :color color))
-            (:south (add-box container (- x half) y z (+ x half) top (+ z thick) :color color))
-            (:west (add-box container (- x thick) y (- z half) x top (+ z half) :color color))
-            (:east (add-box container x y (- z half) (+ x thick) top (+ z half) :color color)))))))
+            (:north (add-box container (- x half) y (- z thick) (+ x half) top z :surface surface))
+            (:south (add-box container (- x half) y z (+ x half) top (+ z thick) :surface surface))
+            (:west (add-box container (- x thick) y (- z half) x top (+ z half) :surface surface))
+            (:east (add-box container x y (- z half) (+ x thick) top (+ z half) :surface surface)))))))
 
 (defun attach-block (name container connector &key at facing)
   "Place block NAME so that its connector named CONNECTOR sits at AT, facing FACING:

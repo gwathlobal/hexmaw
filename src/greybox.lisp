@@ -1,9 +1,9 @@
 (in-package #:hexmaw)
 
-;;; Untextured level geometry. Faces are shaded by which axis they face
-;;; (Doom/Quake style), lit by the lights in lights.lisp, a 1 m grid shows scale,
-;;; and distance fog hides the far end. Every parameter here is a DEFPARAMETER so
-;;; it can be tuned live.
+;;; Level geometry. Faces are shaded by which axis they face (Doom/Quake style), lit by
+;;; the lights in lights.lisp, and distance fog hides the far end. A box with a surface
+;;; is textured; one without is flat colour with a 1 m grid to show scale. Every
+;;; parameter here is a DEFPARAMETER so it can be tuned live.
 
 ;; The project's assets (data/). Defined here, in the first file that defines an asset.
 (define-pool hexmaw :path #p"../data/")
@@ -12,6 +12,45 @@
 (defparameter *fog-start* 3.0)
 (defparameter *fog-end* 12.0)
 (defparameter *grid-strength* 0.25)
+
+;;; Level textures: tiling pixel art made by tools/make_texture.py, laid on the faces in
+;;; world space at *TEXELS-PER-METRE*, the monsters' density, so a 256 px texture covers
+;;; 4 m and walls line up across boxes. Faces are axis-aligned, so no UVs are needed.
+
+(defparameter *texels-per-metre* 64.0)
+
+(define-asset (hexmaw wall-stone) image #p"textures/wall-stone.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw floor-flags) image #p"textures/floor-flags.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw ceiling-stone) image #p"textures/ceiling-stone.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw pillar-stone) image #p"textures/pillar-stone.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw planks) image #p"textures/planks.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+
+;; A surface is the textures of a box's sides, its top and its underside, as floors and
+;; ceilings are flats in Doom. A block's material picks the surface of its name, so
+;; :FLOOR and :CEILING are the same slab under the names blocks use.
+(defparameter *surfaces*
+  '((:wall wall-stone wall-stone wall-stone)
+    (:floor wall-stone floor-flags ceiling-stone)
+    (:ceiling wall-stone floor-flags ceiling-stone)
+    (:pillar pillar-stone pillar-stone pillar-stone)
+    (:platform planks planks planks)
+    (:dais pillar-stone floor-flags pillar-stone)
+    ;; The blueprints' stairs, sarcophagi and beams (data/blueprints/).
+    (:stair planks planks planks)
+    (:stone pillar-stone pillar-stone pillar-stone)
+    (:beam planks planks planks)))
+
+(defun surface-textures (name)
+  "The textures of surface NAME (a keyword, or a material's name) as a list (SIDE TOP
+BOTTOM), or NIL if there is no such surface."
+  (let ((entry (assoc name *surfaces* :test #'string-equal)))
+    (when entry
+      (mapcar (lambda (asset) (// 'hexmaw asset)) (rest entry)))))
 
 ;;; Lighting shared by every lit shader (the level, billboards): LIGHT_AT gives the
 ;;; light falling on a world position, ambient plus the lights in the LAMP-BLOCK uniform
@@ -141,7 +180,18 @@ vec3 band_light(vec3 light){
 }")
 
 (define-shader-entity greybox (lit-entity vertex-entity colored-entity transformed-entity)
-  ((vertex-array :initform (// 'trial 'unit-cube))))
+  ((vertex-array :initform (// 'trial 'unit-cube))
+   (face-textures :initform NIL :initarg :face-textures :accessor face-textures
+                  :documentation "(SIDE TOP BOTTOM) textures from SURFACE-TEXTURES, or NIL for flat colour.")))
+
+(defmethod stage :after ((box greybox) (area staging-area))
+  (dolist (texture (face-textures box))
+    (stage texture area)))
+
+(defmethod bind-textures :after ((box greybox))
+  (loop for texture in (face-textures box)
+        for unit in '(:texture0 :texture1 :texture2)
+        do (bind texture unit)))
 
 (defun set-fog-uniforms (program)
   "Set fog_color, fog_start and fog_end, shared by every shader that fogs."
@@ -153,7 +203,12 @@ vec3 band_light(vec3 light){
   (set-fog-uniforms program)
   (setf (uniform program "light_snap") (float *wall-light-snap* 0f0))
   (setf (uniform program "light_bands") (float *wall-light-bands* 0f0))
-  (setf (uniform program "grid_strength") (float *grid-strength* 0f0)))
+  (setf (uniform program "grid_strength") (float *grid-strength* 0f0))
+  (setf (uniform program "textured") (if (face-textures box) 1 0))
+  (setf (uniform program "side_texture") 0)
+  (setf (uniform program "top_texture") 1)
+  (setf (uniform program "bottom_texture") 2)
+  (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0)))
 
 (define-class-shader (greybox :fragment-shader)
   "in vec3 v_world_position;
@@ -162,7 +217,19 @@ uniform vec3 fog_color;
 uniform float fog_start;
 uniform float fog_end;
 uniform float grid_strength;
+uniform int textured;
+uniform sampler2D side_texture;
+uniform sampler2D top_texture;
+uniform sampler2D bottom_texture;
+uniform float texels_per_metre;
 out vec4 color;
+
+// TEX laid flat on an axis-aligned face with normal N (its absolute value) at world
+// position P: X faces by (z, y), Z faces by (x, y), floors and ceilings by (x, z).
+vec3 face_texel(sampler2D tex, vec3 p, vec3 n){
+  vec2 st = (n.y > 0.5) ? p.xz : (n.x > n.z) ? p.zy : p.xy;
+  return texture(tex, st * texels_per_metre / vec2(textureSize(tex, 0))).rgb;
+}
 
 void main(){
   maybe_call_next_method();
@@ -177,6 +244,12 @@ void main(){
   vec3 tangent = step(n, vec3(0.5));
   float d = min(min(mix(1.0, g.x, tangent.x), mix(1.0, g.y, tangent.y)), mix(1.0, g.z, tangent.z));
   float line = 1.0 - smoothstep(0.0, 0.02, d);
+  if(textured != 0){
+    color.rgb *= (n.y <= 0.5) ? face_texel(side_texture, v_world_position, n)
+               : (face.y > 0.0) ? face_texel(top_texture, v_world_position, n)
+               : face_texel(bottom_texture, v_world_position, n);
+    line = 0.0;
+  }
   color.rgb *= shade * (1.0 - grid_strength * line) * band_light(light_at(snap_position(v_world_position), face, 1.0, v_world_position + face * 0.05));
   float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   color.rgb = mix(color.rgb, fog_color, fog);
@@ -208,12 +281,16 @@ its centre line on X and Z and HEIGHT tall, or NIL. Touching faces don't count."
         when (box-overlaps-p s x y z half-width height)
           return s))
 
-(defun add-box (container x0 y0 z0 x1 y1 z1 &key (color (vec 0.6 0.6 0.6)) (solid T))
-  "Add a box spanning the two corners, in metres, to CONTAINER."
-  (let ((box (make-solid x0 y0 z0 x1 y1 z1)))
+(defun add-box (container x0 y0 z0 x1 y1 z1
+                &key surface (color (if surface (vec 1 1 1) (vec 0.6 0.6 0.6))) (solid T))
+  "Add a box spanning the two corners, in metres, to CONTAINER. SURFACE (a name in
+*SURFACES*) textures it, tinted by COLOR; without one it is flat COLOR."
+  (let ((box (make-solid x0 y0 z0 x1 y1 z1))
+        (textures (and surface (or (surface-textures surface) (error "No surface called ~s." surface)))))
     (when solid (vector-push-extend box *solids*))
     (enter (make-instance 'greybox
                           :color (vec4 (vx color) (vy color) (vz color) 1)
+                          :face-textures textures
                           :location (vec (/ (+ (aref box 0) (aref box 3)) 2)
                                          (/ (+ (aref box 1) (aref box 4)) 2)
                                          (/ (+ (aref box 2) (aref box 5)) 2))

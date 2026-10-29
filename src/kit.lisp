@@ -48,7 +48,7 @@
     ;; Ground between and under the blocks, just below their floors so it doesn't
     ;; fight with them.
     (add-box container (- west *gallery-gap*) -0.55 (- (car (last *gallery-rows*)) 30)
-             east -0.05 12 :color *floor-color*)))
+             east -0.05 12 :surface :floor)))
 
 (defun kit-goto (name)
   "Stand the player outside gallery block NAME's open doorway, facing in. Run it in GAME."

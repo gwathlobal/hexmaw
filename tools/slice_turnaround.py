@@ -4,7 +4,7 @@
 The sheet is N views side by side on a magenta background, separated by cyan
 vertical lines (front, 3/4 front, side, 3/4 back, back). This keys out the
 background, cuts the views with a shared crop so the feet and centre line stay
-put when the game switches views, downscales with nearest-neighbour, and writes:
+put when the game switches views, downscales, and writes:
 
   <out>.png   atlas, one cell per view, left to right, 2 px transparent gaps
   <out>.lisp  index the game reads: cell size, gap, view names
@@ -12,6 +12,11 @@ put when the game switches views, downscales with nearest-neighbour, and writes:
 The game expects the three turned views (front-quarter, side, back-quarter) to
 face image-left, and mirrors them for the other side. Generated sheets are not
 always consistent; check each view and flip the odd ones out with --mirror.
+
+Views are downscaled with nearest-neighbour unless --filter box, which averages the
+source pixels under each sprite pixel: generated sheets are noisy below their pixel
+grid, and picking one source pixel turns that into speckle. --colors N then maps the
+whole atlas onto one N-colour palette taken from its own pixels.
 
   tools/slice_turnaround.py "Pixel Demon Character Turnaround.png" data/sprites/imp/turnaround \\
       --height 96 --mirror back-quarter
@@ -21,6 +26,8 @@ import argparse
 from pathlib import Path
 
 from PIL import Image
+
+from pixelart import box_downscale, reduce_colors
 
 VIEWS = ["front", "front-quarter", "side", "back-quarter", "back"]
 GAP = 2
@@ -71,6 +78,9 @@ def main():
     ap.add_argument("--margin", type=int, default=4, help="source pixels to skip next to each separator")
     ap.add_argument("--mirror", nargs="*", default=[], choices=VIEWS, metavar="VIEW",
                     help="views to flip so they face image-left")
+    ap.add_argument("--filter", choices=("nearest", "box"), default="nearest",
+                    help="downscale by picking one source pixel per sprite pixel, or by averaging them")
+    ap.add_argument("--colors", type=int, help="reduce the atlas to a palette of this many colours")
     args = ap.parse_args()
 
     src = Image.open(args.sheet).convert("RGBA")
@@ -102,10 +112,15 @@ def main():
     for i, (l, r) in enumerate(ranges):
         centre = l + (r - l) // 2
         view = src.crop((centre - half, top, centre + half, bottom))
-        view = view.resize((cell_w, cell_h), Image.NEAREST)
+        if args.filter == "box":
+            view = box_downscale(view, (cell_w, cell_h))
+        else:
+            view = view.resize((cell_w, cell_h), Image.NEAREST)
         if VIEWS[i] in args.mirror:
             view = view.transpose(Image.FLIP_LEFT_RIGHT)
         atlas.paste(view, (i * (cell_w + GAP), 0))
+    if args.colors:
+        atlas = reduce_colors(atlas, args.colors)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

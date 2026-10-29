@@ -122,9 +122,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 ## Layout and conventions
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
-- `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`),
-  and `lit-entity`, the shader mixin whose `light_at` lights the level and billboards from
-  the `lamp-block` uniform buffer.
+- `src/greybox.lisp`: level geometry (`greybox` entity, fog, `add-box`, `*solids*`), its
+  textures and surfaces (see "Level textures" below), and `lit-entity`, the shader mixin
+  whose `light_at` lights the level and billboards from the `lamp-block` uniform buffer.
 - `src/lights.lisp`: point lights (`lamp`s in `*lamps*`, which `build-level` empties).
   `add-torch x y z` places a `torch` whose flame stands on y, `*torch-stand-off*` out from
   the nearest wall within `*torch-wall-reach*` (`wall-near`), with a flickering lamp in the
@@ -189,6 +189,10 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   The block strip has only the covered views. The sword isn't stopped. `turn-speed`
   (radians per second, NIL for instant) is what lets the player get behind it: `turn-to`
   limits every facing change, in walks, idle hunting and an attack's wind-up.
+- `src/flyer.lisp`: `flyer`, a creature that keeps to the air, and the `harpy`. See "Flyers"
+  under "Creature movement" below. Creature code reaches it through generics with a
+  walker's default: `keep-height` (settle, or hover, dive and fall), `move-lift`,
+  `ranged-p` (hunt from range) and `attack-step` (the blow, or the dive).
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
 - `src/blueprint.lisp`: builds blocks from text blueprints (`data/blueprints/*.txt`), in its own
@@ -290,8 +294,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
   torches light through its walls. Its corridor ends in the `shrine` block. A doorway
-  needs floor through its wall too, or the nav grid (and so creatures and
-  `check-reachable`) can't cross it.
+  also needs floor under its wall's thickness: without it the nav grid has no cell there,
+  and no creature can path through it (the player just steps over the gap), and
+  `check-reachable` warns.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
@@ -357,6 +362,42 @@ right of its centre line, where the casting hand is. Closer than `keep-away` it 
 `*retreat-step*` metres along a straight walk the nav grid allows (`retreat`), and casts
 point-blank when cornered; out of range or sight it closes in as a melee creature does. At zero health the player's run starts over (`reset-run`); there's no death screen yet.
 
+### Flyers
+
+A `flyer` (flyer.lisp; the harpy) plans on the same nav grid from the floor under it
+(`ground-point`, which every planner uses), but hovers `hover-height` (2 m) above that floor,
+bobbing, and lower where the ceiling is: `nav-room-around` gives the lowest ceiling within
+`*hover-look-ahead*` (1.25 m), so it ducks under a lintel before reaching it. Its `step-height`
+(1.3 m for the harpy) only decides where it paths; moving, it ignores no ledges
+(`move-lift` 0.05), since low solids pass under it. In a 4 m hall the hovering harpy's talons
+are above the player's 1.8 m, out of the sword's reach (`swing-target` needs the body level
+with the player's); in the 3 m corridor it flies at 1.1 m, in reach. Bolts reach it anywhere.
+
+It hunts as a caster does (`ranged-p`, `hunt-from-range`: back off within `keep-away`, attack
+within `attack-range` with a clear line), but its attack is a dive (`attack-step`): it hangs
+and rises `dive-rise` for `dive-windup` (0.7 s, the warning), then flies a straight line at
+`dive-speed` toward the player's head (`strike-height` above the feet) as it was when the dive
+left, `dive-overshoot` beyond, skimming the floor. The talons strike once, `attack-damage`, if
+the player comes within `attack-reach`; a sidestep makes it miss. It then stands
+`attack-pause`, climbing back at `climb-speed`, low enough for a swing. A hit during the dive
+itself downs it (`downed`): it falls, lies on the floor for `*downed-time*` and climbs back
+before it hunts again. Dead, it falls under `*flyer-gravity*`.
+
+It flaps (`flap-animation`, four frames per view) one beat per bob, the bottom of the stroke
+where the bob is highest, and shows `dive-animation`'s wind-up frame, then its dive frame,
+through the attack (`show-own-pose`, the hook `update-creature-look` asks after the flinch,
+block and attack). Downed, it plays `downed-animation`, front view only like a death
+(`show-front-frame`), timed by `downed-frame`: tumbling while it falls, the crash for
+`*crash-time*` on landing, sprawled, stirring (head up) from `*stir-time*` before it gets up,
+pushing up on its wings from `*push-time*`, and launching for `*launch-time*` as it leaves the
+floor. To look at one, under hit-stop set `(downed harpy)` and `(landed harpy)` (or
+`(launching harpy)`) on a harpy at the floor. It dies the same way, through the same hook
+(`update-creature-look` asks `show-own-pose` before its collapse): tumbling as it falls, the
+crash as it lands, then sprawled, head down, as the corpse (`dead-frame`, `landed-dead`). Hit
+in the air it plays its `hurt-animation` like any creature (jolt, then stagger); hit while it
+lies downed or launches it keeps its knockdown frame, squashed (`flinch-p`, which
+`creature-hurting-p` asks).
+
 `tools/hd '(game (show-nav))'` lays green tiles on the cells within 8 m of the player that
 an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
 `(hide-nav)` or a reset clears them. `tools/hd status` shows each creature's `brain`
@@ -387,6 +428,44 @@ every reference it needs, so a follow-up pose attaches the earlier result as a `
 Keep prompts worth repeating as files under `art/prompts/`, and `--dry-run` a new command
 line to see what will be sent.
 
+## Level textures
+
+Level faces are textured in world space: every face is axis-aligned, so the greybox shader
+lays a texture flat on it by the two world axes in its plane (walls by x or z and y, floors
+and ceilings by x and z), at `*texels-per-metre*` (64, the monsters' density). A texture's
+pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and walls line up
+across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
+sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
+`:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`, and for the
+blueprints `:stair`, `:stone`, `:beam`), tinted by `:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
+
+A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
+from `data/textures/<name>.png`. It starts as a generated square:
+`art/prompts/texture-common.txt` (seamless, flat-on, flat lighting) plus
+`texture-<name>.txt`, the imp's turnaround as the style reference, a few candidates each,
+one at a time (parallel runs hit "model at capacity"):
+
+```bash
+tools/gen_image.py art/textures/wall-stone.png --prompt "$(cat art/prompts/texture-common.txt art/prompts/texture-wall-stone.txt)" --ref "Pixel Demon Character Turnaround.png" --size 1024x1024 -n 2
+```
+
+`tools/make_texture.py` crops it square, box-filters it to `--metres` × 64 px, flattens it
+to one palette (`--colors`, 32) and writes a 3 × 3 tiled preview beside the source to check
+the seams. The generator's 1254 px squares have art pixels about 5 px wide, so 4 m
+(256 px) keeps their detail; a small-patterned one (pillar blocks, planks) is 2 m. Asked
+for seamless, they mostly tile; `--blend PX` cross-fades the edges when they don't, but
+ghosts joints, so a fresh image is often better.
+
+```bash
+tools/make_texture.py art/textures/floor-flags-2.png data/textures/floor-flags --metres 4
+tools/make_texture.py art/textures/ceiling-1.png data/textures/ceiling-stone --metres 4
+tools/make_texture.py art/textures/pillar-stone-1.png data/textures/pillar-stone --metres 2
+tools/make_texture.py art/textures/platform-top-1.png data/textures/planks --metres 2
+```
+
+A re-made PNG is picked up by reloading greybox.lisp (`tools/hd reload src/greybox.lisp`),
+not by `tools/hd reset`.
+
 ## Monster sprites
 
 A monster starts as a 5-view turnaround sheet (front, front-quarter, side,
@@ -401,6 +480,52 @@ The acolyte's sheet is `art/acolyte/turnaround-2.png`, generated by `tools/gen_i
 `art/prompts/acolyte-turnaround.txt` with the imp's sheet as the style reference. It is
 sliced at `--height 115` (and `--mirror back-quarter`) so that, at `*acolyte-height*` 1.8 m,
 its art pixels match the imp's.
+
+The harpy's sheet is `art/harpy/turnaround-2.png` (`art/prompts/harpy-turnaround.txt`, the imp's,
+acolyte's and knight's sheets as style references), drawn hovering with its wings raised.
+Sliced at `--height 116` for its 1.8 m, wingtips to talons, with `--filter box`: averaging
+keeps the yellow eyes and rust claws that nearest-neighbour speckles away (`--colors` merges
+them into the browns, so leave it off). No views needed mirroring.
+
+```bash
+python3 tools/slice_turnaround.py art/harpy/turnaround-2.png data/sprites/harpy/turnaround --height 116 --filter box
+```
+
+Its dive (wind-up, then the dive) is made like the knight's animations: one sheet per view
+opening with a copy of the hovering pose, `harpy-dive-common.txt` plus `harpy-view-<view>.txt`,
+the turnaround and `art/harpy/stand-<view>.png` (its cells, cut from the turnaround) as
+references, the side and back views adding `harpy-follow.txt` with the front,
+`dive-front-2.png`, as the third; the front-quarter takes `harpy-view-front-quarter-strict.txt`
+and no front instead. Its wingbeat can't be a row: at full spread the wings cross into the
+next cell however small the reference draws the harpy. So `harpy-flap-common.txt` asks for a
+2 x 2 grid of the four frames (top, downstroke, bottom, upstroke) with no hovering copy, the
+top frame being the hovering pose, and `--grid` makes `stack_views.py` read each sheet as one
+row; the other views follow `flap-front-c-1.png` with `harpy-flap-follow.txt`. The grid's two
+rows are drawn apart, so each frame stands on its own lowest pixel: the bottom of the stroke,
+whose wingtips hang below the talons, lifts the body a little.
+
+```bash
+python3 tools/stack_views.py art/harpy/dive-sheet.png art/harpy/dive-front-2.png art/harpy/dive-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1
+python3 tools/slice_frames.py art/harpy/dive-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box dive:10
+python3 tools/stack_views.py art/harpy/flap-sheet.png art/harpy/flap-front-c-1.png art/harpy/flap-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --grid
+python3 tools/slice_frames.py art/harpy/flap-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box flap:20
+```
+
+Its flinch (`harpy-hurt-common.txt`, jolt then stagger) is made like the dive, the side and back
+views following `hurt-front-1.png`:
+
+```bash
+python3 tools/stack_views.py art/harpy/hurt-sheet.png art/harpy/hurt-front-1.png art/harpy/hurt-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1
+python3 tools/slice_frames.py art/harpy/hurt-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box hurt:10
+```
+
+Knocked down (`harpy-downed.txt`, front only, `downed-2.png`) is a 2 x 4 grid whose first cell is
+a copy of the hovering pose, to set the scale: it is 494 px tall, so `--pixel 4.26` makes it
+116 px. It is sliced as an animation of its own and deleted:
+
+```bash
+python3 tools/slice_frames.py art/harpy/downed-2.png data/sprites/harpy --pixel 4.26 --anchor bottom --filter box scale:1 downed:6 && rm data/sprites/harpy/scale.*
+```
 
 The game assumes the three turned views face image-left and mirrors them for the
 other side. Generated sheets aren't always consistent (the imp's back-quarter faced
@@ -628,8 +753,10 @@ Blender export that keeps the conventions works the same. Conventions:
   (`add-torch` stands it off the nearest wall).
 - The scene's glTF extras may give `tags` (`room`, `corridor`, `stair`, `start`) and a
   `weight`, for the generator. Blender exports a scene's custom properties there.
-- A material's base colour is the piece's colour; textures aren't read yet. Blender's
-  duplicate suffix (`.001`) is ignored in every name.
+- A material named after a surface (`wall`, `floor`, `ceiling`, `dais`, ...; see "Level
+  textures") draws that surface; any other material is flat in its base colour. The
+  .glb's own textures and UVs aren't read. Blender's duplicate suffix (`.001`) is ignored
+  in every name.
 
 `(attach-block 'shrine container "connector_south" :at point :facing :south)` places a
 block so that connector sits at `point`, opening toward `:south`, and returns the block's
@@ -677,7 +804,8 @@ a plan is 8 columns and 4 rows per cell, plus one row: a doorway is 6 columns on
 or south wall and 3 rows on an east or west one. Nothing inside a block can be thinner
 than 1 m north to south. Other header lines: `storeys N` (one `plan K` each, K from 0),
 `ceiling H` (inside height of the top storey, default 4; corridors use 3), `material NAME
-R G B` (defaults `floor`, `wall`, `ceiling`, `stair`), `mirror yes` (also builds
+R G B` (defaults `floor`, `wall`, `ceiling`, `stair`; a material named after a surface in
+`*surfaces*` is drawn with its textures, the rest flat in their colour), `mirror yes` (also builds
 `<name>-mirror`, flipped west to east, for pieces a turn can't make: `cell`, `tower`) and
 `grid free` (skips the grid checks).
 
@@ -755,5 +883,7 @@ attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp
 `tools/hd status` shows mana and each creature's health. The knight stands by the west
 pillars; a bolt at its front comes back at the player, one at its back hurts it, and
 `(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
+The harpy hovers over the hall's south-east, by the east doorway: `(setf (alert harpy) 6.0)`
+sets it hunting, and `(dive-left harpy)` is non-NIL while it dives (hurt it then to down it).
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (next weapon).

@@ -226,7 +226,26 @@ Path searches ask this for every neighbour, so it reads the arrays directly."
       (let ((k (nav-layer i j y grid)))
         (when k (nav-floor i j k grid))))))
 
-(defun nav-nearest-fitting (point radius height &key (search 2) (reach 1.0) (grid *nav-grid*))
+(defun nav-room-around (x y z reach step &optional (grid *nav-grid*))
+  "The floor of the layer under X Y Z, and the lowest ceiling over it and every column
+within REACH metres around it, on the layer a body on that floor could step to (STEP).
+A flyer keeps under that ceiling so that it ducks under a lintel before it gets there.
+NIL if there is no floor under the point."
+  (multiple-value-bind (ci cj) (nav-cell x z grid)
+    (let* ((ck (and ci (nav-layer ci cj y grid)))
+           (floor (and ck (nav-floor ci cj ck grid))))
+      (when floor
+        (let ((n (ceiling reach (nav-cell-size grid)))
+              (lowest (+ floor (aref (nav-headroom grid) ci cj ck))))
+          (loop for i from (- ci n) to (+ ci n)
+                do (loop for j from (- cj n) to (+ cj n)
+                         for k = (nav-layer-near i j floor 0.0 0.0 step grid)
+                         when k
+                           do (setf lowest (min lowest (+ (nav-floor i j k grid)
+                                                          (aref (nav-headroom grid) i j k))))))
+          (values floor lowest))))))
+
+(defun nav-nearest-fitting(point radius height &key (search 2) (reach 1.0) (grid *nav-grid*))
   "The cell I J K under POINT if the body fits there, else the nearest cell within SEARCH
 columns that it fits, or NIL. Knockback can push a creature into a cell too tight for it.
 Only floors within REACH metres of POINT's height count, the nearest in each column."

@@ -9,6 +9,7 @@
                (:file "nav")
                (:file "sprite")
                (:file "creature")
+               (:file "flyer")
                (:file "blocks")
                (:file "fx")
                (:file "lights")
