@@ -319,6 +319,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
   on whole pixels, since a half-pixel position drops an edge row. Overlapping elements
   take a depth in `place` (below 0 is further back). `hud-top` is where the bars end.
+  `hud-shown-p` decides whether an element draws (by default, not on the main menu). The
+  frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
+  on every screen, counting frames in its render and updating every `*fps-interval*`.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
   (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
@@ -331,8 +334,12 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
-  loading screen is one with no buttons). Hovering a button gives it the keyboard
-  focus, so one button is lit at a time.
+  loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
+  button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
+  variable. Hovering a row gives it the keyboard focus, so one row is lit at a time.
+  Settings (`open-settings`, on both menus) covers the menu it came from while
+  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has one
+  option so far, Show FPS (`*show-fps*`, in memory only, kept across reloads).
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
