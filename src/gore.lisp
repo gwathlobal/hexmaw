@@ -762,9 +762,6 @@ in vec3 v_view_position;
 in vec3 v_normal;
 in float v_fade;
 uniform sampler2D texture_image;
-uniform vec3 fog_color;
-uniform float fog_start;
-uniform float fog_end;
 out vec4 color;
 
 void main(){
@@ -779,7 +776,8 @@ void main(){
   float splat = dot(v_normal, v_normal);
   vec3 n = abs(v_normal);
   float shade = mix(1.0, n.y * 1.0 + n.x * 0.75 + n.z * 0.6, splat);
-  color.rgb *= shade * band_light(light_at(snap_position(v_world_position), v_normal, splat, v_world_position + v_normal * 0.05));
-  float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
-  color.rgb = mix(color.rgb, fog_color, fog);
+  vec3 surface = color.rgb * shade;
+  vec3 light = band_light(light_at(snap_position(v_world_position), v_normal, splat, v_world_position + v_normal * 0.05));
+  vec3 lamp = lamp_part(light);
+  color.rgb = fog_lit(surface * (light - lamp), surface * lamp, length(v_view_position));
 }")

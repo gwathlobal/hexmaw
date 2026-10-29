@@ -135,9 +135,6 @@ void main(){
 (define-class-shader (billboard :fragment-shader)
   "in vec3 v_view_position;
 in vec3 v_world_position;
-uniform vec3 fog_color;
-uniform float fog_start;
-uniform float fog_end;
 uniform vec4 tint;
 uniform vec3 light_probe;
 out vec4 color;
@@ -145,8 +142,10 @@ out vec4 color;
 void main(){
   maybe_call_next_method();
   if(color.a < 0.5) discard;
-  color.rgb *= band_light(light_at(snap_position(v_world_position), vec3(0), 0.0, light_probe));
-  color.rgb = mix(color.rgb, tint.rgb, tint.a);
-  float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
-  color.rgb = mix(color.rgb, fog_color, fog);
+  vec3 light = band_light(light_at(snap_position(v_world_position), vec3(0), 0.0, light_probe));
+  vec3 lamp = lamp_part(light);
+  // The tint (a hit's flash) covers both parts, and fogs with the ambient one.
+  vec3 glow = color.rgb * lamp * (1.0 - tint.a);
+  color.rgb = mix(color.rgb * light, tint.rgb, tint.a) - glow;
+  color.rgb = fog_lit(color.rgb, glow, length(v_view_position));
 }")

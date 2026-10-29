@@ -3,8 +3,9 @@
 ;;; Point lights for the lit shaders (LIT-ENTITY in greybox.lisp): the level and
 ;;; billboards. Effects and the HUD stay unlit; fire is its own light. A light is a
 ;;; LAMP in *LAMPS*, which the level rebuilds. Each frame GATHER-LIGHTS drops the lamps
-;;; the fog hides, sorts the rest nearest first, and writes up to *MAX-LIGHTS* of them
-;;; into the LAMP-BLOCK uniform buffer that every lit shader reads.
+;;; the fog hides (lamp light carries to *LAMP-FOG-END*, further than ambient light),
+;;; sorts the rest nearest first, and writes up to *MAX-LIGHTS* of them into the
+;;; LAMP-BLOCK uniform buffer that every lit shader reads.
 
 (defparameter *ambient-color* (vec 0.65 0.63 0.67)
   "Light on every surface, from no direction. It multiplies the face shading, so 0.65 keeps
@@ -162,20 +163,50 @@ the rooms of those that moved or are new."
                     (setf (aref *lamps* j) lamp) (incf j))))
     (setf (fill-pointer *lamps*) j)))
 
+(declaim (inline sphere-in-view-p))
+(defun sphere-in-view-p (dx dy dz r cos-yaw sin-yaw cos-pitch sin-pitch tan-x tan-y)
+  "True if the sphere of radius R at DX DY DZ from an FPS camera, turned by the cosines
+and sines of its yaw and pitch, reaches into its view frustum, whose sides are TAN-X and
+TAN-Y out per metre ahead. The near and far planes don't count."
+  (declare (type single-float dx dy dz r cos-yaw sin-yaw cos-pitch sin-pitch tan-x tan-y))
+  ;; Into view space as the camera does it (Trial's PROJECT-VIEW for an FPS-CAMERA): turn
+  ;; about Y by the yaw, then about X by the pitch. AHEAD is the distance along the view.
+  (let* ((x (+ (* cos-yaw dx) (* sin-yaw dz)))
+         (z (- (* cos-yaw dz) (* sin-yaw dx)))
+         (y (- (* cos-pitch dy) (* sin-pitch z)))
+         (ahead (- (+ (* sin-pitch dy) (* cos-pitch z)))))
+    (and (< (- r) ahead)
+         (< (- (abs x) (* ahead tan-x)) (* r (sqrt (+ 1 (* tan-x tan-x)))))
+         (< (- (abs y) (* ahead tan-y)) (* r (sqrt (+ 1 (* tan-y tan-y))))))))
+
 (defun sort-lit-lamps (camera)
-  "Fill *LIT-LAMPS* with the lamps that can reach a point closer than the fog's far end,
-nearest CAMERA first. A lamp further than that plus its radius only lights fogged-out
-surfaces. Insertion sort: the order barely changes from frame to frame."
-  (let ((lit *lit-lamps*)
-        (reach (float *fog-end* 0f0)))
+  "Fill *LIT-LAMPS* with the lamps that can light something CAMERA sees closer than the
+fog's far end for lamp light, nearest first. A lamp further than that plus its radius
+only lights fogged-out surfaces, and one whose light lies wholly outside the view
+lights nothing on screen. Insertion sort: the order barely changes from frame to frame."
+  (let* ((lit *lit-lamps*)
+         (eye (location camera))
+         (reach (float (max *fog-end* *lamp-fog-end*) 0f0))
+         (frustum (typep camera 'fps-camera))
+         (pitch (if frustum (vx (rotation camera)) 0f0))
+         (yaw (if frustum (vy (rotation camera)) 0f0))
+         (context (context +main+))
+         (tan-y (float (tan (* (/ pi 360) (if frustum (fov camera) 180))) 0f0))
+         (tan-x (* tan-y (/ (float (max 1 (width context)) 0f0) (max 1 (height context))))))
+    (declare (type single-float reach pitch yaw tan-y tan-x))
     (setf (fill-pointer lit) 0)
-    (loop for lamp across *lamps*
+    (loop with cos-yaw = (cos yaw) and sin-yaw = (sin yaw)
+          and cos-pitch = (cos pitch) and sin-pitch = (sin pitch)
+          for lamp across *lamps*
           for at = (location lamp)
-          for d = (sqrt (+ (expt (- (vx at) (vx camera)) 2)
-                           (expt (- (vy at) (vy camera)) 2)
-                           (expt (- (vz at) (vz camera)) 2)))
+          for dx = (- (vx at) (vx eye))
+          for dy = (- (vy at) (vy eye))
+          for dz = (- (vz at) (vz eye))
+          for d = (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
           do (setf (camera-distance lamp) d)
-             (when (< d (+ reach (radius lamp)))
+             (when (and (< d (+ reach (radius lamp)))
+                        (or (not frustum)
+                            (sphere-in-view-p dx dy dz (float (radius lamp) 0f0) cos-yaw sin-yaw cos-pitch sin-pitch tan-x tan-y)))
                (vector-push-extend lamp lit)
                (loop for j downfrom (1- (fill-pointer lit)) above 0
                      while (< (camera-distance (aref lit j)) (camera-distance (aref lit (1- j))))
@@ -198,7 +229,9 @@ surfaces. Insertion sort: the order barely changes from frame to frame."
 ;; themselves: passing a raw pointer to a function that isn't inline boxes (allocates) it.
 (defun put-lamp-rooms (block light lamp)
   "Write LAMP's room mask and the portals it shines through into LIGHT, its entry in
-LAMP-BLOCK, BLOCK, sending those rooms and portals too."
+LAMP-BLOCK, BLOCK, sending those rooms and portals too. NIL, and nothing worth keeping
+written, if LAMP stands in a room but the rooms sent this frame are full: a mask of 0
+would light everything, through every wall."
   (let ((memory (memory-region-pointer (storage block)))
         (mask 0)
         (offset (slot-offset light 'portal-ids))
@@ -210,6 +243,8 @@ LAMP-BLOCK, BLOCK, sending those rooms and portals too."
                  (when (<= 0 index) (setf mask (logior mask (ash 1 index))))))))
       (add (room-a lamp))
       (add (room-b lamp)))
+    (when (and (= mask 0) (or (room-a lamp) (room-b lamp)))
+      (return-from put-lamp-rooms NIL))
     ;; The portals out of its rooms that it reaches, up to the four LAMP-LIGHT holds.
     (flet ((try (room)
              (when room
@@ -226,7 +261,8 @@ LAMP-BLOCK, BLOCK, sending those rooms and portals too."
       (try (room-b lamp)))
     (loop for k from n below 4
           do (setf (cffi:mem-ref memory :int (+ offset (* 4 k))) -1))
-    (setf (cffi:mem-ref memory :uint (slot-offset light 'room-mask)) mask)))
+    (setf (cffi:mem-ref memory :uint (slot-offset light 'room-mask)) mask)
+    T))
 
 (defun put-rooms (block)
   "Write the rooms and portals sent this frame into LAMP-BLOCK, BLOCK."
@@ -258,14 +294,15 @@ LAMP-BLOCK, BLOCK, sending those rooms and portals too."
 
 (defun gather-lights ()
   "Send the nearest lamps the fog doesn't hide to the LAMP-BLOCK uniform buffer, with
-the rooms and portals they light."
+the rooms and portals they light. A lamp whose room no longer fits is left out."
   (update-lamps)
   (clear-sent-rooms)
   (let ((buffer (// 'hexmaw 'lamp-block))
-        (camera (location (camera (scene +main+)))))
+        (camera (camera (scene +main+))))
     (when (allocated-p buffer)
-      (let* ((lit (sort-lit-lamps camera))
-             (count (min *max-lights* (length lit))))
+      (let ((lit (sort-lit-lamps camera))
+            (count 0))
+        (declare (type fixnum count))
         (with-buffer-tx (block buffer)
           ;; Fields are written straight into the buffer's memory: setting them through
           ;; SLOT-VALUE allocates, which a per-frame function mustn't.
@@ -273,18 +310,19 @@ the rooms and portals they light."
                 (lights (slot-value block 'lights))
                 (color *light-color*))
             (put-floats memory (slot-offset block 'ambient-light) *ambient-color*)
-            (put-floats memory (slot-offset block 'camera-position) camera)
-            (setf (cffi:mem-ref memory :float (slot-offset block 'light-falloff)) (float *light-falloff* 0f0)
-                  (cffi:mem-ref memory :int (slot-offset block 'light-count)) count)
-            (dotimes (i count)
-              (let ((lamp (aref lit i))
-                    (light (aref lights i)))
-                (let ((offset (slot-offset light 'sphere)))
-                  (put-floats memory offset (location lamp))
-                  (setf (cffi:mem-ref memory :float (+ offset 12)) (radius lamp)))
-                (v<- color (color lamp))
-                (nv* color (lamp-brightness lamp))
-                (put-floats memory (slot-offset light 'color) color)
-                (put-lamp-rooms block light lamp)))
+            (put-floats memory (slot-offset block 'camera-position) (location camera))
+            (setf (cffi:mem-ref memory :float (slot-offset block 'light-falloff)) (float *light-falloff* 0f0))
+            (loop for lamp across lit
+                  while (< count *max-lights*)
+                  do (let ((light (aref lights count)))
+                       (when (put-lamp-rooms block light lamp)
+                         (let ((offset (slot-offset light 'sphere)))
+                           (put-floats memory offset (location lamp))
+                           (setf (cffi:mem-ref memory :float (+ offset 12)) (radius lamp)))
+                         (v<- color (color lamp))
+                         (nv* color (lamp-brightness lamp))
+                         (put-floats memory (slot-offset light 'color) color)
+                         (incf count))))
+            (setf (cffi:mem-ref memory :int (slot-offset block 'light-count)) count)
             (put-rooms block)))))))
 

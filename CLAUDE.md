@@ -133,12 +133,21 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   its width, so it never sinks into the wall. `attach-glow` gives an entity a
   lamp that follows it and goes out when it leaves the scene (the bolt and its burst).
   Each frame `gather-lights` (from `main`'s render) drops the lamps that could only light
-  fogged-out surfaces (further than `*fog-end*` plus their radius), sorts the rest nearest
-  first, and writes up to `*max-lights*` of them (128, the size of `lamp-block`'s array in
-  greybox.lisp) into the `lamp-block` uniform buffer that every lit shader reads. It writes
+  fogged-out surfaces (further than `*lamp-fog-end*` plus their radius) and those whose
+  light lies wholly outside the view (`sphere-in-view-p`, exact, so nothing on screen
+  changes), sorts the rest nearest first, and writes up to `*max-lights*` of them (128, the
+  size of `lamp-block`'s array in greybox.lisp) into the `lamp-block` uniform buffer that
+  every lit shader reads. A lamp whose room doesn't fit in the rooms sent (`*max-rooms*`) is
+  left out, since a lamp with no room lights everything. It writes
   the buffer's memory directly: setting a gl-struct field through `slot-value` allocates.
   Light is ambient (`*ambient-color*`) plus each lamp, down to half at `*light-falloff*`
   metres and fading smoothly to nothing at its radius; the shader skips lamps out of reach.
+  Fog (`fog_lit`, in `lit-entity`) treats the two apart: the ambient-lit part of a surface
+  fades into `*fog-color*` from `*fog-start*` to `*fog-end*` (3 to 12 m), what lamps add only
+  from `*lamp-fog-start*` to `*lamp-fog-end*` (6 to 36 m), so a lit room shows far off down
+  a dark corridor. The cost is the lamps sent, since every lit pixel loops over them: on a
+  30-room generated level (seed 12345), GPU time per frame is about 3.7 ms with
+  `*lamp-fog-end*` at 12, 6.1 at 24 and 7.4 at 36.
   Walls take the angle to the light; sprites ignore it, so the side of the imp nearer a
   torch is brighter. A world grid (`*wall-light-snap*`, `*sprite-light-snap*`) and
   brightness bands (`*wall-light-bands*`, `*sprite-light-bands*`) give a blocky retro look

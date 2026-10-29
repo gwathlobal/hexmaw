@@ -11,6 +11,10 @@
 (defparameter *fog-color* (vec 0.06 0.05 0.07))
 (defparameter *fog-start* 3.0)
 (defparameter *fog-end* 12.0)
+;; The light lamps add fades into the fog further out than ambient light does, so a lit
+;; room shows in the dark distance while the unlit stretch before it stays dark.
+(defparameter *lamp-fog-start* 6.0)
+(defparameter *lamp-fog-end* 36.0)
 (defparameter *grid-strength* 0.25)
 
 ;;; Level textures: tiling pixel art made by tools/make_texture.py, laid on the faces in
@@ -54,7 +58,8 @@ BOTTOM), or NIL if there is no such surface."
 ;;; nothing at its radius. Callers may snap the position (SNAP_POSITION) or step the
 ;;; result into bands (BAND_LIGHT) for a retro look. Rooms (rooms.lisp) keep light in: a
 ;;; light reaches its own rooms, and the rooms beyond their portals only through the
-;;; opening. No shadows within a room.
+;;; opening. No shadows within a room. FOG_LIT fogs a lit colour: its ambient-lit part
+;;; fades out between FOG_START and FOG_END, the part lamps lit carries on to LAMP_FOG_END.
 
 ;; Up to 128 lights, the nearest first. The 128 must match *MAX-LIGHTS* (lights.lisp).
 ;; ROOM-MASK has a bit per room that the light stands in, 0 for none (it then lights
@@ -94,6 +99,11 @@ BOTTOM), or NIL if there is no such surface."
 (define-class-shader (lit-entity :fragment-shader)
   "uniform float light_snap;
 uniform float light_bands;
+uniform vec3 fog_color;
+uniform float fog_start;
+uniform float fog_end;
+uniform float lamp_fog_start;
+uniform float lamp_fog_end;
 
 bool in_box(vec3 p, vec3 low, vec3 high){
   return all(greaterThanEqual(p, low)) && all(lessThanEqual(p, high));
@@ -173,6 +183,20 @@ vec3 band_light(vec3 light){
   float level = max(light.r, max(light.g, light.b));
   float banded = ceil(level * light_bands) / light_bands;
   return light * (banded / max(level, 0.0001));
+}
+
+// The part of LIGHT (from LIGHT_AT) that lamps add above the ambient light.
+vec3 lamp_part(vec3 light){
+  return max(light - ambient_light, vec3(0.0));
+}
+
+// A surface seen DIST metres away, COLOR being what ambient light shows of it and GLOW
+// what lamps add, fogged: the ambient part fades into the fog colour by FOG_END, the
+// lamps' part only by LAMP_FOG_END.
+vec3 fog_lit(vec3 color, vec3 glow, float dist){
+  float fog = clamp((dist - fog_start) / (fog_end - fog_start), 0.0, 1.0);
+  float lamp_fog = clamp((dist - lamp_fog_start) / (lamp_fog_end - lamp_fog_start), 0.0, 1.0);
+  return mix(color, fog_color, fog) + glow * (1.0 - lamp_fog);
 }")
 
 (define-shader-entity greybox (lit-entity vertex-entity colored-entity transformed-entity)
@@ -190,10 +214,12 @@ vec3 band_light(vec3 light){
         do (bind texture unit)))
 
 (defun set-fog-uniforms (program)
-  "Set fog_color, fog_start and fog_end, shared by every shader that fogs."
+  "Set the fog uniforms FOG_LIT reads (lit-entity), shared by every shader that fogs."
   (setf (uniform program "fog_color") *fog-color*)
   (setf (uniform program "fog_start") (float *fog-start* 0f0))
-  (setf (uniform program "fog_end") (float *fog-end* 0f0)))
+  (setf (uniform program "fog_end") (float *fog-end* 0f0))
+  (setf (uniform program "lamp_fog_start") (float *lamp-fog-start* 0f0))
+  (setf (uniform program "lamp_fog_end") (float *lamp-fog-end* 0f0)))
 
 (defmethod render :before ((box greybox) (program shader-program))
   (set-fog-uniforms program)
@@ -209,9 +235,6 @@ vec3 band_light(vec3 light){
 (define-class-shader (greybox :fragment-shader)
   "in vec3 v_world_position;
 in vec3 v_view_position;
-uniform vec3 fog_color;
-uniform float fog_start;
-uniform float fog_end;
 uniform float grid_strength;
 uniform int textured;
 uniform sampler2D side_texture;
@@ -246,9 +269,10 @@ void main(){
                : face_texel(bottom_texture, v_world_position, n);
     line = 0.0;
   }
-  color.rgb *= shade * (1.0 - grid_strength * line) * band_light(light_at(snap_position(v_world_position), face, 1.0, v_world_position + face * 0.05));
-  float fog = clamp((length(v_view_position) - fog_start) / (fog_end - fog_start), 0.0, 1.0);
-  color.rgb = mix(color.rgb, fog_color, fog);
+  vec3 surface = color.rgb * shade * (1.0 - grid_strength * line);
+  vec3 light = band_light(light_at(snap_position(v_world_position), face, 1.0, v_world_position + face * 0.05));
+  vec3 lamp = lamp_part(light);
+  color.rgb = fog_lit(surface * (light - lamp), surface * lamp, length(v_view_position));
 }")
 
 ;;; Solids are axis-aligned boxes stored as #(min-x min-y min-z max-x max-y max-z).
