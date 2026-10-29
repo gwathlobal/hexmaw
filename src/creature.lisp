@@ -143,7 +143,10 @@ strength, starts to fade and is out, to match the fire in the death animation.")
    (death-lamp :initform NIL :accessor death-lamp :documentation "The lamp lit while its death glows.")
    (bleeds :initarg :bleeds :initform T :reader bleeds :documentation "True if a hit sprays blood (gore.lisp).")
    (death-blood :initarg :death-blood :initform NIL :reader death-blood
-                :documentation "Drops of blood its death bursts out; NIL for *DEATH-BLOOD*.")
+                :documentation "Drops of blood its death bursts out; NIL for *DEATH-BLOOD*. At 0
+its corpse doesn't bleed either.")
+   (bleeding :initform 0f0 :accessor bleeding :documentation "Seconds it keeps dripping blood.")
+   (drip-timer :initform 0f0 :accessor drip-timer :documentation "Seconds until its next drip.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
    (base-scaling :reader base-scaling)))
@@ -584,7 +587,8 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
           (setf (vy loc) y))))))
 
 (defun revive (creature)
-  (setf (alert creature) 0.0)
+  (setf (alert creature) 0.0
+        (bleeding creature) 0f0)
   (stop-walking creature)
   (setf (walk-distance creature) 0.0)
   (setf (dead creature) NIL
@@ -726,6 +730,7 @@ flinch, 0 to 1."
             (stagger creature) (max 0.0 (- (stagger creature) dt))
             (brace creature) (max 0.0 (- (brace creature) dt)))
       (slide creature dt)
+      (drip-blood creature dt)
       (unless (dead creature)
         (when (<= (stagger creature) 0)
           (think creature dt))

@@ -5,8 +5,13 @@
 ;;; into the scene once: plain arrays, reused oldest first, whose quads are written into
 ;;; one vertex buffer each frame and drawn in one call, so nothing allocates per frame.
 ;;; Drops face the camera plane; splats lie flat on their surface. Both are lit like the
-;;; level (LIGHT_AT) and fogged. The frames are tools/draw_blood.py's strip: drops 0 to 3,
-;;; smallest first, then the splat each drop leaves (drop N, splat 4+N).
+;;; level (LIGHT_AT) and fogged. A level keeps *MAX-SPLATS* splats; past that the oldest
+;;; dissolve, art pixel by art pixel. A drop landing on a round splat adds its blood to
+;;; it instead of making its own, so the splat spreads into a puddle where blood falls
+;;; thick. The frames are tools/draw_blood.py's strip, each group smallest first: drops 0
+;;; to 3; round splats 4 to 27, three variants of eight sizes (drop N leaves size N; 4 to
+;;; 7 are puddles, grown into); floor streaks 28 to 31 (running toward image right) and
+;;; wall drips 32 to 35 (running down), in the four drop sizes.
 
 (define-fx-animation blood "sprites/blood/blood")
 
@@ -27,6 +32,11 @@ doesn't hide them.")
 (defparameter *death-blood* 28 "Drops a death bursts out, in every direction.")
 (defparameter *death-blood-speed* '(1.0 3.5))
 (defparameter *death-blood-lift* 2.0)
+(defparameter *bleed-per-damage* 0.25 "Seconds a creature drips from its wound per point of damage.")
+(defparameter *bleed-max* 6.0 "Most seconds of dripping a creature has in store.")
+(defparameter *bleed-interval* '(0.2 0.4) "Least and most seconds between a wounded creature's drips.")
+(defparameter *corpse-bleed-time* 5.0 "Seconds a corpse bleeds into a pool under it.")
+(defparameter *corpse-bleed-interval* '(0.15 0.3) "Least and most seconds between a corpse's drips.")
 (defparameter *blood-drop-life* 3.0 "Seconds a drop flies before it goes, if it lands nowhere.")
 (defparameter *max-blood* 1024
   "Particles in the pool, drops and splats; a full pool reuses the oldest. Read when a
@@ -34,34 +44,51 @@ pool is made (tools/hd reset).")
 (defparameter *splat-lift* 0.004
   "Metres a splat stands off its surface. Splats alternate between up to 3 times that,
 so overlapping ones don't flicker.")
+(defparameter *max-splats* 400 "Splats a level keeps; past that the oldest dissolve.")
+(defparameter *splat-lifetime* NIL "Seconds before a splat dissolves of its own accord; NIL to keep it.")
+(defparameter *splat-dissolve-time* 1.0 "Seconds a splat takes to dissolve.")
+(defparameter *splat-radii* '(2.1 2.8 3.6 4.6 6.0 7.5 9.0 10.5)
+  "Radius in art pixels of each round splat size, as tools/draw_blood.py draws them
+(ROUND_RADII). The first four are the splats the four drop sizes leave.")
+(defparameter *splat-merge-reach* 0.8
+  "A drop landing on the same face as a round splat, closer to its middle than this
+fraction of their two radii together, joins it instead of making its own splat.")
+(defparameter *merge-spread* 0.8
+  "Fraction of a joining drop's own splat area that the splat it joins spreads by.")
+(defparameter *streak-speed* 2.5 "Horizontal m/s above which a drop smears into a streak on the floor.")
+(defparameter *drip-chance* 0.5 "Chance a drop bigger than the smallest runs down a wall.")
 
 (defvar *blood-pool* NIL "The blood pool in the current scene.")
 
-;; Each vertex: position (3), uv (2), corner (2), normal (3). A drop's position is its
-;; centre and its corner the offset in view space; a splat's position is the corner
-;; itself, its corner 0 and its normal the surface's, which tells the shader it's a splat.
-(defconstant +blood-vertex-floats+ 10)
+;; Each vertex: position (3), uv (2), corner (2), normal (3), dissolve (1). A drop's
+;; position is its centre and its corner the offset in view space; a splat's position is
+;; the corner itself, its corner 0 and its normal the surface's, which tells the shader
+;; it's a splat. Dissolve runs from 0 (whole) to 1 (gone).
+(defparameter *blood-vertex-floats* 11)
 
 (define-shader-entity blood-pool (lit-entity renderable listener)
   ((size :reader pool-size)
-   (cursor :initform 0 :accessor pool-cursor :documentation "The slot the next particle takes.")
-   (state :reader pool-state :documentation "Per particle: 0 free, 1 a flying drop, 2 a splat.")
+   (cursor :initform 0 :accessor pool-cursor :documentation "Where the search for a free slot starts.")
+   (splat-count :initform 0 :accessor splat-count :documentation "Splats not yet dissolving.")
+   (state :reader pool-state
+          :documentation "Per particle: 0 free, 1 a flying drop, 2 a splat, 3 a dissolving splat.")
    (frame :reader pool-frame :documentation "Per particle: its frame in the strip.")
    (side :reader pool-side
          :documentation "Per splat: the face it lies on, 0 to 5 for +X -X +Y -Y +Z -Z, and in
 bits 3 to 5 its turn (quarter turns, then a mirror).")
    (positions :reader pool-positions)
    (velocities :reader pool-velocities)
-   (ages :reader pool-ages)
+   (ages :reader pool-ages
+         :documentation "Per particle: seconds a drop has flown, a splat has lain or a dissolve has run.")
    (data :reader pool-data :documentation "Vertex data, 6 vertices per particle.")
    (vbo :reader pool-vbo)
    (vao :reader pool-vao)))
 
 (defmethod initialize-instance :after ((pool blood-pool) &key)
   (let* ((n *max-blood*)
-         (data (make-array (* n 6 +blood-vertex-floats+) :element-type 'single-float :initial-element 0f0))
+         (data (make-array (* n 6 *blood-vertex-floats*) :element-type 'single-float :initial-element 0f0))
          (vbo (make-instance 'vertex-buffer :buffer-data data :data-usage :stream-draw))
-         (stride (* 4 +blood-vertex-floats+)))
+         (stride (* 4 *blood-vertex-floats*)))
     (setf (slot-value pool 'size) n
           (slot-value pool 'state) (make-array n :element-type '(unsigned-byte 8) :initial-element 0)
           (slot-value pool 'frame) (make-array n :element-type '(unsigned-byte 8) :initial-element 0)
@@ -76,7 +103,8 @@ bits 3 to 5 its turn (quarter turns, then a mirror).")
                                                 :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
                                                             (,vbo :size 2 :offset 12 :stride ,stride :index 2)
                                                             (,vbo :size 2 :offset 20 :stride ,stride :index 3)
-                                                            (,vbo :size 3 :offset 28 :stride ,stride :index 1))))))
+                                                            (,vbo :size 3 :offset 28 :stride ,stride :index 1)
+                                                            (,vbo :size 1 :offset 40 :stride ,stride :index 4))))))
 
 (defmethod stage :after ((pool blood-pool) (area staging-area))
   (stage (pool-vao pool) area)
@@ -93,23 +121,38 @@ bits 3 to 5 its turn (quarter turns, then a mirror).")
   "Take every drop and splat away."
   (when *blood-pool*
     (fill (pool-state *blood-pool*) 0)
-    (setf (pool-cursor *blood-pool*) 0)))
+    (setf (pool-cursor *blood-pool*) 0
+          (splat-count *blood-pool*) 0)))
 
 (defun range-random (range)
   (destructuring-bind (lo hi) range
     (+ lo (random (float (- hi lo) 0f0)))))
 
-(defun spawn-drop (x y z vx vy vz)
-  "Throw a drop from X Y Z at VX VY VZ m/s, in the oldest slot of the pool."
+(defun free-slot (pool)
+  "The next free slot in POOL after the last one taken; if there is none, the slot after
+it, whatever it holds."
+  (let* ((state (pool-state pool))
+         (n (pool-size pool))
+         (start (pool-cursor pool))
+         (i (or (loop for k from 0 below n
+                      for j = (mod (+ start k) n)
+                      when (= 0 (aref state j)) return j)
+                start)))
+    (when (= 2 (aref state i))
+      (decf (splat-count pool)))
+    (setf (pool-cursor pool) (mod (1+ i) n))
+    i))
+
+(defun spawn-drop (x y z vx vy vz &optional size)
+  "Throw a drop of SIZE (0 to 3; NIL for mostly small, the odd big one) from X Y Z at
+VX VY VZ m/s."
   (let ((pool *blood-pool*))
     (when pool
-      (let ((i (pool-cursor pool))
+      (let ((i (free-slot pool))
             (p (pool-positions pool))
             (v (pool-velocities pool)))
-        (setf (pool-cursor pool) (mod (1+ i) (pool-size pool)))
         (setf (aref (pool-state pool) i) 1
-              ;; Mostly small drops, the odd big one.
-              (aref (pool-frame pool) i) (min 3 (floor (* 4 (expt (random 1f0) 1.6))))
+              (aref (pool-frame pool) i) (or size (min 3 (floor (* 4 (expt (random 1f0) 1.6)))))
               (aref (pool-ages pool) i) 0f0
               (aref p (* 3 i)) (float x 0f0) (aref p (+ 1 (* 3 i))) (float y 0f0) (aref p (+ 2 (* 3 i))) (float z 0f0)
               (aref v (* 3 i)) (float vx 0f0) (aref v (+ 1 (* 3 i))) (float vy 0f0) (aref v (+ 2 (* 3 i))) (float vz 0f0))))))
@@ -132,7 +175,8 @@ direction DX DZ (any way when it is 0 0), a BACK fraction of them the other way.
 
 (defun bleed (creature amount from)
   "Spray blood from CREATURE's wound, struck for AMOUNT from point FROM: away from FROM,
-some of it back toward it. Without FROM the blow comes from the player."
+some of it back toward it. Without FROM the blow comes from the player. The wound drips
+for a while after."
   (let* ((loc (location creature))
          (from (or from (and *player* (feet *player*))))
          (dx (if from (- (vx loc) (vx from)) 0.0))
@@ -145,14 +189,48 @@ some of it back toward it. Without FROM the blow comes from the player."
       (decf (vz at) (* dz *blood-wound-offset*)))
     (destructuring-bind (fewest most) *blood-drops*
       (spray-blood at dx dz (max fewest (min most (round (* amount *blood-per-damage*))))
-                   :back *blood-back-spray*))))
+                   :back *blood-back-spray*))
+    (setf (bleeding creature) (min (float *bleed-max* 0f0) (+ (bleeding creature) (* amount *bleed-per-damage*))))))
 
 (defun bleed-out (creature)
-  "Burst blood out of CREATURE as it dies, every way."
-  (let ((loc (location creature)))
+  "Burst blood out of CREATURE as it dies, every way, and let the corpse bleed into a pool.
+A creature whose DEATH-BLOOD is 0 does neither."
+  (let ((loc (location creature))
+        (count (or (death-blood creature) *death-blood*)))
     (spray-blood (vec (vx loc) (+ (vy loc) (* *blood-wound-height* (sprite-height creature))) (vz loc))
-                 0.0 0.0 (or (death-blood creature) *death-blood*)
-                 :speed *death-blood-speed* :rise '(0.0 1.0) :lift *death-blood-lift*)))
+                 0.0 0.0 count
+                 :speed *death-blood-speed* :rise '(0.0 1.0) :lift *death-blood-lift*)
+    (setf (bleeding creature) (if (< 0 count) (float *corpse-bleed-time* 0f0) 0f0)
+          (drip-timer creature) 0f0)))
+
+;;; Dripping: blood falling straight down, a drop at a time, lands on the blood before it
+;;; and so spreads into a puddle: under a wounded creature that stands still (a trail when
+;;; it walks), and under a corpse.
+
+(defun drip-blood (creature dt)
+  "Run CREATURE's bleeding for DT seconds. Called from its tick while the world moves."
+  (when (< 0 (bleeding creature))
+    (decf (bleeding creature) dt)
+    (decf (drip-timer creature) dt)
+    (when (<= (drip-timer creature) 0)
+      (let* ((dead (dead creature))
+             (loc (location creature))
+             (x (+ (vx loc) (- (random 0.08) 0.04)))
+             (z (+ (vz loc) (- (random 0.08) 0.04))))
+        (setf (drip-timer creature) (range-random (if dead *corpse-bleed-interval* *bleed-interval*)))
+        (unless dead
+          ;; From the wound, on the side the player sees, so the sprite doesn't hide it.
+          (when *player*
+            (let* ((feet (feet *player*))
+                   (dx (- (vx feet) (vx loc)))
+                   (dz (- (vz feet) (vz loc)))
+                   (len (sqrt (+ (* dx dx) (* dz dz)))))
+              (when (< 1f-4 len)
+                (incf x (* *blood-wound-offset* (/ dx len)))
+                (incf z (* *blood-wound-offset* (/ dz len)))))))
+        (spawn-drop x (+ (vy loc) (if dead 0.1 (* *blood-wound-height* (sprite-height creature)))) z
+                    (- (random 0.2) 0.1) 0.0 (- (random 0.2) 0.1)
+                    (+ 1 (random (if dead 3 2))))))))
 
 ;;; Flight and landing.
 
@@ -203,9 +281,109 @@ crossed S's face as a splat, or let it slide off a ceiling. One that was already
                           (if (= axis best)
                               (aref s (if best-high (+ axis 3) axis))
                               (+ o (* best-t (- q o))))))
+           (lay-splat pool i (+ (* 2 best) (if best-high 0 1)))))))
+
+(defun round-splat-p (frame)
+  (<= 4 frame 27))
+
+(defun splat-radius (size)
+  "Radius in art pixels of round splat SIZE."
+  (float (nth size *splat-radii*) 0f0))
+
+(defun splat-size-for (area)
+  "The biggest round splat size whose disc is no bigger than AREA (art pixels², over pi)."
+  (let ((size 0))
+    (loop for r in *splat-radii*
+          for n from 0
+          when (<= (* r r) area) do (setf size n))
+    size))
+
+;; A splat's VELOCITIES slot, unused once it lies still, keeps its blood: the area of
+;; its disc in art pixels², over pi, which picks its size.
+(defun merge-splat (pool i face)
+  "Pour drop I, landed on FACE, into the nearest round splat there that it overlaps by
+*SPLAT-MERGE-REACH*, spreading it toward the drop. Returns true if there was one, so
+the drop isn't needed."
+  (let* ((state (pool-state pool))
+         (frames (pool-frame pool))
+         (sides (pool-side pool))
+         (p (pool-positions pool))
+         (v (pool-velocities pool))
+         (b (* 3 i))
+         (size (aref frames i))
+         (ppm (float *blood-pixels-per-metre* 0f0))
+         (own (splat-radius size))
+         (best NIL) (best-k 0f0))
+    (declare (type (simple-array (unsigned-byte 8) (*)) state frames sides)
+             (type (simple-array single-float (*)) p v))
+    ;; The one it lands furthest inside, as a fraction of how far merging reaches.
+    (dotimes (j (pool-size pool))
+      (when (and (= 2 (aref state j))
+                 (= face (logand 7 (aref sides j)))
+                 (round-splat-p (aref frames j)))
+        (let ((d (sqrt (+ (expt (- (aref p (* 3 j)) (aref p b)) 2)
+                          (expt (- (aref p (+ 1 (* 3 j))) (aref p (+ b 1))) 2)
+                          (expt (- (aref p (+ 2 (* 3 j))) (aref p (+ b 2))) 2))))
+              (reach (/ (* *splat-merge-reach* (+ own (splat-radius (mod (- (aref frames j) 4) 8)))) ppm)))
+          (when (and (< d reach) (or (null best) (< (/ d reach) best-k)))
+            (setf best j best-k (/ d reach))))))
+    (when best
+      (let* ((j best)
+             (added (* *merge-spread* own own))
+             (area (+ (aref v (* 3 j)) added))
+             (k (/ added area)))
+        (setf (aref v (* 3 j)) area
+              (aref frames j) (+ 4 (* 8 (floor (- (aref frames j) 4) 8)) (splat-size-for area)))
+        ;; It spreads toward where the new blood fell.
+        (dotimes (axis 3)
+          (incf (aref p (+ (* 3 j) axis)) (* k (- (aref p (+ b axis)) (aref p (+ (* 3 j) axis))))))
+        T))))
+
+(defun dissolve-oldest-splat (pool)
+  (let ((state (pool-state pool))
+        (ages (pool-ages pool))
+        (oldest NIL))
+    (dotimes (j (pool-size pool))
+      (when (and (= 2 (aref state j))
+                 (or (null oldest) (< (aref ages oldest) (aref ages j))))
+        (setf oldest j)))
+    (when oldest
+      (setf (aref state oldest) 3
+            (aref ages oldest) 0f0)
+      (decf (splat-count pool)))))
+
+(defun lay-splat (pool i face)
+  "Turn drop I of POOL, which has landed on FACE (0 to 5 for +X -X +Y -Y +Z -Z), into a
+splat, or into a bigger one already there. A fast drop smears into a streak on the floor,
+the way it was going; a bigger one may run down a wall."
+  (cond ((merge-splat pool i face)
+         (setf (aref (pool-state pool) i) 0))
+        (T
+         (let* ((size (aref (pool-frame pool) i))
+                (v (pool-velocities pool))
+                (vx (aref v (* 3 i)))
+                (vz (aref v (+ 2 (* 3 i))))
+                (frame (+ 4 (* 8 (random 3)) size))
+                (turn (random 8)))
+           (cond ((and (= face 2) (< (expt *streak-speed* 2) (+ (* vx vx) (* vz vz))))
+                  ;; The art runs toward its right, which quarter turn K points along the
+                  ;; floor's +X, +Z, -X, -Z.
+                  (setf frame (+ 28 size)
+                        turn (if (< (abs vz) (abs vx))
+                                 (if (< 0 vx) 0 2)
+                                 (if (< 0 vz) 1 3))))
+                 ((and (/= 1 (floor face 2)) (< 0 size) (< (random 1f0) *drip-chance*))
+                  ;; Unturned, so it runs down; mirrored or not.
+                  (setf frame (+ 32 size)
+                        turn (* 4 (random 2)))))
            (setf (aref (pool-state pool) i) 2
-                 (aref (pool-frame pool) i) (+ 4 (aref (pool-frame pool) i))
-                 (aref (pool-side pool) i) (+ (* 2 best) (if best-high 0 1) (* 8 (random 8))))))))
+                 (aref (pool-ages pool) i) 0f0
+                 (aref v (* 3 i)) (expt (splat-radius size) 2)
+                 (aref (pool-frame pool) i) frame
+                 (aref (pool-side pool) i) (+ face (* 8 turn)))
+           (incf (splat-count pool))
+           (loop while (and (< *max-splats* (splat-count pool))
+                            (dissolve-oldest-splat pool)))))))
 
 (defun step-blood (pool dt)
   (declare (type single-float dt))
@@ -218,6 +396,14 @@ crossed S's face as a splat, or let it slide off a ceiling. One that was already
     (declare (type (simple-array (unsigned-byte 8) (*)) state)
              (type (simple-array single-float (*)) p v ages))
     (dotimes (i (pool-size pool))
+      (case (aref state i)
+        (2 (incf (aref ages i) dt)
+         (when (and *splat-lifetime* (< *splat-lifetime* (aref ages i)))
+           (setf (aref state i) 3 (aref ages i) 0f0)
+           (decf (splat-count pool))))
+        (3 (incf (aref ages i) dt)
+         (when (< *splat-dissolve-time* (aref ages i))
+           (setf (aref state i) 0))))
       (when (= 1 (aref state i))
         (let ((b (* 3 i)))
           (incf (aref ages i) dt)
@@ -266,17 +452,21 @@ crossed S's face as a splat, or let it slide off a ceiling. One that was already
          (du (/ cell width))
          (h (/ (* 0.5 cell) (float *blood-pixels-per-metre* 0f0)))
          (lift (float *splat-lift* 0f0))
+         (ages (pool-ages pool))
+         (dissolve-time (float *splat-dissolve-time* 0f0))
+         (stride *blood-vertex-floats*)
          (k 0))
     (declare (type (simple-array (unsigned-byte 8) (*)) state frames sides corners)
-             (type (simple-array single-float (*)) p data axes)
-             (type single-float du h lift)
-             (type fixnum k))
-    (flet ((put (x y z u v cx cy nx ny nz)
-             (let ((o (* k +blood-vertex-floats+)))
+             (type (simple-array single-float (*)) p data axes ages)
+             (type single-float du h lift dissolve-time)
+             (type fixnum k stride))
+    (flet ((put (x y z u v cx cy nx ny nz fade)
+             (let ((o (* k stride)))
                (setf (aref data o) x (aref data (+ o 1)) y (aref data (+ o 2)) z
                      (aref data (+ o 3)) u (aref data (+ o 4)) v
                      (aref data (+ o 5)) cx (aref data (+ o 6)) cy
-                     (aref data (+ o 7)) nx (aref data (+ o 8)) ny (aref data (+ o 9)) nz))
+                     (aref data (+ o 7)) nx (aref data (+ o 8)) ny (aref data (+ o 9)) nz
+                     (aref data (+ o 10)) fade))
              (incf k)))
       (dotimes (i (pool-size pool))
         (let ((s (aref state i)))
@@ -289,7 +479,7 @@ crossed S's face as a splat, or let it slide off a ceiling. One that was already
                         for a = (aref corners c)
                         for bb = (aref corners (1+ c))
                         do (put x y z (+ u0 (* a du)) (float bb 0f0)
-                                (* h (- (* 2 a) 1)) (* h (- (* 2 bb) 1)) 0f0 0f0 0f0))
+                                (* h (- (* 2 a) 1)) (* h (- (* 2 bb) 1)) 0f0 0f0 0f0 0f0))
                   (let* ((side (logand 7 (aref sides i)))
                          (turn (ash (aref sides i) -3))
                          (axis (floor side 2))
@@ -300,7 +490,8 @@ crossed S's face as a splat, or let it slide off a ceiling. One that was already
                          (nz (if (= axis 2) sign 0f0))
                          ;; Off the surface, a different height for neighbours in the pool.
                          (off (* lift (+ 1 (mod i 3))))
-                         (cx (+ x (* nx off))) (cy (+ y (* ny off))) (cz (+ z (* nz off))))
+                         (cx (+ x (* nx off))) (cy (+ y (* ny off))) (cz (+ z (* nz off)))
+                         (fade (if (= 3 s) (min 1f0 (/ (aref ages i) dissolve-time)) 0f0)))
                     (loop for c from 0 below 12 by 2
                           for a = (aref corners c)
                           for bb = (aref corners (1+ c))
@@ -314,13 +505,13 @@ crossed S's face as a splat, or let it slide off a ceiling. One that was already
                                (put (+ cx (* sa (aref axes o)) (* sb (aref axes (+ o 3))))
                                     (+ cy (* sa (aref axes (+ o 1))) (* sb (aref axes (+ o 4))))
                                     (+ cz (* sa (aref axes (+ o 2))) (* sb (aref axes (+ o 5))))
-                                    (+ u0 (* ta du)) (float tb 0f0) 0f0 0f0 nx ny nz)))))))))
+                                    (+ u0 (* ta du)) (float tb 0f0) 0f0 0f0 nx ny nz fade)))))))))
       k)))
 
 (defmethod render ((pool blood-pool) (program shader-program))
   (let ((count (write-blood-vertices pool)))
     (when (< 0 count)
-      (update-buffer-data (pool-vbo pool) (pool-data pool) :count (* count +blood-vertex-floats+ 4))
+      (update-buffer-data (pool-vbo pool) (pool-data pool) :count (* count *blood-vertex-floats* 4))
       (setf (uniform program "view_matrix") (view-matrix))
       (setf (uniform program "projection_matrix") (projection-matrix))
       (set-fog-uniforms program)
@@ -333,12 +524,14 @@ crossed S's face as a splat, or let it slide off a ceiling. One that was already
 layout (location = 1) in vec3 in_normal;
 layout (location = 2) in vec2 in_uv;
 layout (location = 3) in vec2 corner;
+layout (location = 4) in float in_fade;
 uniform mat4 view_matrix;
 uniform mat4 projection_matrix;
 out vec2 uv;
 out vec3 v_world_position;
 out vec3 v_view_position;
 out vec3 v_normal;
+out float v_fade;
 
 void main(){
   vec4 view_position = view_matrix * vec4(position, 1.0);
@@ -348,6 +541,7 @@ void main(){
   v_world_position = position;
   v_view_position = view_position.xyz;
   v_normal = in_normal;
+  v_fade = in_fade;
 }")
 
 (define-class-shader (blood-pool :fragment-shader)
@@ -355,6 +549,7 @@ void main(){
 in vec3 v_world_position;
 in vec3 v_view_position;
 in vec3 v_normal;
+in float v_fade;
 uniform sampler2D texture_image;
 uniform vec3 fog_color;
 uniform float fog_start;
@@ -364,6 +559,11 @@ out vec4 color;
 void main(){
   color = texture(texture_image, uv);
   if(color.a < 0.5) discard;
+  // Dissolving: art pixels drop out in a fixed random order as V_FADE rises.
+  if(v_fade > 0.0){
+    vec2 texel = floor(uv * vec2(textureSize(texture_image, 0)));
+    if(fract(sin(dot(texel, vec2(12.9898, 78.233))) * 43758.5453) < v_fade) discard;
+  }
   // A splat is lit and shaded like the face it lies on; a drop like a sprite.
   float splat = dot(v_normal, v_normal);
   vec3 n = abs(v_normal);

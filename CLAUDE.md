@@ -196,14 +196,28 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   attacker, `*blood-per-damage*` per point within `*blood-drops*`. A death adds `bleed-out`,
   a burst every way (`death-blood`, 0 for the acolyte, which burns; `bleeds` NIL for no
   blood at all). Drops fly under `*blood-gravity*` and stick where they cross a solid's face
-  as splats, flat on the floor or a wall (a ceiling only stops their rise). Every drop and
-  splat is a slot in one `blood-pool` (`*blood-pool*`, entered by `setup-scene`): plain
-  arrays, the oldest reused once `*max-blood*` are in use, written each frame into one
+  as splats, flat on the floor or a wall (a ceiling only stops their rise). `lay-splat`
+  picks the splat: a drop faster than `*streak-speed*` across the floor smears into a streak
+  pointing the way it went (snapped to a quarter turn), a bigger drop on a wall may run down
+  it (`*drip-chance*`), and the rest are one of three round variants, turned and mirrored at
+  random. A drop landing on a round splat on the same face (closer than
+  `*splat-merge-reach*` of their radii together) pours into it instead: the splat keeps its
+  blood as an area, grows by `*merge-spread*` of the drop's and takes the size that area
+  fills, up to four puddle sizes past any one drop's splat. Sprays scatter too widely to
+  pool, so the pools come from dripping: a hit leaves the wound dripping, nearly straight
+  down, for `*bleed-per-damage*` seconds a point (a puddle under a creature that stands, a
+  trail behind one that walks), and a corpse bleeds into a pool under it for
+  `*corpse-bleed-time*` (`drip-blood`, from the creature's tick). A level keeps
+  `*max-splats*` splats; past that the oldest dissolve, art pixel by art pixel, over
+  `*splat-dissolve-time*` (`*splat-lifetime*` dissolves them by age as well; NIL, the
+  default, keeps them). Every drop and splat is a slot in one `blood-pool` (`*blood-pool*`,
+  entered by `setup-scene`): plain arrays (`*max-blood*` slots), written each frame into one
   stream-draw vertex buffer and drawn in one call. Drops face the camera plane, offset in
   view space by the shader; splats lie on their face, lit and shaded like it. `reset-run`
   clears it (`clear-blood`). `(spray-blood (vec x y z) dx dz count)` throws drops by hand.
-  The frames are `data/sprites/blood/blood`, drawn by `tools/draw_blood.py` (4 drops, then
-  the splat each leaves), at the monsters' 64 px per metre.
+  The frames are `data/sprites/blood/blood`, drawn by `tools/draw_blood.py` (drops, round
+  splats and puddles, streaks, drips; its docstring has the layout), at the monsters' 64 px
+  per metre. Its `ROUND_RADII` must match `*splat-radii*`.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, the player's `bolt` and the acolyte's `cinder`. A new effect kind is
   a method on `apply-effect`, for a `creature` target and (in player.lisp, loaded later) a
