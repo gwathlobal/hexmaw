@@ -65,7 +65,9 @@ upstairs."
   (ecase *level*
     (:test (build-test-level container))
     (:gallery (build-kit-gallery container))
-    (:generated (generate-level container)))
+    (:generated (if *pending-load*
+                    (generate-saved-level container *pending-load*)
+                    (generate-level container))))
   ;; Last, once every solid, room and portal is in.
   (link-rooms)
   (build-nav-grid)
