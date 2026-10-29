@@ -147,14 +147,30 @@ corpse; NIL to collapse into the floor instead.")
 strength, starts to fade and is out, to match the fire in the death animation.")
    (death-lamp :initform NIL :accessor death-lamp :documentation "The lamp lit while its death glows.")
    (bleeds :initarg :bleeds :initform T :reader bleeds :documentation "True if a hit sprays blood (gore.lisp).")
+   (undead :initarg :undead :initform NIL :reader undead
+           :documentation "True for the risen dead, whom a necromancer's spells spare.")
    (death-blood :initarg :death-blood :initform NIL :reader death-blood
                 :documentation "Drops of blood its death bursts out; NIL for *DEATH-BLOOD*. At 0
 its corpse doesn't bleed either.")
    (bleeding :initform 0f0 :accessor bleeding :documentation "Seconds it keeps dripping blood.")
    (gibs :initarg :gibs :initform NIL :reader gibs
-         :documentation "What a blow that overkills it tears it into (gore.lisp): its gib set's
-name in the blood strip, then a piece number for each gib. NIL never tears apart.")
+         :documentation "What a blow that overkills it tears it into (gore.lisp): groups of a
+gib set's name in the blood strip, then a piece number for each gib, (:HEAD N) for the
+one that flies from the top. NIL never tears apart.")
+   (gib-scale :initarg :gib-scale :initform 1.0 :reader gib-scale
+              :documentation "Size its gibs are drawn at, so one set serves every size of creature.")
+   (gib-overkill :initarg :gib-overkill :initform NIL :reader gib-overkill
+                 :documentation "Fraction of its most health a killing blow must overkill it by to
+tear it apart; NIL for *GIB-OVERKILL*.")
    (gibbed :initform NIL :accessor gibbed :documentation "True while it lies torn apart.")
+   (summoned :initarg :summoned :initform NIL :reader summoned
+             :documentation "True if it came into the level mid-game (a raised skeleton): a
+reset takes it away instead of reviving it.")
+   (rising :initform 0.0 :accessor rising
+           :documentation "Seconds left of getting up from where it was raised; it does
+nothing else meanwhile, and plays its death backwards.")
+   (stirring :initform 0.0 :accessor stirring
+             :documentation "Seconds left of a corpse's twitching, as something raises it.")
    (drip-timer :initform 0f0 :accessor drip-timer :documentation "Seconds until its next drip.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
@@ -189,14 +205,19 @@ name in the blood strip, then a piece number for each gib. NIL never tears apart
   (vector-push-extend creature *creatures*)
   (enter creature container))
 
+(defgeneric spares-p (caster target)
+  (:documentation "True if CASTER's spells pass TARGET by (a necromancer's, its undead).")
+  (:method (caster target) NIL))
+
 (defun creature-at (point margin &optional ignore)
-  "The first live creature other than IGNORE whose body contains POINT, grown by MARGIN
-metres, or NIL."
+  "The first live creature other than IGNORE, or one IGNORE spares, whose body contains
+POINT, grown by MARGIN metres, or NIL."
   (loop for c across *creatures*
         for loc = (location c)
         for r = (+ (body-radius c) margin)
         when (and (not (dead c))
                   (not (eq c ignore))
+                  (not (and ignore (spares-p ignore c)))
                   (< (+ (expt (- (vx point) (vx loc)) 2) (expt (- (vz point) (vz loc)) 2)) (* r r))
                   (< (- (vy loc) margin) (vy point) (+ (vy loc) (sprite-height c) margin)))
           return c))
@@ -277,8 +298,7 @@ whether the X move and whether the Z move were blocked."
     (hit-stop)
     (when (<= (health creature) 0)
       (cond ((gib-p creature amount)
-             (setf (gibbed creature) T)
-             (burst-gibs creature from))
+             (tear-apart creature :from from))
             ((bleeds creature)
              (bleed-out creature)))
       (setf (dead creature) 0.0))))
@@ -519,8 +539,11 @@ allows a straight walk. Returns NIL if every way back is blocked."
                        (replan-timer creature) *chase-replan*)
                  (return T)))))
 
-(defun hunt-from-range (creature)
-  "Back off from a player too close, cast at one in range and in sight, else close in."
+(defgeneric hunt-from-range (creature)
+  (:documentation "Hunt as a caster does: back off from a player too close, attack one in
+range and in sight, else close in."))
+
+(defmethod hunt-from-range ((creature creature))
   (let ((distance (player-distance creature)))
     (cond ((and (< distance (keep-away creature)) (retreat creature)))
           ((and (< distance (attack-range creature))
@@ -571,21 +594,31 @@ a caster, or a flyer that dives from out of reach.")
       (cast-spell (find-spell (attack-spell creature)) origin (nvunit aim) (container creature)
                   :caster creature))))
 
+(defgeneric release-attack (creature)
+  (:documentation "Land CREATURE's attack, on its ATTACK-HIT-FRAME: cast its spell, or
+strike the player if still in reach and in front of it.")
+  (:method ((creature creature))
+    (cond ((attack-spell creature)
+           (release-attack-spell creature))
+          ((and (player-within-p creature (attack-reach creature))
+                (< (player-angle creature) (attack-arc creature))
+                (clear-path-p (location creature) (feet *player*) 1.0))
+           (hurt-player *player* (roll (attack-damage creature)) (location creature))))))
+
+(defgeneric face-attack-target (creature dt)
+  (:documentation "Turn CREATURE through an attack's wind-up toward what it attacks.")
+  (:method ((creature creature) dt) (face-player creature dt)))
+
 (defun attack (creature dt)
   (let ((time (incf (attack-time creature) dt))
         (times (attack-frame-times creature)))
-    ;; It turns to follow the player through the wind-up (a caster, until it casts);
+    ;; It turns to follow its target through the wind-up (a caster, until it casts);
     ;; after that the blow is committed.
-    (when (< time (if (attack-spell creature) (attack-hit-time creature) (first times)))
-      (face-player creature dt))
+    (when (< time (if (ranged-p creature) (attack-hit-time creature) (first times)))
+      (face-attack-target creature dt))
     (when (and (attack-pending creature) (<= (attack-hit-time creature) time))
       (setf (attack-pending creature) NIL)
-      (cond ((attack-spell creature)
-             (release-attack-spell creature))
-            ((and (player-within-p creature (attack-reach creature))
-                  (< (player-angle creature) (attack-arc creature))
-                  (clear-path-p (location creature) (feet *player*) 1.0))
-             (hurt-player *player* (roll (attack-damage creature)) (location creature)))))
+      (release-attack creature))
     (when (<= (reduce #'+ times) time)
       (stop-walking creature (attack-pause creature)))))
 
@@ -632,7 +665,9 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 (defun revive (creature)
   (setf (alert creature) 0.0
         (bleeding creature) 0f0
-        (gibbed creature) NIL)
+        (gibbed creature) NIL
+        (rising creature) 0.0
+        (stirring creature) 0.0)
   (stop-walking creature)
   (setf (walk-distance creature) 0.0)
   (setf (dead creature) NIL
@@ -681,6 +716,29 @@ flinch, 0 to 1."
     (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)) (+ 1 (* squash *stagger-squash* 0.7)))
           (vy scale) (* h (- 1 (* squash *stagger-squash*))))))
 
+(defun show-front-frame (creature name frame squash)
+  "Show FRAME of animation NAME whatever the view, as a death strip is shown. SQUASH is
+the flinch, 0 to 1."
+  (let* ((animation (find-fx-animation name))
+         (atlas (animation-atlas animation))
+         (h (animation-size animation))
+         (scale (scaling creature)))
+    (setf (texture creature) (animation-texture animation))
+    (strip-uv (frame-uv creature) atlas frame (getf atlas :frames))
+    (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)) (+ 1 (* squash *stagger-squash* 0.7)))
+          (vy scale) (* h (- 1 (* squash *stagger-squash*))))))
+
+(defun show-rising (creature)
+  "Show CREATURE getting up where it was raised: its death played backwards, or without
+one, growing up out of the floor."
+  (let* ((duration (death-duration creature))
+         (k (max 0.0 (min 1.0 (- 1 (/ (rising creature) duration)))))
+         (name (death-animation creature)))
+    (if name
+        (let ((count (getf (animation-atlas (find-fx-animation name)) :frames)))
+          (show-front-frame creature name (- count 1 (min (1- count) (floor (* k count)))) 0.0))
+        (setf (vy (scaling creature)) (* (vy (base-scaling creature)) (max 0.02 k))))))
+
 (defgeneric show-own-pose (creature squash)
   (:documentation "Show a pose of CREATURE's own kind (a flyer's wingbeat and dive) with
 SHOW-VIEW-FRAME, and return true; or NIL to show the walk or the standing pose. Comes
@@ -702,7 +760,9 @@ after the flinch, block and attack.")
     (setf (vx scale) (* (vx base) (+ 1 (* s *stagger-squash* 0.7)))
           (vy scale) (* (vy base) (- 1 (* s *stagger-squash*)))
           (vz scale) (vz base))
-    (cond ((creature-hurting-p creature)
+    (cond ((and (< 0 (rising creature)) (not (dead creature)))
+           (show-rising creature))
+          ((creature-hurting-p creature)
            ;; The frames carry the flinch, so no squash on top.
            (let ((frames (floor (getf (animation-atlas (find-fx-animation (hurt-animation creature))) :frames)
                                 (length (getf (atlas creature) :views)))))
@@ -737,7 +797,8 @@ after the flinch, block and attack.")
                (setf (texture creature) (animation-texture animation))
                (strip-uv (frame-uv creature) atlas (min (1- count) (floor (* d (animation-fps animation)))) count)
                (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)))
-                     (vy scale) h)))
+                     (vy scale) h)
+               (stir creature)))
             ;; A death pose of its own kind (a flyer reuses its knockdown).
             ((show-own-pose creature 0.0))
             (T
@@ -745,6 +806,14 @@ after the flinch, block and attack.")
              (let ((k (max 0.02 (- 1 (/ d *death-time*)))))
                (setf (vy scale) (* (vy base) k)
                      (vx tint) 0.1 (vy tint) 0.0 (vz tint) 0.0 (vw tint) (- 1 k))))))))
+
+(defun stir (creature)
+  "Twitch CREATURE's corpse while it is STIRRING: something is raising it."
+  (when (< 0 (stirring creature))
+    (let ((scale (scaling creature))
+          (k (* 0.06 (sin (* 47.0 (stirring creature))))))
+      (setf (vx scale) (* (vx scale) (+ 1 k))
+            (vy scale) (* (vy scale) (- 1 (* 0.5 k)))))))
 
 ;;; A burning death lights its surroundings: a lamp that comes up with the fire, fades
 ;;; with it and is then taken out of *LAMPS*, since a corpse never leaves the scene.
@@ -779,10 +848,7 @@ after the flinch, block and attack.")
              (setf (vx at) (vx loc) (vy at) (+ (vy loc) (* 0.5 (sprite-height creature))) (vz at) (vz loc))
              (setf (vx color) (* k (vx glow)) (vy color) (* k (vy glow)) (vz color) (* k (vz glow)))))
           (lamp
-           (let ((at (position lamp *lamps*)))
-             (when at
-               (replace *lamps* *lamps* :start1 at :start2 (1+ at))
-               (decf (fill-pointer *lamps*))))
+           (remove-lamp lamp)
            (setf (death-lamp creature) NIL)))))
 
 ;; :AFTER so BILLBOARD's tick handler (view selection) still runs.
@@ -791,16 +857,19 @@ after the flinch, block and attack.")
     (let ((dt (min dt 0.05)))
       (setf (flash creature) (max 0.0 (- (flash creature) dt))
             (stagger creature) (max 0.0 (- (stagger creature) dt))
-            (brace creature) (max 0.0 (- (brace creature) dt)))
+            (brace creature) (max 0.0 (- (brace creature) dt))
+            (stirring creature) (max 0.0 (- (stirring creature) dt)))
       (slide creature dt)
       (drip-blood creature dt)
       (unless (dead creature)
-        (when (<= (stagger creature) 0)
-          (think creature dt)))
+        (cond ((< 0 (rising creature))
+               (decf (rising creature) dt))
+              ((<= (stagger creature) 0)
+               (think creature dt))))
       (keep-height creature dt)
       (when (dead creature)
         (incf (dead creature) dt)
-        (when (and *revive-time* (eq *level* :test)
+        (when (and *revive-time* (eq *level* :test) (not (summoned creature))
                    (< (+ (death-duration creature) *revive-time*) (dead creature))
                    ;; Wait for whoever stands on its spawn point to move.
                    (let ((home (home creature)))
@@ -838,8 +907,9 @@ after the flinch, block and attack.")
    (walk-animation :initform 'imp-walk)
    (attack-animation :initform 'imp-attack)
    (hurt-animation :initform 'imp-hurt)
-   ;; Head, two arms, two legs, the tail, ribs, a big chunk, two chunks, two scraps.
-   (gibs :initform '(:imp 0 1 1 2 2 3 4 5 6 6 7 7))
+   ;; Its own head and tail, then flesh: two arms, two legs, ribs, an organ, a big
+   ;; chunk, two chunks, two scraps.
+   (gibs :initform '((:imp (:head 0) 3) (:flesh 0 0 1 1 2 4 5 6 6 7 7)))
    (attack-damage :initform '(6 10))
    (chase-speed :initform 2.6)
    (max-health :initform 30)))
@@ -945,4 +1015,9 @@ after the flinch, block and attack.")
    (walk-speed :initform 0.9)
    (chase-speed :initform 1.4)
    (wander-radius :initform 2.0)
+   ;; Flesh from inside the plate, drawn bigger for its size. No single blow overkills
+   ;; 60 health by the usual fraction, so it tears apart more easily.
+   (gibs :initform '((:flesh 0 0 1 1 2 3 4 5 5 6 6 7 7)))
+   (gib-scale :initform 1.3)
+   (gib-overkill :initform 0.15)
    (max-health :initform 60)))

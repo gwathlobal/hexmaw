@@ -32,6 +32,8 @@
   (add-sword scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)
+  ;; So are raised skeletons.
+  (preload (make-instance 'skeleton-warrior) scene)
   (enter (make-instance 'menu-controller) scene)
   ;; The game draws into one pass and the menus (Alloy) into another; the blend
   ;; puts the menus on top and is what reaches the screen.

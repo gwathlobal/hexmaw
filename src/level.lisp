@@ -104,6 +104,8 @@ upstairs."
     (spawn-creature (make-instance 'knight :location (vec -6 0 0) :facing pi) container)
     ;; A harpy in the south-east of the hall; it rises to its hover from the floor.
     (spawn-creature (make-instance 'harpy :location (vec 6 0 7) :facing (- (/ pi 2))) container)
+    ;; A necromancer at the back of the hall, behind the imp, facing the spawn point.
+    (spawn-creature (make-instance 'necromancer :location (vec -2 0 -8) :facing pi) container)
     (build-annex container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))

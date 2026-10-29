@@ -10,6 +10,7 @@
                (:file "sprite")
                (:file "creature")
                (:file "flyer")
+               (:file "necromancer")
                (:file "blocks")
                (:file "fx")
                (:file "lights")

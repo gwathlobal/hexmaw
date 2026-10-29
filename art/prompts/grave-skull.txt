@@ -1,0 +1,17 @@
+Pixel-art sprite sheet of a spell effect for a Doom/Hexen-style first-person dark-fantasy game, where spells are drawn as small flat sprites: the GRAVE SKULL, a flying human skull wreathed in sickly green ghost-fire that a necromancer hurls at the player. It flies slowly and curves after its target, and bursts in green flame when it hits.
+
+REFERENCE IMAGE: the sheet of another spell from the same game (an orange fire bolt: five flight frames, then its burst). Match its art style exactly: pixel size, outline weight, the size of the flying ball within its cell, the way the burst grows and breaks up. Use it ONLY for the style and the layout; do not copy its colours or its fireball.
+
+THE FRAMES
+- Frames 1 to 5, FLIGHT, a seamless loop: a small human skull seen from the front, slightly from above, its jaw gaping, its eye sockets blazing bright sickly green. Tongues of translucent-looking (but drawn in solid pixels) pale green ghost-fire stream back from it and flicker around it, different in each frame so the loop moves, as the reference's fireball swirls. The skull itself stays the same size and in the same place in every frame. The skull is dull bone white, shaded grey-green.
+- Frames 6 to 12, BURST: the skull shatters in a flash of green fire: frame 6 a bright pale green flash where it was, frame 7 a bigger flash with skull fragments flying out, frame 8 a ring of green flame, frame 9 a billow of green fire with bone shards, frames 10 to 12 the flame breaking up into wisps and falling bone chips, fading to a few specks.
+
+COLOURS: bone white and grey; the fire in sickly greens, from near-white pale green in the hottest parts through bright acid green to dark bottle green at the edges. No orange, yellow, red or blue.
+
+LAYOUT
+- The image is 1536 x 1024 pixels: rows of square cells read left to right, top to bottom, laid out as in the reference: 5 cells in the first row (the flight), 5 in the second (burst frames 6 to 10), 2 in the third (burst frames 11 and 12).
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette or glow.
+- The cells are separated by thin lines of pure cyan (#00FFFF).
+- Each frame is centred in its cell with a clear magenta margin; nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers or frame borders.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no glow bleeding into the background: the fire's glow is drawn as solid pixels on the effect only.

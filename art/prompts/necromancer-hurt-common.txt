@@ -1,0 +1,21 @@
+Pixel-art sprite sheet: the pain (flinch) animation of the NECROMANCER, a withered sorcerer who raises the dead, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The necromancer's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a tall, gaunt, stooped old man: a bald, bone-pale head with sunken cheeks, a long thin grey beard, glowing sickly green eyes; a high stiff collar standing up behind the head; ragged layered robes of black and dark sickly green, torn into tatters at the hem and the sleeves; a rope belt hung with small bones and a little skull; bare, bony feet with cord wrapped at the ankles; and in his RIGHT hand a tall, thin, knotted black STAFF crowned with a human skull bound on with cord, its eye sockets glowing sickly green. His LEFT hand is free, its long fingers clawed. Also the shading style.
+2. The necromancer standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The staff stays in the right hand in every frame. Never swap hands, never draw a second staff or a third arm. The face, beard, collar and the staff's skull look the same in every frame. Any magic is sickly green light drawn as solid pixels on or right next to his hand and the staff's skull, never a soft halo on the magenta.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 3 the 2 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the necromancer standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. He does not hop or float.
+- The whole figure, including the top of the staff, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, blood or impact effects. Only the necromancer.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE FLINCH: a sharp, readable reaction to a blow, in the spirit of a Doom pain frame. It plays for a third of a second when he is struck by a sword or a fire bolt. It must read clearly as hurt, not as an attack or a cast. His feet stay planted.
+- Cell 2, JOLT: the instant of the hit. His head snaps back, mouth open in a cry, eyes wide; the body thrown back; the left hand flung up; the staff tilting back in his grip.
+- Cell 3, STAGGER: a moment later. He doubles forward, hunched lower than standing, clutching his chest with the left hand, leaning heavily on the staff.

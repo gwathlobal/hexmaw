@@ -206,6 +206,12 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (when *player* (reset-player *player*))
   (setf *hit-stop* 0.0)
   (clear-blood)
+  ;; What came into the level mid-game (raised skeletons) goes; the rest live again.
+  (let ((j 0))
+    (loop for creature across *creatures*
+          do (cond ((summoned creature) (despawn creature))
+                   (T (setf (aref *creatures* j) creature) (incf j))))
+    (setf (fill-pointer *creatures*) j))
   (loop for creature across *creatures*
         do (revive creature)
            (update-creature-look creature))
