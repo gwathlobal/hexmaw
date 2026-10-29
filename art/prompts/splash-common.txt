@@ -1,0 +1,11 @@
+Pixel-art SPLASH SCREEN for a Doom/Hexen-style first-person dark-fantasy dungeon game, in the style of a 1990s DOS game's title art (Hexen, Heretic, Daggerfall).
+
+REFERENCE IMAGES: turnaround sheets of the game's monsters. Use them for the art style (pixel size, palette, hard-edged shading with a few tones, outline weight) and, where a monster appears in the scene, for its exact design. Do not copy the sheet layout, the magenta background or the cyan lines.
+
+THE IMAGE
+- One wide landscape picture, 1536 x 1024, filled edge to edge with the scene: no frame, border, panel or vignette box.
+- The game shows it cropped to 16:9, so the top and bottom eighth of the picture may be cut off: keep everything important within the middle three quarters of its height.
+- Crisp pixel art with hard edges, chunky art pixels (about 4 to 5 image pixels each), a limited palette, no anti-aliasing, no blur, no photographic texture, no smooth airbrushed gradients. Shading and glow in a few hard steps, with ordered dithering at most.
+- A grim, muted dungeon palette: soot black, cold grey-brown stone, deep shadow, with warm torch orange and ember red as the only strong colours.
+- ABSOLUTELY NO TEXT anywhere: no title, logo, letters, numbers, runes that read as letters, signature or watermark. The game draws its own title and buttons over the picture.
+- The game draws a column of menu text in the CENTRE of the picture (the middle third of its width, from a little above the middle to a little below). Keep that area calm and dark: deep shadow, fog or distant darkness, with no bright light, no faces, no important detail. Put the subjects and the light to the sides and below.

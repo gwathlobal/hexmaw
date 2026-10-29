@@ -40,6 +40,33 @@ cut loose from the old scene's passes."
    (alloy:margins)
    :pattern (chroma:color 0 0 0 *menu-dim*)))
 
+;; The main menu and the loading screen cover the game with a splash picture
+;; (data/splash/, from tools/make_splash.py) instead of the veil.
+(defparameter *splash-dim* 0.6 "Opacity of the veil over a splash, so the menu stands out.")
+(defparameter *title-menu-top* 130
+  "UI units from the top of the screen to the main menu, which keeps the dagger in the
+lower middle of its splash clear.")
+
+(defclass splash-backdrop (menu-backdrop)
+  ((splash :initarg :splash :reader splash
+           :documentation "The picture's path under data/splash/, without extension."))
+  (:documentation "A MENU-BACKDROP that draws a picture over the whole screen, cropped to cover it."))
+
+(defun splash-image (renderer name)
+  ;; The renderer caches images by path, and the menu pass outlives scenes, so each
+  ;; picture is read once. Nearest filtering keeps its pixels hard.
+  (simple:request-image renderer (merge-pathnames (format NIL "data/splash/~a.png" name) (root))
+                        :filtering :nearest))
+
+(presentations:define-realization (presentations:default-look-and-feel splash-backdrop)
+  ((:splash simple:icon)
+   (alloy:margins)
+   (splash-image alloy:renderer (splash alloy:renderable))
+   :sizing :cover :halign :middle :valign :middle)
+  ((:veil simple:rectangle)
+   (alloy:margins)
+   :pattern (chroma:color 0 0 0 *splash-dim*)))
+
 (defparameter *menu-text-color* (chroma:color 0.92 0.88 0.78))
 (defparameter *menu-button-color* (chroma:color 0.13 0.11 0.10 0.92))
 (defparameter *menu-button-hover-color* (chroma:color 0.38 0.20 0.10 0.95))
@@ -97,15 +124,23 @@ cut loose from the old scene's passes."
   (:documentation "A full-screen menu: a title over a column of buttons."))
 
 (defgeneric panel-title (panel))
+(defgeneric panel-splash (panel)
+  (:documentation "The splash picture behind PANEL (see SPLASH-BACKDROP), or NIL to dim the game.")
+  (:method ((panel menu-panel)) NIL))
+(defgeneric panel-top (panel)
+  (:documentation "UI units from the top of the screen to PANEL's title, or T to centre it.")
+  (:method ((panel menu-panel)) T))
 (defgeneric panel-buttons (panel)
   (:documentation "A list of (LABEL ACTION): ACTION is a function name, called on the next tick after a click."))
 
 (defmethod initialize-instance :after ((panel menu-panel) &key)
   (let* ((buttons (panel-buttons panel))
          (rows (1+ (length buttons)))
-         (backdrop (make-instance 'menu-backdrop
+         (splash (panel-splash panel))
+         (backdrop (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
                                   :col-sizes `(T ,*menu-width* T)
-                                  :row-sizes `(T ,(+ (* rows *menu-row-height*) (* (1- rows) *menu-row-gap*)) T)))
+                                  :row-sizes `(,(panel-top panel) ,(+ (* rows *menu-row-height*) (* (1- rows) *menu-row-gap*)) T)
+                                  (when splash (list :splash splash))))
          (column (make-instance 'alloy:vertical-linear-layout
                                 :min-size (alloy:size *menu-width* *menu-row-height*)
                                 :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
@@ -124,12 +159,15 @@ cut loose from the old scene's passes."
 
 (defclass main-menu (menu-panel) ())
 (defmethod panel-title ((panel main-menu)) "HEXMAW")
+(defmethod panel-splash ((panel main-menu)) "title")
+(defmethod panel-top ((panel main-menu)) *title-menu-top*)
 (defmethod panel-buttons ((panel main-menu))
   '(("Start game" start-game) ("Debug level" start-debug-level) ("Exit game" exit-game)))
 
 (defclass loading-screen (menu-panel) ()
   (:documentation "Up while a level is built (:LOADING), which freezes the frame for a second or two."))
 (defmethod panel-title ((panel loading-screen)) "Building the level...")
+(defmethod panel-splash ((panel loading-screen)) "loading")
 (defmethod panel-buttons ((panel loading-screen)) ())
 
 (defclass pause-menu (menu-panel) ())

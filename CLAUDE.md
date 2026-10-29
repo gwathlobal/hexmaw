@@ -281,7 +281,11 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
-  loading screen is one with no buttons). Hovering a button gives it the keyboard
+  loading screen is one with no buttons). `panel-splash` names a picture in `data/splash/`
+  to cover the screen with (the main menu's `title`, the loading screen's `loading`; see
+  "Splash screens" below); NIL, the pause menu's, dims the game behind it instead.
+  `panel-top` places the menu from the top of the screen (T, the default, centres it; the
+  main menu's `*title-menu-top*` keeps it off the dagger in its splash). Hovering a button gives it the keyboard
   focus, so one button is lit at a time.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
@@ -474,6 +478,30 @@ tools/make_texture.py art/textures/platform-top-1.png data/textures/planks --met
 
 A re-made PNG is picked up by reloading greybox.lisp (`tools/hd reload src/greybox.lisp`),
 not by `tools/hd reset`.
+
+## Splash screens
+
+The main menu and the loading screen draw a picture over the whole window
+(`splash-backdrop` in menu.lisp), cropped to cover it, with nearest filtering and a dark
+veil (`*splash-dim*`, 0.6) so it stays in the background. Each is a generated 1536 × 1024 picture: `art/prompts/splash-common.txt`
+(16:9 crop, no text, a calm dark centre for the menu) plus `splash-title.txt` or
+`splash-loading.txt`. The title references the four monsters' turnarounds, the loading
+screen the imp's turnaround, the stone wall and the torch:
+
+```bash
+P=art/prompts; tools/gen_image.py art/splash/title.png --prompt "$(cat $P/splash-common.txt $P/splash-title.txt)" --ref "Pixel Demon Character Turnaround.png" --ref art/acolyte/turnaround-2.png --ref art/knight/runic-turnaround-3.png --ref art/harpy/turnaround-2.png --size 1536x1024 -n 2
+```
+
+`tools/make_splash.py` crops it to 16:9 (`--shift` -1 keeps the top, 1 the bottom) and
+box-filters it to 640 × 360, 2 screen pixels per splash pixel at 1280 × 720. It keeps every
+colour by default: a 64-colour palette turned the knight's blue runes yellow.
+
+```bash
+tools/make_splash.py art/splash/title-2.png data/splash/title --shift -0.6
+```
+
+The menu pass caches the picture by path and outlives scenes, so a re-made one shows after a
+restart of `./run.sh`.
 
 ## Monster sprites
 
