@@ -120,9 +120,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 ## Layout and conventions
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
-- `src/greybox.lisp`: untextured level geometry (`greybox` entity, fog, `add-box`, `*solids*`),
-  and `lit-entity`, the shader mixin whose `light_at` lights the level and billboards from
-  the `lamp-block` uniform buffer.
+- `src/greybox.lisp`: level geometry (`greybox` entity, fog, `add-box`, `*solids*`), its
+  textures and surfaces (see "Level textures" below), and `lit-entity`, the shader mixin
+  whose `light_at` lights the level and billboards from the `lamp-block` uniform buffer.
 - `src/lights.lisp`: point lights (`lamp`s in `*lamps*`, which `build-level` empties).
   `add-torch x y z` places a `torch` whose flame stands on y, `*torch-stand-off*` out from
   the nearest wall within `*torch-wall-reach*` (`wall-near`), with a flickering lamp in the
@@ -410,6 +410,44 @@ every reference it needs, so a follow-up pose attaches the earlier result as a `
 Keep prompts worth repeating as files under `art/prompts/`, and `--dry-run` a new command
 line to see what will be sent.
 
+## Level textures
+
+Level faces are textured in world space: every face is axis-aligned, so the greybox shader
+lays a texture flat on it by the two world axes in its plane (walls by x or z and y, floors
+and ceilings by x and z), at `*texels-per-metre*` (64, the monsters' density). A texture's
+pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and walls line up
+across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
+sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
+`:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`), tinted by
+`:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
+
+A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
+from `data/textures/<name>.png`. It starts as a generated square:
+`art/prompts/texture-common.txt` (seamless, flat-on, flat lighting) plus
+`texture-<name>.txt`, the imp's turnaround as the style reference, a few candidates each,
+one at a time (parallel runs hit "model at capacity"):
+
+```bash
+tools/gen_image.py art/textures/wall-stone.png --prompt "$(cat art/prompts/texture-common.txt art/prompts/texture-wall-stone.txt)" --ref "Pixel Demon Character Turnaround.png" --size 1024x1024 -n 2
+```
+
+`tools/make_texture.py` crops it square, box-filters it to `--metres` × 64 px, flattens it
+to one palette (`--colors`, 32) and writes a 3 × 3 tiled preview beside the source to check
+the seams. The generator's 1254 px squares have art pixels about 5 px wide, so 4 m
+(256 px) keeps their detail; a small-patterned one (pillar blocks, planks) is 2 m. Asked
+for seamless, they mostly tile; `--blend PX` cross-fades the edges when they don't, but
+ghosts joints, so a fresh image is often better.
+
+```bash
+tools/make_texture.py art/textures/floor-flags-2.png data/textures/floor-flags --metres 4
+tools/make_texture.py art/textures/ceiling-1.png data/textures/ceiling-stone --metres 4
+tools/make_texture.py art/textures/pillar-stone-1.png data/textures/pillar-stone --metres 2
+tools/make_texture.py art/textures/platform-top-1.png data/textures/planks --metres 2
+```
+
+A re-made PNG is picked up by reloading greybox.lisp (`tools/hd reload src/greybox.lisp`),
+not by `tools/hd reset`.
+
 ## Monster sprites
 
 A monster starts as a 5-view turnaround sheet (front, front-quarter, side,
@@ -686,7 +724,9 @@ with the greybox shader in their material colours. Authoring conventions (Blende
   block stacked above, below or beside it.
 - Empties named `spawn_<monster>` (e.g. `spawn_imp`) place a monster facing the
   empty's −Z.
-- A material's base colour is the piece's colour; textures aren't read yet.
+- A material named after a surface (`wall`, `floor`, `ceiling`, `dais`, ...; see "Level
+  textures") draws that surface; any other material is flat in its base colour. The
+  .glb's own textures and UVs aren't read.
 
 `(attach-block 'test-room container "connector_south" :at point :facing :south)` places a
 block so that connector sits at `point`, opening toward `:south`, and returns the block's

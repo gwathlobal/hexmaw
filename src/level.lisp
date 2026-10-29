@@ -4,12 +4,6 @@
 ;;; two-storey annex east and a corridor north that runs into the fog. Units are metres, +Y is up, the
 ;;; player spawns facing -Z (north). Rebuilt on every scene reload.
 
-(defparameter *floor-color* (vec 0.45 0.42 0.38))
-(defparameter *wall-color* (vec 0.62 0.6 0.56))
-(defparameter *ceiling-color* (vec 0.32 0.31 0.3))
-(defparameter *pillar-color* (vec 0.62 0.36 0.3))
-(defparameter *platform-color* (vec 0.4 0.46 0.56))
-
 (defun build-annex (container)
   "A two-storey annex east of the hall: a lower room through the hall's east doorway, an
 upper room right above it, and a stair shaft along their east side that climbs from the
@@ -20,32 +14,32 @@ upstairs."
         (hall 4.0))                     ; where the hall's east wall ends
     ;; Floor under the doorway from the hall, the lower room and the stair shaft. Without
     ;; the doorway's strip the nav grid has no floor there, and creatures can't path through.
-    (add-box container (- x0 w) -0.5 (- z0 w)  (+ shaft w) 0 (+ z1 w) :color *floor-color*)
+    (add-box container (- x0 w) -0.5 (- z0 w)  (+ shaft w) 0 (+ z1 w) :surface :floor)
     ;; Lower room: 3 m tall, with a doorway at the south end of its east wall into the shaft.
-    (add-box container x0 0 (- z0 w)  (+ x1 w) 3 z0 :color *wall-color*)
-    (add-box container x0 0 z1  (+ x1 w) 3 (+ z1 w) :color *wall-color*)
-    (add-box container x1 0 z0  (+ x1 w) 3 (- z1 2) :color *wall-color*)
+    (add-box container x0 0 (- z0 w)  (+ x1 w) 3 z0 :surface :wall)
+    (add-box container x0 0 z1  (+ x1 w) 3 (+ z1 w) :surface :wall)
+    (add-box container x1 0 z0  (+ x1 w) 3 (- z1 2) :surface :wall)
     ;; Its ceiling is the upper room's floor.
-    (add-box container x0 3 (- z0 w)  (+ x1 w) upper (+ z1 w) :color *platform-color*)
+    (add-box container x0 3 (- z0 w)  (+ x1 w) upper (+ z1 w) :surface :floor)
     ;; Upper room, with a doorway at the north end of its east wall onto the stair landing.
     ;; Its west wall stands on the hall's east wall.
-    (add-box container (- x0 w) hall (- z0 w)  x0 top (+ z1 w) :color *wall-color*)
-    (add-box container x0 upper (- z0 w)  (+ x1 w) top z0 :color *wall-color*)
-    (add-box container x0 upper z1  (+ x1 w) top (+ z1 w) :color *wall-color*)
-    (add-box container x1 upper (+ z0 2)  (+ x1 w) top z1 :color *wall-color*)
-    (add-box container (- x0 w) top (- z0 w)  (+ x1 w) (+ top w) (+ z1 w) :color *ceiling-color*)
+    (add-box container (- x0 w) hall (- z0 w)  x0 top (+ z1 w) :surface :wall)
+    (add-box container x0 upper (- z0 w)  (+ x1 w) top z0 :surface :wall)
+    (add-box container x0 upper z1  (+ x1 w) top (+ z1 w) :surface :wall)
+    (add-box container x1 upper (+ z0 2)  (+ x1 w) top z1 :surface :wall)
+    (add-box container (- x0 w) top (- z0 w)  (+ x1 w) (+ top w) (+ z1 w) :surface :ceiling)
     ;; Stair shaft, open from the floor to its own ceiling.
     (let ((x (+ x1 w)) (roof (+ top w)))
-      (add-box container shaft 0 (- z0 w)  (+ shaft w) roof (+ z1 w) :color *wall-color*)
-      (add-box container x 0 (- z0 w)  shaft roof z0 :color *wall-color*)
-      (add-box container x 0 z1  shaft roof (+ z1 w) :color *wall-color*)
-      (add-box container x roof (- z0 w)  (+ shaft w) (+ roof w) (+ z1 w) :color *ceiling-color*)
+      (add-box container shaft 0 (- z0 w)  (+ shaft w) roof (+ z1 w) :surface :wall)
+      (add-box container x 0 (- z0 w)  shaft roof z0 :surface :wall)
+      (add-box container x 0 z1  shaft roof (+ z1 w) :surface :wall)
+      (add-box container x roof (- z0 w)  (+ shaft w) (+ roof w) (+ z1 w) :surface :ceiling)
       ;; Ten steps climbing north from the lower doorway; the last is the landing.
       (let ((steps (round upper rise)))
         (loop for k from 1 to steps
               for south = (- z1 1 (* tread (1- k)))
               for north = (if (= k steps) z0 (- south tread))
-              do (add-box container x 0 north  shaft (* rise k) south :color *platform-color*))))
+              do (add-box container x 0 north  shaft (* rise k) south :surface :platform))))
     ;; Rooms, so the torches don't light through floors and walls, and the doorways
     ;; between them: hall to lower room, lower room to shaft, shaft to upper room.
     (add-room x0 0 z0  x1 3 z1)
@@ -69,24 +63,24 @@ upstairs."
     (add-room -10 0 -10  10 h 10)
     (add-portal -1.5 0 (- -10 w)  1.5 3 -10)
     ;; Hall: floor, ceiling, east/west/south walls, north wall with a doorway.
-    (add-box container -10 -0.5 -10  10 0 10 :color *floor-color*)
-    (add-box container -10 h -10  10 (+ h 0.5) 10 :color *ceiling-color*)
-    (add-box container (- -10 w) 0 -10  -10 h 10 :color *wall-color*)
+    (add-box container -10 -0.5 -10  10 0 10 :surface :floor)
+    (add-box container -10 h -10  10 (+ h 0.5) 10 :surface :ceiling)
+    (add-box container (- -10 w) 0 -10  -10 h 10 :surface :wall)
     ;; East wall, with a doorway into the annex.
-    (add-box container 10 0 -10  (+ 10 w) h 3.5 :color *wall-color*)
-    (add-box container 10 0 6.5  (+ 10 w) h 10 :color *wall-color*)
-    (add-box container 10 3 3.5  (+ 10 w) h 6.5 :color *wall-color*)
-    (add-box container -10 0 10  10 h (+ 10 w) :color *wall-color*)
-    (add-box container -10 0 (- -10 w)  -1.5 h -10 :color *wall-color*)
-    (add-box container 1.5 0 (- -10 w)  10 h -10 :color *wall-color*)
-    (add-box container -1.5 3 (- -10 w)  1.5 h -10 :color *wall-color*)
+    (add-box container 10 0 -10  (+ 10 w) h 3.5 :surface :wall)
+    (add-box container 10 0 6.5  (+ 10 w) h 10 :surface :wall)
+    (add-box container 10 3 3.5  (+ 10 w) h 6.5 :surface :wall)
+    (add-box container -10 0 10  10 h (+ 10 w) :surface :wall)
+    (add-box container -10 0 (- -10 w)  -1.5 h -10 :surface :wall)
+    (add-box container 1.5 0 (- -10 w)  10 h -10 :surface :wall)
+    (add-box container -1.5 3 (- -10 w)  1.5 h -10 :surface :wall)
     ;; Pillars.
     (loop for (x z) in '((-4 -4) (4 -4) (-4 4) (4 4))
-          do (add-box container (- x 0.5) 0 (- z 0.5) (+ x 0.5) h (+ z 0.5) :color *pillar-color*))
+          do (add-box container (- x 0.5) 0 (- z 0.5) (+ x 0.5) h (+ z 0.5) :surface :pillar))
     ;; Platform in the north-east corner with two steps up to it.
-    (add-box container 5 0 -9.5  9.5 1.2 -5 :color *platform-color*)
-    (add-box container 5 0 -5  6.5 0.8 -3.5 :color *platform-color*)
-    (add-box container 6.5 0 -5  8 0.4 -3.5 :color *platform-color*)
+    (add-box container 5 0 -9.5  9.5 1.2 -5 :surface :platform)
+    (add-box container 5 0 -5  6.5 0.8 -3.5 :surface :platform)
+    (add-box container 6.5 0 -5  8 0.4 -3.5 :surface :platform)
     ;; Torches on the hall walls, two of them flanking the doorway.
     (loop for (x z) in '((-9.5 0) (9.5 0) (0 9.5) (-5 -9.5) (5 -9.5))
           do (add-torch container x 2.4 z))
@@ -103,10 +97,10 @@ upstairs."
     (let ((z0 (- -10 w)) (z1 -25))
       (add-room -1.5 0 z1  1.5 3 z0)
       ;; The floor runs under the doorway too, for the nav grid.
-      (add-box container -1.5 -0.5 z1  1.5 0 -10 :color *floor-color*)
-      (add-box container -1.5 3 z1  1.5 3.5 z0 :color *ceiling-color*)
-      (add-box container (- -1.5 w) 0 z1  -1.5 3 z0 :color *wall-color*)
-      (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :color *wall-color*)
+      (add-box container -1.5 -0.5 z1  1.5 0 -10 :surface :floor)
+      (add-box container -1.5 3 z1  1.5 3.5 z0 :surface :ceiling)
+      (add-box container (- -1.5 w) 0 z1  -1.5 3 z0 :surface :wall)
+      (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :surface :wall)
       (add-torch container -1.0 2.2 -18)
       ;; The test block (data/blocks/test-room.glb) at the corridor's end, attached by
       ;; its south doorway. Its other doorways are walled off for now.
