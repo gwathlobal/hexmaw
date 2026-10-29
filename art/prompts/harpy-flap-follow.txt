@@ -1,0 +1,1 @@
+REFERENCE IMAGE 3 is the finished wingbeat seen from the FRONT, laid out the same way (the same 2 x 2 grid, frames in the same order). It is the same animation this sheet must show: the same four wing positions in the same order, the same scale. Only the camera angle changes, to the one in reference 2.

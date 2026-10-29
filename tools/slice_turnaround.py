@@ -4,7 +4,7 @@
 The sheet is N views side by side on a magenta background, separated by cyan
 vertical lines (front, 3/4 front, side, 3/4 back, back). This keys out the
 background, cuts the views with a shared crop so the feet and centre line stay
-put when the game switches views, downscales with nearest-neighbour, and writes:
+put when the game switches views, downscales, and writes:
 
   <out>.png   atlas, one cell per view, left to right, 2 px transparent gaps
   <out>.lisp  index the game reads: cell size, gap, view names
@@ -13,13 +13,20 @@ The game expects the three turned views (front-quarter, side, back-quarter) to
 face image-left, and mirrors them for the other side. Generated sheets are not
 always consistent; check each view and flip the odd ones out with --mirror.
 
+Views are downscaled with nearest-neighbour unless --filter box, which averages the
+source pixels under each sprite pixel: generated sheets are noisy below their pixel
+grid, and picking one source pixel turns that into speckle. --colors N then maps the
+whole atlas onto one N-colour palette taken from its own pixels.
+
   tools/slice_turnaround.py "Pixel Demon Character Turnaround.png" data/sprites/imp/turnaround \\
       --height 96 --mirror back-quarter
 """
 
 import argparse
+import math
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 VIEWS = ["front", "front-quarter", "side", "back-quarter", "back"]
@@ -31,6 +38,36 @@ def is_background(r, g, b):
     magenta = min(r, b) > 60 and g < 0.5 * min(r, b) and abs(r - b) < 0.35 * max(r, b)
     cyan = b > 150 and g > 150 and r < 120
     return magenta or cyan
+
+
+def box_downscale(img, size):
+    """Average the source pixels under each output pixel. A pixel is opaque when at least
+    half the source under it is, and takes the mean colour of the opaque ones."""
+    src = np.asarray(img, dtype=np.float64)
+    (w, h), (sw, sh) = size, img.size
+    out = np.zeros((h, w, 4), dtype=np.uint8)
+    for y in range(h):
+        y0, y1 = int(y * sh / h), max(int(y * sh / h) + 1, math.ceil((y + 1) * sh / h))
+        for x in range(w):
+            x0, x1 = int(x * sw / w), max(int(x * sw / w) + 1, math.ceil((x + 1) * sw / w))
+            block = src[y0:y1, x0:x1].reshape(-1, 4)
+            solid = block[block[:, 3] > 0]
+            if len(solid) * 2 >= len(block):
+                out[y, x, :3] = solid[:, :3].mean(axis=0).round()
+                out[y, x, 3] = 255
+    return Image.fromarray(out, "RGBA")
+
+
+def reduce_colors(img, colors):
+    """Map the opaque pixels onto one palette of COLORS colours taken from them."""
+    rgba = np.asarray(img).copy()
+    solid = rgba[:, :, 3] > 0
+    pixels = Image.fromarray(rgba[solid][:, :3].reshape(1, -1, 3), "RGB")
+    palette = pixels.quantize(colors=colors, method=Image.MEDIANCUT)
+    mapped = Image.fromarray(rgba[:, :, :3], "RGB").quantize(palette=palette, dither=Image.NONE)
+    rgba[:, :, :3] = np.asarray(mapped.convert("RGB"))
+    rgba[~solid] = 0
+    return Image.fromarray(rgba, "RGBA")
 
 
 def separator_columns(img):
@@ -71,6 +108,9 @@ def main():
     ap.add_argument("--margin", type=int, default=4, help="source pixels to skip next to each separator")
     ap.add_argument("--mirror", nargs="*", default=[], choices=VIEWS, metavar="VIEW",
                     help="views to flip so they face image-left")
+    ap.add_argument("--filter", choices=("nearest", "box"), default="nearest",
+                    help="downscale by picking one source pixel per sprite pixel, or by averaging them")
+    ap.add_argument("--colors", type=int, help="reduce the atlas to a palette of this many colours")
     args = ap.parse_args()
 
     src = Image.open(args.sheet).convert("RGBA")
@@ -102,10 +142,15 @@ def main():
     for i, (l, r) in enumerate(ranges):
         centre = l + (r - l) // 2
         view = src.crop((centre - half, top, centre + half, bottom))
-        view = view.resize((cell_w, cell_h), Image.NEAREST)
+        if args.filter == "box":
+            view = box_downscale(view, (cell_w, cell_h))
+        else:
+            view = view.resize((cell_w, cell_h), Image.NEAREST)
         if VIEWS[i] in args.mirror:
             view = view.transpose(Image.FLIP_LEFT_RIGHT)
         atlas.paste(view, (i * (cell_w + GAP), 0))
+    if args.colors:
+        atlas = reduce_colors(atlas, args.colors)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

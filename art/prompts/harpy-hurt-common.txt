@@ -1,0 +1,20 @@
+Pixel-art sprite sheet: the HARPY FLINCHING when struck in mid-air, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles. The harpy is a winged hag that hovers under a dungeon's ceiling; a sword blow or a fire bolt hits it and it jolts in pain, then recovers its hover.
+
+REFERENCE IMAGES, in the order attached:
+1. The harpy's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a gaunt hag with grey leathery skin, a hooked, beak-like nose, a shrieking mouth of small yellowed teeth, glowing sickly yellow eyes and long matted ash-grey hair; a body of ragged slate and soot-brown feathers; ARMS THAT ARE WINGS, with three long, bony, rust-clawed fingers at each wing's bend; scaly dark bird legs with big hooked rust-coloured talons; a short fan of tail feathers. Also the shading style.
+2. The harpy hovering, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight and scale exactly.
+
+The harpy has exactly two wings and two legs in every frame, and no human arms or hands besides the clawed fingers at the wings' bends. The face, hair, eyes and talons look the same in every frame. No blood, wounds, sparks or effects: the pain shows only in the pose.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right: cell 1 the hovering copy, cell 2 the jolt, cell 3 the stagger. Make the cells wide enough for the wings at their widest, with the harpy drawn small enough to fit.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the harpy hovering, wings raised in a high V, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale: the body, head and legs are exactly as big in every cell.
+- The whole figure, including both wingtips and the talons, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, loose feathers, dust or effects. Only the harpy.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE POSES (the blow comes from in front of the harpy, where it faces):
+- Frame 2 (cell 2), JOLT: the instant the blow lands: the whole body snapped back and hunched, the head thrown back with the eyes squeezed shut and the mouth wide in a screech, both wings jerked up and flung out stiffly, the feathers bristling, the legs drawn up tight under the body with the talons clenched shut.
+- Frame 3 (cell 3), STAGGER: a moment later, sagging in the air: the body slumped and tilted to one side, the head hanging forward, glaring, both wings drooping half folded below the shoulders, one lower than the other, beating weakly, the legs dangling loose.
