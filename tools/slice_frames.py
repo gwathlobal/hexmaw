@@ -19,9 +19,10 @@ for first-person HUD sprites (hands, weapons) whose arms are cut off by the scre
 edge: each frame is still centred horizontally on its cell, but its lowest solid row
 goes on the strip's bottom edge, wherever the generator happened to cut the arms. --pixel is the
 size of one art pixel in the sheet (generated pixel art is upscaled); the frames
-are downscaled by it with nearest-neighbour, the same for all animations, so
-their sizes stay comparable. Generated art is often noisy below its pixel grid; --filter box
-averages each art pixel's source pixels instead of picking one, and --colors N maps every
+are downscaled by it, the same for all animations, so their sizes stay comparable,
+with nearest-neighbour by default. Generated art is often noisy below its pixel grid;
+--filter box averages each art pixel's source pixels instead of picking one (an art
+pixel is opaque when at least half its source is), and --colors N maps every
 frame of an animation onto one N-colour palette taken from its own pixels, which merges
 the speckle into flat pixel-art colours.
 
@@ -37,6 +38,8 @@ import math
 from pathlib import Path
 
 from PIL import Image
+
+from pixelart import box_downscale, reduce_colors
 
 GAP = 2
 
@@ -213,7 +216,13 @@ def main():
             # otherwise pick up the frame in the row above.
             frame = Image.new("RGBA", (2 * half_w, 2 * half_h), (0, 0, 0, 0))
             frame.paste(src.crop((l, t, r + 1, b + 1)), (l - (cx - half_w), t - (cy - half_h)))
-            strip.paste(frame.resize((cell_w, cell_h), Image.NEAREST), (i * (cell_w + GAP), 0))
+            if args.filter == "box":
+                frame = box_downscale(frame, (cell_w, cell_h))
+            else:
+                frame = frame.resize((cell_w, cell_h), Image.NEAREST)
+            strip.paste(frame, (i * (cell_w + GAP), 0))
+        if args.colors:
+            strip = reduce_colors(strip, args.colors)
         strip.save(out / f"{name}.png")
         (out / f"{name}.lisp").write_text(
             f";;; Written by tools/slice_frames.py from {Path(args.sheet).name}; do not edit.\n"
