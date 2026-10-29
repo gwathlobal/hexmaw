@@ -331,6 +331,27 @@ by its KNOCKBACK-SCALE."
         (attack-time creature) NIL
         (idle-timer creature) pause))
 
+(defgeneric move-lift (creature)
+  (:documentation "Metres above its feet that a moving CREATURE ignores solids in: the
+ledges it climbs. A flyer has nothing to climb.")
+  (:method ((creature creature)) (step-height creature)))
+
+(defgeneric keep-height (creature dt)
+  (:documentation "Each tick, dead or alive, move CREATURE to the height it belongs at.
+A walker settles onto the floor; a flyer (flyer.lisp) hovers, dives and falls.")
+  (:method ((creature creature) dt)
+    (unless (dead creature)
+      (settle creature dt))))
+
+(defun ground-point (creature)
+  "Where CREATURE plans its moves from: its feet, or for one in the air, the floor
+under them. The nav grid only knows floors."
+  (let* ((loc (location creature))
+         (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc)))))
+    (if (and floor (< *nav-layer-above* (- (vy loc) floor)))
+        (vec (vx loc) floor (vz loc))
+        loc)))
+
 (defun walk-path (creature dt)
   "Walk DT seconds toward the next point of the path, facing the way it goes. Blocked
 by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
@@ -345,7 +366,7 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
          (z0 (vz loc)))
     (when (< 1f-4 distance)
       (turn-to creature (atan dx (- dz)) dt)
-      (move-creature creature (* step (/ dx distance)) (* step (/ dz distance)) (step-height creature)))
+      (move-creature creature (* step (/ dx distance)) (* step (/ dz distance)) (move-lift creature)))
     (let ((moved (sqrt (+ (expt (- (vx loc) x0) 2) (expt (- (vz loc) z0) 2)))))
       (incf (walk-distance creature) moved)
       (setf (stuck creature) (if (< moved (* 0.25 step)) (+ (stuck creature) dt) 0.0))
@@ -357,7 +378,7 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
 
 (defun plan-wander (creature)
   "Set off for a random spot it can reach within WANDER-RADIUS of home."
-  (let* ((loc (location creature))
+  (let* ((loc (ground-point creature))
          (path (flet ((spot (around)
                         (nav-reachable-spot loc (body-radius creature) (sprite-height creature)
                                             (step-height creature)
@@ -441,7 +462,7 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
 
 (defun chase-path (creature)
   "A path to the player: straight at them when nothing is in the way, else along the nav grid."
-  (let ((loc (location creature))
+  (let ((loc (ground-point creature))
         (feet (feet *player*))
         (r (body-radius creature))
         (h (sprite-height creature))
@@ -479,7 +500,7 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
 (defun retreat (creature)
   "Walk *RETREAT-STEP* metres away from the player, or as near away as the nav grid
 allows a straight walk. Returns NIL if every way back is blocked."
-  (let* ((loc (location creature))
+  (let* ((loc (ground-point creature))
          (feet (feet *player*))
          (away (atan (- (vx loc) (vx feet)) (- (vz feet) (vz loc)))))
     (when *nav-grid*
@@ -502,9 +523,14 @@ allows a straight walk. Returns NIL if every way back is blocked."
            (start-attack creature))
           (T (chase creature)))))
 
+(defgeneric ranged-p (creature)
+  (:documentation "True if CREATURE attacks from a distance, as HUNT-FROM-RANGE has it:
+a caster, or a flyer that dives from out of reach.")
+  (:method ((creature creature)) (attack-spell creature)))
+
 (defun hunt (creature)
   "Attack the player if within reach, or set off along a fresh path toward them."
-  (cond ((attack-spell creature) (hunt-from-range creature))
+  (cond ((ranged-p creature) (hunt-from-range creature))
         ((player-within-p creature (* *attack-start-reach* (attack-reach creature)))
          (start-attack creature))
         (T (chase creature))))
@@ -558,6 +584,11 @@ allows a straight walk. Returns NIL if every way back is blocked."
     (when (<= (reduce #'+ times) time)
       (stop-walking creature (attack-pause creature)))))
 
+(defgeneric attack-step (creature dt)
+  (:documentation "Run DT seconds of CREATURE's attack: a blow or a cast (ATTACK), or a
+flyer's dive.")
+  (:method ((creature creature) dt) (attack creature dt)))
+
 (defun think (creature dt)
   "Hunt the player while alert, wander otherwise."
   (when (attacker-p creature)
@@ -565,14 +596,14 @@ allows a straight walk. Returns NIL if every way back is blocked."
   (let ((hunting (hunting-p creature)))
     (ecase (brain creature)
       (:attacking
-       (attack creature dt))
+       (attack-step creature dt))
       (:idle
        (when hunting
          (face-player creature dt))
        (when (<= (decf (idle-timer creature) dt) 0)
          (if hunting (hunt creature) (plan-wander creature))))
       (:walking
-       (cond ((and hunting (not (attack-spell creature))
+       (cond ((and hunting (not (ranged-p creature))
                    (player-within-p creature (* *attack-start-reach* (attack-reach creature))))
               (start-attack creature))
              (T
@@ -612,8 +643,13 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 (defun creature-walking-p (creature)
   (and (eq (brain creature) :walking) (not (dead creature)) (walk-animation creature)))
 
+(defgeneric flinch-p (creature)
+  (:documentation "True if CREATURE's pose lets it show its flinch when hit: not a flyer
+lying knocked down, which squashes its own pose instead.")
+  (:method ((creature creature)) T))
+
 (defun creature-hurting-p (creature)
-  (and (< 0 (stagger creature)) (not (dead creature)) (hurt-animation creature)))
+  (and (< 0 (stagger creature)) (not (dead creature)) (hurt-animation creature) (flinch-p creature)))
 
 ;; The block strip only has the views the shield covers: a deflected spell comes from
 ;; one of them. Seen from elsewhere, it braces in the standing pose.
@@ -639,6 +675,14 @@ flinch, 0 to 1."
               count (mirrored creature))
     (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)) (+ 1 (* squash *stagger-squash* 0.7)))
           (vy scale) (* h (- 1 (* squash *stagger-squash*))))))
+
+(defgeneric show-own-pose (creature squash)
+  (:documentation "Show a pose of CREATURE's own kind (a flyer's wingbeat and dive) with
+SHOW-VIEW-FRAME, and return true; or NIL to show the walk or the standing pose. Comes
+after the flinch, block and attack.")
+  (:method ((creature creature) squash)
+    (declare (ignore squash))
+    NIL))
 
 (defun update-creature-look (creature)
   "Set texture, frame, tint and scaling from walking, attacking, flash, stagger and death."
@@ -668,6 +712,7 @@ flinch, 0 to 1."
                               views)))
           ((creature-attacking-p creature)
            (show-view-frame creature (attack-animation creature) (attack-frame creature) s))
+          ((show-own-pose creature s))
           ((creature-walking-p creature)
            ;; The frame follows the distance walked, so feet don't skate.
            (show-view-frame creature (walk-animation creature)
@@ -688,6 +733,8 @@ flinch, 0 to 1."
                (strip-uv (frame-uv creature) atlas (min (1- count) (floor (* d (animation-fps animation)))) count)
                (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)))
                      (vy scale) h)))
+            ;; A death pose of its own kind (a flyer reuses its knockdown).
+            ((show-own-pose creature 0.0))
             (T
              ;; Collapse into the floor, darkening, then stay flat until revived.
              (let ((k (max 0.02 (- 1 (/ d *death-time*)))))
@@ -744,8 +791,8 @@ flinch, 0 to 1."
       (drip-blood creature dt)
       (unless (dead creature)
         (when (<= (stagger creature) 0)
-          (think creature dt))
-        (settle creature dt))
+          (think creature dt)))
+      (keep-height creature dt)
       (when (dead creature)
         (incf (dead creature) dt)
         (when (and *revive-time* (< (+ (death-duration creature) *revive-time*) (dead creature))

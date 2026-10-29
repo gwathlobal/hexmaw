@@ -12,8 +12,9 @@ upstairs."
   (let ((x0 10.5) (x1 18.5) (z0 1) (z1 9) (w 0.5)
         (upper 3.5) (top 6.5) (shaft 21) (rise 0.35) (tread 0.6)
         (hall 4.0))                     ; where the hall's east wall ends
-    ;; Floor under the lower room and the stair shaft.
-    (add-box container x0 -0.5 (- z0 w)  (+ shaft w) 0 (+ z1 w) :surface :floor)
+    ;; Floor under the doorway from the hall, the lower room and the stair shaft. Without
+    ;; the doorway's strip the nav grid has no floor there, and creatures can't path through.
+    (add-box container (- x0 w) -0.5 (- z0 w)  (+ shaft w) 0 (+ z1 w) :surface :floor)
     ;; Lower room: 3 m tall, with a doorway at the south end of its east wall into the shaft.
     (add-box container x0 0 (- z0 w)  (+ x1 w) 3 z0 :surface :wall)
     (add-box container x0 0 z1  (+ x1 w) 3 (+ z1 w) :surface :wall)
@@ -89,11 +90,14 @@ upstairs."
     (spawn-creature (make-instance 'acolyte :location (vec 7.5 1.2 -7.5) :facing -2.6) container)
     ;; A knight by the west pillars, its shield toward the spawn point.
     (spawn-creature (make-instance 'knight :location (vec -6 0 0) :facing pi) container)
+    ;; A harpy in the south-east of the hall; it rises to its hover from the floor.
+    (spawn-creature (make-instance 'harpy :location (vec 6 0 7) :facing (- (/ pi 2))) container)
     (build-annex container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))
       (add-room -1.5 0 z1  1.5 3 z0)
-      (add-box container -1.5 -0.5 z1  1.5 0 z0 :surface :floor)
+      ;; The floor runs under the doorway too, for the nav grid.
+      (add-box container -1.5 -0.5 z1  1.5 0 -10 :surface :floor)
       (add-box container -1.5 3 z1  1.5 3.5 z0 :surface :ceiling)
       (add-box container (- -1.5 w) 0 z1  -1.5 3 z0 :surface :wall)
       (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :surface :wall)
