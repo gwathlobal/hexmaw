@@ -1,0 +1,28 @@
+{
+  "prompt": "Pixel-art SURFACE TEXTURE for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the wall and floor textures of Hexen or Daggerfall.\n\nREFERENCE IMAGE: a monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, how shading is done with a few hard-edged tones. Do not draw the monster or anything from the sheet.\n\nTHE IMAGE\n- One square image, filled edge to edge with the surface, seen dead-on and perfectly flat: no perspective, no vanishing point, no curvature, no frame, no border, no vignette.\n- It must TILE SEAMLESSLY: the left edge continues into the right edge and the top into the bottom. Nothing big crosses an edge in a way that would not continue; no feature sits only at the centre.\n- Even, flat lighting across the whole image: no light source, no gradient from one side to the other, no cast shadows from outside, no glow. Lighting comes from the game. Only small local shading inside each stone or plank (a lighter top edge, darker cracks and gaps).\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no photographic texture, no dithering gradients.\n- Muted, grimy dungeon colours, a little desaturated, of medium brightness, so it can be lit darker or brighter in game.\n- No text, symbols, runes, labels, numbers, characters, torches, doors, windows, moss clumps or other objects. Just the surface.\nTHE SURFACE: a dungeon WALL of rough-cut grey-brown stone blocks in mortared courses.\n- Eight courses of stone from top to bottom, each course the same height, so the pattern repeats exactly vertically. Blocks of varied length within a course (one to two and a half times as long as they are tall), joints staggered between courses like brickwork.\n- Stones are cool grey with a brownish cast, a few slightly darker or warmer than the rest; chipped corners, a few hairline cracks, worn faces.\n- Mortar joints dark and recessed, about one sixteenth of a course thick.",
+  "prompt_file": null,
+  "refs": [
+    "Pixel Demon Character Turnaround.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1793240706,
+  "size_request": "1024x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art SURFACE TEXTURE for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the wall and floor textures of Hexen or Daggerfall.\n\nREFERENCE IMAGE: a monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, how shading is done with a few hard-edged tones. Do not draw the monster or anything from the sheet.\n\nTHE IMAGE\n- One square image, filled edge to edge with the surface, seen dead-on and perfectly flat: no perspective, no vanishing point, no curvature, no frame, no border, no vignette.\n- It must TILE SEAMLESSLY: the left edge continues into the right edge and the top into the bottom. Nothing big crosses an edge in a way that would not continue; no feature sits only at the centre.\n- Even, flat lighting across the whole image: no light source, no gradient from one side to the other, no cast shadows from outside, no glow. Lighting comes from the game. Only small local shading inside each stone or plank (a lighter top edge, darker cracks and gaps).\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no photographic texture, no dithering gradients.\n- Muted, grimy dungeon colours, a little desaturated, of medium brightness, so it can be lit darker or brighter in game.\n- No text, symbols, runes, labels, numbers, characters, torches, doors, windows, moss clumps or other objects. Just the surface.\nTHE SURFACE: a dungeon WALL of rough-cut grey-brown stone blocks in mortared courses.\n- Eight courses of stone from top to bottom, each course the same height, so the pattern repeats exactly vertically. Blocks of varied length within a course (one to two and a half times as long as they are tall), joints staggered between courses like brickwork.\n- Stones are cool grey with a brownish cast, a few slightly darker or warmer than the rest; chipped corners, a few hairline cracks, worn faces.\n- Mortar joints dark and recessed, about one sixteenth of a course thick.\nImage size: 1024x1024 pixels (square).",
+  "codex_threads": [
+    "01a18578-7008-7d33-9f9e-341f6b40bca6",
+    "01a18578-ff86-7501-a6c5-375bb904228b"
+  ],
+  "sizes": [
+    [
+      1254,
+      1254
+    ],
+    [
+      1254,
+      1254
+    ]
+  ]
+}
