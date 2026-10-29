@@ -1,6 +1,6 @@
 ; A cavern flooded with lava, its rock at 0 and 45 degrees (< and > are 45-degree rock
 ; standing in the lava), crossed by a causeway from the north doorway to the south one
-; with a bridge to the east.
+; with 45-degree edges ( ), and a bridge to a landing by the east doorway.
 cells 3 3
 tags room
 weight 1
@@ -14,21 +14,22 @@ legend
   ~ lava
   < diagonal /, lava
   > diagonal \, lava
-  o pit
+  ( diagonal / floor -0.4 0, lava    ; the causeway's edge: floor on one half, lava on the other
+  ) diagonal \ floor -0.4 0, lava
   v box 3 top rock
   i spawn any west
 
 plan 0
 ########Tnnnnnn#########
 #####<<~~......~~>>#####
-###<<~~~~....~~~~~~>>###
-###~~~~~....~~~~~~~~~###
-#<<~~~~~.vv.~~~~~~~~~>>#
-T~~~~~~~~....~~~~~~....e
+###<<~~((....((~~~~>>###
+###~~~~......~~~~~~~~###
+#<<~~~~))vv..))~~~~~~>>#
+T~~~~~~~~......~~~~((..e
 #>>~~~~~~.......ii.....e
-###~~~~~~~....~~~~~....e
+###~~~~~~))....~~~~))..e
 #<<~~~~~~~~....~~~~~~<<#
-#>>~~~~~~~~.oo.~~~~~~###
-###>>~~~~~....~~~~~<<###
+#>>~~~~~~~~....~~~~~~###
+###>>~~~~((....~~~~<<###
 #####>>~~......~~<<#####
 #########ssssssT########

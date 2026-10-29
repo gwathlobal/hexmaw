@@ -1088,10 +1088,19 @@ or `\\`, a 1 m square cut along the diagonal the character draws, rock on the si
 neighbours (the cells above and beside the pair) are more wall, floor on the other, and
 an error when it can't tell. A staircase of pairs moving 2 columns a row is one straight
 45° wall; each pair is a `wedge_` prism of the `wall` material (remapped like walls),
-standing on the cell's floor slab. The legend action `diagonal DIR [material]` (DIR `/`
-or `\`) is the same with any character and combines with `lava` or `pit`: the wedge then
-stands on the pit's floor and the lava fills its open half (the caves' `<` and `>`), so a
-lava shore against rock runs at 45° too. Legend actions: `wall [material]`, `floor`,
+standing on the cell's floor slab. The legend action `diagonal DIR [material] [Y0 Y1]
+[SIDE]` (DIR `/` or `\`) is the same with any character and any extent: Y0 Y1 as `box`'s
+(default: the cell's floor, a pit's or lava's in one, an `open` cell's slab bottom, to
+the top), so besides rock it draws the 45° edges of pits and pools (`diagonal / floor
+-0.4 0, lava`: floor on one half, lava filling the other; `, pit` for a dry pit), shelves
+(`diagonal / cave-floor 0 0.4`), hanging rock (`diagonal \ rock 3 top`) and drops (`diagonal
+/ floor -0.5 0, open`, half a slab). Its solid half is the side whose neighbours are solid
+over the whole Y0..Y1 (a wall, a box, the floor slab up to its top, a pit's to its floor;
+a diagonal neighbour doesn't count), or SIDE (`ne`, `nw`, `se`, `sw`) for what the
+neighbours can't decide, such as a 2 × 2 m diamond column of four pairs with no core.
+Combined with `lava`, a full-height diagonal stands in the pit and the lava fills its open
+half (the caves' `<` and `>`). A pool's lava box runs under the floor half too, hidden
+under it; standing there doesn't burn, since liquid checks look just above the feet. Legend actions: `wall [material]`, `floor`,
 `open`, `box Y0 Y1 [material]` (solid from Y0 to Y1 above the storey's floor; `top` is the
 storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
 [material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
@@ -1117,8 +1126,9 @@ doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2
 rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
 bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
-up to it); caves `cave` (wavy 45° walls, an octagonal pillar, shelves, a lava pool against
-the rock, a dry pit), `lava-lake` (a causeway across lava with a bridge east) and
+up to it); caves `cave` (wavy 45° walls, an octagonal pillar, an octagonal shelf and
+hanging rock, a lava pool against the rock and a dry pit, both with 45° shores), `lava-lake`
+(a causeway with 45° edges across lava, a bridge east) and
 `cave-passage` (a corridor at 45°, 2 × 2 cells), each with a mirror.
 Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip.
@@ -1126,14 +1136,18 @@ count), or the generator builds places that are a one-way trip.
 Caves are blueprints like the rest: rock is wall characters inside the rectangle (every
 `#` is rock under `remap wall rock`), 45° rock is `/` and `\` pairs, or `<` and `>` where it
 stands in lava, shelves are `box 0 H cave-floor`, low rock `box H top rock`, dips `pit` or
-`lava`. Every rock edge in `cave`, `lava-lake` and `cave-passage` runs at 0° or 45°; their
-plans were drawn from outlines (a row's wall moving 2 columns is a diagonal pair), so redraw
-them the same way. So walls are octagonal, not round, floors and ceilings stay flat and
-terraced, a shelf's or a lava pool's edge against floor stays square, dips go no deeper than the slab (deeper hollows need the floor
+`lava`, and each has 45° edges through `diagonal` with its heights. Every edge in `cave`,
+`lava-lake` and `cave-passage` runs at 0° or 45°; their plans were drawn from outlines (a
+row's edge moving 2 columns is a diagonal pair; rock first, then pools, pits, shelves and
+hanging rock, each region with its own pair characters), so redraw them the same way. A pair
+can't tell its side when both outer sides are other diagonals: move it, or give it a SIDE.
+So walls and pools are octagonal, not round, floors and ceilings stay flat and terraced,
+dips go no deeper than the slab (deeper hollows need the floor
 raised round them), their mouths are ordinary doorways on the grid, and each is one room
 for lighting: a passage that doubles back inside one block lights through the rock
-between, so keep a cave one open space. A cave is 70 to 80 boxes and wedges, about four
-times a chamber: that many solids for collision, but drawn in the level's batches. Keep
+between, so keep a cave one open space. Shaped pools merge into fewer lava boxes than
+stepped ones (seed 11: 23 lava surfaces against 33, 3.0 ms a frame against 4.1, vsync off).
+A cave is 80 to 90 boxes and wedges, about four times a chamber: that many solids for collision, but drawn in the level's batches. Keep
 shelves clear of doorways: one 0.8 m shelf a column inside a doorway left 0.5 m of floor,
 too narrow for the player, and `check-reachable` found whole regions cut off.
 

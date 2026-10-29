@@ -1,7 +1,7 @@
-; A natural cavern, its rock all at 0 and 45 degrees: / and \ pairs are 45-degree rock,
-; < and > the same standing in lava. A lava pool against the north-west rock, a dry
-; pit, an octagonal pillar, shelves in the north-east and rock hanging from the ceiling.
-; Every # is rock (remap wall rock), so the rock inside the rectangle is just more wall.
+; A natural cavern with every edge at 0 or 45 degrees: wavy rock walls (/ and \ pairs,
+; < and > where the rock stands in lava), a lava pool against the north-west rock with
+; 45-degree shores ( ), a dry pit [ ], an octagonal pillar, an octagonal shelf { } and
+; octagonal rock hanging from the ceiling A B. Every # is rock (remap wall rock).
 cells 3 3
 tags room
 weight 2
@@ -12,26 +12,33 @@ remap wall rock
 remap ceiling rock
 remap floor cave-floor
 legend
-  , box 0 0.4 cave-floor   ; a shelf, one step up
-  : box 0 0.8 cave-floor   ; a higher shelf, reached from ,
   ~ lava
-  < diagonal /, lava       ; 45-degree rock with lava in its open half
+  < diagonal /, lava                 ; 45-degree rock with lava in its open half
   > diagonal \, lava
-  o pit                    ; dry, 0.4 m down
-  v box 3 top rock         ; rock hanging from the 4 m ceiling to 3 m
+  ( diagonal / floor -0.4 0, lava    ; a pool's shore: floor on one half, lava on the other
+  ) diagonal \ floor -0.4 0, lava
+  o pit                              ; dry, 0.4 m down
+  [ diagonal / floor -0.4 0, pit     ; the pit's edge
+  ] diagonal \ floor -0.4 0, pit
+  , box 0 0.4 cave-floor             ; a shelf, one step up
+  { diagonal / cave-floor 0 0.4      ; the shelf's edge
+  } diagonal \ cave-floor 0 0.4
+  v box 3 top rock                   ; rock hanging from the 4 m ceiling to 3 m
+  A diagonal / rock 3 top            ; its edge
+  B diagonal \ rock 3 top
   i spawn any south
 
 plan 0
 ########Tnnnnnn#########
 #####//..........\\#####
-#####..........,,..\\###
-###<<~~~~~.....,,,,,.###
-#<<~~~~~~~~o.....::,,\\#
-w....~~~~~~oo..........e
-w....~~~~~....vv.ii....e
-w.....~~~.....vv.......e
-#\\........//##\\....//#
-###..,,,...######..//###
+#####........{{,,}}\\###
+###<<~~~~~)).,,,,,,..###
+#<<~~~~~~~~~.}},,{{..\\#
+w..))~~~~~~~...AAvvBB..e
+w....))~~~((ii.vvvvvv..e
+w....[[oo]]....BBvvAA..e
+#\\..oooooo//##\\....//#
+###..]]oo[[######..//###
 ###\\......\\##//..#####
 #####\\..........//#####
 #########ssssssT########

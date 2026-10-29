@@ -157,10 +157,23 @@
              (list :lava (if args (parse-number (first args) line) *lava-depth*)
                    (if (second args) (parse-number (second args) line) *lava-surface*)))
             ((string-equal op "diagonal")
-             (let ((dir (arg 0)))
+             ;; diagonal DIR [material] [Y0 Y1] [SIDE], in any order after DIR.
+             (let ((dir (arg 0)) (material "wall") (heights ()) (side NIL))
                (unless (member dir '("/" "\\") :test #'string=)
                  (fail line NIL "diagonal takes / or \\, got ~s." dir))
-               (list :diagonal (or (second args) "wall") (char dir 0))))
+               (dolist (word (rest args))
+                 (cond ((member word '("ne" "nw" "se" "sw") :test #'string-equal)
+                        (setf side (intern (string-upcase word) :keyword)))
+                       ((or (string-equal word "top") (find-if #'digit-char-p word))
+                        (push (parse-height word line) heights))
+                       (T (setf material word))))
+               (unless (member (length heights) '(0 2))
+                 (fail line NIL "diagonal takes both heights, Y0 and Y1, or neither."))
+               (when (and side (not (member side (if (string= dir "/") '(:nw :se) '(:ne :sw)))))
+                 (fail line NIL "A ~a diagonal is solid on its ~a side or its ~a side, not ~(~a~)." dir
+                       (if (string= dir "/") "nw" "ne") (if (string= dir "/") "se" "sw") side))
+               (setf heights (nreverse heights))
+               (list :diagonal material (char dir 0) (first heights) (second heights) side)))
             ((string-equal op "pit")
              (let ((depth (if args (parse-number (first args) line) *lava-depth*)))
                ;; The pit's floor is what is left of the slab.
@@ -268,8 +281,8 @@
           (#\Space '((:open)))
           ((#\n #\e #\s #\w) '((:door "door")))
           (#\T `((:torch ,*torch-height*)))
-          (#\/ '((:diagonal "wall" #\/)))
-          (#\\ '((:diagonal "wall" #\\)))))))
+          (#\/ '((:diagonal "wall" #\/ NIL NIL NIL)))
+          (#\\ '((:diagonal "wall" #\\ NIL NIL NIL)))))))
 
 (defun side-letter (char)
   (case char (#\n :north) (#\e :east) (#\s :south) (#\w :west)))
@@ -444,6 +457,44 @@
         (not (or (action :open actions) (action :wall actions)
                  (and border (action :torch actions))))))))
 
+(defun diagonal-extent (blueprint k actions)
+  "The heights above storey K's floor that the diagonal in ACTIONS runs between: its own,
+or from the cell's floor (a pit's, lava's, or an open cell's slab bottom) to the top."
+  (let ((diagonal (action :diagonal actions))
+        (pit (or (action :lava actions) (action :pit actions)))
+        (top (- (storey-top blueprint k) (storey-base k))))
+    (flet ((height (h) (if (eq h :top) top h)))
+      (if (fourth diagonal)
+          (values (height (fourth diagonal)) (height (fifth diagonal)))
+          (values (cond (pit (- (second pit))) ((action :open actions) (- *border*)) (T 0.0))
+                  top)))))
+
+(defun cell-covers-p (blueprint k r c y0 y1)
+  "True if cell R C of storey K is solid all the way from Y0 to Y1 above the storey's floor:
+its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
+  (let* ((plan (find k (plans blueprint) :key #'storey))
+         (rows (rows plan))
+         (actions (char-actions blueprint (char (aref rows r) c)))
+         (border (or (= r 0) (= c 0) (= r (1- (length rows))) (= c (1- (length (aref rows 0))))))
+         (top (- (storey-top blueprint k) (storey-base k)))
+         (spans ()))
+    (flet ((height (h) (if (eq h :top) top h)))
+      (when (or (action :wall actions) (and border (action :torch actions)))
+        (push (cons (- *border*) top) spans))
+      (when (slab-cell-p blueprint k r c)
+        (let ((pit (or (action :lava actions) (action :pit actions))))
+          (push (cons (- *border*) (if pit (- (second pit)) 0.0)) spans)))
+      (dolist (a actions)
+        (case (first a)
+          (:box (push (cons (height (second a)) (height (third a))) spans))
+          (:door (push (cons (third (connector-kind (second a))) top) spans)))))
+    ;; Covered if the spans, end to end, leave no gap from Y0 to Y1.
+    (let ((reach y0))
+      (dolist (span (sort spans #'< :key #'car))
+        (when (<= (car span) (+ reach 1e-3))
+          (setf reach (max reach (cdr span)))))
+      (<= (- y1 1e-3) reach))))
+
 (defun blueprint-geometry (blueprint)
   "The boxes, empties and scene extras of BLUEPRINT's block."
   (let* ((*file* (path blueprint))
@@ -557,8 +608,10 @@
                           (push (list (format NIL "torch_~d" (incf (gethash "torch" counts 0)))
                                       (list x (+ base (second torch)) z) NIL)
                                 empties))))))))
-            ;; Diagonals: each pair of / or \ is a 1 m square, half rock, cut along the
-            ;; diagonal the character draws; the rock is the half whose neighbours are wall.
+            ;; Diagonals: each pair of / or \ (or a diagonal action) is a 1 m square cut
+            ;; along the diagonal it draws, solid on one side over its heights: rock to the
+            ;; top, a pit's dry edge, a shelf's. The solid side is its SIDE, or the side
+            ;; whose neighbours are solid over the same heights.
             (dotimes (r nr)
               (let ((c 0))
                 (loop while (< c nc)
@@ -570,31 +623,32 @@
                                (let ((line (+ (line plan) r)))
                                  (unless (and (< (1+ c) nc) (char= char (char (aref rows r) (1+ c))))
                                    (fail line (1+ c) "~s draws a 1 m square, two columns wide: write it as a pair." (string char)))
-                                 (flet ((wall-at (rr cc)
-                                          (if (and (< -1 rr nr) (< -1 cc nc))
-                                              (if (action :wall (char-actions blueprint (char (aref rows rr) cc))) 1 0)
-                                              1)))
-                                   (let* ((north (+ (wall-at (1- r) c) (wall-at (1- r) (1+ c))))
-                                          (south (+ (wall-at (1+ r) c) (wall-at (1+ r) (1+ c))))
-                                          (west (wall-at r (1- c)))
-                                          (east (wall-at r (+ c 2)))
-                                          ;; / runs south-west to north-east, \ north-west to south-east.
-                                          (dir (third diagonal))
-                                          (a (if (char= dir #\/) (+ north west) (+ north east)))
-                                          (b (if (char= dir #\/) (+ south east) (+ south west)))
-                                          ;; The cut corner is on the side away from the rock.
-                                          (cut (cond ((= a b)
-                                                      (fail line (1+ c) "Can't tell which side of ~s is rock: put wall beside one side only." (string char)))
-                                                     ((char= dir #\/) (if (< b a) 4 2))
-                                                     (T (if (< b a) 3 1)))))
-                                     (multiple-value-bind (x0) (col-span blueprint c)
-                                       (multiple-value-bind (z0 z1) (row-span blueprint r)
-                                         (let ((x1 (nth-value 1 (col-span blueprint (1+ c))))
-                                               (cap (if (slab-cell-p blueprint (1+ k) r c) (- top *border*) top))
-                                               ;; In a pit (lava's too) it stands on the pit's floor.
-                                               (pit (or (action :lava actions) (action :pit actions))))
-                                           (wedge (remapped blueprint (second diagonal)) cut
-                                                  x0 (if pit (- base (second pit)) base) z0 x1 cap z1))))))
+                                 (multiple-value-bind (y0 y1) (diagonal-extent blueprint k actions)
+                                   (flet ((solid-at (rr cc)
+                                            (if (and (< -1 rr nr) (< -1 cc nc))
+                                                (if (cell-covers-p blueprint k rr cc y0 y1) 1 0)
+                                                1)))
+                                     (let* ((dir (third diagonal))
+                                            (north (+ (solid-at (1- r) c) (solid-at (1- r) (1+ c))))
+                                            (south (+ (solid-at (1+ r) c) (solid-at (1+ r) (1+ c))))
+                                            (west (solid-at r (1- c)))
+                                            (east (solid-at r (+ c 2)))
+                                            ;; / runs south-west to north-east, \ north-west to south-east.
+                                            (a (if (char= dir #\/) (+ north west) (+ north east)))
+                                            (b (if (char= dir #\/) (+ south east) (+ south west)))
+                                            ;; The cut corner is on the side away from the solid half.
+                                            (cut (case (sixth diagonal)
+                                                   (:ne 3) (:nw 4) (:se 2) (:sw 1)
+                                                   (T (cond ((= a b)
+                                                             (fail line (1+ c) "Can't tell which side of ~s is solid: put solid beside one side only, or give it a side." (string char)))
+                                                            ((char= dir #\/) (if (< b a) 4 2))
+                                                            (T (if (< b a) 3 1)))))))
+                                       (multiple-value-bind (x0) (col-span blueprint c)
+                                         (multiple-value-bind (z0 z1) (row-span blueprint r)
+                                           (let ((x1 (nth-value 1 (col-span blueprint (1+ c))))
+                                                 (cap (if (slab-cell-p blueprint (1+ k) r c) (- top *border*) top)))
+                                             (wedge (remapped blueprint (second diagonal)) cut
+                                                    x0 (+ base y0) z0 x1 (min cap (+ base y1)) z1)))))))
                                  (incf c 2)))))))
             ;; Doorways: a connector on the outer face and a plug filling the hole.
             (dolist (run (door-runs blueprint plan))
@@ -658,7 +712,8 @@
   (case (first a)
     (:stairs (list* :stairs (mirror-direction (second a)) (cddr a)))
     (:spawn (list :spawn (second a) (mirror-direction (third a))))
-    (:diagonal (list :diagonal (second a) (if (char= (third a) #\/) #\\ #\/)))
+    (:diagonal (list :diagonal (second a) (if (char= (third a) #\/) #\\ #\/) (fourth a) (fifth a)
+                     (case (sixth a) (:ne :nw) (:nw :ne) (:se :sw) (:sw :se))))
     (T a)))
 
 (defun mirrored (blueprint)
