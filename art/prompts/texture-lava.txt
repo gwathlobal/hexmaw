@@ -1,0 +1,7 @@
+THE SURFACE: a pool of MOLTEN LAVA, seen from straight above, like the lava flats of Hexen, Heretic or Quake.
+
+This surface is the one exception to the colour rule above: lava glows by itself, so it is BRIGHT and SATURATED, not muted. Still no light source, gradient or vignette across the image; the glow is in the colours themselves.
+- Irregular islands and plates of dark cooling crust (near-black, deep red-brown) floating in bright molten rock, roughly a third of the image crust. The plates vary in size, a few large, many small, with rounded, torn edges.
+- Between them the molten rock: deep red at the crust edges, through orange, to hot yellow in the thickest channels, in a few hard-edged bands of colour, like flowing veins.
+- A few small bright bubbles and spatter dots of near-white yellow scattered in the molten parts.
+- Evenly spread over the whole image, with no big feature at the centre, so it tiles.

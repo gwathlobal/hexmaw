@@ -135,6 +135,8 @@ WALK-ANIMATION, spread over *STAGGER-TIME*; NIL to squash the standing pose inst
    (knockback :initform (vec 0 0 0) :reader knockback)
    (stagger :initform 0.0 :accessor stagger)
    (flash :initform 0.0 :accessor flash)
+   (burn-timer :initform 0.0 :accessor burn-timer
+               :documentation "Seconds toward the next burn while standing in lava (liquids.lisp).")
    (dead :initform NIL :accessor dead :documentation "Seconds since death, or NIL while alive.")
    (death-animation :initarg :death-animation :initform NIL :accessor death-animation
                     :documentation "Frame animation played once on death, its last frame the
@@ -303,6 +305,28 @@ whether the X move and whether the Z move were blocked."
              (bleed-out creature)))
       (setf (dead creature) 0.0))))
 
+(defun burn (creature amount)
+  "Take AMOUNT health from CREATURE standing in lava: a flash and it notices, but no
+flinch, blood or hit-stop, which would freeze the game every burn."
+  (unless (dead creature)
+    (decf (health creature) amount)
+    (setf (flash creature) *flash-time*
+          (alert creature) *alert-time*)
+    (when (<= (health creature) 0)
+      (stop-walking creature)
+      (setf (dead creature) 0.0))))
+
+(defun escape-liquid (creature)
+  "Set CREATURE, standing in lava, walking to the nearest dry cell."
+  (when *nav-grid*
+    (multiple-value-bind (i j k)
+        (let ((*nav-hazards* :avoid))
+          (nav-nearest-fitting (location creature) (body-radius creature) (sprite-height creature) :search 4))
+      (when i
+        (setf (path creature) (list (nav-point i j k))
+              (brain creature) :walking
+              (stuck creature) 0.0)))))
+
 (defun shielded-p (creature from)
   "True if CREATURE's shield covers it against a blow from point FROM: the view of it
 seen from FROM is one its shield covers."
@@ -355,6 +379,11 @@ by its KNOCKBACK-SCALE."
         (stuck creature) 0.0
         (attack-time creature) NIL
         (idle-timer creature) pause))
+
+(defgeneric nav-hazards (creature)
+  (:documentation "How CREATURE's paths treat lava (*NAV-HAZARDS*, nav.lisp): a walker
+keeps out of it, unless only a way through it reaches the player; a flyer ignores it.")
+  (:method ((creature creature)) :avoid))
 
 (defgeneric move-lift (creature)
   (:documentation "Metres above its feet that a moving CREATURE ignores solids in: the
@@ -493,9 +522,13 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
         (h (sprite-height creature))
         (step (step-height creature)))
     (when *nav-grid*
-      (if (nav-line-clear-p loc feet r h step)
-          (list (vcopy feet))
-          (nav-path-to loc feet r h step :max-walk *chase-max-walk*)))))
+      (cond ((nav-line-clear-p loc feet r h step)
+             (list (vcopy feet)))
+            ((nav-path-to loc feet r h step :max-walk *chase-max-walk*))
+            ;; No dry way: through lava, then, the short way across.
+            ((eq *nav-hazards* :avoid)
+             (let ((*nav-hazards* :wade))
+               (nav-path-to loc feet r h step :max-walk *chase-max-walk*)))))))
 
 (defun start-attack (creature)
   (face-player creature)
@@ -862,10 +895,20 @@ after the flinch, block and attack.")
       (slide creature dt)
       (drip-blood creature dt)
       (unless (dead creature)
+        (let* ((loc (location creature))
+               (damage (hazard-at (vx loc) (+ (vy loc) 0.05) (vz loc))))
+          (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt damage)
+            (setf (burn-timer creature) timer)
+            (when (< 0 due)
+              (burn creature due)))
+          (when (and (< 0 damage) (not (dead creature)) (eq (brain creature) :idle))
+            (escape-liquid creature))))
+      (unless (dead creature)
         (cond ((< 0 (rising creature))
                (decf (rising creature) dt))
               ((<= (stagger creature) 0)
-               (think creature dt))))
+               (let ((*nav-hazards* (nav-hazards creature)))
+                 (think creature dt)))))
       (keep-height creature dt)
       (when (dead creature)
         (incf (dead creature) dt)

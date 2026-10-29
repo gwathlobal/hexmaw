@@ -14,6 +14,7 @@
                (:file "blocks")
                (:file "fx")
                (:file "lights")
+               (:file "liquids")
                (:file "gore")
                (:file "spells")
                (:file "player")

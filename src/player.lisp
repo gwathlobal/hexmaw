@@ -41,6 +41,8 @@
    (mouse-look :initform NIL :accessor mouse-look)
    (health :initform *player-max-health* :accessor health)
    (pain :initform 0.0 :accessor pain :documentation "Seconds of the pain flash left.")
+   (burn-timer :initform 0.0 :accessor burn-timer
+               :documentation "Seconds toward the next burn while standing in lava (liquids.lisp).")
    (mana :initform *max-mana* :accessor mana)
    (cast-timer :initform 0.0 :accessor cast-timer)
    (cast-time :initform NIL :accessor cast-time
@@ -218,9 +220,11 @@ On a step the eye keeps its height and eases to the new one."
          (wx (+ (* iz (sin yaw)) (* ix (cos yaw))))
          (wz (+ (* iz (- (cos yaw))) (* ix (sin yaw))))
          (wlen (sqrt (+ (* wx wx) (* wz wz))))
-         (speed (cond (crouching *crouch-speed*)
-                      ((retained :left-shift) *run-speed*)
-                      (T *walk-speed*))))
+         (liquid (let ((feet (feet player))) (liquid-at (vx feet) (+ (vy feet) 0.05) (vz feet))))
+         (speed (* (cond (crouching *crouch-speed*)
+                         ((retained :left-shift) *run-speed*)
+                         (T *walk-speed*))
+                   (if liquid (liquid-property (liquid-kind liquid) :speed) 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
     ;; Accelerate horizontal velocity toward the wished velocity.
@@ -248,26 +252,35 @@ On a step the eye keeps its height and eases to the new one."
         (snap-to-ground player)))
     (when (< (vy (feet player)) *kill-height*)
       (respawn player))
+    ;; Standing in lava burns.
+    (let ((feet (feet player)))
+      (multiple-value-bind (timer damage)
+          (burn-due (burn-timer player) dt (hazard-at (vx feet) (+ (vy feet) 0.05) (vz feet)))
+        (setf (burn-timer player) timer)
+        (when (< 0 damage)
+          (hurt-player player damage feet :shove NIL))))
     ;; Ease the eye toward standing or crouching height, then place the camera.
     (let ((target (if crouching *crouch-eye-height* *eye-height*)))
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
     (place-camera player)))
 
-(defun hurt-player (player amount from)
+(defun hurt-player (player amount from &key (shove T))
   "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
-from FROM and hit-stop. At zero health the run starts over."
+from FROM and hit-stop. Without SHOVE (a burn) only the flash. At zero health the run
+starts over."
   (when (< 0 (health player))
     (decf (health player) amount)
     (setf (pain player) *pain-time*)
-    (let* ((feet (feet player))
-           (vel (velocity player))
-           (dx (- (vx feet) (vx from)))
-           (dz (- (vz feet) (vz from)))
-           (len (sqrt (+ (* dx dx) (* dz dz)))))
-      (when (< 1f-4 len)
-        (incf (vx vel) (* *player-knockback* (/ dx len)))
-        (incf (vz vel) (* *player-knockback* (/ dz len)))))
-    (hit-stop)
+    (when shove
+      (let* ((feet (feet player))
+             (vel (velocity player))
+             (dx (- (vx feet) (vx from)))
+             (dz (- (vz feet) (vz from)))
+             (len (sqrt (+ (* dx dx) (* dz dz)))))
+        (when (< 1f-4 len)
+          (incf (vx vel) (* *player-knockback* (/ dx len)))
+          (incf (vz vel) (* *player-knockback* (/ dz len)))))
+      (hit-stop))
     (when (<= (health player) 0)
       ;; No death screen yet. Not now: this runs inside a creature's tick, and
       ;; RESET-RUN despawns entities.

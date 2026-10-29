@@ -19,7 +19,7 @@
 
 (defpackage #:hexmaw.blueprint
   (:use #:cl)
-  (:export #:*cell-size* #:*storey-height* #:*connector-kinds*
+  (:export #:*cell-size* #:*storey-height* #:*connector-kinds* #:*lava-depth* #:*lava-surface*
            #:blueprint-error #:read-blueprint #:blueprint-names #:blueprint-path
            #:build-blueprint #:build-blueprints #:ensure-block #:main))
 
@@ -35,8 +35,11 @@
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3
   "How far into the room a torch drawn on a border wall goes; ADD-TORCH stands it off the wall.")
+(defparameter *lava-depth* 0.4 "Metres a lava pit's floor lies below the storey's floor: less than a step.")
+(defparameter *lava-surface* 0.1 "Metres the lava's surface lies below the storey's floor.")
 (defparameter *materials*
-  '(("floor" 0.45 0.42 0.38) ("wall" 0.62 0.6 0.56) ("ceiling" 0.32 0.31 0.3) ("stair" 0.4 0.46 0.56))
+  '(("floor" 0.45 0.42 0.38) ("wall" 0.62 0.6 0.56) ("ceiling" 0.32 0.31 0.3) ("stair" 0.4 0.46 0.56)
+    ("lava" 1.0 0.45 0.1))
   "The colours every blueprint has; its MATERIAL lines add to them or replace them.")
 
 (defun root () (asdf:system-source-directory :hexmaw-blueprints))
@@ -147,6 +150,9 @@
             ((string-equal op "stairs")
              (list :stairs (parse-direction (arg 0) line) (parse-number (arg 1) line)
                    (parse-number (arg 2) line) (or (fourth args) "stair")))
+            ((string-equal op "lava")
+             (list :lava (if args (parse-number (first args) line) *lava-depth*)
+                   (if (second args) (parse-number (second args) line) *lava-surface*)))
             ((string-equal op "torch")
              (list :torch (if args (parse-number (first args) line) *torch-height*)))
             ((string-equal op "spawn")
@@ -448,7 +454,11 @@
                          ;; and no two top faces share a plane.
                          (cap (if (slab-cell-p blueprint (1+ k) r c) (- top *border*) top)))
                     (when (slab-cell-p blueprint k r c)
-                      (span r c (- base *border*) base "floor" T))
+                      ;; Under lava the slab is the pit's floor, and the lava fills it.
+                      (let ((lava (action :lava actions)))
+                        (span r c (- base *border*) (if lava (- base (second lava)) base) "floor" T)
+                        (when lava
+                          (span r c (- base (second lava)) (- base (third lava)) "lava" :liquid))))
                     (dolist (a actions)
                       (case (first a)
                         (:wall (span r c wall-bottom cap (second a) T))
@@ -460,7 +470,7 @@
               (maphash (lambda (key grid)
                          (destructuring-bind (y0 y1 material solid) key
                            (loop for (r0 c0 r1 c1) in (merge-rectangles grid)
-                                 do (box (if solid "" "deco_") material solid
+                                 do (box (if solid "" "deco_") material (eq solid T)
                                          (col-span blueprint c0) y0 (row-span blueprint r0)
                                          (nth-value 1 (col-span blueprint c1)) y1
                                          (nth-value 1 (row-span blueprint r1))))))

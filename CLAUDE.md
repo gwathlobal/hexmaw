@@ -218,6 +218,30 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 - `src/kit.lisp`: the kit (`kit-blocks`, every `.glb` in `data/blocks/`) and the gallery level
   that lays it out (`build-kit-gallery`, `kit-goto`).
 - `src/generate.lisp`: the level generator (`generate-level`); see "Generated levels" below.
+- `src/liquids.lisp`: liquids, lava for now (water will be another kind). A liquid is a box of
+  volume in `*liquids*` (`build-level` empties it), never a solid: it fills a sunken pit
+  whose floor is an ordinary solid `*lava-depth*` (0.4 m, under a step) below the floor
+  around it, its surface `*lava-surface*` (0.1 m) below, so walking in and out is a step
+  down and up and the feet sink. Everything else asks `liquid-at x y z`. `*liquid-kinds*`
+  says what a kind does: `:damage` per second, paid every `*lava-tick*` by the player
+  (`hurt-player ... :shove NIL`: the pain flash, no shove or hit-stop) and by creatures
+  (`burn`: a flash, no flinch or blood; one standing in it walks to the nearest dry cell,
+  `escape-liquid`), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
+  hangs `*glow-height*` over it. The nav grid flags each cell under lava (`nav-hazard`), and
+  `*nav-hazards*` says what the nav questions make of it: `:avoid`, the default, keeps out
+  (so wandering, retreat, `show-nav` and `check-reachable` stay dry, and a generated level
+  always has a dry way); `:wade` lets a path through at `*nav-wade-cost*` (3) times the
+  cost per step but no straight walk across, so it takes the short way over; `:ignore`
+  is any floor. A creature thinks under its `nav-hazards`: `:avoid` for walkers, whose
+  chase falls back to `:wade` only when no dry way reaches the player within
+  `*chase-max-walk*` (`chase-path`), and `:ignore` for flyers, which hover over it.
+  Projectiles burst on its surface; blood drops and
+  gibs that fall in are gone. The surface is a `liquid-surface` quad, fullbright and fogged
+  as lamp light, its texture (`data/textures/lava-flow.png`, from
+  `art/prompts/texture-lava.txt` like the other textures) swirled by crossed waves. On
+  the test level, `add-lava` digs a pit in the hall's south-west (x −9 to −6, z 3 to 7),
+  its floor slab left with a hole there; the hall's room reaches down to the slab's
+  underside so the glow lights the pit's rim.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites.
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
@@ -860,7 +884,8 @@ Blender export that keeps the conventions works the same. Conventions:
   (`*storey-height*`, in `hexmaw.blueprint`). Storey k's floor is at 5k, on a slab
   from 5k − 0.5. A corridor is one cell: a 3 m doorway and two 0.5 m walls.
 - Every mesh object is drawn and its bounding box is a solid, unless its name starts
-  with `deco_` (drawn, no collision) or `plug_`. Model collision as boxes: a sloped or
+  with `deco_` (drawn, no collision), `plug_`, or `lava_` (not drawn: its bounding box is
+  a lava volume, its top the surface, in a pit whose floor is a solid). Model collision as boxes: a sloped or
   L-shaped object's bounding box is the whole box around it.
 - Empties named `connector_<rest>` mark doorways, on the block's outer face, at the middle
   of a cell edge, on a storey's floor. A connector faces out through the face it lies on.
@@ -941,7 +966,9 @@ border wall it goes just inside the room). Legend actions: `wall [material]`, `f
 `open`, `box Y0 Y1 [material]` (solid from Y0 to Y1 above the storey's floor; `top` is the
 storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
 [material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
-`torch Y` and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
+`lava [DEPTH SURFACE]` (that cell's floor slab sinks to DEPTH below the floor, 0.4 by
+default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `torch Y`
+and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy and necromancer 1 each), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
@@ -957,14 +984,16 @@ niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never l
 `arch` (beams and torches, the way into a room), `narrow` and `narrowing` (to a narrow
 doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
 rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
-(sarcophagi) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
+(sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
+bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
 up to it). Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip.
 
 To walk the kit: `tools/hd '(progn (setf *level* :gallery) (reload-scene))'` lays every
 block out in two rows, corridors and stairs in front, rooms behind, each with one doorway
-open toward the spawn and the rest plugged, and `(game (kit-goto "chamber"))` stands the
-player outside one. Upper storeys are only reachable by moving the player there.
+open toward the spawn and the rest plugged, on ground that stops at each block's walls
+(`add-ground`; under a block it would fill its lava pits), and `(game (kit-goto "chamber"))`
+stands the player outside one. Upper storeys are only reachable by moving the player there.
 
 ## Generated levels
 

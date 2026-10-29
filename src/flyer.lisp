@@ -117,6 +117,8 @@ as it lands, then sprawled, its head down, for the corpse."
 (defmethod ranged-p ((flyer flyer)) T)
 
 (defmethod move-lift ((flyer flyer)) 0.05)
+;; It hovers over lava: its paths treat it as any floor.
+(defmethod nav-hazards ((flyer flyer)) :ignore)
 
 (defun lift-flyer (flyer dy)
   "Move FLYER up by DY metres (down if negative) if its body fits there. Returns T if it moved."

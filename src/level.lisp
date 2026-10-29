@@ -59,6 +59,7 @@ upstairs."
         (fill-pointer *lamps*) 0
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
+        (fill-pointer *liquids*) 0
         *level-doorways* ())
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0)
   (ecase *level*
@@ -72,10 +73,16 @@ upstairs."
 
 (defun build-test-level (container)
   (let ((h 4.0) (w 0.5))
-    (add-room -10 0 -10  10 h 10)
+    ;; Down to the floor slab's underside, so the lava pit is in the hall's room.
+    (add-room -10 -0.5 -10  10 h 10)
     (add-portal -1.5 0 (- -10 w)  1.5 3 -10)
     ;; Hall: floor, ceiling, east/west/south walls, north wall with a doorway.
-    (add-box container -10 -0.5 -10  10 0 10 :surface :floor)
+    ;; The floor leaves a hole for the lava pit, x -9 to -6, z 3 to 7.
+    (add-box container -10 -0.5 -10  10 0 3 :surface :floor)
+    (add-box container -10 -0.5 7  10 0 10 :surface :floor)
+    (add-box container -10 -0.5 3  -9 0 7 :surface :floor)
+    (add-box container -6 -0.5 3  10 0 7 :surface :floor)
+    (add-lava container -9 3  -6 7)
     (add-box container -10 h -10  10 (+ h 0.5) 10 :surface :ceiling)
     (add-box container (- -10 w) 0 -10  -10 h 10 :surface :wall)
     ;; East wall, with a doorway into the annex.
