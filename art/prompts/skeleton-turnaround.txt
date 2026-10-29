@@ -1,0 +1,23 @@
+Pixel-art character turnaround sheet for a monster in a Doom/Hexen-style first-person dark-fantasy dungeon game, where monsters are drawn as sprites seen from several camera angles: the SKELETON, a dead warrior raised by a necromancer, shambling at the player with an old sword.
+
+REFERENCE IMAGES, in the order attached: turnaround sheets of four other monsters from the same game (a red imp, a robed acolyte, an armoured knight, and a winged harpy). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs.
+
+THE SKELETON
+- A bare human skeleton of a tall man, about as tall as the acolyte, standing a little hunched, knees slightly bent, ready to lurch forward. Every bone is visible and correct: skull, jaw, spine, rib cage, pelvis, arm and leg bones, hands and feet. No flesh, no skin, no organs.
+- Old, yellowed bone, stained brown in the joints and cracks, a few bones chipped. Shading in dull ivory, ochre and brown-grey.
+- The SKULL with an open, grinning jaw, and two small GLOWING EYES deep in the sockets, the same sickly bright green as the necromancer's magic that raised it.
+- A few scraps of what it wore in life: a rotted, dark leather belt at the hips with a torn strip of dark cloth hanging from it, and a dented, rusted iron arm guard on the left forearm. Nothing that hides the rib cage or the skull.
+- In its RIGHT hand, an old SWORD with a notched, rusty blade, held low and forward, the point angled toward the ground in front of it.
+- The LEFT hand is empty, its finger bones spread like claws.
+- A muted palette: yellowed ivory and ochre bone, brown-grey shadows, dark leather, rust brown and dull iron grey, and sickly green only for the eyes.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).
+- In the front three-quarter, side and rear three-quarter views the skeleton faces IMAGE-LEFT.
+- The sword stays in the same hand (the right) in every view, so it is on the opposite side of the body in the front and back views.
+- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The whole figure, including the sword, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, dust, smoke or effects outside the figure. The green glow stays in the eye sockets, never as a halo on the magenta.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

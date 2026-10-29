@@ -202,6 +202,14 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   under "Creature movement" below. Creature code reaches it through generics with a
   walker's default: `keep-height` (settle, or hover, dive and fall), `move-lift`,
   `ranged-p` (hunt from range) and `attack-step` (the blow, or the dive).
+- `src/necromancer.lisp`: the `necromancer` and the skeletons it raises (`skeleton-warrior`:
+  Trial already has a `skeleton`, for skeletal animation). See "The necromancer" under
+  "Creature movement" below. A creature with several attacks has `ability` objects (frame
+  times, hit frame, animation, spell, pause, cooldown); its attack readers
+  (`attack-frame-times`, `attack-animation` and the rest) are methods answering for the
+  current one, so `attack` runs any of them, and `release-attack` (what lands on the hit
+  frame), `face-attack-target` (what it turns to through the wind-up) and `hunt-from-range`
+  are generics with the caster's behaviour as the default.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
 - `src/blueprint.lisp`: builds blocks from text blueprints (`data/blueprints/*.txt`), in its own
@@ -210,6 +218,30 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
 - `src/kit.lisp`: the kit (`kit-blocks`, every `.glb` in `data/blocks/`) and the gallery level
   that lays it out (`build-kit-gallery`, `kit-goto`).
 - `src/generate.lisp`: the level generator (`generate-level`); see "Generated levels" below.
+- `src/liquids.lisp`: liquids, lava for now (water will be another kind). A liquid is a box of
+  volume in `*liquids*` (`build-level` empties it), never a solid: it fills a sunken pit
+  whose floor is an ordinary solid `*lava-depth*` (0.4 m, under a step) below the floor
+  around it, its surface `*lava-surface*` (0.1 m) below, so walking in and out is a step
+  down and up and the feet sink. Everything else asks `liquid-at x y z`. `*liquid-kinds*`
+  says what a kind does: `:damage` per second, paid every `*lava-tick*` by the player
+  (`hurt-player ... :shove NIL`: the pain flash, no shove or hit-stop) and by creatures
+  (`burn`: a flash, no flinch or blood; one standing in it walks to the nearest dry cell,
+  `escape-liquid`), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
+  hangs `*glow-height*` over it. The nav grid flags each cell under lava (`nav-hazard`), and
+  `*nav-hazards*` says what the nav questions make of it: `:avoid`, the default, keeps out
+  (so wandering, retreat, `show-nav` and `check-reachable` stay dry, and a generated level
+  always has a dry way); `:wade` lets a path through at `*nav-wade-cost*` (3) times the
+  cost per step but no straight walk across, so it takes the short way over; `:ignore`
+  is any floor. A creature thinks under its `nav-hazards`: `:avoid` for walkers, whose
+  chase falls back to `:wade` only when no dry way reaches the player within
+  `*chase-max-walk*` (`chase-path`), and `:ignore` for flyers, which hover over it.
+  Projectiles burst on its surface; blood drops and
+  gibs that fall in are gone. The surface is a `liquid-surface` quad, fullbright and fogged
+  as lamp light, its texture (`data/textures/lava-flow.png`, from
+  `art/prompts/texture-lava.txt` like the other textures) swirled by crossed waves. On
+  the test level, `add-lava` digs a pit in the hall's south-west (x −9 to −6, z 3 to 7),
+  its floor slab left with a hole there; the hall's room reaches down to the slab's
+  underside so the glow lights the pit's rim.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites.
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
@@ -240,35 +272,80 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   The frames are `data/sprites/blood/blood`, drawn by `tools/draw_blood.py` (drops, round
   splats and puddles, streaks, drips; its docstring has the layout), at the monsters' 64 px
   per metre. Its `ROUND_RADII` must match `*splat-radii*`.
-  Gibs: a killing blow that leaves health below 0 by `*gib-overkill*` of the most (0.3)
-  tears a creature with `gibs` apart instead (`gib-p`, `burst-gibs`): it vanishes
-  (`gibbed`, until revival) and its pieces fly out with a burst of blood, tumbling a quarter
-  turn at a time and trailing drops, bounce off what they hit (`*gib-bounce*`, leaving a
-  splat), and come to rest on the floor once slower than `*gib-rest-speed*`, standing
-  upright and turned to face the camera like a billboard. They are slots in the same pool;
-  a level keeps `*max-gibs*` at rest and dissolves the oldest. A creature's `gibs` is its
-  set's name in the blood strip and a piece number per gib (the imp: head, two arms, two
-  legs, tail, ribs and five chunks). A set starts as a generated sheet of pieces, each
-  lying on the ground (`art/gibs/imp-gibs-1.png`, from `art/prompts/imp-gibs.txt` with the
+  Gibs: a killing blow that leaves health below 0 by `*gib-overkill*` of the most (0.3; a
+  creature's own `gib-overkill` overrides it: the knight's 0.15, since no one blow overkills
+  60 by 18, the skeleton's 0.1) tears a creature with `gibs` apart instead (`gib-p`,
+  `tear-apart`, `burst-gibs`): it vanishes (`gibbed`, until revival; its wound stops
+  dripping) and its pieces fly out with a burst of blood, tumbling a quarter turn at a time
+  and trailing drops, bounce off what they hit (`*gib-bounce*`, leaving a splat), and come
+  to rest on the floor once slower than `*gib-rest-speed*`, standing upright and turned to
+  face the camera like a billboard. They are slots in the same pool; a level keeps
+  `*max-gibs*` at rest and dissolves the oldest. A creature's `gibs` is a list of groups,
+  each a set's name in the blood strip and a piece number per gib, `(:head n)` for the one
+  that flies from the top of the body. Sets are shared: `:flesh` (arm, leg, ribs, spine,
+  organ, three chunks; no skin, so it suits any flesh-and-bone creature) serves the imp,
+  knight, harpy and necromancer, the imp adding its own head and tail from `:imp`; the
+  skeleton's `:bones` are its own. `gib-scale` draws a creature's pieces bigger or smaller
+  (the knight 1.3), and the gibs of a creature that doesn't `bleed` leave no blood. The
+  acolyte has none: it burns. A set starts as a generated sheet of pieces, each
+  lying on the ground (`art/gibs/flesh-gibs-2.png`, from `art/prompts/flesh-gibs.txt` with the
   imp's turnaround and death sheet as references), sliced by `tools/slice_frames.py` into
   `art/gibs/strips/<set>`, which `tools/draw_blood.py --gibs <set>=<strip>` appends to the
-  blood strip with the turned frames; cells grow to fit the biggest piece. The generator
-  draws the pieces bigger than asked, so `--pixel` is set by eye to the imp's scale (the
-  head about 30 px across):
+  blood strip with the turned frames; cells grow to fit the biggest piece. Every run
+  rebuilds the strip, so pass every set. The generator draws the pieces bigger than asked,
+  so `--pixel` is set by eye to the imp's scale (the head about 30 px across); the strip
+  holds 256 frames at most, 4 a piece:
 
   ```bash
-  python3 tools/slice_frames.py art/gibs/imp-gibs-1.png art/gibs/strips --pixel 9 --filter box --colors 32 imp:8
-  tools/draw_blood.py data/sprites/blood/blood --gibs imp=art/gibs/strips/imp
+  python3 tools/slice_frames.py art/gibs/flesh-gibs-2.png art/gibs/strips --pixel 9 --filter box --colors 32 flesh:8
+  tools/draw_blood.py data/sprites/blood/blood --gibs imp=art/gibs/strips/imp --gibs flesh=art/gibs/strips/flesh --gibs bones=art/gibs/strips/bones
   ```
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
-  projectile delivery, the player's `bolt` and the acolyte's `cinder`. A new effect kind is
-  a method on `apply-effect`, for a `creature` target and (in player.lisp, loaded later) a
-  `player` one. A projectile hits any live creature or the player except its `caster`.
+  projectile delivery, the player's `bolt`, the acolyte's `cinder` and the necromancer's
+  `grave-skull` and `grave-spikes`. A new effect kind is a method on `apply-effect`, for a
+  `creature` target and (in player.lisp, loaded later) a `player` one; where the effect came
+  from and which way it pushes are `effect-origin` and `effect-direction` of its source (the
+  projectile, or the circle). A projectile hits any live creature or the player except its
+  `caster` and those the caster `spares-p` (a necromancer, its undead). A spell's `homing`
+  (radians a second) turns a creature's projectile after the player's chest (`steer`), so a
+  late sidestep still dodges a slow one; a shield that turns it aside ends it. `lifetime`
+  overrides `*projectile-lifetime*`.
+  The `:circle` delivery (`grave-spikes`, `spell-circle`) is drawn round a point on the floor:
+  its sign (`circle-animation`, lying flat, drawn in over `*circle-draw-in*` of the wind-up,
+  then pulsing), an `aurora` round its rim, and a lamp that brightens to
+  `*circle-light-color*`. The aurora is a curtain like the northern lights, rising to
+  `*aurora-height*`: a ring of `*aurora-segments*` quads that its vertex shader sways into
+  drifting folds above the foot (the foot stays on the rim), and its fragment shader fills
+  with soft vertical streaks of many heights (smooth noise that repeats round the ring, so
+  it meets itself), a glowing band along the foot, the colour wandering through the
+  necromancer's greens (emerald, acid, sea-green) round the ring and deepening toward the
+  top. It is added
+  over what is behind it (`gl:blend-func :one :one`, no depth written), so it needs no
+  sorting against other glows; it draws both faces. Every
+  aurora shares one ring (`*aurora-vao*`), staged by `preload-spells`: a vertex array made
+  mid-game is never loaded onto the GPU. After its `windup` it strikes, once, everything living with feet in
+  it (the effects' `area` is the radius, within `*circle-reach-height*` of the floor) except
+  its caster and the `undead`, wrenching `*harvest-blood*` drops straight up out of each
+  (`harvest`), and its `strike-animation` bursts up in `*strike-rings*` from the middle out.
+  Once cast it goes on alone: hitting or killing the caster doesn't stop it, and it spares
+  no one's allies. `tools/draw_grave_circle.py data/sprites/grave` draws the sign; the
+  skull and the bone spikes are generated sheets (`art/spells/`, from
+  `art/prompts/grave-skull.txt` with the bolt sheet, and `bone-spikes.txt`):
+
+  ```bash
+  python3 tools/slice_frames.py art/spells/grave-skull-2.png data/sprites/grave --pixel 5 --filter box flight:5 burst:7
+  python3 tools/slice_frames.py art/spells/bone-spikes-1.png data/sprites/grave --pixel 3.5 --filter box --colors 32 --anchor bottom spikes:8
+  ```
+
+  To look at one: `tools/hd '(game (cast-spell (find-spell (quote grave-spikes)) (v+ (feet *player*) (vec 0 0 -4)) (vec 0 0 1) (scene +main+)))'`.
 - `src/hud.lisp`: HP and mana bars in the lower-left corner, and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
   on whole pixels, since a half-pixel position drops an edge row. Overlapping elements
   take a depth in `place` (below 0 is further back). `hud-top` is where the bars end.
+  `hud-shown-p` decides whether an element draws (by default, not on the main menu). The
+  frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
+  on every screen, counting frames in its render and updating every `*fps-interval*`.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
   (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
@@ -281,12 +358,17 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
-  loading screen is one with no buttons). `panel-splash` names a picture in `data/splash/`
-  to cover the screen with (the main menu's `title`, the loading screen's `loading`; see
-  "Splash screens" below); NIL, the pause menu's, dims the game behind it instead.
-  `panel-top` places the menu from the top of the screen (T, the default, centres it; the
-  main menu's `*title-menu-top*` keeps it off the dagger in its splash). Hovering a button gives it the keyboard
-  focus, so one button is lit at a time.
+  loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
+  button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
+  variable. Hovering a row gives it the keyboard focus, so one row is lit at a time.
+  Settings (`open-settings`, on both menus) covers the menu it came from while
+  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has one
+  option so far, Show FPS (`*show-fps*`, in memory only, kept across reloads).
+  `panel-splash` names a picture in `data/splash/` to cover the screen with (the main
+  menu's `title`, the loading screen's `loading`, and Settings' over the main menu; see
+  "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
+  of the screen (T, the default, centres it; the main menu's `*title-menu-top*` keeps it
+  off the dagger in its splash).
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
@@ -410,6 +492,35 @@ crash as it lands, then sprawled, head down, as the corpse (`dead-frame`, `lande
 in the air it plays its `hurt-animation` like any creature (jolt, then stagger); hit while it
 lies downed or launches it keeps its knockdown frame, squashed (`flinch-p`, which
 `creature-hurting-p` asks).
+
+### The necromancer
+
+The `necromancer` (necromancer.lisp) hunts from range as the acolyte does, backing off within
+`keep-away` (5 m), but it has three abilities, and its `hunt-from-range` picks one, in order:
+
+- **Raise** (cooldown 7 s): the nearest corpse within `*raise-range*` it can see that is
+  `raisable-p` (dead past its `death-duration`, not gibbed, with `gibs`; so not the acolyte,
+  which burns). It turns to the corpse and channels for 2 s (the cast's held frame), the
+  corpse twitching (`stirring`) under a growing green lamp; a hit breaks the channel, and it
+  tries again later. Released, it tears the corpse apart (`tear-apart`, the gibs as a blow
+  would) and stands a `skeleton-warrior` up out of it (`spawn-raised-skeleton`): `summoned`,
+  `rising` for its death strip played backwards (`show-rising`, no thinking meanwhile), then
+  alert. There's no cap on how many: kill them fast or go for the necromancer. A skeleton cut
+  down leaves a pile of bones that can be raised again; one shattered (gibbed, which its low
+  `gib-overkill` makes likely) is gone, so the supply is finite.
+- **Grave circle** (cooldown 14 s): the player within `*nova-range*` and in sight. A short
+  cast, then `grave-spikes` is drawn on the floor under the player as they stand at release
+  (spells.lisp). It strikes 2.5 s later whatever happens to the necromancer, so it makes the
+  player move, and it hurts the necromancer's own living allies.
+- **Grave skull**, otherwise: homing, 6 m/s, turning 1 rad/s.
+
+Its cooldowns run in its tick (`cooldowns`, by name), from when an ability takes effect. Its
+spells spare the undead (`spares-p`, `undead`). `reset-run` takes summoned creatures out of
+`*creatures*` instead of reviving them, and the test level's revival skips them. On the
+test level the necromancer stands at the back of the hall, behind the imp; set
+`(setf *revive-time* nil)` so corpses stay down for it, kill the imp with
+`(hurt (aref *creatures* 0) 30)` (no overkill: a corpse, not gibs) and set it hunting with
+`(setf (alert necromancer) 30.0)`.
 
 `tools/hd '(game (show-nav))'` lays green tiles on the cells within 8 m of the player that
 an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
@@ -731,6 +842,35 @@ python3 tools/slice_frames.py art/knight/runic-hurt-sheet.png data/sprites/knigh
 python3 tools/slice_frames.py art/knight/runic-death-b-2.png data/sprites/knight --pixel 3.27 --anchor bottom --filter box death:8
 ```
 
+The necromancer (gaunt, bald, a long white beard, ragged robes in black and moss green, a
+staff topped with a horned skull, green-glowing eyes) is `art/necromancer/turnaround-3.png`
+(`art/prompts/necromancer-turnaround.txt`, the imp's, acolyte's, knight's and harpy's sheets
+as style references), sliced at `--height 128` for its 2 m, staff included. The skeleton it
+raises (yellowed bone, a leather kilt and bracer, a notched rusty sword) is
+`art/skeleton/turnaround-1.png` (`skeleton-turnaround.txt`), at `--height 115` for its 1.8 m.
+Both slice with `--filter box`, and neither needed mirroring. Their animations are made the
+knight's way, and `tools/gen_monster_views.sh` makes one animation's views in a row (run it in
+the background, front and front-quarter first, then the rest with the chosen front sheet after
+`--`): `<who>-<anim>-common.txt` plus `<who>-view-<view>.txt`, `<who>-follow.txt` and
+`<who>-view-front-quarter-strict.txt`, with `art/<who>/stand-<view>.png` cut from the
+turnaround. The necromancer has a walk, a cast (staff raised, the free hand flaring green: the
+raise and the grave circle), a thrust (the staff's skull swung forward: the grave skull) and a
+flinch; the skeleton a walk, an attack (an overhead chop) and a flinch. The deaths are front
+only, 2 × 4: the necromancer falls face down beside its staff, the skeleton collapses into the
+pile of bones that is its corpse (and, played backwards, its rising).
+
+```bash
+tools/gen_monster_views.sh necromancer walk art/necromancer/turnaround-3.png front front-quarter
+tools/gen_monster_views.sh necromancer walk art/necromancer/turnaround-3.png side back-quarter back -- art/necromancer/walk-front.png
+V="front front-quarter side back-quarter back"
+for a in walk cast thrust hurt; do python3 tools/stack_views.py art/necromancer/$a-sheet.png $(for v in $V; do echo art/necromancer/$a-$v.png; done) --height 1024 --frame 1 --blank 1; done
+for a in walk:20 cast:20 thrust:20 hurt:10; do python3 tools/slice_frames.py art/necromancer/${a%:*}-sheet.png data/sprites/necromancer --pixel 8 --anchor bottom --filter box $a; done
+for a in walk attack hurt; do python3 tools/stack_views.py art/skeleton/$a-sheet.png $(for v in $V; do echo art/skeleton/$a-$v.png; done) --height 920 --frame 1 --blank 1; done
+for a in walk:20 attack:20 hurt:10; do python3 tools/slice_frames.py art/skeleton/${a%:*}-sheet.png data/sprites/skeleton --pixel 8 --anchor bottom --filter box $a; done
+python3 tools/slice_frames.py art/necromancer/death.png data/sprites/necromancer --pixel 3.72 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/skeleton/death.png data/sprites/skeleton --pixel 3.94 --anchor bottom --filter box death:8
+```
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -773,7 +913,8 @@ Blender export that keeps the conventions works the same. Conventions:
   (`*storey-height*`, in `hexmaw.blueprint`). Storey k's floor is at 5k, on a slab
   from 5k − 0.5. A corridor is one cell: a 3 m doorway and two 0.5 m walls.
 - Every mesh object is drawn and its bounding box is a solid, unless its name starts
-  with `deco_` (drawn, no collision) or `plug_`. Model collision as boxes: a sloped or
+  with `deco_` (drawn, no collision), `plug_`, or `lava_` (not drawn: its bounding box is
+  a lava volume, its top the surface, in a pit whose floor is a solid). Model collision as boxes: a sloped or
   L-shaped object's bounding box is the whole box around it.
 - Empties named `connector_<rest>` mark doorways, on the block's outer face, at the middle
   of a cell edge, on a storey's floor. A connector faces out through the face it lies on.
@@ -854,8 +995,10 @@ border wall it goes just inside the room). Legend actions: `wall [material]`, `f
 `open`, `box Y0 Y1 [material]` (solid from Y0 to Y1 above the storey's floor; `top` is the
 storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
 [material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
-`torch Y` and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight and harpy 1 each), picked as the
+`lava [DEPTH SURFACE]` (that cell's floor slab sinks to DEPTH below the floor, 0.4 by
+default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `torch Y`
+and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy and necromancer 1 each), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
@@ -869,15 +1012,17 @@ The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-
 niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
 `arch` (beams and torches, the way into a room), `narrow` and `narrowing` (to a narrow
 doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
-rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte or harpy), `crypt`
-(sarcophagi) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
+rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
+(sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
+bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
 up to it). Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip.
 
 To walk the kit: `tools/hd '(progn (setf *level* :gallery) (reload-scene))'` lays every
 block out in two rows, corridors and stairs in front, rooms behind, each with one doorway
-open toward the spawn and the rest plugged, and `(game (kit-goto "chamber"))` stands the
-player outside one. Upper storeys are only reachable by moving the player there.
+open toward the spawn and the rest plugged, on ground that stops at each block's walls
+(`add-ground`; under a block it would fill its lava pits), and `(game (kit-goto "chamber"))`
+stands the player outside one. Upper storeys are only reachable by moving the player there.
 
 ## Generated levels
 

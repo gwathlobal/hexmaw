@@ -1,0 +1,25 @@
+Pixel-art sprite sheet: the 8-frame death animation of the NECROMANCER, a withered sorcerer who raises the dead, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The death is seen from the front only. The last frame is the corpse, which stays on the floor.
+
+REFERENCE IMAGES, in the order attached:
+1. The necromancer's turnaround sheet. It is the character design: a tall, gaunt, stooped old man: a bald, bone-pale head with sunken cheeks, a long thin grey beard, glowing sickly green eyes; a high stiff collar standing up behind the head; ragged layered robes of black and dark sickly green, torn into tatters at the hem and the sleeves; a rope belt hung with small bones and a little skull; bare, bony feet with cord wrapped at the ankles; and in his RIGHT hand a tall, thin, knotted black STAFF crowned with a human skull bound on with cord, its eye sockets glowing sickly green. His LEFT hand is free, its long fingers clawed. Also the shading style.
+2. The necromancer standing, seen from the front. Match its pixel size, outline weight and scale exactly: frame 1 is exactly as tall as reference 2.
+
+THE DEATH: the green light goes out of him and the staff's skull as he falls.
+- Frame 1, HIT: standing as in reference 2 but jolted back, his head snapped back, mouth open, eyes flaring.
+- Frame 2, REELING: he staggers back a step, clutching his chest with the left hand, the staff tilting away from him.
+- Frame 3, BUCKLING: his knees give way, the body sagging lower, the staff slipping from his hand and falling to image-left.
+- Frame 4, KNEELING: on his knees, half the standing height, the head bowed, arms limp, the eyes dimming; the staff falling flat beside him.
+- Frame 5, TOPPLING: still on his knees, the knees exactly where they were in frame 4, the upper body tips forward toward the viewer, a hand reaching for the floor.
+- Frame 6, FALLING: he falls face down from that same spot, the robes spreading.
+- Frame 7, STILL: he lies face down on the floor, a heap of ragged black and green robes, the bald head and a bony hand showing, the staff on the floor beside him, its skull's sockets dark.
+- Frame 8, CORPSE: the same body lying still. No glow anywhere. This frame stays on screen.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Each frame follows on smoothly from the one before: it falls in one place, without jumps between frames, and once down it never leaves the floor.
+- The same scale in every frame. In every frame the figure or what is left of it rests on the same ground line near the bottom of its cell; nothing reaches below it, and nothing floats.
+- Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, dust, sparks, blood pools or gore.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

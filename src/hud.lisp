@@ -1,7 +1,7 @@
 (in-package #:hexmaw)
 
 ;;; Heads-up display: health and mana in the lower-left corner, each a label, a
-;;; bar and the numbers. HUD elements are ordinary scene entities drawn with a
+;;; bar and the numbers, and the frame counter in the upper-left when it's on. HUD elements are ordinary scene entities drawn with a
 ;;; pixel-space orthographic projection at the near plane, so they stay on top
 ;;; whatever order the scene draws in. Text uses Trial's built-in 9x17 pixel font.
 
@@ -18,9 +18,15 @@
 
 (define-shader-entity hud-element () ())
 
-(defmethod render :around ((element hud-element) (program shader-program))
+(defgeneric hud-shown-p (element)
+  (:documentation "Whether ELEMENT draws this frame."))
+
+(defmethod hud-shown-p ((element hud-element))
   ;; No HUD on the main menu; the pause menu dims it instead.
-  (unless (eq *game-state* :title)
+  (not (eq *game-state* :title)))
+
+(defmethod render :around ((element hud-element) (program shader-program))
+  (when (hud-shown-p element)
     (with-pushed-matrix ((view-matrix :identity)
                          (projection-matrix :identity))
       ;; Pixel coordinates with the origin at the bottom left; z 0 is the near plane.
@@ -87,9 +93,35 @@ void main(){
   if(color.a < 0.01) discard;
 }")
 
-(defun make-hud-text (&optional (text ""))
-  (make-instance 'hud-text :text text :font-size (float +glyph-height+ 0f0)
+(defun make-hud-text (&optional (text "") (class 'hud-text))
+  (make-instance class :text text :font-size (float +glyph-height+ 0f0)
                            :foreground *hud-text-color* :background (vec4 0 0 0 0)))
+
+;;; Frame counter: frames drawn per second, in the upper-left corner, when the
+;;; settings menu's Show FPS is on.
+
+(defvar *show-fps* NIL "Show the frame counter. The settings menu (menu.lisp) toggles it.")
+(defparameter *fps-interval* 0.5 "Seconds of frames the counter averages over between updates.")
+
+(define-shader-entity fps-display (hud-text)
+  ((frames :initform 0 :accessor frames)
+   (since :initform 0 :accessor since :documentation "Internal real time the count started.")))
+
+;; On every screen, menus included: what the menus cost to draw is worth seeing too.
+(defmethod hud-shown-p ((display fps-display))
+  *show-fps*)
+
+(defmethod render :before ((display fps-display) (program shader-program))
+  ;; Render runs once a frame (the tick runs at a fixed rate), so count here.
+  (let* ((now (get-internal-real-time))
+         (elapsed (/ (- now (since display)) (float internal-time-units-per-second))))
+    (incf (frames display))
+    (when (<= *fps-interval* elapsed)
+      ;; A longer gap means the counter was hidden: start over rather than show it.
+      (when (< elapsed (* 2 *fps-interval*))
+        (setf (text display) (format NIL "~d FPS" (round (frames display) elapsed))))
+      (setf (frames display) 0
+            (since display) now))))
 
 ;;; Pain: the whole view flashes red when the player is hurt.
 
@@ -128,6 +160,7 @@ void main(){
    (mana-bar :initform (make-instance 'hud-bar :fill-color *mana-bar-color*) :reader mana-bar)
    (mana-text :initform (make-hud-text) :reader mana-text)
    (pain-flash :initform (make-instance 'pain-flash) :reader pain-flash)
+   (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
    (shown-health :initform NIL :accessor shown-health)
    (shown-mana :initform NIL :accessor shown-mana)))
 
@@ -135,7 +168,8 @@ void main(){
   ;; The flash first, so the bars draw over it.
   (list (pain-flash hud)
         (health-label hud) (health-bar hud) (health-text hud)
-        (mana-label hud) (mana-bar hud) (mana-text hud)))
+        (mana-label hud) (mana-bar hud) (mana-text hud)
+        (fps-display hud)))
 
 (defun add-hud (container)
   (let ((hud (make-instance 'hud)))
@@ -165,6 +199,7 @@ void main(){
              (place value (+ bar-x *hud-bar-width* 8) y)))
       (row (hud-row-y 0) (mana-label hud) (mana-bar hud) (mana-text hud))
       (row (hud-row-y 1) (health-label hud) (health-bar hud) (health-text hud))))
+  (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* +glyph-height+))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
   (let ((flash (pain-flash hud)))

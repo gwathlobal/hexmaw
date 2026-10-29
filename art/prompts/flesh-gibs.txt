@@ -1,0 +1,26 @@
+Pixel-art sprite sheet: generic gibs, the pieces any flesh-and-bone monster bursts into when a blow tears it apart, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The same pieces are used for every kind of monster (a red imp, a harpy, an armoured knight), so they show NO skin, fur, feathers, armour or anything else that would belong to one creature: only raw meat, sinew and bone. The pieces fly through the air and then lie on the floor, so each is drawn on its own, lying on the ground and seen from the side.
+
+REFERENCE IMAGES, in the order attached:
+1. A monster's turnaround sheet from the same game. Use it ONLY for the art style: pixel size, outline weight and shading. Do not copy anything of its design or colours.
+2. That monster's death sheet. Match its pixel size, outline weight and scale exactly: every piece is drawn at the scale of the monster in frame 1 of reference 2, so a severed forearm is as long as its forearm there.
+
+THE PIECES, one per cell:
+- Cell 1, ARM: a skinless severed forearm, raw red muscle with pale sinew, a knob of off-white bone at the elbow end and a few bare finger bones at the other.
+- Cell 2, LEG: a skinless severed lower leg, raw muscle around a thick off-white shin bone that sticks out splintered at the knee end.
+- Cell 3, RIBS: a torn section of rib cage, four curved off-white ribs joined to a stub of spine, scraps of dark meat clinging between them.
+- Cell 4, SPINE: a short length of backbone, five or six off-white vertebrae in a gentle curve, torn meat at both ends.
+- Cell 5, ORGAN: a dark, glistening lump of organ (a heart or a kidney) with a torn vessel trailing from it.
+- Cell 6, BIG CHUNK: a big lump of torn raw meat, layered dark red and crimson, one splintered bone sticking out.
+- Cell 7, CHUNK: a smaller lump of torn raw meat with a strip of pale fat.
+- Cell 8, SCRAP: a small scrap of raw meat, about the size of a hand.
+
+COLOURS: raw meat and blood are dark crimson and oxblood, shaded down to near-black, never bright red or pink. Fat and sinew are dull cream. Bone is dull off-white, shaded grey. No other colours.
+
+LAYOUT
+- The image is 1536 x 1024 pixels: a grid of 2 rows of 4 equal cells, cells 1 to 4 in the top row and 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Every piece lies on the same ground line near the bottom of its cell, at the same scale. Each piece is centred in its cell with a wide magenta margin all round. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No blood pool, splash or drops under or around the pieces: just the pieces.
+- No text, labels, numbers, frame borders, speed lines or motion blur.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

@@ -1,0 +1,23 @@
+Pixel-art sprite sheet: the bones a skeleton monster shatters into when a blow smashes it apart, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The pieces fly through the air and then lie on the floor, so each is drawn on its own, lying on the ground and seen from the side.
+
+REFERENCE IMAGES, in the order attached:
+1. The skeleton's turnaround sheet. It is the design and the colours: old, yellowed bone stained brown in the joints and cracks, the skull's sockets with small sickly green eyes. Also the shading style.
+2. The skeleton standing, seen from the front. Match its pixel size, outline weight and scale exactly: every bone is drawn at the scale of the skeleton in reference 2, so the skull is as big as its skull there and a thigh bone as long as its thigh.
+
+THE PIECES, one per cell:
+- Cell 1, SKULL: the skull lying on its side, the jaw missing, a crack across the crown, the sockets dark (no glow: it is dead).
+- Cell 2, RIB CAGE: a broken section of rib cage, five or six curved ribs joined to a stub of spine.
+- Cell 3, PELVIS: the hip bones, lying on their side.
+- Cell 4, THIGH BONE: one long thigh bone with its round knobbed ends, lying flat.
+- Cell 5, ARM BONE: a forearm's two bones with a few finger bones still hanging on at the end.
+- Cell 6, SPINE: a short length of backbone, five vertebrae in a gentle curve.
+- Cell 7, JAW: the lower jaw with its teeth, lying on its side.
+- Cell 8, SMALL BONES: a few small bones and splinters lying together.
+
+LAYOUT
+- The image is 1536 x 1024 pixels: a grid of 2 rows of 4 equal cells, cells 1 to 4 in the top row and 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Every piece lies on the same ground line near the bottom of its cell, at the same scale. Each piece is centred in its cell with a wide magenta margin all round. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No blood, dust, text, labels, numbers, frame borders, speed lines or motion blur. Just the bones.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

@@ -70,17 +70,6 @@ NIL to fall and lie in the standing pose.")))
     (when name
       (stage (animation-texture (find-fx-animation name)) area))))
 
-(defun show-front-frame (creature name frame squash)
-  "Show FRAME of animation NAME whatever the view, as a death strip is shown. SQUASH is
-the flinch, 0 to 1."
-  (let* ((animation (find-fx-animation name))
-         (atlas (animation-atlas animation))
-         (h (animation-size animation))
-         (scale (scaling creature)))
-    (setf (texture creature) (animation-texture animation))
-    (strip-uv (frame-uv creature) atlas frame (getf atlas :frames))
-    (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)) (+ 1 (* squash *stagger-squash* 0.7)))
-          (vy scale) (* h (- 1 (* squash *stagger-squash*))))))
 
 (defun downed-frame (flyer)
   "The frame of the downed animation FLYER shows now."
@@ -128,6 +117,8 @@ as it lands, then sprawled, its head down, for the corpse."
 (defmethod ranged-p ((flyer flyer)) T)
 
 (defmethod move-lift ((flyer flyer)) 0.05)
+;; It hovers over lava: its paths treat it as any floor.
+(defmethod nav-hazards ((flyer flyer)) :ignore)
 
 (defun lift-flyer (flyer dy)
   "Move FLYER up by DY metres (down if negative) if its body fits there. Returns T if it moved."
@@ -290,4 +281,6 @@ length, against a wall or a body, or on the strike."
    (walk-speed :initform 1.6)
    (chase-speed :initform 3.0)
    (wander-radius :initform 5.0)
+   (gibs :initform '((:flesh 0 0 1 2 4 5 6 7 7)))
+   (gib-scale :initform 1.1)
    (max-health :initform 20)))

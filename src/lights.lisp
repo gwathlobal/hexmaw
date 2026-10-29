@@ -62,6 +62,13 @@ the sprite, which turns to face the camera, doesn't sink into the wall seen from
     (vector-push-extend lamp *lamps*)
     lamp))
 
+(defun remove-lamp (lamp)
+  "Put LAMP out: take it out of *LAMPS*, if it is still there."
+  (let ((at (position lamp *lamps*)))
+    (when at
+      (replace *lamps* *lamps* :start1 at :start2 (1+ at))
+      (decf (fill-pointer *lamps*)))))
+
 ;;; Torches: a burning torch in an iron collar, one camera-facing sprite standing off the
 ;;; wall, and a flickering lamp in the flame. Like the effects, it is fullbright.
 

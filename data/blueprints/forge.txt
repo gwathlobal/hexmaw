@@ -1,0 +1,24 @@
+; A room cut across by a lava channel, 3 m wide (a running jump clears it), with a
+; bridge in the middle and banks along the east and west walls, so every doorway still
+; reaches every other dry-shod. A sword blow near the edge knocks a monster in.
+cells 3 3
+tags room
+weight 1
+legend
+  ~ lava
+  i spawn any south
+
+plan 0
+#########nnnnnn#########
+#......................#
+T..........ii..........T
+#......................#
+#......................#
+w...~~~~~~....~~~~~~...e
+w...~~~~~~....~~~~~~...e
+w...~~~~~~....~~~~~~...e
+#......................#
+#......................#
+T......................T
+#......................#
+#########ssssss#########

@@ -87,7 +87,15 @@ lower middle of its splash clear.")
    :text alloy:text
    :pattern *menu-text-color*))
 
-(defclass menu-button (alloy:button) ())
+(defclass menu-focusable () ()
+  (:documentation "A menu row: hovering it with the mouse gives it the keyboard focus."))
+
+;; The mouse moves the keyboard's selection too, so only one row is ever lit.
+(defmethod (setf alloy:hovered-p) :after (value (row menu-focusable))
+  (when (and value (not (alloy:focus row)))
+    (setf (alloy:focus row) :weak)))
+
+(defclass menu-button (menu-focusable alloy:button) ())
 
 (presentations:define-realization (presentations:default-look-and-feel menu-button)
   ((:background simple:rectangle)
@@ -115,10 +123,54 @@ lower middle of its splash clear.")
    :text alloy:text
    :pattern *menu-text-color*))
 
-;; The mouse moves the keyboard's selection too, so only one button is ever lit.
-(defmethod (setf alloy:hovered-p) :after (value (button menu-button))
-  (when (and value (not (alloy:focus button)))
-    (setf (alloy:focus button) :weak)))
+(defparameter *menu-check-size* 20 "Side of a toggle's check box, in UI units.")
+
+(defclass menu-toggle (menu-focusable alloy:labelled-switch) ()
+  (:documentation "A checkbox row the size of a button: the box at the left, its label beside it."))
+
+(presentations:define-realization (presentations:default-look-and-feel menu-toggle)
+  ((:background simple:rectangle)
+   (alloy:margins)
+   :pattern *menu-button-color*)
+  ((:border simple:rectangle)
+   (alloy:margins)
+   :line-width (alloy:un 2)
+   :pattern *menu-border-color*)
+  ;; Rows are *MENU-ROW-HEIGHT* tall, so the box is centred from the bottom edge.
+  ((:box simple:rectangle)
+   (alloy:extent (alloy:un 16) (alloy:un (/ (- *menu-row-height* *menu-check-size*) 2))
+                 (alloy:un *menu-check-size*) (alloy:un *menu-check-size*))
+   :line-width (alloy:un 2)
+   :pattern *menu-border-color*)
+  ((:check simple:rectangle)
+   (alloy:extent (alloy:un 20) (alloy:un (+ 4 (/ (- *menu-row-height* *menu-check-size*) 2)))
+                 (alloy:un (- *menu-check-size* 8)) (alloy:un (- *menu-check-size* 8)))
+   :pattern *menu-text-color*)
+  ((:label simple:text)
+   (alloy:margins (+ 16 *menu-check-size* 12) 1 1 1)
+   alloy:text
+   :pattern *menu-text-color*
+   :size (alloy:un 20)
+   :halign :start :valign :middle))
+
+(presentations:define-update (presentations:default-look-and-feel menu-toggle)
+  (:background
+   :pattern (if (or alloy:focus alloy:hovered-p) *menu-button-hover-color* *menu-button-color*))
+  (:border
+   :pattern *menu-border-color*
+   :hidden-p NIL)
+  (:box
+   :pattern *menu-border-color*)
+  (:check
+   :hidden-p (not (alloy:active-p alloy:renderable))
+   :pattern *menu-text-color*)
+  (:label
+   :text alloy:text
+   :pattern *menu-text-color*))
+
+;; A labelled switch sizes itself to its label; a toggle fills its row as a button does.
+(defmethod presentations::compute-sizing-strategy ((renderer presentations:default-look-and-feel) (toggle menu-toggle))
+  presentations::*fit-to-all-shapes*)
 
 (defclass menu-panel (trial-alloy:panel) ()
   (:documentation "A full-screen menu: a title over a column of buttons."))
@@ -131,7 +183,9 @@ lower middle of its splash clear.")
   (:documentation "UI units from the top of the screen to PANEL's title, or T to centre it.")
   (:method ((panel menu-panel)) T))
 (defgeneric panel-buttons (panel)
-  (:documentation "A list of (LABEL ACTION): ACTION is a function name, called on the next tick after a click."))
+  (:documentation "A list of rows, each (LABEL ACTION), a button: ACTION is a function name,
+called on the next tick after a click; or (LABEL :TOGGLE VARIABLE), a checkbox that sets the
+special variable VARIABLE to T or NIL as it is clicked."))
 
 (defmethod initialize-instance :after ((panel menu-panel) &key)
   (let* ((buttons (panel-buttons panel))
@@ -148,13 +202,20 @@ lower middle of its splash clear.")
     (alloy:enter column backdrop :row 1 :col 1)
     (let ((title (panel-title panel)))
       (alloy:enter (alloy:represent title 'menu-title) column))
-    (loop for (label action) in buttons
+    (loop for (label action variable) in buttons
           ;; REPRESENT binds to the variable itself, so each button needs its own.
-          do (let* ((label label)
-                    (action action)
-                    (button (alloy:represent label 'menu-button :layout-parent column :focus-parent focus)))
-               (alloy:on (alloy:activate button) ()
-                 (queue-menu-action action))))
+          do (let ((label label)
+                   (action action)
+                   (variable variable))
+               (if (eq action :toggle)
+                   (alloy:represent-with 'menu-toggle
+                                         (make-instance 'alloy:place-data
+                                                        :getter (lambda () (symbol-value variable))
+                                                        :setter (lambda (value) (setf (symbol-value variable) value)))
+                                         :text label :layout-parent column :focus-parent focus)
+                   (let ((button (alloy:represent label 'menu-button :layout-parent column :focus-parent focus)))
+                     (alloy:on (alloy:activate button) ()
+                       (queue-menu-action action))))))
     (alloy:finish-structure panel backdrop focus)))
 
 (defclass main-menu (menu-panel) ())
@@ -162,7 +223,7 @@ lower middle of its splash clear.")
 (defmethod panel-splash ((panel main-menu)) "title")
 (defmethod panel-top ((panel main-menu)) *title-menu-top*)
 (defmethod panel-buttons ((panel main-menu))
-  '(("Start game" start-game) ("Debug level" start-debug-level) ("Exit game" exit-game)))
+  '(("Start game" start-game) ("Debug level" start-debug-level) ("Settings" open-settings) ("Exit game" exit-game)))
 
 (defclass loading-screen (menu-panel) ()
   (:documentation "Up while a level is built (:LOADING), which freezes the frame for a second or two."))
@@ -172,14 +233,25 @@ lower middle of its splash clear.")
 
 (defclass pause-menu (menu-panel) ())
 (defmethod panel-title ((panel pause-menu)) "Paused")
-(defmethod panel-buttons ((panel pause-menu)) '(("Resume game" resume-game) ("Exit to main menu" exit-to-title)))
+(defmethod panel-buttons ((panel pause-menu))
+  '(("Resume game" resume-game) ("Settings" open-settings) ("Exit to main menu" exit-to-title)))
+
+(defvar *settings-open* NIL
+  "True while the settings panel covers the main or pause menu, which Back returns to.")
+
+(defclass settings-menu (menu-panel) ())
+(defmethod panel-title ((panel settings-menu)) "Settings")
+;; Over the main menu it keeps the main menu's picture, rather than showing the level.
+(defmethod panel-splash ((panel settings-menu)) (when (eq *game-state* :title) "title"))
+(defmethod panel-top ((panel settings-menu)) (if (eq *game-state* :title) *title-menu-top* T))
+(defmethod panel-buttons ((panel settings-menu)) '(("Show FPS" :toggle *show-fps*) ("Back" close-settings)))
 
 (defun state-menu ()
   "The panel class that belongs on screen in the current state, or NIL."
   (case *game-state*
-    (:title 'main-menu)
+    (:title (if *settings-open* 'settings-menu 'main-menu))
     (:loading 'loading-screen)
-    (:paused 'pause-menu)))
+    (:paused (if *settings-open* 'settings-menu 'pause-menu))))
 
 ;;; Transitions.
 
@@ -211,6 +283,7 @@ the build holds the frame.")
   "Leave the main menu for a new run on LEVEL (see *LEVEL*): put the loading screen up,
 then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE starts play."
   (setf *level* level
+        *settings-open* NIL
         *new-run* T
         *game-state* :loading
         *loading-countdown* *loading-frames*))
@@ -234,8 +307,16 @@ then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE start
     (when *player* (capture-mouse *player*))))
 
 (defun show-title ()
-  (setf *game-state* :title)
+  (setf *game-state* :title
+        *settings-open* NIL)
   (when *player* (release-mouse *player*)))
+
+(defun open-settings ()
+  (when (member *game-state* '(:title :paused))
+    (setf *settings-open* T)))
+
+(defun close-settings ()
+  (setf *settings-open* NIL))
 
 (defun reset-run ()
   "Put the level back as it was built, in place: the player at the spawn point, every
@@ -244,6 +325,12 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (when *player* (reset-player *player*))
   (setf *hit-stop* 0.0)
   (clear-blood)
+  ;; What came into the level mid-game (raised skeletons) goes; the rest live again.
+  (let ((j 0))
+    (loop for creature across *creatures*
+          do (cond ((summoned creature) (despawn creature))
+                   (T (setf (aref *creatures* j) creature) (incf j))))
+    (setf (fill-pointer *creatures*) j))
   (loop for creature across *creatures*
         do (revive creature)
            (update-creature-look creature))
@@ -281,9 +368,9 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
 
 (define-handler (menu-controller key-press) (key)
   (when (eq key :escape)
-    (case *game-state*
-      (:playing (pause-game))
-      (:paused (resume-game)))))
+    (cond (*settings-open* (close-settings))
+          ((eq *game-state* :playing) (pause-game))
+          ((eq *game-state* :paused) (resume-game)))))
 
 (define-handler (menu-controller tick) ()
   (let ((action *menu-action*))

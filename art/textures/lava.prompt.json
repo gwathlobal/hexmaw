@@ -1,0 +1,28 @@
+{
+  "prompt": "Pixel-art SURFACE TEXTURE for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the wall and floor textures of Hexen or Daggerfall.\n\nREFERENCE IMAGE: a monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, how shading is done with a few hard-edged tones. Do not draw the monster or anything from the sheet.\n\nTHE IMAGE\n- One square image, filled edge to edge with the surface, seen dead-on and perfectly flat: no perspective, no vanishing point, no curvature, no frame, no border, no vignette.\n- It must TILE SEAMLESSLY: the left edge continues into the right edge and the top into the bottom. Nothing big crosses an edge in a way that would not continue; no feature sits only at the centre.\n- Even, flat lighting across the whole image: no light source, no gradient from one side to the other, no cast shadows from outside, no glow. Lighting comes from the game. Only small local shading inside each stone or plank (a lighter top edge, darker cracks and gaps).\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no photographic texture, no dithering gradients.\n- Muted, grimy dungeon colours, a little desaturated, of medium brightness, so it can be lit darker or brighter in game.\n- No text, symbols, runes, labels, numbers, characters, torches, doors, windows, moss clumps or other objects. Just the surface.\nTHE SURFACE: a pool of MOLTEN LAVA, seen from straight above, like the lava flats of Hexen, Heretic or Quake.\n\nThis surface is the one exception to the colour rule above: lava glows by itself, so it is BRIGHT and SATURATED, not muted. Still no light source, gradient or vignette across the image; the glow is in the colours themselves.\n- Irregular islands and plates of dark cooling crust (near-black, deep red-brown) floating in bright molten rock, roughly a third of the image crust. The plates vary in size, a few large, many small, with rounded, torn edges.\n- Between them the molten rock: deep red at the crust edges, through orange, to hot yellow in the thickest channels, in a few hard-edged bands of colour, like flowing veins.\n- A few small bright bubbles and spatter dots of near-white yellow scattered in the molten parts.\n- Evenly spread over the whole image, with no big feature at the centre, so it tiles.\n",
+  "prompt_file": "/tmp/lava-prompt.txt",
+  "refs": [
+    "Pixel Demon Character Turnaround.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1793284404,
+  "size_request": "1024x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art SURFACE TEXTURE for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the wall and floor textures of Hexen or Daggerfall.\n\nREFERENCE IMAGE: a monster turnaround sheet from the same game. Use it ONLY for the art style: pixel size, palette mood, how shading is done with a few hard-edged tones. Do not draw the monster or anything from the sheet.\n\nTHE IMAGE\n- One square image, filled edge to edge with the surface, seen dead-on and perfectly flat: no perspective, no vanishing point, no curvature, no frame, no border, no vignette.\n- It must TILE SEAMLESSLY: the left edge continues into the right edge and the top into the bottom. Nothing big crosses an edge in a way that would not continue; no feature sits only at the centre.\n- Even, flat lighting across the whole image: no light source, no gradient from one side to the other, no cast shadows from outside, no glow. Lighting comes from the game. Only small local shading inside each stone or plank (a lighter top edge, darker cracks and gaps).\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no photographic texture, no dithering gradients.\n- Muted, grimy dungeon colours, a little desaturated, of medium brightness, so it can be lit darker or brighter in game.\n- No text, symbols, runes, labels, numbers, characters, torches, doors, windows, moss clumps or other objects. Just the surface.\nTHE SURFACE: a pool of MOLTEN LAVA, seen from straight above, like the lava flats of Hexen, Heretic or Quake.\n\nThis surface is the one exception to the colour rule above: lava glows by itself, so it is BRIGHT and SATURATED, not muted. Still no light source, gradient or vignette across the image; the glow is in the colours themselves.\n- Irregular islands and plates of dark cooling crust (near-black, deep red-brown) floating in bright molten rock, roughly a third of the image crust. The plates vary in size, a few large, many small, with rounded, torn edges.\n- Between them the molten rock: deep red at the crust edges, through orange, to hot yellow in the thickest channels, in a few hard-edged bands of colour, like flowing veins.\n- A few small bright bubbles and spatter dots of near-white yellow scattered in the molten parts.\n- Evenly spread over the whole image, with no big feature at the centre, so it tiles.\nImage size: 1024x1024 pixels (square).",
+  "codex_threads": [
+    "01a18812-d7bc-7261-8b99-06e51386d02c",
+    "01a18813-8f66-77d3-b63d-bb306c6bb28b"
+  ],
+  "sizes": [
+    [
+      1254,
+      1254
+    ],
+    [
+      1254,
+      1254
+    ]
+  ]
+}

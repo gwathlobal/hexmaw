@@ -14,10 +14,12 @@
 ;;; wall drips 32 to 35 (running down), in the four drop sizes; then each creature's gibs,
 ;;; four frames a piece (lying as drawn, then turned a quarter at a time, clockwise).
 ;;;
-;;; Gibs are pieces of a creature torn apart by a blow that overkills it (*GIB-OVERKILL*).
-;;; They live in the same pool: they fly heavier than drops, tumbling and dripping blood,
-;;; bounce off what they hit, leaving a splat, and come to rest standing on the floor,
-;;; facing the camera like a billboard. A level keeps *MAX-GIBS* of them.
+;;; Gibs are pieces of a creature torn apart by a blow that overkills it (*GIB-OVERKILL*,
+;;; or its own GIB-OVERKILL). They live in the same pool: they fly heavier than drops,
+;;; tumbling and dripping blood, bounce off what they hit, leaving a splat, and come to
+;;; rest standing on the floor, facing the camera like a billboard. A level keeps
+;;; *MAX-GIBS* of them. One set serves many creatures: each draws its pieces at its own
+;;; GIB-SCALE, and the gibs of a creature that doesn't bleed (bones) leave no blood.
 
 (define-fx-animation blood "sprites/blood/blood")
 
@@ -99,7 +101,9 @@ at least this fraction of its most.")
    (side :reader pool-side
          :documentation "Per splat: the face it lies on, 0 to 5 for +X -X +Y -Y +Z -Z, and in
 bits 3 to 5 its turn (quarter turns, then a mirror). Per gib: bit 0 to tumble
-anticlockwise, bit 1 to mirror, bits 2 and 3 the quarter turn it starts at.")
+anticlockwise, bit 1 to mirror, bits 2 and 3 the quarter turn it starts at, bit 4 if it
+leaves no blood.")
+   (scales :reader pool-scales :documentation "Per gib: the size it is drawn at, 1 as the art is.")
    (positions :reader pool-positions)
    (velocities :reader pool-velocities)
    (ages :reader pool-ages
@@ -117,6 +121,7 @@ anticlockwise, bit 1 to mirror, bits 2 and 3 the quarter turn it starts at.")
           (slot-value pool 'state) (make-array n :element-type '(unsigned-byte 8) :initial-element 0)
           (slot-value pool 'frame) (make-array n :element-type '(unsigned-byte 8) :initial-element 0)
           (slot-value pool 'side) (make-array n :element-type '(unsigned-byte 8) :initial-element 0)
+          (slot-value pool 'scales) (make-array n :element-type 'single-float :initial-element 1f0)
           (slot-value pool 'positions) (make-array (* 3 n) :element-type 'single-float :initial-element 0f0)
           (slot-value pool 'velocities) (make-array (* 3 n) :element-type 'single-float :initial-element 0f0)
           (slot-value pool 'ages) (make-array n :element-type 'single-float :initial-element 0f0)
@@ -456,7 +461,8 @@ the way it was going; a bigger one may run down a wall."
                  (ny (+ (aref p (+ b 1)) (* dt (aref v (+ b 1)))))
                  (nz (+ (aref p (+ b 2)) (* dt (aref v (+ b 2)))))
                  (s (solid-at nx ny nz)))
-            (cond (s (land-drop pool i s nx ny nz))
+            (cond ((liquid-at nx ny nz) (setf (aref state i) 0)) ; Sunk, or burnt off.
+                  (s (land-drop pool i s nx ny nz))
                   ((< *blood-drop-life* (aref ages i)) (setf (aref state i) 0))
                   (T (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz)))))))))
 
@@ -472,8 +478,9 @@ the way it was going; a bigger one may run down a wall."
     (unless set (error "No gib set ~s in the blood strip (tools/draw_blood.py --gibs)." name))
     (values (getf set :first) (getf set :count))))
 
-(defun spawn-gib (frame x y z vx vy vz)
-  "Throw the gib whose unturned frame is FRAME from X Y Z at VX VY VZ m/s."
+(defun spawn-gib (frame x y z vx vy vz &key (scale 1.0) dry)
+  "Throw the gib whose unturned frame is FRAME from X Y Z at VX VY VZ m/s, drawn at
+SCALE; a DRY one leaves no blood."
   (let ((pool *blood-pool*))
     (when pool
       (let ((i (free-slot pool))
@@ -481,7 +488,8 @@ the way it was going; a bigger one may run down a wall."
             (v (pool-velocities pool)))
         (setf (aref (pool-state pool) i) 4
               (aref (pool-frame pool) i) frame
-              (aref (pool-side pool) i) (random 16)
+              (aref (pool-side pool) i) (logior (random 16) (if dry 16 0))
+              (aref (pool-scales pool) i) (float scale 0f0)
               (aref (pool-ages pool) i) 0f0
               (aref p (* 3 i)) (float x 0f0) (aref p (+ 1 (* 3 i))) (float y 0f0) (aref p (+ 2 (* 3 i))) (float z 0f0)
               (aref v (* 3 i)) (float vx 0f0) (aref v (+ 1 (* 3 i))) (float vy 0f0) (aref v (+ 2 (* 3 i))) (float vz 0f0))))))
@@ -490,32 +498,47 @@ the way it was going; a bigger one may run down a wall."
   "True if CREATURE, killed by a blow of AMOUNT, should be torn apart."
   (declare (ignore amount))
   (and (gibs creature)
-       (<= (health creature) (- (* *gib-overkill* (max-health creature))))))
+       (<= (health creature) (- (* (or (gib-overkill creature) *gib-overkill*) (max-health creature))))))
 
 (defun burst-gibs (creature from)
   "Tear CREATURE apart: throw its gibs out every way and along the blow from point FROM
-(NIL: from the player), with a burst of blood."
+(NIL: from the player), with a burst of blood if it bleeds. Its GIBS are groups, each a
+set's name in the blood strip and its piece numbers; a piece written (:HEAD N) flies
+from the top of the body, the rest from anywhere in it."
   (let* ((loc (location creature))
          (height (sprite-height creature))
+         (scale (gib-scale creature))
+         (dry (not (bleeds creature)))
          (from (or from (and *player* (feet *player*))))
          (dx (if from (- (vx loc) (vx from)) 0.0))
          (dz (if from (- (vz loc) (vz from)) 0.0))
          (len (sqrt (+ (* dx dx) (* dz dz)))))
     (when (< 1f-4 len)
       (setf dx (/ dx len) dz (/ dz len)))
-    (destructuring-bind (set . pieces) (gibs creature)
-      (let ((first (gib-set set)))
-        (loop for piece in pieces
-              for a = (random (float (* 2 pi) 0f0))
-              for s = (range-random *gib-speed*)
-              ;; The head flies from the top, the rest from anywhere in the body.
-              for y = (+ (vy loc) (* height (if (= piece 0) 0.85 (+ 0.25 (random 0.5)))))
-              do (spawn-gib (+ first (* 4 piece)) (vx loc) y (vz loc)
-                            (+ (* s (cos a)) (* *gib-push* dx))
-                            (range-random *gib-rise*)
-                            (+ (* s (sin a)) (* *gib-push* dz))))))
-    (spray-blood (vec (vx loc) (+ (vy loc) (* 0.5 height)) (vz loc)) dx dz *gib-blood*
-                 :spread pi :speed *death-blood-speed* :rise '(0.0 1.0) :lift *death-blood-lift*)))
+    (loop for (set . pieces) in (gibs creature)
+          for first = (gib-set set)
+          do (loop for entry in pieces
+                   for head = (consp entry)
+                   for piece = (if head (second entry) entry)
+                   for a = (random (float (* 2 pi) 0f0))
+                   for s = (range-random *gib-speed*)
+                   for y = (+ (vy loc) (* height (if head 0.85 (+ 0.25 (random 0.5)))))
+                   do (spawn-gib (+ first (* 4 piece)) (vx loc) y (vz loc)
+                                 (+ (* s (cos a)) (* *gib-push* dx))
+                                 (range-random *gib-rise*)
+                                 (+ (* s (sin a)) (* *gib-push* dz))
+                                 :scale scale :dry dry)))
+    (unless dry
+      (spray-blood (vec (vx loc) (+ (vy loc) (* 0.5 height)) (vz loc)) dx dz *gib-blood*
+                   :spread pi :speed *death-blood-speed* :rise '(0.0 1.0) :lift *death-blood-lift*))))
+
+(defun tear-apart (creature &key from)
+  "Tear CREATURE apart, struck from point FROM, as a blow that overkills it does: it
+vanishes and its gibs fly. Its wound stops dripping, since nothing of it is left."
+  (unless (gibbed creature)
+    (setf (gibbed creature) T
+          (bleeding creature) 0f0)
+    (burst-gibs creature from)))
 
 (defun dissolve-oldest-gib (pool)
   (let ((state (pool-state pool))
@@ -545,12 +568,13 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
          (v (pool-velocities pool))
          (ages (pool-ages pool))
          (b (* 3 i))
-         (scatter (float *gib-drip-scatter* 0f0)))
+         (scatter (float *gib-drip-scatter* 0f0))
+         (dry (logbitp 4 (aref (pool-side pool) i))))
     (declare (type (simple-array single-float (*)) p v ages)
              (type single-float scatter))
     (incf (aref ages i) dt)
     ;; At random, so the trail isn't a dotted line.
-    (when (< (random 1f0) (/ dt *gib-drip-interval*))
+    (when (and (not dry) (< (random 1f0) (/ dt *gib-drip-interval*)))
       (flet ((stray () (- (random (* 2 scatter)) scatter)))
         (spawn-drop (aref p b) (aref p (+ b 1)) (aref p (+ b 2))
                     (+ (* 0.3 (aref v b)) (stray)) (+ (* 0.3 (aref v (+ b 1))) (stray)) (+ (* 0.3 (aref v (+ b 2))) (stray))
@@ -561,7 +585,9 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
            (ny (+ (aref p (+ b 1)) (* dt (aref v (+ b 1)))))
            (nz (+ (aref p (+ b 2)) (* dt (aref v (+ b 2)))))
            (s (solid-at nx ny nz)))
-      (cond ((null s)
+      (cond ((liquid-at nx ny nz)
+             (setf (aref (pool-state pool) i) 0))
+            ((null s)
              (if (< *blood-drop-life* (aref ages i))
                  (setf (aref (pool-state pool) i) 0)
                  (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz)))
@@ -575,7 +601,7 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
                              (floor-p (and (= axis 1) high))
                              (out (if high 0.01 -0.01)))
                         ;; A splat where it struck, from a drop just off the face.
-                        (when (< 1.5 into)
+                        (when (and (not dry) (< 1.5 into))
                           (spawn-drop (+ (aref p b) (if (= axis 0) out 0.0))
                                       (+ (aref p (+ b 1)) (if (= axis 1) out 0.0))
                                       (+ (aref p (+ b 2)) (if (= axis 2) out 0.0))
@@ -619,6 +645,7 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
          (frames (pool-frame pool))
          (sides (pool-side pool))
          (p (pool-positions pool))
+         (scales (pool-scales pool))
          (data (pool-data pool))
          (axes *splat-axes*)
          (corners *quad-corners*)
@@ -642,7 +669,7 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
          (rx (cos yaw)) (rz (sin yaw))
          (k 0))
     (declare (type (simple-array (unsigned-byte 8) (*)) state frames sides corners)
-             (type (simple-array single-float (*)) p data axes ages)
+             (type (simple-array single-float (*)) p scales data axes ages)
              (type (simple-array fixnum (*)) bottoms)
              (type single-float du h lift dissolve-time ppm tumble rx rz)
              (type fixnum k stride))
@@ -673,7 +700,8 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
                         (turns (+ (ash bits -2) (floor (* (aref ages i) tumble))))
                         (frame (+ (aref frames i) (mod (if (logbitp 0 bits) (- turns) turns) 4)))
                         (u0 (/ (* frame (+ cell gap)) width))
-                        (mirror (logbitp 1 bits)))
+                        (mirror (logbitp 1 bits))
+                        (h (* h (aref scales i))))
                    (loop for c from 0 below 12 by 2
                          for a = (aref corners c)
                          for bb = (aref corners (1+ c))
@@ -681,9 +709,11 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
                                  (* h (- (* 2 a) 1)) (* h (- (* 2 bb) 1)) 0f0 0f0 0f0 0f0))))
                 ((<= 5 s 6)
                  ;; At rest, standing on the floor at its lowest drawn pixel.
-                 (let ((cy (+ y (- h (/ (aref bottoms (aref frames i)) ppm))))
-                       (mirror (logbitp 1 (aref sides i)))
-                       (fade (if (= 6 s) (min 1f0 (/ (aref ages i) dissolve-time)) 0f0)))
+                 (let* ((scale (aref scales i))
+                        (h (* h scale))
+                        (cy (+ y (- h (/ (* scale (aref bottoms (aref frames i))) ppm))))
+                        (mirror (logbitp 1 (aref sides i)))
+                        (fade (if (= 6 s) (min 1f0 (/ (aref ages i) dissolve-time)) 0f0)))
                    (loop for c from 0 below 12 by 2
                          for a = (aref corners c)
                          for bb = (aref corners (1+ c))
