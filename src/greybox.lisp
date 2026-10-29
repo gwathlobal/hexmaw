@@ -29,6 +29,18 @@
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 (define-asset (hexmaw planks) image #p"textures/planks.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw stair-side) image #p"textures/stair-side.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw stair-tread) image #p"textures/stair-tread.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw dressed-stone) image #p"textures/dressed-stone.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw timber) image #p"textures/timber.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw sarcophagus-side) image #p"textures/sarcophagus-side.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw sarcophagus-lid) image #p"textures/sarcophagus-lid.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 
 ;; A surface is the textures of a box's sides, its top and its underside, as floors and
 ;; ceilings are flats in Doom. A block's material picks the surface of its name, so
@@ -39,7 +51,12 @@
     (:ceiling wall-stone floor-flags ceiling-stone)
     (:pillar pillar-stone pillar-stone pillar-stone)
     (:platform planks planks planks)
-    (:dais pillar-stone floor-flags pillar-stone)))
+    (:dais pillar-stone floor-flags pillar-stone)
+    (:stair stair-side stair-tread stair-side)
+    (:stone dressed-stone dressed-stone dressed-stone)
+    (:beam timber timber timber)
+    ;; Its side is a 0.8 m strip on a 1 m texture: a box 0.8 m tall standing on a floor.
+    (:sarcophagus sarcophagus-side sarcophagus-lid sarcophagus-side)))
 
 (defun surface-textures (name)
   "The textures of surface NAME (a keyword, or a material's name) as a list (SIDE TOP

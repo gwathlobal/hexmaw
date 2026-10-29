@@ -13,7 +13,17 @@ it ghosts joints that don't line up, so a fresh image is often the better fix.
 
 Then it is box-filtered down to size (averaging, as slice_frames.py --filter box does),
 and --colors reduces it to one palette, which flattens the generator's noise below the
-pixel grid. Writes <out>.png and, beside the source, <source stem>-tiled.png: the
+pixel grid.
+
+A strip (--strip H) is one band of a face, H metres tall and --metres wide, such as a
+sarcophagus's side, drawn on a magenta background: it is cropped to what isn't magenta,
+scaled to that size and stood on the bottom of a texture --period metres tall (default
+1), the rows above filled by repeating its top row. Rows start at y = 0, so on a box
+standing on a floor the strip fits the box's sides whatever storey it is on, as long
+as --period divides the storey height.
+
+--brightness scales every colour first, for a generated surface that came
+out too light or dark beside the rest of the level. Writes <out>.png and, beside the source, <source stem>-tiled.png: the
 texture 3 x 3 at 4x zoom, to check the seams by eye. It prints how far the wrapped
 edges differ from neighbouring rows inside the tile (1.0: no more than any two rows).
 """
@@ -66,6 +76,28 @@ def seam_ratio(tex):
     return edge / max(inner, 1e-6)
 
 
+def make_strip(src, args):
+    """The strip texture of SRC, a band drawn on magenta, as --strip describes."""
+    w, h = src.size
+    px = src.load()
+    keyed = lambda c: c[0] > 180 and c[2] > 180 and c[1] < 90
+    rows = [y for y in range(h) if sum(not keyed(px[x, y]) for x in range(0, w, 4)) > w // 16]
+    band = src.crop((0, rows[0], w, rows[-1] + 1))
+    width = round(args.metres * PIXELS_PER_METRE)
+    tall = round(args.strip * PIXELS_PER_METRE)
+    period = round(args.period * PIXELS_PER_METRE)
+    strip = band.resize((width, tall), Image.BOX)
+    if args.brightness != 1.0:
+        strip = strip.point(lambda v: min(255, round(v * args.brightness)))
+    if args.colors:
+        strip = strip.quantize(args.colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
+    tex = Image.new("RGB", (width, period))
+    for y in range(period - tall):
+        tex.paste(strip.crop((0, 0, width, 1)), (0, y))
+    tex.paste(strip, (0, period - tall))
+    return tex
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source")
@@ -75,9 +107,19 @@ def main():
     ap.add_argument("--blend", type=int, default=0,
                     help="source pixels cross-faded across the wrapped edges (default 0: none)")
     ap.add_argument("--colors", type=int, default=32, help="palette size (default 32, 0 to keep every colour)")
+    ap.add_argument("--strip", type=float, default=0, help="metres tall: the source is a strip on magenta")
+    ap.add_argument("--period", type=float, default=1.0, help="metres tall the strip's texture is (default 1)")
+    ap.add_argument("--brightness", type=float, default=1.0, help="factor every colour is scaled by (default 1)")
     args = ap.parse_args()
 
     src = Image.open(args.source).convert("RGB")
+    if args.strip:
+        tex = make_strip(src, args)
+        out = Path(args.out).with_suffix(".png")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        tex.save(out)
+        print(f"{out}: {tex.size[0]} x {tex.size[1]} px; seam {seam_ratio(tex):.2f}")
+        return
     w, h = src.size
     side = min(w, h) - 2 * args.crop
     left, top = (w - side) // 2, (h - side) // 2
@@ -86,6 +128,8 @@ def main():
 
     size = round(args.metres * PIXELS_PER_METRE)
     tex = img.resize((size, size), Image.BOX)
+    if args.brightness != 1.0:
+        tex = tex.point(lambda v: min(255, round(v * args.brightness)))
     if args.colors:
         tex = tex.quantize(args.colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
 

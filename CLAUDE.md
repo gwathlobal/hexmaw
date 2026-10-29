@@ -436,7 +436,8 @@ and ceilings by x and z), at `*texels-per-metre*` (64, the monsters' density). A
 pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and walls line up
 across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
 sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
-`:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`), tinted by
+`:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`, `:stair`, `:stone`,
+`:beam`, `:sarcophagus`), tinted by
 `:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
 
 A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
@@ -461,7 +462,29 @@ tools/make_texture.py art/textures/floor-flags-2.png data/textures/floor-flags -
 tools/make_texture.py art/textures/ceiling-1.png data/textures/ceiling-stone --metres 4
 tools/make_texture.py art/textures/pillar-stone-1.png data/textures/pillar-stone --metres 2
 tools/make_texture.py art/textures/platform-top-1.png data/textures/planks --metres 2
+tools/make_texture.py art/textures/stair-side-2.png data/textures/stair-side --metres 2
+tools/make_texture.py art/textures/stair-tread-1.png data/textures/stair-tread --metres 2
+tools/make_texture.py art/textures/stone-2.png data/textures/dressed-stone --metres 2 --brightness 0.78
+tools/make_texture.py art/textures/beam-2.png data/textures/timber --metres 2
+tools/make_texture.py art/textures/sarcophagus-side-3.png data/textures/sarcophagus-side --metres 2 --strip 0.8 --brightness 0.78
+tools/make_texture.py art/textures/sarcophagus-lid-1.png data/textures/sarcophagus-lid --metres 2 --brightness 0.78
 ```
+
+The stair's treads (`stair-tread`) are a straight 4 × 4 grid of slabs on 2 m, so their joints
+fall on the 0.5 m treads the stair pieces have; its risers and flanks are `stair-side`, small
+courses that don't need to meet the risers. `stone` is one plain dressed face, no courses,
+`--brightness 0.78` so the pale stone doesn't glare in the dark.
+
+A face made for one size of box is a **strip**: `sarcophagus` (the crypt's, 0.8 m tall) has
+a side that is plinth, four carved panels and the lid's edge, generated alone as a 2.5:1
+band on magenta (`texture-sarcophagus-side.txt`, not `texture-common.txt`, with
+`art/textures/stone-2.png` as a second reference for the stone). `--strip 0.8` crops the
+band and stands it on the bottom of a 1 m texture (PNG rows run top down, from y = 1 m to
+y = 0). The 1 m repeat divides the 5 m storeys, so it fits a box standing on any storey's
+floor, and the 0.5 m panels meet a box's ends, which always lie on the 0.5 m grid. The lid
+is 4 × 4 coffers on 2 m, so 0.5 m too.
+`beam` (`timber`) has its grain running along x: a beam turned to run along z shows the
+grain across its underside.
 
 A re-made PNG is picked up by reloading greybox.lisp (`tools/hd reload src/greybox.lisp`),
 not by `tools/hd reset`.
