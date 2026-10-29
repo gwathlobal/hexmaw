@@ -7,6 +7,8 @@
 
 ;; The project's assets (data/). Defined here, in the first file that defines an asset.
 (define-pool hexmaw :path #p"../data/")
+;; Blocks are built from their blueprints before a standalone build (tools/build-dist).
+(define-as-unused hexmaw #p"blueprints/")
 
 (defparameter *fog-color* (vec 0.06 0.05 0.07))
 (defparameter *fog-start* 3.0)

@@ -265,7 +265,7 @@ length, against a wall or a body, or on the strike."
 
 (define-shader-entity harpy (flyer)
   ((texture :initform (// 'hexmaw 'harpy-turnaround))
-   (atlas :initform (read-atlas "data/sprites/harpy/turnaround.lisp"))
+   (atlas :initform (read-atlas "sprites/harpy/turnaround.lisp"))
    (sprite-height :initform *harpy-height*)
    (dive-animation :initform 'harpy-dive)
    (flap-animation :initform 'harpy-flap)

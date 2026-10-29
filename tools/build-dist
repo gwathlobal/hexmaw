@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Build the standalone game into dist/: the executable, the foreign libraries it loads,
+# and the asset pools under dist/pool/ (src/dist.lisp). Copy dist/ anywhere and run
+# dist/hexmaw; it needs no SBCL, Quicklisp or source tree.
+#
+#   tools/build-dist
+#
+# Every block is built from its blueprint first, so the shipped .glb files are current.
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root" || exit 1
+# Deploy patches the shipped libraries' sonames with patchelf.
+command -v patchelf >/dev/null || { echo "build-dist: needs patchelf (apt install patchelf)" >&2; exit 1; }
+rm -rf dist
+sbcl --dynamic-space-size 4096 --noinform --no-userinit --non-interactive \
+     --load boot.lisp \
+     --eval '(mapc (function hexmaw.blueprint:ensure-block) (hexmaw.blueprint:blueprint-names))' \
+     --eval '(asdf:make :hexmaw)' || exit 1
+rmdir bin 2>/dev/null  # Deploy reaches dist/ through bin/ (hexmaw.asd)
+[ -x dist/hexmaw ] || { echo "build-dist: no dist/hexmaw was written" >&2; exit 1; }
+echo "Built $root/dist ($(du -sh dist | cut -f1)); run dist/hexmaw"

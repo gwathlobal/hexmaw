@@ -27,6 +27,32 @@ least 2 GB of heap. Dependencies come from the project-local Quicklisp in `.ql/`
 (Shirakumo dist, not checked in), and ASDF is limited to this folder because other
 projects under `~/common-lisp/` ship conflicting copies of Trial's dependencies.
 
+## Standalone build
+
+```bash
+tools/build-dist
+```
+
+Builds the game into `dist/` (gitignored), about 200 MB: `hexmaw`, the executable,
+the native libraries it loads (GLFW, evdev), and `pool/` with the assets: `pool/hexmaw/`
+is `data/` without the blueprints, beside Trial's own pools and the font cache. Copy `dist/`
+anywhere and run `dist/hexmaw`; it needs no SBCL, Quicklisp or source tree. It takes
+about 2.5 minutes and needs `patchelf` (`apt install patchelf`), which Deploy uses on the
+libraries it ships. It builds every block from its blueprint first, so the shipped `.glb`
+files are current.
+
+`asdf:make` does the dumping: `hexmaw.asd` sends it to Deploy's `deploy-op`, with
+`dist-main` (`src/dist.lisp`) as the entry point. The binary starts on the main menu with no
+eval server; `HEXMAW_EVAL_PORT=7272 dist/hexmaw` starts one, so `tools/hd` (given the
+same `HEXMAW_EVAL_PORT`) can drive a build. `HEXMAW_FULLSCREEN=1` works as with `run.sh`.
+Trial's log, `trial.log`, and F12 screenshots land beside the executable; an error that
+escapes shows a message box. The 4 GB heap is a limit kept from the build, not memory used.
+
+A file the game reads at run time goes through `(data-path "sprites/...")`, a path under
+`data/`: in the binary it resolves to `pool/hexmaw/`. `root` is the project only in
+development (the executable's folder in a build), and ASDF is gone from the binary. In the
+binary blocks are never rebuilt (`hexmaw.blueprint:*build-blocks*` is NIL).
+
 ## Live reload: how changes reach the game
 
 A PostToolUse hook (`.claude/settings.json` → `tools/claude-reload-hook.sh`) reloads
@@ -393,6 +419,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
+- `src/dist.lisp`: the standalone build's entry point (`dist-main`) and its Deploy hook; see
+  "Standalone build" above.
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
 (north). Collision is axis-aligned boxes in `*solids*`, resolved one axis at a time.

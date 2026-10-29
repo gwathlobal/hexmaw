@@ -15,8 +15,8 @@
   :min-filter :nearest :mag-filter :nearest)
 
 (defun read-atlas (file)
-  "Read an atlas index written by tools/slice_turnaround.py: a plist."
-  (with-open-file (in (merge-pathnames file (root)))
+  "Read an atlas index written by tools/slice_turnaround.py, FILE under data/: a plist."
+  (with-open-file (in (data-path file))
     (let ((*read-eval* NIL))
       (read in))))
 
@@ -45,7 +45,7 @@ the STRIP.png and STRIP.lisp that tools/slice_frames.py writes."
        :min-filter :nearest :mag-filter :nearest)
      (setf (gethash ',name *fx-animations*)
            (make-instance 'fx-animation :texture (// 'hexmaw ',name)
-                                        :atlas (read-atlas ,(format NIL "data/~a.lisp" strip))
+                                        :atlas (read-atlas ,(format NIL "~a.lisp" strip))
                                         :fps ,fps :loop ,loop :size ,size))))
 
 (define-shader-entity billboard (lit-entity vertex-entity textured-entity transformed-entity listener)

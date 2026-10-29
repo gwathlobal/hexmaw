@@ -191,7 +191,7 @@
   "Read blocks by file name: (file-date . definition).")
 
 (defun block-path (name)
-  (merge-pathnames (format NIL "data/blocks/~(~a~).glb" name) (root)))
+  (data-path (format NIL "blocks/~(~a~).glb" name)))
 
 (defun find-block (name)
   "The definition of block NAME (data/blocks/<name>.glb), re-read when the file changes.

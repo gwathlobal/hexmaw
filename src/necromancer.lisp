@@ -49,7 +49,7 @@
 
 (define-shader-entity skeleton-warrior (creature)
   ((texture :initform (// 'hexmaw 'skeleton-turnaround))
-   (atlas :initform (read-atlas "data/sprites/skeleton/turnaround.lisp"))
+   (atlas :initform (read-atlas "sprites/skeleton/turnaround.lisp"))
    (sprite-height :initform *skeleton-height*)
    (walk-animation :initform 'skeleton-walk)
    (attack-animation :initform 'skeleton-attack)
@@ -124,7 +124,7 @@
 
 (define-shader-entity necromancer (creature)
   ((texture :initform (// 'hexmaw 'necromancer-turnaround))
-   (atlas :initform (read-atlas "data/sprites/necromancer/turnaround.lisp"))
+   (atlas :initform (read-atlas "sprites/necromancer/turnaround.lisp"))
    (sprite-height :initform *necromancer-height*)
    (walk-animation :initform 'necromancer-walk)
    (hurt-animation :initform 'necromancer-hurt)

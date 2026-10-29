@@ -55,7 +55,7 @@ lower middle of its splash clear.")
 (defun splash-image (renderer name)
   ;; The renderer caches images by path, and the menu pass outlives scenes, so each
   ;; picture is read once. Nearest filtering keeps its pixels hard.
-  (simple:request-image renderer (merge-pathnames (format NIL "data/splash/~a.png" name) (root))
+  (simple:request-image renderer (data-path (format NIL "splash/~a.png" name))
                         :filtering :nearest))
 
 (presentations:define-realization (presentations:default-look-and-feel splash-backdrop)
