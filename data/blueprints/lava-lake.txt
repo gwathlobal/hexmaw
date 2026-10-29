@@ -1,5 +1,6 @@
-; A cavern flooded with lava, crossed by a winding causeway of rock from the north
-; doorway to the south one, with a branch to the east.
+; A cavern flooded with lava, its rock at 0 and 45 degrees (< and > are 45-degree rock
+; standing in the lava), crossed by a causeway from the north doorway to the south one
+; with a bridge to the east.
 cells 3 3
 tags room
 weight 1
@@ -11,22 +12,23 @@ remap ceiling rock
 remap floor cave-floor
 legend
   ~ lava
+  < diagonal /, lava
+  > diagonal \, lava
   o pit
   v box 3 top rock
-  t torch 2.4
   i spawn any west
 
 plan 0
-#########nnnnnn#########
-#######t.........t######
-####~~~~.......~~~~#####
-###~~~~~~~....~~~~~~~###
-##~~~~~~~~~....~~~~~~~##
-#~~~~~~~~~....~~~~~~~..e
-#~~~~~~~~~......vii....e
-#~~~~~~~~~~~....~~~~~..e
-##~~~~~~~~~~....~~~~~~##
-###~~~~~~~~....~~~~~~###
-####~~~~~~.....~~~~#####
-######t....oo....#######
-#########ssssss#########
+########Tnnnnnn#########
+#####<<~~......~~>>#####
+###<<~~~~....~~~~~~>>###
+###~~~~~....~~~~~~~~~###
+#<<~~~~~.vv.~~~~~~~~~>>#
+T~~~~~~~~....~~~~~~....e
+#>>~~~~~~.......ii.....e
+###~~~~~~~....~~~~~....e
+#<<~~~~~~~~....~~~~~~<<#
+#>>~~~~~~~~.oo.~~~~~~###
+###>>~~~~~....~~~~~<<###
+#####>>~~......~~<<#####
+#########ssssssT########

@@ -85,10 +85,10 @@ the sprite, which turns to face the camera, doesn't sink into the wall seen from
 
 (defun wall-near (x y z reach)
   "The wall face nearest X Y Z along +-X or +-Z within REACH metres: its distance and the
-X and Z of its outward normal, or NIL."
+X and Z of its outward normal, or NIL. Wedges don't count: a torch hangs on a square wall."
   (let ((best reach) nx nz)
     (loop for s across *solids*
-          do (when (< (aref s 1) y (aref s 4))
+          do (when (and (= 0 (solid-cut s)) (< (aref s 1) y (aref s 4)))
                (when (< (aref s 2) z (aref s 5))
                  (let ((west (- x (aref s 3))) (east (- (aref s 0) x)))
                    (when (< 0 west best) (setf best west nx 1.0 nz 0.0))

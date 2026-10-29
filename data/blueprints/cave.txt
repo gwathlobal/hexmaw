@@ -1,5 +1,7 @@
-; A natural cavern: rock shelves, a lava pool, a dry pit and a hanging rock. With
-; every # remapped to rock, the rock inside the rectangle is just more wall.
+; A natural cavern, its rock all at 0 and 45 degrees: / and \ pairs are 45-degree rock,
+; < and > the same standing in lava. A lava pool against the north-west rock, a dry
+; pit, an octagonal pillar, shelves in the north-east and rock hanging from the ceiling.
+; Every # is rock (remap wall rock), so the rock inside the rectangle is just more wall.
 cells 3 3
 tags room
 weight 2
@@ -13,22 +15,23 @@ legend
   , box 0 0.4 cave-floor   ; a shelf, one step up
   : box 0 0.8 cave-floor   ; a higher shelf, reached from ,
   ~ lava
+  < diagonal /, lava       ; 45-degree rock with lava in its open half
+  > diagonal \, lava
   o pit                    ; dry, 0.4 m down
   v box 3 top rock         ; rock hanging from the 4 m ceiling to 3 m
-  t torch 2.4              ; stood off the nearest rock
   i spawn any south
 
 plan 0
-#########nnnnnn#########
-######...........,,#####
-####.::..........,,,,###
-###.....~~~......,,,,,##
-##.t...~~~~~o.....v....#
-w....~~~~~~oo....vv....e
-w....~~~~~~.....ii.....e
-w.....~~~~.........::..e
-##.....~~.....::::::..##
-###.........,,::::,,.###
-####t........,,,,......#
-#######............#####
-#########ssssss#########
+########Tnnnnnn#########
+#####//..........\\#####
+#####..........,,..\\###
+###<<~~~~~.....,,,,,.###
+#<<~~~~~~~~o.....::,,\\#
+w....~~~~~~oo..........e
+w....~~~~~....vv.ii....e
+w.....~~~.....vv.......e
+#\\........//##\\....//#
+###..,,,...######..//###
+###\\......\\##//..#####
+#####\\..........//#####
+#########ssssssT########

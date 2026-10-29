@@ -268,19 +268,19 @@ A creature whose DEATH-BLOOD is 0 does neither."
 (defun solid-at (x y z)
   "The solid box that point X Y Z is inside, or NIL."
   (declare (type single-float x y z))
-  (loop for s across *solids*
-        do (let ((s s))
-             (declare (type (simple-array single-float (6)) s))
-             (when (and (< (aref s 0) x (aref s 3))
-                        (< (aref s 1) y (aref s 4))
-                        (< (aref s 2) z (aref s 5)))
-               (return s)))))
+  (do-solids-near (s x z x z)
+    (when (and (< (aref s 0) x (aref s 3))
+               (< (aref s 1) y (aref s 4))
+               (< (aref s 2) z (aref s 5))
+               (< 0f0 (%wedge-depth s x z x z)))
+      (return-from solid-at s)))
+  NIL)
 
 (defun crossed-face (p b s nx ny nz)
   "The face of solid S that the particle at P, from index B, crossed on its way to NX NY
 NZ: its axis (0 to 2, or -1 if the particle was already inside), true if it is the
 high side, and how far along the way it was crossed, 0 to 1."
-  (declare (type (simple-array single-float (6)) s)
+  (declare (type (simple-array single-float (*)) s)
            (type (simple-array single-float (*)) p)
            (type single-float nx ny nz))
   (let ((best -1) (best-t -1f0) (best-high NIL))
@@ -307,16 +307,37 @@ high side, and how far along the way it was crossed, 0 to 1."
                      (aref s (if high (+ k 3) k))
                      (+ o (* tt (- q o)))))))
 
+(defun diagonal-entry-p (p b s axis high tt nx nz)
+  "True if the particle at P, from index B, went into wedge S through its diagonal: it was
+already inside S's box (AXIS -1, from CROSSED-FACE), or the box face it crossed, AXIS
+HIGH TT of the way to NX NZ, lies in the cut-away half."
+  (and (< 0 (solid-cut s))
+       (or (< axis 0)
+           (let ((x (if (= axis 0) (aref s (if high 3 0)) (+ (aref p b) (* tt (- nx (aref p b))))))
+                 (z (if (= axis 2) (aref s (if high 5 2)) (+ (aref p (+ b 2)) (* tt (- nz (aref p (+ b 2))))))))
+             (< (%wedge-depth s x z x z) -1f-5)))))
+
+(defun reflect-off-diagonal (v b s)
+  "Turn the velocity at V, from index B, back off wedge S's diagonal, as a bounce."
+  (multiple-value-bind (cu cv) (cut-sides (solid-cut s))
+    ;; Mirroring about a 45° wall swaps the horizontal parts, signed by its normal.
+    (let ((sign (* (if (= cu 1) -1 1) (if (= cv 1) 1 -1)))
+          (vx (aref v b)) (vz (aref v (+ b 2))))
+      (setf (aref v b) (* sign vz *gib-bounce*)
+            (aref v (+ b 2)) (* sign vx *gib-bounce*)))))
+
 (defun land-drop (pool i s nx ny nz)
   "Drop I of POOL has moved from where it is to NX NY NZ, into solid S: stick it where it
 crossed S's face as a splat, or let it slide off a ceiling. One that was already inside goes."
-  (declare (type (simple-array single-float (6)) s)
+  (declare (type (simple-array single-float (*)) s)
            (type single-float nx ny nz))
   (let* ((p (pool-positions pool))
          (v (pool-velocities pool))
          (b (* 3 i)))
     (multiple-value-bind (best best-high best-t) (crossed-face p b s nx ny nz)
-     (cond ((< best 0)
+     ;; A splat lies flat on a box's face; one on a diagonal would need turning, so a
+     ;; drop that goes in through one is gone.
+     (cond ((or (< best 0) (diagonal-entry-p p b s best best-high best-t nx nz))
            (setf (aref (pool-state pool) i) 0))
           ((and (= best 1) (not best-high))
            ;; A ceiling: it loses its rise and falls.
@@ -593,7 +614,10 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
                  (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz)))
             (T
              (multiple-value-bind (axis high tt) (crossed-face p b s nx ny nz)
-               (cond ((< axis 0)
+               (cond ((diagonal-entry-p p b s axis high tt nx nz)
+                      ;; Off a diagonal: it stays where it was and bounces back.
+                      (reflect-off-diagonal v b s))
+                     ((< axis 0)
                       (setf (aref (pool-state pool) i) 0))
                      (T
                       (move-to-face p b s axis high tt nx ny nz)

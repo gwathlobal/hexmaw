@@ -66,7 +66,7 @@ it. :IGNORE treats them as any floor, for flyers. Creatures bind it while they t
 (defun floor-candidates (x z)
   "Heights of the solid tops under the point X Z, lowest first."
   (sort (loop for s across *solids*
-              when (and (<= (aref s 0) x (aref s 3)) (<= (aref s 2) z (aref s 5)))
+              when (solid-covers-p s x z)
                 collect (aref s 4))
         #'<))
 
@@ -74,7 +74,7 @@ it. :IGNORE treats them as any floor, for flyers. Creatures bind it while they t
   "Height of the lowest solid bottom at or above Y over the point X Z, or NIL."
   (let ((lowest NIL))
     (loop for s across *solids*
-          when (and (<= (aref s 0) x (aref s 3)) (<= (aref s 2) z (aref s 5))
+          when (and (solid-covers-p s x z)
                     (<= (- y 1f-4) (aref s 1))
                     (or (null lowest) (< (aref s 1) lowest)))
             do (setf lowest (aref s 1)))

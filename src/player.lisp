@@ -135,23 +135,44 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
           (body-overlapping (vx feet) (vy feet) (vz feet) r h *player*)))))
 
 (defun move-axis (player axis delta)
-  "Move along AXIS (0 x, 1 y, 2 z) by DELTA, stopping flush against solids."
+  "Move along AXIS (0 x, 1 y, 2 z) by DELTA, stopping flush against solids. Returns the
+wedge whose diagonal stopped it, if one did, and how far short of DELTA it stopped."
   (let ((feet (feet player))
-        (vel (velocity player)))
+        (vel (velocity player))
+        (wedge NIL))
     (flet ((ref (v) (ecase axis (0 (vx v)) (1 (vy v)) (2 (vz v))))
            (put (v x) (ecase axis (0 (setf (vx v) x)) (1 (setf (vy v) x)) (2 (setf (vz v) x)))))
-      (put feet (+ (ref feet) delta))
-      (loop repeat 8
-            for s = (overlapping-solid feet)
-            while s
-            do (let ((lo (aref s axis)) (hi (aref s (+ axis 3))))
-                 (cond ((< 0 delta)
-                        (put feet (- lo (if (= axis 1) (float *player-height* 0f0) (float *player-radius* 0f0)))))
+      (let ((target (+ (ref feet) delta)))
+        (put feet target)
+        (loop repeat 8
+              for s = (overlapping-solid feet)
+              while s
+              do (cond ((/= axis 1)
+                        (multiple-value-bind (at diagonal)
+                            (solid-flush s axis delta (vx feet) (vz feet) (float *player-radius* 0f0))
+                          (put feet at)
+                          (setf wedge (and diagonal s))))
+                       ((< 0 delta)
+                        (put feet (- (aref s 1) (float *player-height* 0f0))))
                        (T
-                        (put feet (+ hi (if (= axis 1) 0f0 (float *player-radius* 0f0))))
-                        (when (= axis 1) (setf (grounded player) T))))
+                        (put feet (aref s 4))
+                        (setf (grounded player) T)))
                  (put vel 0f0)
-                 (when (= 0 delta) (return)))))))
+                 (when (= 0 delta) (return)))
+        (values wedge (- target (ref feet)))))))
+
+(defun move-flat (player dx dz)
+  "Move by DX then DZ against solids, sliding along a wedge's diagonal where it stops one."
+  (flet ((go-axis (axis delta)
+           (multiple-value-bind (wedge blocked) (move-axis player axis delta)
+             (when wedge
+               ;; Along the wall: first the other axis, which leads away from it, then this one.
+               (multiple-value-bind (sx sz) (slide-along wedge axis blocked)
+                 (if (= axis 0)
+                     (progn (move-axis player 2 sz) (move-axis player 0 sx))
+                     (progn (move-axis player 0 sx) (move-axis player 2 sz))))))))
+    (go-axis 0 dx)
+    (go-axis 2 dz)))
 
 (defun horizontal-distance-squared (feet x0 z0)
   (+ (expt (- (vx feet) x0) 2) (expt (- (vz feet) z0) 2)))
@@ -163,16 +184,14 @@ On a step the eye keeps its height and eases to the new one."
   (let* ((feet (feet player)) (vel (velocity player))
          (x0 (vx feet)) (y0 (vy feet)) (z0 (vz feet))
          (vx0 (vx vel)) (vy0 (vy vel)) (vz0 (vz vel)))
-    (move-axis player 0 dx)
-    (move-axis player 2 dz)
+    (move-flat player dx dz)
     ;; MOVE-AXIS zeroes the velocity component it was blocked on.
     (when (and can-step (or (/= (vx vel) vx0) (/= (vz vel) vz0)))
       (let ((px (vx feet)) (pz (vz feet)) (pvx (vx vel)) (pvz (vz vel))
             (plain (horizontal-distance-squared feet x0 z0)))
         (setf (vx feet) x0 (vy feet) y0 (vz feet) z0 (vx vel) vx0 (vy vel) vy0 (vz vel) vz0)
         (move-axis player 1 (float *step-height* 0f0))
-        (move-axis player 0 dx)
-        (move-axis player 2 dz)
+        (move-flat player dx dz)
         (move-axis player 1 (- y0 (vy feet)))
         (if (< (+ plain 1f-8) (horizontal-distance-squared feet x0 z0))
             (decf (eye player) (- (vy feet) y0))

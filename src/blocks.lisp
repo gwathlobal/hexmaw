@@ -7,7 +7,10 @@
 ;;;  - Metres, +Y up, the block's origin at its centre on the floor. On the grid, a block
 ;;;    is whole 4 m cells across and whole 5 m storeys tall.
 ;;;  - Every mesh object is drawn and its bounding box is a solid, unless its name
-;;;    starts with "deco_" (drawn, no collision) or "plug_" (see below).
+;;;    starts with "deco_" (drawn, no collision) or "plug_" (see below). One named
+;;;    "wedge_<n>_..." is that box with a vertical corner cut away along the diagonal
+;;;    (n: 1 north-east, 2 north-west, 3 south-west, 4 south-east, as the block lies),
+;;;    a 45° wall when the box is square; the mesh must be that shape.
 ;;;  - Empties named "connector_<rest>" mark doorways, on the block's outer face. A
 ;;;    connector faces out through the face it lies on. <rest> starting with a kind and
 ;;;    "_" (connector_narrow_north) gives its kind, else it's a door.
@@ -30,6 +33,12 @@
 (defun gltf-node-transform (node)
   "NODE's transform within its file, parents included."
   (org.shirakumo.fraf.trial.gltf::gltf-node-transform* node))
+
+(defun wedge-name-cut (name)
+  "The corner a piece named wedge_<n>_... has cut away (1 to 4), or 0."
+  (if (and (< 7 (length name)) (string-equal "wedge_" name :end2 6) (digit-char-p (char name 6)))
+      (digit-char-p (char name 6))
+      0))
 
 (defun prefixp (prefix string)
   (and (<= (length prefix) (length string))
@@ -148,7 +157,8 @@
                                               :material (primitive-material-name primitive)
                                               :transform transform
                                               :bounds bounds
-                                              :solid (not (or (prefixp "deco_" name) (prefixp "lava_" name))))
+                                              :solid (not (or (prefixp "deco_" name) (prefixp "lava_" name)))
+                                              :cut (wedge-name-cut name))
                             do (setf low (vmin low (first bounds)) high (vmax high (second bounds)))
                                (cond ((prefixp "plug_" name)
                                       (push (cons (subseq name (length "plug_")) piece) plugs))
@@ -351,8 +361,17 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
     (when (getf piece :solid)
       (destructuring-bind (lo hi) (getf piece :bounds)
         (let* ((a (funcall world lo)) (b (funcall world hi))
-               (min (vmin a b)) (max (vmax a b)))
-          (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)) *solids*))))))
+               (min (vmin a b)) (max (vmax a b))
+               (cut (or (getf piece :cut) 0)))
+          (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)
+                                          (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf)))))
+                              *solids*))))))
+
+(defun turn-cut (cut rotation)
+  "Wedge corner CUT (1 to 4) as it lies once turned by ROTATION, a quarter turn about Y."
+  (multiple-value-bind (east south) (case cut (1 (values 1 -1)) (2 (values -1 -1)) (3 (values -1 1)) (4 (values 1 1)))
+    (let ((d (q* rotation (vec east 0 south))))
+      (corner-cut (< 0 (vx d)) (< 0 (vz d))))))
 
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1))
   "What a block's spawn_any picks from, each monster with its weight.")

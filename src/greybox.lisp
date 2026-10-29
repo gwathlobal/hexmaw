@@ -279,10 +279,26 @@ uniform sampler2D bottom_texture;
 uniform float texels_per_metre;
 out vec4 color;
 
-// TEX laid flat on an axis-aligned face with normal N (its absolute value) at world
-// position P: X faces by (z, y), Z faces by (x, y), floors and ceilings by (x, z).
+// TEX laid flat on a face with normal N at world position P: floors and ceilings by
+// (x, z), walls by the distance along the wall and y. Along the wall runs the way of its
+// horizontal tangent that leans to +x and +z, so an X face reads z and a Z face x, and a
+// 45° wall its diagonal; that choice is made where it can't flicker. Walls run only at
+// 0° and 45°, so the direction is snapped to the nearest 45°: N comes from screen-space
+// derivatives, and its slight noise, times a world position 100 m out, would scatter the
+// texture by texels from one pixel to the next.
 vec3 face_texel(sampler2D tex, vec3 p, vec3 n){
-  vec2 st = (n.y > 0.5) ? p.xz : (n.x > n.z) ? p.zy : p.xy;
+  vec2 st;
+  if(abs(n.y) > 0.5){
+    st = p.xz;
+  }else{
+    float eighth = 0.78539816;
+    float a = round(atan(n.z, n.x) / eighth) * eighth;
+    vec2 h = vec2(cos(a), sin(a));
+    vec2 t = vec2(h.y, -h.x);
+    float lean = t.x + t.y;
+    if(lean < -0.5 || (abs(lean) <= 0.5 && t.x < 0.0)) t = -t;
+    st = vec2(dot(p.xz, t), p.y);
+  }
   return texture(tex, st * texels_per_metre / vec2(textureSize(tex, 0))).rgb;
 }
 
@@ -293,16 +309,17 @@ void main(){
   vec3 face = normalize(cross(dFdx(v_world_position), dFdy(v_world_position)));
   if(dot(face, camera_position - v_world_position) < 0.0) face = -face;
   vec3 n = abs(face);
-  float shade = n.y * 1.0 + n.x * 0.75 + n.z * 0.6;
+  // Weighted by the squares, so a 45° wall falls between an X face and a Z face.
+  float shade = n.y * n.y * 1.0 + n.x * n.x * 0.75 + n.z * n.z * 0.6;
   // 1 m grid on the two axes that lie in the face.
   vec3 g = abs(fract(v_world_position + 0.5) - 0.5);
   vec3 tangent = step(n, vec3(0.5));
   float d = min(min(mix(1.0, g.x, tangent.x), mix(1.0, g.y, tangent.y)), mix(1.0, g.z, tangent.z));
   float line = 1.0 - smoothstep(0.0, 0.02, d);
   if(textured != 0){
-    color.rgb *= (n.y <= 0.5) ? face_texel(side_texture, v_world_position, n)
-               : (face.y > 0.0) ? face_texel(top_texture, v_world_position, n)
-               : face_texel(bottom_texture, v_world_position, n);
+    color.rgb *= (n.y <= 0.5) ? face_texel(side_texture, v_world_position, face)
+               : (face.y > 0.0) ? face_texel(top_texture, v_world_position, face)
+               : face_texel(bottom_texture, v_world_position, face);
     line = 0.0;
   }
   vec3 surface = color.rgb * shade * (1.0 - grid_strength * line);
@@ -316,26 +333,183 @@ void main(){
 
 (defvar *solids* (make-array 0 :adjustable T :fill-pointer T))
 
-(defun make-solid (x0 y0 z0 x1 y1 z1)
-  (let ((box (make-array 6 :element-type 'single-float)))
+;;; A wedge is a solid box with one vertical corner cut away along the diagonal between
+;;; the two corners beside it: a 45° wall when the box is square. Its 7th value names the
+;;; corner cut, seen from above: 1 north-east (max x, min z), 2 north-west, 3 south-west,
+;;; 4 south-east; a box has none, or 0. Top and bottom stay flat, so heights read as a
+;;; box's, over its solid half.
+
+(defun corner-cut (east south)
+  "The cut that takes away the corner on the EAST (else west) and SOUTH (else north) side."
+  (+ 1 (if east 0 1) (if south (if east 3 1) 0)))
+
+(defun make-solid (x0 y0 z0 x1 y1 z1 &optional (cut 0))
+  (let ((box (make-array (if (= 0 cut) 6 7) :element-type 'single-float)))
     (setf (aref box 0) (float (min x0 x1) 0f0) (aref box 1) (float (min y0 y1) 0f0) (aref box 2) (float (min z0 z1) 0f0)
           (aref box 3) (float (max x0 x1) 0f0) (aref box 4) (float (max y0 y1) 0f0) (aref box 5) (float (max z0 z1) 0f0))
+    (unless (= 0 cut) (setf (aref box 6) (float cut 0f0)))
     box))
+
+(declaim (inline solid-cut))
+(defun solid-cut (s)
+  "The corner wedge S has cut away (1 to 4), or 0 for a box."
+  (declare (type (simple-array single-float (*)) s))
+  (if (< 6 (length s)) (truncate (aref s 6)) 0))
+
+(declaim (inline cut-sides))
+(defun cut-sides (cut)
+  "1 if CUT's corner is on the +X (east) side, else 0; and 1 if on the +Z (south) side."
+  (declare (type (integer 1 4) cut))
+  (values (if (member cut '(1 4)) 1 0) (if (member cut '(3 4)) 1 0)))
+
+(declaim (inline %wedge-depth))
+(defun %wedge-depth (s x0 z0 x1 z1)
+  "How far the XZ rectangle X0..X1 by Z0..Z1 reaches past wedge S's diagonal into its solid
+half, as a fraction of the box (0 just touching, below 0 clear of it); 1 for a box."
+  (declare (type (simple-array single-float (*)) s)
+           (type single-float x0 z0 x1 z1)
+           (optimize speed))
+  (let ((cut (solid-cut s)))
+    (if (= 0 cut)
+        1f0
+        (multiple-value-bind (cu cv) (cut-sides cut)
+          ;; Across the box, f = ±u ± v grows toward the cut corner; the solid half is
+          ;; where f is at most its value at the other two corners, CU + CV - 1.
+          (let* ((u (/ (- (if (= cu 1) x0 x1) (aref s 0)) (- (aref s 3) (aref s 0))))
+                 (v (/ (- (if (= cv 1) z0 z1) (aref s 2)) (- (aref s 5) (aref s 2))))
+                 (f (+ (if (= cu 1) u (- u)) (if (= cv 1) v (- v)))))
+            (- (float (+ cu cv -1) 0f0) f))))))
+
+(defun solid-covers-p (s x z)
+  "True if solid S stands over the point X Z (its edges included)."
+  (let ((x (float x 0f0)) (z (float z 0f0)))
+    (and (<= (aref s 0) x (aref s 3)) (<= (aref s 2) z (aref s 5))
+         (<= -1f-5 (%wedge-depth s x z x z)))))
+
+(declaim (inline %box-overlaps-p))
+(defun %box-overlaps-p (s x y z half-width height)
+  (declare (type (simple-array single-float (*)) s)
+           (type single-float x y z half-width height)
+           (optimize speed))
+  (let ((eps 1f-4))
+    (and (< (- x half-width) (- (aref s 3) eps)) (> (+ x half-width) (+ (aref s 0) eps))
+         (< y (- (aref s 4) eps)) (> (+ y height) (+ (aref s 1) eps))
+         (< (- z half-width) (- (aref s 5) eps)) (> (+ z half-width) (+ (aref s 2) eps))
+         (< 1f-5 (%wedge-depth s (- x half-width) (- z half-width) (+ x half-width) (+ z half-width))))))
+
+(defun solid-flush (s axis delta x z radius)
+  "Where an upright body RADIUS out from its centre line at X Z, having moved DELTA along
+AXIS (0 for X, 2 for Z) into solid S, stands flush against it: its centre's coordinate on
+AXIS. True as the second value if it was a wedge's diagonal that stopped it."
+  (let* ((lo (aref s axis)) (hi (aref s (+ axis 3)))
+         (edge (if (< 0 delta) (- lo radius) (+ hi radius)))
+         (cut (solid-cut s)))
+    (if (= 0 cut)
+        edge
+        (multiple-value-bind (cu cv) (cut-sides cut)
+          (let* ((along (if (= axis 0) cu cv))
+                 (across (if (= axis 0) cv cu))
+                 (clo (aref s (if (= axis 0) 2 0)))
+                 (clen (- (aref s (if (= axis 0) 5 3)) clo))
+                 (c (if (= axis 0) z x))
+                 ;; The across axis's part of f, for the body's extent there.
+                 (cterm (if (= across 1)
+                            (/ (- (- c radius) clo) clen)
+                            (- (/ (- (+ c radius) clo) clen))))
+                 (limit (float (+ cu cv -1) 0f0))
+                 (flush (if (= along 1)
+                            (+ lo radius (* (- hi lo) (- limit cterm)))
+                            (+ (- lo radius) (* (- hi lo) (- cterm limit))))))
+            ;; Backing off only clears the diagonal if it was moving toward the cut side.
+            (if (< (* (if (= along 1) 1 -1) delta) 0)
+                (if (< 0 delta)
+                    (if (< edge flush) (values flush T) edge)
+                    (if (< flush edge) (values flush T) edge))
+                edge))))))
+
+(defun slide-along (s axis blocked)
+  "The move along wedge S's diagonal that takes the place of BLOCKED metres along AXIS
+(0 X, 2 Z) it stopped: the X and Z of the part of BLOCKED that runs along the wall."
+  (multiple-value-bind (cu cv) (cut-sides (solid-cut s))
+    ;; The diagonal's outward normal is (SU, SV)/sqrt 2: project the blocked move onto
+    ;; the wall, which leaves half of it on its own axis and half on the other.
+    (let ((sign (* (if (= cu 1) 1 -1) (if (= cv 1) 1 -1) -0.5)))
+      (if (= axis 0)
+          (values (* 0.5 blocked) (* sign blocked))
+          (values (* sign blocked) (* 0.5 blocked))))))
 
 (defun box-overlaps-p (s x y z half-width height)
   "True if box S overlaps an upright box standing at X Y Z, HALF-WIDTH out from its
 centre line on X and Z and HEIGHT tall. Touching faces don't count."
-  (let ((eps 1f-4))
-    (and (< (- x half-width) (- (aref s 3) eps)) (> (+ x half-width) (+ (aref s 0) eps))
-         (< y (- (aref s 4) eps)) (> (+ y height) (+ (aref s 1) eps))
-         (< (- z half-width) (- (aref s 5) eps)) (> (+ z half-width) (+ (aref s 2) eps)))))
+  (%box-overlaps-p s (float x 0f0) (float y 0f0) (float z 0f0) (float half-width 0f0) (float height 0f0)))
+
+;;; Finding solids fast. Collision, sight lines, projectiles and blood all ask "what
+;;; solid is here?", many times a frame (a sight line asks every 0.1 m), so once a level
+;;; is built INDEX-SOLIDS files every solid under the 4 m columns it reaches into, and a
+;;; question looks only in the columns it touches. *SOLIDS* stays the list of record:
+;;; when it isn't the vector indexed, or has grown since (a box added from the REPL), or
+;;; is rebound (the nav grid binds it to the solids near a tile), questions walk it whole.
+
+(defparameter *solid-column* 4.0 "Metres across the columns INDEX-SOLIDS files solids under.")
+(defvar *solid-columns* NIL "INDEX-SOLIDS's 2D array of simple-vectors of solids, or NIL.")
+(defvar *solid-columns-of* NIL "The *SOLIDS* vector *SOLID-COLUMNS* was made from.")
+(defvar *solid-columns-count* 0 "How many solids it had then.")
+(defvar *solid-columns-x0* 0f0)
+(defvar *solid-columns-z0* 0f0)
+
+(defun index-solids ()
+  "File every solid of *SOLIDS* under the columns it reaches into, for DO-SOLIDS-NEAR."
+  (let ((n (length *solids*)))
+    (if (= 0 n)
+        (setf *solid-columns* NIL)
+        (let* ((size *solid-column*)
+               (x0 (loop for s across *solids* minimize (aref s 0)))
+               (z0 (loop for s across *solids* minimize (aref s 2)))
+               (x1 (loop for s across *solids* maximize (aref s 3)))
+               (z1 (loop for s across *solids* maximize (aref s 5)))
+               (columns (make-array (list (1+ (floor (- x1 x0) size)) (1+ (floor (- z1 z0) size)))
+                                    :initial-element ())))
+          (loop for s across *solids*
+                do (loop for i from (floor (- (aref s 0) x0) size) to (floor (- (aref s 3) x0) size)
+                         do (loop for k from (floor (- (aref s 2) z0) size) to (floor (- (aref s 5) z0) size)
+                                  do (push s (aref columns i k)))))
+          (dotimes (i (array-total-size columns))
+            (setf (row-major-aref columns i) (coerce (nreverse (row-major-aref columns i)) 'simple-vector)))
+          (setf *solid-columns* columns *solid-columns-of* *solids* *solid-columns-count* n
+                *solid-columns-x0* (float x0 0f0) *solid-columns-z0* (float z0 0f0))))))
+
+(defun solid-columns-current-p ()
+  (and *solid-columns* (eq *solid-columns-of* *solids*) (= *solid-columns-count* (length *solids*))))
+
+(defmacro do-solids-near ((s x0 z0 x1 z1) &body body)
+  "Run BODY with S bound to every solid that may reach into the XZ rectangle X0 Z0 X1 Z1
+(single-floats): those filed under the columns it touches, or every solid when *SOLIDS*
+isn't indexed. A solid in two of those columns comes up twice."
+  (let ((columns (gensym "COLUMNS")) (i (gensym "I")) (k (gensym "K")) (size (gensym "SIZE")))
+    `(flet ((visit (,s)
+              (declare (type (simple-array single-float (*)) ,s))
+              ,@body))
+       (declare (inline visit))
+       (if (solid-columns-current-p)
+           (let ((,columns *solid-columns*) (,size *solid-column*))
+             (declare (type (simple-array T (* *)) ,columns))
+             (loop for ,i from (max 0 (floor (- ,x0 *solid-columns-x0*) ,size))
+                     to (min (1- (array-dimension ,columns 0)) (floor (- ,x1 *solid-columns-x0*) ,size))
+                   do (loop for ,k from (max 0 (floor (- ,z0 *solid-columns-z0*) ,size))
+                              to (min (1- (array-dimension ,columns 1)) (floor (- ,z1 *solid-columns-z0*) ,size))
+                            do (loop for ,s across (the simple-vector (aref ,columns ,i ,k))
+                                     do (visit ,s)))))
+           (loop for ,s across *solids* do (visit ,s))))))
 
 (defun solid-overlapping (x y z half-width height)
   "The first solid overlapped by an upright box standing at X Y Z, HALF-WIDTH out from
 its centre line on X and Z and HEIGHT tall, or NIL. Touching faces don't count."
-  (loop for s across *solids*
-        when (box-overlaps-p s x y z half-width height)
-          return s))
+  (let ((x (float x 0f0)) (y (float y 0f0)) (z (float z 0f0))
+        (r (float half-width 0f0)) (h (float height 0f0)))
+    (do-solids-near (s (- x r) (- z r) (+ x r) (+ z r))
+      (when (%box-overlaps-p s x y z r h)
+        (return-from solid-overlapping s)))
+    NIL))
 
 (defun add-box (container x0 y0 z0 x1 y1 z1
                 &key surface (color (if surface (vec 1 1 1) (vec 0.6 0.6 0.6))) (solid T))

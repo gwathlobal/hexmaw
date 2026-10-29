@@ -272,17 +272,24 @@ whether the X move and whether the Z move were blocked."
          (h (float (sprite-height creature) 0f0))
          ;; Already inside a body (revived under the player, say): let it walk out.
          (bodies (not (creature-body-overlapping creature))))
-    (flet ((blocked ()
-             (or (solid-overlapping (vx loc) (+ (vy loc) lift) (vz loc) r (- h lift))
-                 (and bodies (creature-body-overlapping creature)))))
-      (values (unless (= 0 dx)
-                (let ((old (vx loc)))
-                  (incf (vx loc) dx)
-                  (when (blocked) (setf (vx loc) old) T)))
-              (unless (= 0 dz)
-                (let ((old (vz loc)))
-                  (incf (vz loc) dz)
-                  (when (blocked) (setf (vz loc) old) T)))))))
+    (labels ((blocked ()
+               (or (solid-overlapping (vx loc) (+ (vy loc) lift) (vz loc) r (- h lift))
+                   (and bodies (creature-body-overlapping creature))))
+             (try (axis delta)
+               ;; Move DELTA along AXIS; blocked, undo it, or take the part that runs
+               ;; along a wedge's diagonal instead. True if it got nowhere.
+               (let ((ox (vx loc)) (oz (vz loc)))
+                 (if (= axis 0) (incf (vx loc) delta) (incf (vz loc) delta))
+                 (let ((s (blocked)))
+                   (when s
+                     (let ((diagonal (nth-value 1 (solid-flush s axis delta (vx loc) (vz loc) r))))
+                       (setf (vx loc) ox (vz loc) oz)
+                       (or (not diagonal)
+                           (multiple-value-bind (sx sz) (slide-along s axis delta)
+                             (incf (vx loc) sx) (incf (vz loc) sz)
+                             (when (blocked) (setf (vx loc) ox (vz loc) oz) T)))))))))
+      (values (unless (= 0 dx) (try 0 dx))
+              (unless (= 0 dz) (try 2 dz))))))
 
 (defun hurt (creature amount &key from)
   "Take AMOUNT health from CREATURE with the full hit reaction, struck from point FROM

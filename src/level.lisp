@@ -67,6 +67,7 @@ upstairs."
       (:test (build-test-level container))
       (:gallery (build-kit-gallery container))
       (:generated (generate-level container))))
+  (index-solids)
   ;; Last, once every solid, room and portal is in.
   (link-rooms)
   (build-nav-grid)
