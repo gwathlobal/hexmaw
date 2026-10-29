@@ -12,6 +12,9 @@ between:
   tools/stack_views.py "art/imp/Imp Walk Sheet.png" front.png front-quarter.png side.png \\
       back-quarter.png back.png --height 768 --mirror 4
 
+tools/slice_views.py stacks and slices in one step without writing the sheet; this tool
+is for looking at it.
+
 --mirror takes 1-based input positions. Turned views must face image-left, like the
 turnaround; generators don't always draw them that way.
 
@@ -99,17 +102,16 @@ def sprite_height(img, frame=None):
     return rows[-1] - rows[0] + 1
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("output")
-    ap.add_argument("inputs", nargs="+")
+def add_stack_arguments(ap):
     ap.add_argument("--height", type=int, required=True, help="tallest frame of every view, in pixels")
     ap.add_argument("--frame", type=int, help="1-based frame to scale by, at --height, instead of the tallest")
     ap.add_argument("--mirror", type=int, nargs="*", default=[], help="1-based inputs to mirror frame by frame")
     ap.add_argument("--blank", type=int, nargs="*", default=[], help="1-based frames to empty in every view")
     ap.add_argument("--grid", action="store_true", help="each input is a grid of frames, read row by row")
-    args = ap.parse_args()
 
+
+def stack(args):
+    """The stacked sheet of ARGS.inputs, as an RGB image."""
     rows = []
     for n, path in enumerate(args.inputs, 1):
         img = Image.open(path).convert("RGB")
@@ -137,8 +139,19 @@ def main():
         if row.width < width:
             out.paste(CYAN, (row.width, y, width, y + row.height))
         y += row.height
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("output")
+    ap.add_argument("inputs", nargs="+")
+    add_stack_arguments(ap)
+    args = ap.parse_args()
+
+    out = stack(args)
     out.save(args.output)
-    print(f"{args.output}: {len(rows)} views, {width} x {out.height}")
+    print(f"{args.output}: {len(args.inputs)} views, {out.width} x {out.height}")
 
 
 if __name__ == "__main__":

@@ -670,24 +670,21 @@ references, the side and back views adding `harpy-follow.txt` with the front,
 and no front instead. Its wingbeat can't be a row: at full spread the wings cross into the
 next cell however small the reference draws the harpy. So `harpy-flap-common.txt` asks for a
 2 x 2 grid of the four frames (top, downstroke, bottom, upstroke) with no hovering copy, the
-top frame being the hovering pose, and `--grid` makes `stack_views.py` read each sheet as one
+top frame being the hovering pose, and `--grid` makes `slice_views.py` read each sheet as one
 row; the other views follow `flap-front-c-1.png` with `harpy-flap-follow.txt`. The grid's two
 rows are drawn apart, so each frame stands on its own lowest pixel: the bottom of the stroke,
 whose wingtips hang below the talons, lifts the body a little.
 
 ```bash
-python3 tools/stack_views.py art/harpy/dive-sheet.png art/harpy/dive-front-2.png art/harpy/dive-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1
-python3 tools/slice_frames.py art/harpy/dive-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box dive:10
-python3 tools/stack_views.py art/harpy/flap-sheet.png art/harpy/flap-front-c-1.png art/harpy/flap-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --grid
-python3 tools/slice_frames.py art/harpy/flap-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box flap:20
+python3 tools/slice_views.py data/sprites/harpy dive:10 art/harpy/dive-front-2.png art/harpy/dive-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box
+python3 tools/slice_views.py data/sprites/harpy flap:20 art/harpy/flap-front-c-1.png art/harpy/flap-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --grid --pixel 8 --anchor bottom --filter box
 ```
 
 Its flinch (`harpy-hurt-common.txt`, jolt then stagger) is made like the dive, the side and back
 views following `hurt-front-1.png`:
 
 ```bash
-python3 tools/stack_views.py art/harpy/hurt-sheet.png art/harpy/hurt-front-1.png art/harpy/hurt-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1
-python3 tools/slice_frames.py art/harpy/hurt-sheet.png data/sprites/harpy --pixel 8 --anchor bottom --filter box hurt:10
+python3 tools/slice_views.py data/sprites/harpy hurt:10 art/harpy/hurt-front-1.png art/harpy/hurt-{front-quarter,side,back-quarter,back}.png --height 928 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box
 ```
 
 Knocked down (`harpy-downed.txt`, front only, `downed-2.png`) is a 2 x 4 grid whose first cell is
@@ -756,13 +753,16 @@ frames instead. A re-sliced PNG isn't picked up by `tools/hd reset` (loaded asse
 
 A monster's walk is one strip of 4 frames per view, in the turnaround's view order. It
 comes as one generated sheet per view (`art/imp/*walk*.png`, view number in the name), each
-drawing the imp at its own size. `tools/stack_views.py` scales every sheet to one sprite
-height, mirrors the views that face right frame by frame (here the back-quarter), and stacks
-them; slicing it at `--pixel` = height / 96 makes the imp as tall as a turnaround cell:
+drawing the imp at its own size. `tools/slice_views.py` scales every sheet to one sprite
+height, mirrors the views that face right frame by frame (here the back-quarter), stacks
+them and slices the stack; `--pixel` = height / 96 makes the imp as tall as a turnaround
+cell. It is `tools/stack_views.py` and `tools/slice_frames.py` in one step: the stacked sheet
+(10 MB or so) stays in memory, since it rebuilds exactly from the per-view sheets, and
+`.gitignore` keeps any written one (`*-sheet.png`) out of git. To look at it, run
+`stack_views.py` with the same stacking options:
 
 ```bash
-python3 tools/stack_views.py "art/imp/Imp Walk Sheet.png" "art/imp/Four-frame pixel imp walk cycle (frame 1).png" "art/imp/Four-Frame Imp Walk Cycle (frame 2).png" "art/imp/Side-Profile Imp Walk Cycle (frame 3).png" "art/imp/Rear Three-Quarter Imp Walk Cycle (frame 4).png" "art/imp/Pixel-art imp rear-view walk cycle (frame 5).png" --height 768 --mirror 4
-python3 tools/slice_frames.py "art/imp/Imp Walk Sheet.png" data/sprites/imp --pixel 8 --anchor bottom --filter box walk:20
+python3 tools/slice_views.py data/sprites/imp walk:20 "art/imp/Four-frame pixel imp walk cycle (frame 1).png" "art/imp/Four-Frame Imp Walk Cycle (frame 2).png" "art/imp/Side-Profile Imp Walk Cycle (frame 3).png" "art/imp/Rear Three-Quarter Imp Walk Cycle (frame 4).png" "art/imp/Pixel-art imp rear-view walk cycle (frame 5).png" --height 768 --mirror 4 --pixel 8 --anchor bottom --filter box
 ```
 
 The creature's `walk-animation` names it. The billboard picks the view as for standing,
@@ -773,13 +773,12 @@ The attack (a claw swipe: wind-up, lunge, strike, recover) is built the same way
 `art/imp/Red Imp Four-Frame Claw Attack (frame N).png`. The front two were made by hand;
 the other three came from `tools/gen_image.py` with `art/prompts/imp-attack-common.txt`
 plus the view's file, referencing the turnaround, that view's walk sheet and the two
-finished attack sheets. `stack_views.py` scales by the tallest frame, here the raised
+finished attack sheets. `slice_views.py` scales by the tallest frame, here the raised
 claw, which stands about 1.15 times the imp's height, so the stack is taller than the
 walk's to keep the standing imp at 96 px (cells come out 110 px tall):
 
 ```bash
-python3 tools/stack_views.py "art/imp/Imp Attack Sheet.png" "art/imp/Red Imp Four-Frame Claw Attack (frame "{1,2,3,4,5}").png" --height 880 --mirror 4
-python3 tools/slice_frames.py "art/imp/Imp Attack Sheet.png" data/sprites/imp --pixel 8 --anchor bottom --filter box attack:20
+python3 tools/slice_views.py data/sprites/imp attack:20 "art/imp/Red Imp Four-Frame Claw Attack (frame "{1,2,3,4,5}").png" --height 880 --mirror 4 --pixel 8 --anchor bottom --filter box
 ```
 
 The flinch on a hit is 2 frames per view (jolt, then stagger), played over
@@ -791,8 +790,7 @@ the reference's scale, so a sheet's scale can't be taken from its walk sheet; th
 buckled jolt frame is about 0.83 of standing height, hence `--height 640`:
 
 ```bash
-python3 tools/stack_views.py "art/imp/Imp Hurt Sheet.png" art/imp/hurt-front-3.png art/imp/hurt-front-quarter-2.png art/imp/hurt-side-2.png art/imp/hurt-back-quarter-2.png art/imp/hurt-back-2.png --height 640 --mirror 4
-python3 tools/slice_frames.py "art/imp/Imp Hurt Sheet.png" data/sprites/imp --pixel 8 --anchor bottom --filter box hurt:10
+python3 tools/slice_views.py data/sprites/imp hurt:10 art/imp/hurt-front-3.png art/imp/hurt-front-quarter-2.png art/imp/hurt-side-2.png art/imp/hurt-back-quarter-2.png art/imp/hurt-back-2.png --height 640 --mirror 4 --pixel 8 --anchor bottom --filter box
 ```
 
 To look at a flinch frame, `(setf *hit-stop* 1000.0)` and `(setf (stagger imp) 0.3)` (jolt)
@@ -808,8 +806,7 @@ sheets to follow, so each view's reference is its standing cell cut from the tur
 `--pixel 8` slices that to the turnaround's 115 px (cells come out 125 px tall):
 
 ```bash
-python3 tools/stack_views.py art/acolyte/cast-sheet.png art/acolyte/cast-front-3.png art/acolyte/cast-front-quarter-1.png art/acolyte/cast-side-2.png art/acolyte/cast-back-quarter-1.png art/acolyte/cast-back-1.png --height 920 --frame 4 --mirror 4
-python3 tools/slice_frames.py art/acolyte/cast-sheet.png data/sprites/acolyte --pixel 8 --anchor bottom --filter box cast:20
+python3 tools/slice_views.py data/sprites/acolyte cast:20 art/acolyte/cast-front-3.png art/acolyte/cast-front-quarter-1.png art/acolyte/cast-side-2.png art/acolyte/cast-back-quarter-1.png art/acolyte/cast-back-1.png --height 920 --frame 4 --mirror 4 --pixel 8 --anchor bottom --filter box
 ```
 
 Its flinch is made the same way (`acolyte-hurt-common.txt`, `-follow.txt`, `-<view>.txt`,
@@ -818,8 +815,7 @@ same in every view to scale by. So each sheet opens with a copy of the standing 
 `--frame 1` scales by it and `--blank 1` drops it before slicing:
 
 ```bash
-python3 tools/stack_views.py art/acolyte/hurt-sheet.png art/acolyte/hurt-{front,front-quarter,side,back-quarter,back}-2.png --height 920 --frame 1 --blank 1 --mirror 4
-python3 tools/slice_frames.py art/acolyte/hurt-sheet.png data/sprites/acolyte --pixel 8 --anchor bottom --filter box hurt:10
+python3 tools/slice_views.py data/sprites/acolyte hurt:10 art/acolyte/hurt-{front,front-quarter,side,back-quarter,back}-2.png --height 920 --frame 1 --blank 1 --mirror 4 --pixel 8 --anchor bottom --filter box
 ```
 
 Its death (`art/prompts/acolyte-death.txt`, front only, 2 × 4 like the imp's) burns the
@@ -842,8 +838,7 @@ front-quarter, the views its shield covers, made like the acolyte's flinch: the 
 standing cells) as references. The generator turns the quarter view only a little.
 
 ```bash
-python3 tools/stack_views.py art/knight/runic-block-sheet.png art/knight/runic-block-front-2.png art/knight/runic-block-front-quarter-2.png --height 1000 --frame 1 --blank 1
-python3 tools/slice_frames.py art/knight/runic-block-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box block:4
+python3 tools/slice_views.py data/sprites/knight block:4 art/knight/runic-block-front-2.png art/knight/runic-block-front-quarter-2.png --height 1000 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box
 ```
 
 Its walk, attack (the mace over the shield, which stays up) and flinch are made the same way,
@@ -858,10 +853,7 @@ crashes down; frame 1 is 409 px tall, so `--pixel 3.27` makes it 125 px. The sta
 sheets are big: `--filter box` takes a minute or two each.
 
 ```bash
-K=art/knight; for a in walk attack hurt; do python3 tools/stack_views.py $K/runic-$a-sheet.png $K/runic-$a-front-1.png $K/runic-$a-front-quarter-b-1.png $K/runic-$a-side.png $K/runic-$a-back-quarter.png $K/runic-$a-back.png --height 1000 --frame 1 --blank 1; done
-python3 tools/slice_frames.py art/knight/runic-walk-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box walk:20
-python3 tools/slice_frames.py art/knight/runic-attack-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box attack:20
-python3 tools/slice_frames.py art/knight/runic-hurt-sheet.png data/sprites/knight --pixel 8 --anchor bottom --filter box hurt:10
+K=art/knight; for a in walk:20 attack:20 hurt:10; do n=${a%:*}; python3 tools/slice_views.py data/sprites/knight $a $K/runic-$n-front-1.png $K/runic-$n-front-quarter-b-1.png $K/runic-$n-side.png $K/runic-$n-back-quarter.png $K/runic-$n-back.png --height 1000 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
 python3 tools/slice_frames.py art/knight/runic-death-b-2.png data/sprites/knight --pixel 3.27 --anchor bottom --filter box death:8
 ```
 
@@ -886,10 +878,8 @@ pile of bones that is its corpse (and, played backwards, its rising).
 tools/gen_monster_views.sh necromancer walk art/necromancer/turnaround-3.png front front-quarter
 tools/gen_monster_views.sh necromancer walk art/necromancer/turnaround-3.png side back-quarter back -- art/necromancer/walk-front.png
 V="front front-quarter side back-quarter back"
-for a in walk cast thrust hurt; do python3 tools/stack_views.py art/necromancer/$a-sheet.png $(for v in $V; do echo art/necromancer/$a-$v.png; done) --height 1024 --frame 1 --blank 1; done
-for a in walk:20 cast:20 thrust:20 hurt:10; do python3 tools/slice_frames.py art/necromancer/${a%:*}-sheet.png data/sprites/necromancer --pixel 8 --anchor bottom --filter box $a; done
-for a in walk attack hurt; do python3 tools/stack_views.py art/skeleton/$a-sheet.png $(for v in $V; do echo art/skeleton/$a-$v.png; done) --height 920 --frame 1 --blank 1; done
-for a in walk:20 attack:20 hurt:10; do python3 tools/slice_frames.py art/skeleton/${a%:*}-sheet.png data/sprites/skeleton --pixel 8 --anchor bottom --filter box $a; done
+for a in walk:20 cast:20 thrust:20 hurt:10; do python3 tools/slice_views.py data/sprites/necromancer $a $(for v in $V; do echo art/necromancer/${a%:*}-$v.png; done) --height 1024 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
+for a in walk:20 attack:20 hurt:10; do python3 tools/slice_views.py data/sprites/skeleton $a $(for v in $V; do echo art/skeleton/${a%:*}-$v.png; done) --height 920 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
 python3 tools/slice_frames.py art/necromancer/death.png data/sprites/necromancer --pixel 3.72 --anchor bottom --filter box death:8
 python3 tools/slice_frames.py art/skeleton/death.png data/sprites/skeleton --pixel 3.94 --anchor bottom --filter box death:8
 ```
