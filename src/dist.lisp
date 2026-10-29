@@ -10,6 +10,10 @@
   ;; The blocks were built before the dump; the blueprints aren't shipped.
   (setf hexmaw.blueprint:*build-blocks* NIL))
 
+(deploy:define-hook (:boot hexmaw) ()
+  ;; Found when the image was built, on the build machine; find it again on the player's.
+  (setf *save-directory* (uiop:xdg-data-home "hexmaw/saves/")))
+
 (defun dist-main ()
   "Entry point of the standalone executable: the game on the main menu. HEXMAW_EVAL_PORT
 starts the eval server, so tools/hd can drive a build; there is no Swank.

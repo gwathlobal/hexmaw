@@ -43,7 +43,7 @@ cut loose from the old scene's passes."
 ;; The main menu and the loading screen cover the game with a splash picture
 ;; (data/splash/, from tools/make_splash.py) instead of the veil.
 (defparameter *splash-dim* 0.6 "Opacity of the veil over a splash, so the menu stands out.")
-(defparameter *title-menu-top* 130
+(defparameter *title-menu-top* 110
   "UI units from the top of the screen to the main menu, which keeps the dagger in the
 lower middle of its splash clear.")
 
@@ -182,6 +182,9 @@ lower middle of its splash clear.")
 (defgeneric panel-top (panel)
   (:documentation "UI units from the top of the screen to PANEL's title, or T to centre it.")
   (:method ((panel menu-panel)) T))
+(defgeneric panel-width (panel)
+  (:documentation "Width of PANEL's button column, in UI units.")
+  (:method ((panel menu-panel)) *menu-width*))
 (defgeneric panel-buttons (panel)
   (:documentation "A list of rows, each (LABEL ACTION), a button: ACTION is a function name,
 called on the next tick after a click; or (LABEL :TOGGLE VARIABLE), a checkbox that sets the
@@ -192,11 +195,11 @@ special variable VARIABLE to T or NIL as it is clicked."))
          (rows (1+ (length buttons)))
          (splash (panel-splash panel))
          (backdrop (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
-                                  :col-sizes `(T ,*menu-width* T)
+                                  :col-sizes `(T ,(panel-width panel) T)
                                   :row-sizes `(,(panel-top panel) ,(+ (* rows *menu-row-height*) (* (1- rows) *menu-row-gap*)) T)
                                   (when splash (list :splash splash))))
          (column (make-instance 'alloy:vertical-linear-layout
-                                :min-size (alloy:size *menu-width* *menu-row-height*)
+                                :min-size (alloy:size (panel-width panel) *menu-row-height*)
                                 :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
          (focus (make-instance 'alloy:focus-list)))
     (alloy:enter column backdrop :row 1 :col 1)
@@ -218,12 +221,18 @@ special variable VARIABLE to T or NIL as it is clicked."))
                        (queue-menu-action action))))))
     (alloy:finish-structure panel backdrop focus)))
 
+(defparameter *save-slots* '(1 2 3 :quick) "The slots the menus offer (save.lisp), :QUICK for F5 and F9.")
+(defvar *save-note* NIL "What the pause menu's title says after a save, or NIL.")
+(defvar *pending-load* NIL
+  "A save being loaded (save.lisp): BUILD-LEVEL builds its seed and SETUP-SCENE restores it.")
+
 (defclass main-menu (menu-panel) ())
 (defmethod panel-title ((panel main-menu)) "HEXMAW")
 (defmethod panel-splash ((panel main-menu)) "title")
 (defmethod panel-top ((panel main-menu)) *title-menu-top*)
 (defmethod panel-buttons ((panel main-menu))
-  '(("Start game" start-game) ("Debug level" start-debug-level) ("Settings" open-settings) ("Exit game" exit-game)))
+  '(("Start game" start-game) ("Load game" open-load-menu) ("Debug level" start-debug-level)
+    ("Settings" open-settings) ("Exit game" exit-game)))
 
 (defclass loading-screen (menu-panel) ()
   (:documentation "Up while a level is built (:LOADING), which freezes the frame for a second or two."))
@@ -232,9 +241,13 @@ special variable VARIABLE to T or NIL as it is clicked."))
 (defmethod panel-buttons ((panel loading-screen)) ())
 
 (defclass pause-menu (menu-panel) ())
-(defmethod panel-title ((panel pause-menu)) "Paused")
+;; After a save, the title says where it went (*SAVE-NOTE*, save.lisp).
+(defmethod panel-title ((panel pause-menu)) (or *save-note* "Paused"))
 (defmethod panel-buttons ((panel pause-menu))
-  '(("Resume game" resume-game) ("Settings" open-settings) ("Exit to main menu" exit-to-title)))
+  `(("Resume game" resume-game)
+    ;; Only a generated level can be saved.
+    ,@(when (eq *level* :generated) '(("Save game" open-save-menu)))
+    ("Load game" open-load-menu) ("Settings" open-settings) ("Exit to main menu" exit-to-title)))
 
 (defvar *settings-open* NIL
   "True while the settings panel covers the main or pause menu, which Back returns to.")
@@ -246,12 +259,44 @@ special variable VARIABLE to T or NIL as it is clicked."))
 (defmethod panel-top ((panel settings-menu)) (if (eq *game-state* :title) *title-menu-top* T))
 (defmethod panel-buttons ((panel settings-menu)) '(("Show FPS" :toggle *show-fps*) ("Back" close-settings)))
 
+(defvar *slot-menu* NIL
+  "While the save or load panel covers the main or pause menu, which: :SAVE or :LOAD.")
+
+(defclass slot-menu (menu-panel) ()
+  (:documentation "A row per save slot (save.lisp), labelled with what it holds, then Back."))
+;; Over the main menu it keeps the main menu's picture, as settings does.
+(defmethod panel-splash ((panel slot-menu)) (when (eq *game-state* :title) "title"))
+(defmethod panel-top ((panel slot-menu)) (if (eq *game-state* :title) *title-menu-top* T))
+;; Wide enough for a slot's label.
+(defmethod panel-width ((panel slot-menu)) 440)
+
+(defclass save-menu (slot-menu) ())
+(defmethod panel-title ((panel save-menu)) "Save game")
+(defmethod panel-buttons ((panel save-menu))
+  (append (loop for slot in *save-slots*
+                collect (let ((slot slot))
+                          (list (slot-info slot) (lambda () (save-to-slot slot)))))
+          '(("Back" close-slot-menu))))
+
+(defclass load-menu (slot-menu) ())
+(defmethod panel-title ((panel load-menu)) "Load game")
+(defmethod panel-buttons ((panel load-menu))
+  (append (loop for slot in *save-slots*
+                collect (let ((slot slot))
+                          (list (slot-info slot) (lambda () (when (slot-used-p slot) (load-game slot))))))
+          '(("Back" close-slot-menu))))
+
 (defun state-menu ()
   "The panel class that belongs on screen in the current state, or NIL."
   (case *game-state*
-    (:title (if *settings-open* 'settings-menu 'main-menu))
+    (:title (cond (*settings-open* 'settings-menu)
+                  ((eq *slot-menu* :load) 'load-menu)
+                  (T 'main-menu)))
     (:loading 'loading-screen)
-    (:paused (if *settings-open* 'settings-menu 'pause-menu))))
+    (:paused (cond (*settings-open* 'settings-menu)
+                   ((eq *slot-menu* :save) 'save-menu)
+                   ((eq *slot-menu* :load) 'load-menu)
+                   (T 'pause-menu)))))
 
 ;;; Transitions.
 
@@ -284,6 +329,8 @@ the build holds the frame.")
 then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE starts play."
   (setf *level* level
         *settings-open* NIL
+        *slot-menu* NIL
+        *pending-load* NIL
         *new-run* T
         *game-state* :loading
         *loading-countdown* *loading-frames*))
@@ -303,12 +350,15 @@ then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE start
 
 (defun resume-game ()
   (when (eq *game-state* :paused)
-    (setf *game-state* :playing)
+    (setf *game-state* :playing
+          *save-note* NIL)
     (when *player* (capture-mouse *player*))))
 
 (defun show-title ()
   (setf *game-state* :title
-        *settings-open* NIL)
+        *settings-open* NIL
+        *slot-menu* NIL
+        *save-note* NIL)
   (when *player* (release-mouse *player*)))
 
 (defun open-settings ()
@@ -317,6 +367,30 @@ then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE start
 
 (defun close-settings ()
   (setf *settings-open* NIL))
+
+(defun open-save-menu ()
+  (when (eq *game-state* :paused)
+    (setf *slot-menu* :save)))
+
+(defun open-load-menu ()
+  (when (member *game-state* '(:title :paused))
+    (setf *slot-menu* :load)))
+
+(defun close-slot-menu ()
+  (setf *slot-menu* NIL))
+
+(defun save-to-slot (slot)
+  "The save panel's action: save, then back to the pause menu, which says where it went."
+  (save-game slot)
+  (close-slot-menu))
+
+(defun quicksave ()
+  (when (member *game-state* '(:playing :paused))
+    (save-game :quick)))
+
+(defun quickload ()
+  (when (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
+    (load-game :quick)))
 
 (defun reset-run ()
   "Put the level back as it was built, in place: the player at the spawn point, every
@@ -367,10 +441,14 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
 scene's controller rebuilds whatever panel it finds, picking up changed panel code.")))
 
 (define-handler (menu-controller key-press) (key)
-  (when (eq key :escape)
-    (cond (*settings-open* (close-settings))
-          ((eq *game-state* :playing) (pause-game))
-          ((eq *game-state* :paused) (resume-game)))))
+  (case key
+    (:escape
+     (cond (*settings-open* (close-settings))
+           (*slot-menu* (close-slot-menu))
+           ((eq *game-state* :playing) (pause-game))
+           ((eq *game-state* :paused) (resume-game))))
+    (:f5 (queue-menu-action 'quicksave))
+    (:f9 (queue-menu-action 'quickload))))
 
 (define-handler (menu-controller tick) ()
   (let ((action *menu-action*))

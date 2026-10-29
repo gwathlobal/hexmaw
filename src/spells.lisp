@@ -74,9 +74,14 @@
 (defun spell-cost (spell)
   (ceiling (reduce #'+ (spell-effects spell) :key #'effect-cost)))
 
+(defvar *roll-random* (make-random-state T)
+  "Rolls damage and knockback. RANDOM serves blood, wandering and the like, which draw a
+different number of times a frame as the frame rate varies; kept apart, and saved with a
+game (save.lisp), the rolls after a load come out as they did after the save.")
+
 (defun roll (magnitude)
   (destructuring-bind (lo hi) magnitude
-    (+ lo (random (1+ (- hi lo))))))
+    (+ lo (random (1+ (- hi lo)) *roll-random*))))
 
 ;;; Effects.
 
