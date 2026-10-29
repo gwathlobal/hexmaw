@@ -49,7 +49,17 @@ step, and its feet may sit a little below the floor it settles onto.")
            :documentation "Floor height per cell I J K, or MOST-NEGATIVE-SINGLE-FLOAT for none.
 A column's floors come first, lowest first.")
    (headroom :initarg :headroom :reader nav-headroom)
-   (clearance :initarg :clearance :reader nav-clearance)))
+   (clearance :initarg :clearance :reader nav-clearance)
+   (hazard :initarg :hazard :reader nav-hazard
+           :documentation "A bit per cell I J K, set where its floor is under lava (liquids.lisp).")))
+
+(defvar *nav-hazards* :avoid
+  "How the nav questions treat cells under lava. :AVOID, the default, keeps out of them.
+:WADE lets paths through them, each step there costing *NAV-WADE-COST* times as much,
+but no straight walk crosses them, so a path through lava keeps to the short way across
+it. :IGNORE treats them as any floor, for flyers. Creatures bind it while they think.")
+(defparameter *nav-wade-cost* 3.0
+  "How many times as costly a step through lava is to a path that may wade.")
 
 ;;; Geometry questions.
 
@@ -149,24 +159,22 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
         (let ((floors (make-array (list width depth layers) :element-type 'single-float
                                                             :initial-element most-negative-single-float))
               (headroom (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
-              (clearance (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0)))
+              (clearance (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
+              (hazard (make-array (list width depth layers) :element-type 'bit :initial-element 0)))
           (do-nav-tiles (i j width depth cell x0 z0)
             (let ((x (centre-x i)) (z (centre-z j)))
               (loop for y in (aref columns i j)
                     for k from 0
                     do (let ((room (let ((top (ceiling-above x y z)))
                                      (if top (- top y) *nav-open-headroom*))))
-                         ;; A floor under lava (liquids.lisp) has no room for anyone, so
-                         ;; nothing paths or walks straight through it, and a creature
-                         ;; knocked in finds the nearest dry cell.
                          (setf (aref floors i j k) y
                                (aref headroom i j k) (float room 0f0)
-                               (aref clearance i j k) (if (< 0 (hazard-at x (+ y 0.05) z))
-                                                          0f0
-                                                          (measure-clearance x y z room)))))))
+                               (aref clearance i j k) (measure-clearance x y z room)
+                               (aref hazard i j k) (if (< 0 (hazard-at x (+ y 0.05) z)) 1 0))))))
           (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
                                                     :layers layers :floors floors
-                                                    :headroom headroom :clearance clearance)))))))
+                                                    :headroom headroom :clearance clearance
+                                                    :hazard hazard)))))))
 
 ;;; Cells.
 
@@ -205,8 +213,10 @@ fits, whose floor is at most STEP away, the nearest if several. NIL if there is 
 Path searches ask this for every neighbour, so it reads the arrays directly."
   (when (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)))
     (let ((floors (nav-floors grid)) (clearance (nav-clearance grid)) (headroom (nav-headroom grid))
+          (hazard (nav-hazard grid)) (dry (eq *nav-hazards* :avoid))
           (best NIL) (best-d 0.0))
-      (declare (type (simple-array single-float (* * *)) floors clearance headroom))
+      (declare (type (simple-array single-float (* * *)) floors clearance headroom)
+               (type (simple-array bit (* * *)) hazard))
       (dotimes (k (nav-layers grid) best)
         (let ((y (aref floors i j k)))
           ;; A column's floors come first, so the first missing one ends them.
@@ -214,7 +224,8 @@ Path searches ask this for every neighbour, so it reads the arrays directly."
             (return best))
           (let ((d (abs (- y floor))))
             (when (and (<= d step) (or (null best) (< d best-d))
-                       (<= radius (aref clearance i j k)) (<= height (aref headroom i j k)))
+                       (<= radius (aref clearance i j k)) (<= height (aref headroom i j k))
+                       (not (and dry (= 1 (aref hazard i j k)))))
               (setf best k best-d d))))))))
 
 (defun nav-point (i j k &optional (grid *nav-grid*))
@@ -235,9 +246,10 @@ Path searches ask this for every neighbour, so it reads the arrays directly."
   "The floor of the layer under X Y Z, and the lowest ceiling over it and every column
 within REACH metres around it, on the layer a body on that floor could step to (STEP).
 A flyer keeps under that ceiling so that it ducks under a lintel before it gets there.
-NIL if there is no floor under the point."
+NIL if there is no floor under the point. Lava is floor here: this is about ceilings."
   (multiple-value-bind (ci cj) (nav-cell x z grid)
-    (let* ((ck (and ci (nav-layer ci cj y grid)))
+    (let* ((*nav-hazards* :ignore)
+           (ck (and ci (nav-layer ci cj y grid)))
            (floor (and ck (nav-floor ci cj ck grid))))
       (when floor
         (let ((n (ceiling reach (nav-cell-size grid)))
@@ -294,14 +306,17 @@ Only floors within REACH metres of POINT's height count, the nearest in each col
 (defun nav-flood (si sj sk max-distance radius height step &optional (grid *nav-grid*))
   "Shortest path lengths from cell SI SJ SK to every cell within MAX-DISTANCE metres of
 walking. Returns two arrays indexed by NAV-INDEX: distances (infinity where not
-reached) and each cell's previous cell on its path (-1 for none)."
+reached) and each cell's previous cell on its path (-1 for none). While *NAV-HAZARDS* is
+:WADE, a step into lava counts *NAV-WADE-COST* times its length."
   (let* ((n (* (nav-width grid) (nav-depth grid) (nav-layers grid)))
          (cell (nav-cell-size grid))
          (dist (make-array n :element-type 'single-float :initial-element most-positive-single-float))
          (parent (make-array n :element-type 'fixnum :initial-element -1))
          (done (make-array n :element-type 'bit :initial-element 0))
          (open (make-array 64 :adjustable T :fill-pointer 0))
-         (start (nav-index si sj sk grid)))
+         (start (nav-index si sj sk grid))
+         (hazard (nav-hazard grid))
+         (wade-cost (if (eq *nav-hazards* :wade) (float *nav-wade-cost* 0f0) 1f0)))
     (setf (aref dist start) 0.0)
     (vector-push-extend start open)
     ;; Dijkstra with a plain list of open cells: a wander radius reaches a few hundred.
@@ -320,12 +335,13 @@ reached) and each cell's previous cell on its path (-1 for none)."
                    (loop for di from -1 to 1
                          do (loop for dj from -1 to 1
                                   for ni = (+ i di) for nj = (+ j dj)
-                                  for d = (+ (aref dist c) (* cell (if (or (= di 0) (= dj 0)) 1.0 1.4142135)))
-                                  for nk = (unless (or (and (= di 0) (= dj 0)) (< max-distance d))
+                                  for d0 = (* cell (if (or (= di 0) (= dj 0)) 1.0 1.4142135))
+                                  for nk = (unless (or (and (= di 0) (= dj 0)) (< max-distance (+ (aref dist c) d0)))
                                              (nav-step i j k ni nj radius height step grid))
                                   when nk
-                                    do (let ((nc (nav-index ni nj nk grid)))
-                                         (when (< d (aref dist nc))
+                                    do (let* ((nc (nav-index ni nj nk grid))
+                                              (d (+ (aref dist c) (if (= 1 (aref hazard ni nj nk)) (* d0 wade-cost) d0))))
+                                         (when (and (<= d max-distance) (< d (aref dist nc)))
                                            (setf (aref dist nc) d
                                                  (aref parent nc) c)
                                            (vector-push-extend nc open)))))))))
@@ -357,8 +373,10 @@ Steps go up and down alike, so it can walk back from all of them too."
 (defun nav-line-clear-p (a b radius height step &optional (grid *nav-grid*))
   "True if a body standing at point A can walk the straight line to point B: it fits
 every cell along it, no floor change between them is more than STEP, and it arrives on
-the floor B is on, not one above or below it."
-  (let* ((dx (- (vx b) (vx a))) (dz (- (vz b) (vz a)))
+the floor B is on, not one above or below it. Unless *NAV-HAZARDS* is :IGNORE, the
+line keeps out of lava, even for a path that may wade."
+  (let* ((*nav-hazards* (if (eq *nav-hazards* :ignore) :ignore :avoid))
+         (dx (- (vx b) (vx a))) (dz (- (vz b) (vz a)))
          (samples (max 1 (ceiling (sqrt (+ (* dx dx) (* dz dz))) (/ (nav-cell-size grid) 4))))
          (floor (nav-floor-at (vx a) (vy a) (vz a) grid)))
     (when floor

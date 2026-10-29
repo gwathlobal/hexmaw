@@ -227,9 +227,15 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   (`hurt-player ... :shove NIL`: the pain flash, no shove or hit-stop) and by creatures
   (`burn`: a flash, no flinch or blood; one standing in it walks to the nearest dry cell,
   `escape-liquid`), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
-  hangs `*glow-height*` over it. The nav grid gives a cell under lava no room, so nothing
-  paths or walks straight through it and `check-reachable` never asks for wading (the
-  harpy doesn't path over it either). Projectiles burst on its surface; blood drops and
+  hangs `*glow-height*` over it. The nav grid flags each cell under lava (`nav-hazard`), and
+  `*nav-hazards*` says what the nav questions make of it: `:avoid`, the default, keeps out
+  (so wandering, retreat, `show-nav` and `check-reachable` stay dry, and a generated level
+  always has a dry way); `:wade` lets a path through at `*nav-wade-cost*` (3) times the
+  cost per step but no straight walk across, so it takes the short way over; `:ignore`
+  is any floor. A creature thinks under its `nav-hazards`: `:avoid` for walkers, whose
+  chase falls back to `:wade` only when no dry way reaches the player within
+  `*chase-max-walk*` (`chase-path`), and `:ignore` for flyers, which hover over it.
+  Projectiles burst on its surface; blood drops and
   gibs that fall in are gone. The surface is a `liquid-surface` quad, fullbright and fogged
   as lamp light, its texture (`data/textures/lava-flow.png`, from
   `art/prompts/texture-lava.txt` like the other textures) swirled by crossed waves. On

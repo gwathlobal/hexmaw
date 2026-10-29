@@ -317,11 +317,11 @@ flinch, blood or hit-stop, which would freeze the game every burn."
       (setf (dead creature) 0.0))))
 
 (defun escape-liquid (creature)
-  "Set CREATURE, standing in lava, walking to the nearest cell out of it. The nav grid
-leaves lava cells no room (nav.lisp), so the nearest cell it fits is dry."
+  "Set CREATURE, standing in lava, walking to the nearest dry cell."
   (when *nav-grid*
     (multiple-value-bind (i j k)
-        (nav-nearest-fitting (location creature) (body-radius creature) (sprite-height creature) :search 4)
+        (let ((*nav-hazards* :avoid))
+          (nav-nearest-fitting (location creature) (body-radius creature) (sprite-height creature) :search 4))
       (when i
         (setf (path creature) (list (nav-point i j k))
               (brain creature) :walking
@@ -379,6 +379,11 @@ by its KNOCKBACK-SCALE."
         (stuck creature) 0.0
         (attack-time creature) NIL
         (idle-timer creature) pause))
+
+(defgeneric nav-hazards (creature)
+  (:documentation "How CREATURE's paths treat lava (*NAV-HAZARDS*, nav.lisp): a walker
+keeps out of it, unless only a way through it reaches the player; a flyer ignores it.")
+  (:method ((creature creature)) :avoid))
 
 (defgeneric move-lift (creature)
   (:documentation "Metres above its feet that a moving CREATURE ignores solids in: the
@@ -517,9 +522,13 @@ by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
         (h (sprite-height creature))
         (step (step-height creature)))
     (when *nav-grid*
-      (if (nav-line-clear-p loc feet r h step)
-          (list (vcopy feet))
-          (nav-path-to loc feet r h step :max-walk *chase-max-walk*)))))
+      (cond ((nav-line-clear-p loc feet r h step)
+             (list (vcopy feet)))
+            ((nav-path-to loc feet r h step :max-walk *chase-max-walk*))
+            ;; No dry way: through lava, then, the short way across.
+            ((eq *nav-hazards* :avoid)
+             (let ((*nav-hazards* :wade))
+               (nav-path-to loc feet r h step :max-walk *chase-max-walk*)))))))
 
 (defun start-attack (creature)
   (face-player creature)
@@ -898,7 +907,8 @@ after the flinch, block and attack.")
         (cond ((< 0 (rising creature))
                (decf (rising creature) dt))
               ((<= (stagger creature) 0)
-               (think creature dt))))
+               (let ((*nav-hazards* (nav-hazards creature)))
+                 (think creature dt)))))
       (keep-height creature dt)
       (when (dead creature)
         (incf (dead creature) dt)
