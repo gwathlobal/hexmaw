@@ -1,0 +1,41 @@
+; Two storeys: an open floor below, a ledge 2 m wide all round above it, where an
+; acolyte shoots down. A stair climbs north from the floor to the ledge, so the doorways
+; of both storeys can be walked between.
+cells 3 3
+storeys 2
+tags room
+weight 1
+legend
+  i spawn any south
+  a spawn acolyte south
+  ^ stairs north 0 5
+
+plan 0
+#########nnnnnn#########
+#......................#
+#......................#
+#........^^^^^^........#
+#........^^^^^^........#
+#........^^^^^^........#
+#........^^^^^^........#
+#........^^^^^^........#
+#........^^^^^^........#
+#......................#
+#..........ii..........#
+#......................#
+#########ssssss#########
+
+plan 1
+########################
+#......................#
+#..........aa..........#
+T....              ....T
+#....              ....#
+w....              ....e
+w....              ....e
+w....              ....e
+#....              ....#
+T....              ....T
+#......................#
+#......................#
+########################

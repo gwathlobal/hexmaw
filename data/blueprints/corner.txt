@@ -1,0 +1,12 @@
+; A corridor turning a corner.
+cells 1 1
+ceiling 3
+tags corridor
+weight 3
+
+plan 0
+#nnnnnn#
+#......e
+#......e
+#......e
+########

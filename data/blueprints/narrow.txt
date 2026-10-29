@@ -1,0 +1,15 @@
+; A narrow passage, 2 m wide and 2.5 m tall.
+cells 1 1
+ceiling 3
+tags corridor
+weight 2
+legend
+  n door narrow
+  s door narrow
+
+plan 0
+##nnnn##
+##....##
+##....##
+##....##
+##ssss##

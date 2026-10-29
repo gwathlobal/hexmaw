@@ -1,0 +1,12 @@
+; A crossroads.
+cells 1 1
+ceiling 3
+tags corridor
+weight 1
+
+plan 0
+#nnnnnn#
+w......e
+w......e
+w......e
+#ssssss#

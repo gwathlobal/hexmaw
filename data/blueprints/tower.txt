@@ -1,0 +1,34 @@
+; A switchback stair up one storey: in at the floor through the east of the south wall,
+; up north to a landing at 2.5 m, back south to 5 m and out through the west.
+cells 2 2
+storeys 2
+tags stair
+weight 1
+mirror yes
+legend
+  : box 0 2.5 stair
+  + box 0 5 stair
+  ^ stairs north 0 2.5
+  v stairs south 2.5 5
+
+plan 0
+################
+#::::::::::::::#
+#::::::::::::::#
+#vvvvvvv^^^^^^^#
+#vvvvvvv^^^^^^^#
+#vvvvvvv^^^^^^^#
+#vvvvvvv^^^^^^^#
+#+++++++.......#
+#########ssssss#
+
+plan 1
+################
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#.......       #
+#ssssss#########

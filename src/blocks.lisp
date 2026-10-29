@@ -1,16 +1,23 @@
 (in-package #:hexmaw)
 
-;;; Level blocks: hand-authored pieces of dungeon in glTF (Blender exports, or
-;;; tools/make_test_block.py), placed by the level and later by the generator.
-;;; Authoring conventions, also in CLAUDE.md:
+;;; Level blocks: pieces of dungeon in glTF, placed by the level and the generator. Most
+;;; are built from text blueprints (data/blueprints/, src/blueprint.lisp); any Blender
+;;; export that keeps the conventions works too. Authoring conventions, also in CLAUDE.md:
 ;;;
-;;;  - Metres, +Y up, the block's origin at its centre on the floor.
+;;;  - Metres, +Y up, the block's origin at its centre on the floor. On the grid, a block
+;;;    is whole 4 m cells across and whole 5 m storeys tall.
 ;;;  - Every mesh object is drawn and its bounding box is a solid, unless its name
-;;;    starts with "deco_" (drawn, no collision).
-;;;  - Empties named "connector_<anything>" mark doorways. A connector faces the
-;;;    direction from the origin to it, snapped to north/east/south/west.
-;;;  - Empties named "spawn_<monster>" place a monster facing the empty's -Z.
+;;;    starts with "deco_" (drawn, no collision) or "plug_" (see below).
+;;;  - Empties named "connector_<rest>" mark doorways, on the block's outer face. A
+;;;    connector faces out through the face it lies on. <rest> starting with a kind and
+;;;    "_" (connector_narrow_north) gives its kind, else it's a door.
+;;;  - Meshes named "plug_<rest>" fill the doorway of connector_<rest>. They're left out
+;;;    when the block is placed, and SEAL-CONNECTOR puts them in to shut it.
+;;;  - Empties named "spawn_<monster>" place a monster facing the empty's -Z, and empties
+;;;    named "torch_<anything>" a torch whose flame stands there (ADD-TORCH).
 ;;;  - A material's base colour is the piece's colour (no textures yet).
+;;;  - The scene's extras may give "tags" and a "weight", for the generator.
+;;;  - Blender's duplicate suffix (".001") is ignored in every name.
 ;;;
 ;;; Blocks turn in quarter turns only, so solids stay axis-aligned boxes.
 
@@ -26,6 +33,10 @@
   (and (<= (length prefix) (length string))
        (string-equal prefix string :end2 (length prefix))))
 
+(defun base-name (name)
+  "NAME without a Blender duplicate's suffix, \".001\"."
+  (subseq name 0 (position #\. name)))
+
 ;;; Directions and quarter turns. Turning counter-clockwise seen from above takes
 ;;; north to west to south to east.
 
@@ -38,6 +49,9 @@
 
 (defun turn-direction (direction turns)
   (nth (mod (+ (position direction *directions*) turns) 4) *directions*))
+
+(defun opposite-direction (direction)
+  (turn-direction direction 2))
 
 (defun turns-between (from to)
   "Quarter turns counter-clockwise that take direction FROM to direction TO."
@@ -56,6 +70,21 @@
   "Yaw, in the player's convention (0 faces -Z), of the -Z axis turned by ROTATION."
   (let ((forward (q* rotation (vec 0 0 -1))))
     (float (atan (vx forward) (- (vz forward))) 0f0)))
+
+;;; Connector kinds, shared with the blueprint builder.
+
+(defun connector-size (kind)
+  "The width and height of a doorway of KIND."
+  (let ((spec (or (assoc kind hexmaw.blueprint:*connector-kinds* :test #'string-equal)
+                  (error "No connector kind ~s." kind))))
+    (values (second spec) (third spec))))
+
+(defun connector-name-kind (rest)
+  "The kind a connector named connector_REST has."
+  (or (loop for (kind) in hexmaw.blueprint:*connector-kinds*
+            when (and (string-not-equal kind "door") (prefixp (format NIL "~a_" kind) rest))
+            return (string-downcase kind))
+      "door"))
 
 ;;; Reading blocks.
 
@@ -81,35 +110,70 @@
             (setf min (vmin min p) max (vmax max p))))))
     (list min max)))
 
+(defun face-direction (position low high)
+  "The direction out of the face of the box LOW HIGH that POSITION lies on, or nearest."
+  (let ((faces (list (cons (abs (- (vz position) (vz low))) :north)
+                     (cons (abs (- (vz position) (vz high))) :south)
+                     (cons (abs (- (vx position) (vx low))) :west)
+                     (cons (abs (- (vx position) (vx high))) :east))))
+    (cdr (first (sort faces #'< :key #'car)))))
+
 (defun read-block (path)
-  "Read the block at PATH into a plist of :PIECES, :CONNECTORS and :SPAWNS."
-  (let ((pieces ()) (connectors ()) (spawns ()))
+  "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :BOUNDS
+(min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist of :NAME
+:KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
+  (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (tags ()) (weight 1.0)
+        (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
+        (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (org.shirakumo.fraf.gltf:with-gltf (gltf path)
       (loop for node across (org.shirakumo.fraf.gltf:nodes gltf)
-            for name = (or (org.shirakumo.fraf.gltf:name node) "")
+            for name = (base-name (or (org.shirakumo.fraf.gltf:name node) ""))
             for transform = (gltf-node-transform node)
             for mesh = (org.shirakumo.fraf.gltf:mesh node)
             do (cond (mesh
                       (loop for primitive across (org.shirakumo.fraf.gltf:primitives mesh)
                             for data in (gltf-mesh-data mesh)
-                            do (push (list :name name
-                                           :vertex-array (make-vertex-array data NIL)
-                                           :color (primitive-color primitive)
-                                           :transform transform
-                                           :bounds (primitive-bounds primitive transform)
-                                           :solid (not (prefixp "deco_" name)))
-                                     pieces)))
+                            for bounds = (primitive-bounds primitive transform)
+                            for piece = (list :name name
+                                              :vertex-array (make-vertex-array data NIL)
+                                              :color (primitive-color primitive)
+                                              :transform transform
+                                              :bounds bounds
+                                              :solid (not (prefixp "deco_" name)))
+                            do (setf low (vmin low (first bounds)) high (vmax high (second bounds)))
+                               (if (prefixp "plug_" name)
+                                   (push (cons (subseq name (length "plug_")) piece) plugs)
+                                   (push piece pieces))))
                      ((prefixp "connector_" name)
-                      (push (list :name name
-                                  :position (vcopy (tlocation transform))
-                                  :direction (snap-direction (tlocation transform)))
-                            connectors))
+                      (let ((rest (subseq name (length "connector_"))))
+                        (push (list :name name :rest rest :kind (connector-name-kind rest)
+                                    :position (vcopy (tlocation transform)))
+                              connectors)))
                      ((prefixp "spawn_" name)
                       (push (list :kind (subseq name (length "spawn_"))
                                   :position (vcopy (tlocation transform))
                                   :yaw (rotation-yaw (trotation transform)))
-                            spawns)))))
-    (list :pieces (nreverse pieces) :connectors (nreverse connectors) :spawns (nreverse spawns))))
+                            spawns))
+                     ((prefixp "torch_" name)
+                      (push (vcopy (tlocation transform)) torches))))
+      (let* ((scenes (org.shirakumo.fraf.gltf:scenes gltf))
+             (extras (and (plusp (length scenes)) (org.shirakumo.fraf.gltf:extras (aref scenes 0)))))
+        (when (hash-table-p extras)
+          (setf tags (map 'list (lambda (tag) (intern (string-upcase tag) :keyword)) (gethash "tags" extras #()))
+                weight (float (gethash "weight" extras 1.0) 0f0)))))
+    (setf connectors
+          (loop for c in connectors
+                for position = (getf c :position)
+                collect (list* :direction (face-direction position low high)
+                               :storey (round (vy position) hexmaw.blueprint:*storey-height*)
+                               :plugs (loop for (rest . piece) in plugs
+                                            when (string-equal rest (getf c :rest)) collect piece)
+                               c)))
+    (loop for (rest) in plugs
+          unless (find rest connectors :key (lambda (c) (getf c :rest)) :test #'string-equal)
+          do (v:warn :hexmaw "~a: plug_~a has no connector_~:*~a." (file-namestring path) rest))
+    (list :pieces (nreverse pieces) :connectors (nreverse connectors) :spawns (nreverse spawns)
+          :torches (nreverse torches) :bounds (list low high) :tags tags :weight weight)))
 
 (defvar *blocks* (make-hash-table :test 'equal)
   "Read blocks by file name: (file-date . definition).")
@@ -118,7 +182,9 @@
   (merge-pathnames (format NIL "data/blocks/~(~a~).glb" name) (root)))
 
 (defun find-block (name)
-  "The definition of block NAME (data/blocks/<name>.glb), re-read when the file changes."
+  "The definition of block NAME (data/blocks/<name>.glb), re-read when the file changes.
+A block with a blueprint is built from it first if the blueprint is newer."
+  (hexmaw.blueprint:ensure-block name)
   (let* ((path (block-path name))
          (date (file-write-date path))
          (cached (gethash (namestring path) *blocks*)))
@@ -126,79 +192,179 @@
         (cdr cached)
         (cdr (setf (gethash (namestring path) *blocks*) (cons date (read-block path)))))))
 
-;;; Placing blocks.
+;;; Where a block goes, before placing it.
 
-(define-shader-entity block-piece (greybox) ()
-  (:documentation "A mesh from a block, drawn like the greybox geometry."))
+(defun block-world-bounds (name at turns)
+  "The min and max corners of block NAME placed at AT, turned TURNS quarter turns."
+  (destructuring-bind (lo hi) (getf (find-block name) :bounds)
+    (let ((a (nv+ (turn-point lo turns) at)) (b (nv+ (turn-point hi turns) at)))
+      (values (vmin a b) (vmax a b)))))
 
-(defun place-block (name container &key (at (vec 0 0 0)) (turns 0))
-  "Place block NAME with its origin at AT, turned TURNS quarter turns counter-clockwise
-seen from above. Enters its pieces into CONTAINER, adds its solids to *SOLIDS* and spawns
-its monsters. Returns its connectors in world space: a list of (NAME POSITION DIRECTION)."
-  (let ((def (find-block name))
-        (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0))))
-        (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
-        (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
-    (flet ((world (point) (nv+ (turn-point point turns) at)))
-      ;; The whole block is one room, walls and all, and its doorways are portals.
-      (dolist (piece (getf def :pieces))
-        (dolist (corner (getf piece :bounds))
-          (let ((p (world corner)))
-            (setf low (vmin low p) high (vmax high p)))))
-      (add-room (vx low) (vy low) (vz low) (vx high) (vy high) (vz high))
-      (dolist (c (getf def :connectors))
-        (add-doorway-portal (world (getf c :position)) (turn-direction (getf c :direction) turns)))
-      (dolist (piece (getf def :pieces))
-        (let ((tf (getf piece :transform)))
-          (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
-                                             :color (getf piece :color)
-                                             :location (world (tlocation tf))
-                                             :orientation (q* rotation (trotation tf))
-                                             :scaling (vcopy (tscaling tf)))
-                 container))
-        (when (getf piece :solid)
-          (destructuring-bind (lo hi) (getf piece :bounds)
-            (let ((a (world lo)) (b (world hi)))
-              (vector-push-extend (make-solid (vx a) (vy a) (vz a) (vx b) (vy b) (vz b)) *solids*)))))
-      (dolist (spawn (getf def :spawns))
-        (let ((class (find-symbol (string-upcase (getf spawn :kind)) '#:hexmaw)))
-          (if (and class (find-class class NIL) (subtypep class 'creature))
-              (spawn-creature (make-instance class :location (world (getf spawn :position))
-                                                   :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))
-                              container)
-              (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name (getf spawn :kind)))))
-      (loop for c in (getf def :connectors)
-            collect (list (getf c :name) (world (getf c :position)) (turn-direction (getf c :direction) turns))))))
+(defun block-cells (name at turns)
+  "The grid cells (i j k) that block NAME fills placed at AT, turned TURNS: cell i j
+spans x 4i..4i+4 and z 4j..4j+4, storey k from 5k - 0.5."
+  (multiple-value-bind (low high) (block-world-bounds name at turns)
+    (let ((size hexmaw.blueprint:*cell-size*)
+          (storey hexmaw.blueprint:*storey-height*))
+      (loop for i from (round (vx low) size) below (round (vx high) size)
+            nconc (loop for j from (round (vz low) size) below (round (vz high) size)
+                        nconc (loop for k from (round (+ (vy low) 0.5) storey)
+                                      below (ceiling (- (+ (vy high) 0.5) 1e-3) storey)
+                                    collect (list i j k)))))))
 
-(defparameter *doorway-width* 3.0 "Doorways are this wide and *DOORWAY-HEIGHT* tall in every block.")
-(defparameter *doorway-height* 3.0)
-
-(defun add-doorway-portal (position direction)
-  "A flat portal filling the doorway of a connector at POSITION facing DIRECTION. If
-nothing is attached there, LINK-ROOMS finds no room beyond and drops it."
-  (let ((x (vx position)) (y (vy position)) (z (vz position))
-        (half (/ *doorway-width* 2)))
-    (if (member direction '(:north :south))
-        (add-portal (- x half) y z (+ x half) (+ y *doorway-height*) z)
-        (add-portal x y (- z half) x (+ y *doorway-height*) (+ z half)))))
-
-(defun seal-connector (container position direction &key (color *wall-color*))
-  "Wall off the doorway of a connector at POSITION facing DIRECTION, outside the block."
-  (let* ((x (vx position)) (y (vy position)) (z (vz position))
-         (half (/ *doorway-width* 2)) (top (+ y *doorway-height*)) (thick 0.5))
-    (ecase direction
-      (:north (add-box container (- x half) y (- z thick) (+ x half) top z :color color))
-      (:south (add-box container (- x half) y z (+ x half) top (+ z thick) :color color))
-      (:west (add-box container (- x thick) y (- z half) x top (+ z half) :color color))
-      (:east (add-box container x y (- z half) (+ x thick) top (+ z half) :color color)))))
-
-(defun attach-block (name container connector &key at facing)
-  "Place block NAME so that its connector named CONNECTOR sits at AT, facing FACING:
-the direction the doorway opens toward, back at whatever it attaches to.
-Returns the placed block's connectors, as PLACE-BLOCK does."
+(defun attach-placement (name connector at facing)
+  "Where block NAME goes so its connector named CONNECTOR sits at AT, facing FACING:
+its origin and its quarter turns."
   (let* ((def (find-block name))
          (c (or (find connector (getf def :connectors) :key (lambda (c) (getf c :name)) :test #'string-equal)
                 (error "Block ~a has no connector ~s; it has ~{~a~^, ~}." name connector
                        (mapcar (lambda (c) (getf c :name)) (getf def :connectors)))))
          (turns (turns-between (getf c :direction) facing)))
-    (place-block name container :at (v- at (turn-point (getf c :position) turns)) :turns turns)))
+    (values (v- at (turn-point (getf c :position) turns)) turns)))
+
+;;; Placing blocks.
+
+(define-shader-entity block-piece (greybox) ()
+  (:documentation "A mesh from a block, drawn like the greybox geometry."))
+
+(defclass connector ()
+  ((name :initarg :name :reader connector-name)
+   (location :initarg :location :reader connector-location :documentation "On the doorway's floor, in world space.")
+   (direction :initarg :direction :reader connector-direction :documentation "The way it opens, out of the block.")
+   (kind :initarg :kind :reader connector-kind)
+   (storey :initarg :storey :reader connector-storey :documentation "The block's storey it is on.")
+   (block-name :initarg :block-name :reader connector-block)
+   (plug :initarg :plug :initform NIL :reader connector-plug
+         :documentation "A function of a container that enters the plug, or NIL.")
+   (portal :initarg :portal :initform NIL :reader connector-portal
+           :documentation "The portal in its doorway, which sealing it removes."))
+  (:documentation "A placed block's doorway, as PLACE-BLOCK returns them."))
+
+(defmethod print-object ((c connector) stream)
+  (print-unreadable-object (c stream :type T)
+    (format stream "~a ~a ~(~a~)" (connector-block c) (connector-name c) (connector-direction c))))
+
+(defvar *level-doorways* ()
+  "Every doorway of the blocks placed in the level, plugged or not. BUILD-LEVEL empties it,
+and CHECK-REACHABLE walks to each.")
+
+(defun enter-piece (piece container world rotation)
+  "Enter PIECE of a block, its points placed by WORLD and turned by ROTATION, into
+CONTAINER, and add its solid to *SOLIDS*."
+  (let ((tf (getf piece :transform)))
+    (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
+                                       :color (getf piece :color)
+                                       :location (funcall world (tlocation tf))
+                                       :orientation (q* rotation (trotation tf))
+                                       :scaling (vcopy (tscaling tf)))
+           container)
+    (when (getf piece :solid)
+      (destructuring-bind (lo hi) (getf piece :bounds)
+        (let* ((a (funcall world lo)) (b (funcall world hi))
+               (min (vmin a b)) (max (vmax a b)))
+          (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)) *solids*))))))
+
+(defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1))
+  "What a block's spawn_any picks from, each monster with its weight.")
+
+(defvar *block-random* (make-random-state T)
+  "Picks among a spawn's choices. The generator binds it to its own, seeded, state.")
+
+(defun spawn-choice (kind)
+  "The monster a spawn of KIND places: KIND itself, one of \"a|b|c\" (alike), or for
+\"any\" one of *SPAWN-POOL* by weight."
+  (let* ((choices (if (string-equal kind "any")
+                      *spawn-pool*
+                      (mapcar (lambda (k) (list k 1)) (uiop:split-string kind :separator "|"))))
+         (pick (random (reduce #'+ choices :key #'second) *block-random*)))
+    (loop for (name weight) in choices
+          do (decf pick weight)
+          when (< pick 0) return name
+          finally (return (first (car (last choices)))))))
+
+(defun place-block (name container &key (at (vec 0 0 0)) (turns 0) (spawns T))
+  "Place block NAME with its origin at AT, turned TURNS quarter turns counter-clockwise
+seen from above. Enters its pieces into CONTAINER, adds its solids to *SOLIDS*, its room
+and doorway portals, its torches, and spawns its monsters unless SPAWNS is NIL. Its
+doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNECTOR."
+  (let ((def (find-block name))
+        (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0)))))
+    (flet ((world (point) (nv+ (turn-point point turns) at)))
+      ;; The whole block is one room, walls and all, and its doorways are portals.
+      (multiple-value-bind (low high) (block-world-bounds name at turns)
+        (add-room (vx low) (vy low) (vz low) (vx high) (vy high) (vz high)))
+      (let ((portals (loop for c in (getf def :connectors)
+                           collect (add-doorway-portal (world (getf c :position))
+                                                       (turn-direction (getf c :direction) turns)
+                                                       (getf c :kind)))))
+        (dolist (piece (getf def :pieces))
+          (enter-piece piece container #'world rotation))
+        ;; After the solids, so ADD-TORCH finds the walls.
+        (dolist (p (getf def :torches))
+          (let ((w (world p)))
+            (add-torch container (vx w) (vy w) (vz w))))
+        (dolist (spawn (and spawns (getf def :spawns)))
+          (let* ((kind (spawn-choice (getf spawn :kind)))
+                 (class (find-symbol (string-upcase kind) '#:hexmaw)))
+            (if (and class (find-class class NIL) (subtypep class 'creature))
+                (spawn-creature (make-instance class :location (world (getf spawn :position))
+                                                     :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))
+                                container)
+                (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind))))
+        (loop for c in (getf def :connectors)
+              for portal in portals
+              collect (let ((plugs (getf c :plugs)))
+                        (first
+                         (push (make-instance 'connector
+                                              :name (getf c :name) :block-name name
+                                              :location (world (getf c :position))
+                                              :direction (turn-direction (getf c :direction) turns)
+                                              :kind (getf c :kind) :storey (getf c :storey) :portal portal
+                                              :plug (when plugs
+                                                      (lambda (container)
+                                                        (dolist (piece plugs)
+                                                          (enter-piece piece container #'world rotation)))))
+                               *level-doorways*))))))))
+
+(defun add-doorway-portal (position direction &optional (kind "door"))
+  "A flat portal filling the doorway of a connector at POSITION facing DIRECTION. If
+nothing is attached there, LINK-ROOMS finds no room beyond and drops it."
+  (multiple-value-bind (width height) (connector-size kind)
+    (let ((x (vx position)) (y (vy position)) (z (vz position))
+          (half (/ width 2)))
+      (if (member direction '(:north :south))
+          (add-portal (- x half) y z (+ x half) (+ y height) z)
+          (add-portal x y (- z half) x (+ y height) (+ z half))))))
+
+(defun drop-portal (connector)
+  "Take CONNECTOR's portal out of *PORTALS*: its doorway is shut, or another doorway's
+portal already fills it."
+  (let ((at (position (connector-portal connector) *portals*)))
+    (when at
+      (setf (aref *portals* at) (aref *portals* (1- (fill-pointer *portals*))))
+      (decf (fill-pointer *portals*)))))
+
+(defun seal-connector (container connector &key (color *wall-color*))
+  "Shut CONNECTOR's doorway with the block's plug, and take away its portal so no light
+goes through. A block without a plug gets a wall outside it instead, which sticks into
+the next grid cell."
+  (drop-portal connector)
+  (if (connector-plug connector)
+      (funcall (connector-plug connector) container)
+      (multiple-value-bind (width height) (connector-size (connector-kind connector))
+        (v:warn :hexmaw "~a has no plug; walling it off outside the block." connector)
+        (let* ((position (connector-location connector))
+               (x (vx position)) (y (vy position)) (z (vz position))
+               (half (/ width 2)) (top (+ y height)) (thick 0.5))
+          (ecase (connector-direction connector)
+            (:north (add-box container (- x half) y (- z thick) (+ x half) top z :color color))
+            (:south (add-box container (- x half) y z (+ x half) top (+ z thick) :color color))
+            (:west (add-box container (- x thick) y (- z half) x top (+ z half) :color color))
+            (:east (add-box container x y (- z half) (+ x thick) top (+ z half) :color color)))))))
+
+(defun attach-block (name container connector &key at facing)
+  "Place block NAME so that its connector named CONNECTOR sits at AT, facing FACING:
+the direction the doorway opens toward, back at whatever it attaches to.
+Returns the placed block's connectors, as PLACE-BLOCK does."
+  (multiple-value-bind (origin turns) (attach-placement name connector at facing)
+    (place-block name container :at origin :turns turns)))

@@ -100,6 +100,31 @@ shortest body above it, once (boxes side by side share a top)."
                  (fits-at-p x y z 0.0 *nav-min-height*))
         (push y floors)))))
 
+(defparameter *nav-tile* 8 "BUILD-NAV-GRID measures cells in tiles this many cells across.")
+
+(defun solids-near (x0 z0 x1 z1)
+  "The solids that reach into the XZ rectangle X0 Z0 X1 Z1."
+  (let ((near (make-array 16 :adjustable T :fill-pointer 0)))
+    (loop for s across *solids*
+          do (when (and (< (aref s 0) x1) (< x0 (aref s 3)) (< (aref s 2) z1) (< z0 (aref s 5)))
+               (vector-push-extend s near)))
+    near))
+
+(defmacro do-nav-tiles ((i j width depth cell x0 z0) &body body)
+  "Run BODY for every cell I J of a grid WIDTH by DEPTH, a tile at a time, with *SOLIDS*
+bound to the solids near the tile, so each question looks at a few boxes, not all."
+  (let ((ti (gensym "TI")) (tj (gensym "TJ")) (margin (gensym "MARGIN")))
+    `(let ((,margin (+ *nav-max-radius* (* 2 ,cell))))
+       (loop for ,ti from 0 below ,width by *nav-tile*
+             do (loop for ,tj from 0 below ,depth by *nav-tile*
+                      do (let ((*solids* (solids-near (- (+ ,x0 (* ,ti ,cell)) ,margin)
+                                                      (- (+ ,z0 (* ,tj ,cell)) ,margin)
+                                                      (+ ,x0 (* (+ ,ti *nav-tile*) ,cell) ,margin)
+                                                      (+ ,z0 (* (+ ,tj *nav-tile*) ,cell) ,margin))))
+                           (loop for ,i from ,ti below (min ,width (+ ,ti *nav-tile*))
+                                 do (loop for ,j from ,tj below (min ,depth (+ ,tj *nav-tile*))
+                                          do (progn ,@body)))))))))
+
 (defun build-nav-grid ()
   "Measure every cell of the level in *SOLIDS* and make the result *NAV-GRID*."
   (when (= 0 (length *solids*))
@@ -117,25 +142,23 @@ shortest body above it, once (boxes side by side share a top)."
       (flet ((centre-x (i) (+ x0 (* (+ i 0.5) cell)))
              (centre-z (j) (+ z0 (* (+ j 0.5) cell))))
         ;; Find every column's floors first: the deepest column sizes the layers.
-        (dotimes (i width)
-          (dotimes (j depth)
-            (let ((floors (column-floors (centre-x i) (centre-z j))))
-              (setf (aref columns i j) floors
-                    layers (max layers (length floors))))))
+        (do-nav-tiles (i j width depth cell x0 z0)
+          (let ((floors (column-floors (centre-x i) (centre-z j))))
+            (setf (aref columns i j) floors
+                  layers (max layers (length floors)))))
         (let ((floors (make-array (list width depth layers) :element-type 'single-float
                                                             :initial-element most-negative-single-float))
               (headroom (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
               (clearance (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0)))
-          (dotimes (i width)
-            (dotimes (j depth)
-              (let ((x (centre-x i)) (z (centre-z j)))
-                (loop for y in (aref columns i j)
-                      for k from 0
-                      do (let ((room (let ((top (ceiling-above x y z)))
-                                       (if top (- top y) *nav-open-headroom*))))
-                           (setf (aref floors i j k) y
-                                 (aref headroom i j k) (float room 0f0)
-                                 (aref clearance i j k) (measure-clearance x y z room)))))))
+          (do-nav-tiles (i j width depth cell x0 z0)
+            (let ((x (centre-x i)) (z (centre-z j)))
+              (loop for y in (aref columns i j)
+                    for k from 0
+                    do (let ((room (let ((top (ceiling-above x y z)))
+                                     (if top (- top y) *nav-open-headroom*))))
+                         (setf (aref floors i j k) y
+                               (aref headroom i j k) (float room 0f0)
+                               (aref clearance i j k) (measure-clearance x y z room))))))
           (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
                                                     :layers layers :floors floors
                                                     :headroom headroom :clearance clearance)))))))
@@ -283,6 +306,29 @@ reached) and each cell's previous cell on its path (-1 for none)."
                                                  (aref parent nc) c)
                                            (vector-push-extend nc open)))))))))
     (values dist parent)))
+
+(defun nav-reached (si sj sk radius height step &optional (grid *nav-grid*))
+  "Every cell a body can walk to from cell SI SJ SK, however far: a bit per NAV-INDEX.
+Steps go up and down alike, so it can walk back from all of them too."
+  (let* ((seen (make-array (* (nav-width grid) (nav-depth grid) (nav-layers grid))
+                           :element-type 'bit :initial-element 0))
+         (queue (make-array 256 :adjustable T :fill-pointer 0))
+         (start (nav-index si sj sk grid)))
+    (setf (sbit seen start) 1)
+    (vector-push-extend start queue)
+    (loop for head from 0
+          while (< head (fill-pointer queue))
+          do (multiple-value-bind (i j k) (nav-unindex (aref queue head) grid)
+               (loop for di from -1 to 1
+                     do (loop for dj from -1 to 1
+                              for nk = (unless (and (= di 0) (= dj 0))
+                                         (nav-step i j k (+ i di) (+ j dj) radius height step grid))
+                              when nk
+                                do (let ((nc (nav-index (+ i di) (+ j dj) nk grid)))
+                                     (when (= 0 (sbit seen nc))
+                                       (setf (sbit seen nc) 1)
+                                       (vector-push-extend nc queue)))))))
+    seen))
 
 (defun nav-line-clear-p (a b radius height step &optional (grid *nav-grid*))
   "True if a body standing at point A can walk the straight line to point B: it fits

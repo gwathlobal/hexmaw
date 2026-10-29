@@ -7,17 +7,24 @@
 
 (defmethod setup-scene ((main main) scene)
   (build-level scene)
-  ;; A scene reload makes a fresh player; carry over where it stood and looked.
+  ;; A scene reload makes a fresh player; carry over where it stood and looked, unless
+  ;; the reload starts a new run (START-LEVEL).
   (let ((old *player*)
         (new (make-instance 'player)))
     (when old
-      (v<- (feet new) (feet old))
-      (v<- (rotation new) (rotation old))
-      (setf (mouse-look new) (mouse-look old)
-            (weapon new) (wanted-weapon old)
+      (unless *new-run*
+        (v<- (feet new) (feet old))
+        (v<- (rotation new) (rotation old))
+        (setf (mouse-look new) (mouse-look old)))
+      (setf (weapon new) (wanted-weapon old)
             (wanted-weapon new) (wanted-weapon old)))
     (setf *player* new)
-    (enter new scene))
+    (enter new scene)
+    (when *new-run*
+      (setf *new-run* NIL
+            *game-state* :playing)
+      (reset-player new)
+      (capture-mouse new)))
   (add-blood-pool scene)
   (add-hud scene)
   (add-weapon-bar scene)
@@ -70,6 +77,7 @@
                 (case *game-state*
                   (:title "main menu up, world frozen (start with (game (start-game)))")
                   (:paused "paused, world frozen (resume with (game (resume-game)))")
+                  (:loading "building a level, world frozen")
                   (T "playing"))
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
                 (health *player*) (floor (mana *player*)) (weapon *player*)

@@ -1,0 +1,16 @@
+; A straight corridor two cells long.
+cells 1 2
+ceiling 3
+tags corridor
+weight 3
+
+plan 0
+#nnnnnn#
+#......#
+#......#
+#......#
+#......#
+#......#
+#......#
+#......#
+#ssssss#

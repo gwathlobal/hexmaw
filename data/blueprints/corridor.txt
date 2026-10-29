@@ -1,0 +1,12 @@
+; A straight corridor, 3 m wide and 3 m tall.
+cells 1 1
+ceiling 3
+tags corridor
+weight 6
+
+plan 0
+#nnnnnn#
+#......#
+#......#
+#......#
+#ssssss#

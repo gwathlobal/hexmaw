@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Build level blocks from their text blueprints, data/blueprints/<name>.txt, into
+# data/blocks/<name>.glb (src/blueprint.lisp; the format is in CLAUDE.md).
+#
+#   tools/blueprint                 build every blueprint
+#   tools/blueprint chamber stair   build these
+#   tools/blueprint --check         only check them
+#
+# The game also rebuilds a block whose blueprint is newer when it loads it, so after
+# editing a blueprint `tools/hd reset` is enough.
+root="$(cd "$(dirname "$0")/.." && pwd)"
+args=""
+for a in "$@"; do args+=" \"${a//[\"\\]/}\""; done
+exec sbcl --noinform --non-interactive --no-userinit \
+     --eval '(defparameter cl-user::*boot-system* :hexmaw-blueprints)' \
+     --load "$root/boot.lisp" \
+     --eval "(uiop:quit (hexmaw.blueprint:main (list $args)))"

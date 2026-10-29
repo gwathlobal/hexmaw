@@ -19,4 +19,7 @@
 
 (load (merge-pathnames ".ql/setup.lisp" cl-user::*hexmaw-root*))
 
-(ql:quickload :hexmaw :silent T)
+
+;; tools/blueprint binds this to load only the blueprint builder, without Trial.
+(ql:quickload (if (boundp 'cl-user::*boot-system*) (symbol-value 'cl-user::*boot-system*) :hexmaw)
+              :silent T)

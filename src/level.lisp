@@ -63,12 +63,28 @@ upstairs."
         (fill-pointer *creatures*) 0
         (fill-pointer *lamps*) 0
         (fill-pointer *rooms*) 0
-        (fill-pointer *portals*) 0)
+        (fill-pointer *portals*) 0
+        *level-doorways* ())
+  (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0)
+  (ecase *level*
+    (:test (build-test-level container))
+    (:gallery (build-kit-gallery container))
+    (:generated (generate-level container)))
+  ;; Last, once every solid, room and portal is in.
+  (link-rooms)
+  (build-nav-grid)
+  (check-reachable))
+
+(defun build-test-level (container)
   (let ((h 4.0) (w 0.5))
     (add-room -10 0 -10  10 h 10)
     (add-portal -1.5 0 (- -10 w)  1.5 3 -10)
     ;; Hall: floor, ceiling, east/west/south walls, north wall with a doorway.
     (add-box container -10 -0.5 -10  10 0 10 :color *floor-color*)
+    ;; Floor through the north and east doorways' wall thickness, so the nav grid (and
+    ;; the creatures on it) can walk through them.
+    (add-box container -1.5 -0.5 (- -10 w)  1.5 0 -10 :color *floor-color*)
+    (add-box container 10 -0.5 3.5  (+ 10 w) 0 6.5 :color *floor-color*)
     (add-box container -10 h -10  10 (+ h 0.5) 10 :color *ceiling-color*)
     (add-box container (- -10 w) 0 -10  -10 h 10 :color *wall-color*)
     ;; East wall, with a doorway into the annex.
@@ -104,15 +120,8 @@ upstairs."
       (add-box container (- -1.5 w) 0 z1  -1.5 3 z0 :color *wall-color*)
       (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :color *wall-color*)
       (add-torch container -1.0 2.2 -18)
-      ;; The test block (data/blocks/test-room.glb) at the corridor's end, attached by
-      ;; its south doorway. Its other doorways are walled off for now.
-      (dolist (c (attach-block 'test-room container "connector_south" :at (vec 0 0 z1) :facing :south))
-        (destructuring-bind (name position direction) c
-          (unless (string-equal name "connector_south")
-            (seal-connector container position direction))))
-      ;; Two torches on the test room's side walls.
-      (add-torch container -4.5 2.6 -30.5)
-      (add-torch container 4.5 2.6 -30.5)))
-  ;; Last, once every solid, room and portal is in.
-  (link-rooms)
-  (build-nav-grid))
+      ;; The shrine block (data/blueprints/shrine.txt) at the corridor's end, attached by
+      ;; its south doorway. Its other doorways are plugged.
+      (dolist (c (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south))
+        (unless (string-equal (connector-name c) "connector_south")
+          (seal-connector container c))))))

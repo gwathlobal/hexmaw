@@ -1,0 +1,15 @@
+; A corridor's end, with a niche in the back wall, 2 m wide and 1 m deep, that a monster
+; waits in: wide enough for a knight to walk out of.
+cells 1 1
+ceiling 3
+tags corridor
+weight 1
+legend
+  i spawn imp|acolyte|knight south
+
+plan 0
+########
+##iiii##
+#......#
+#......#
+#ssssss#

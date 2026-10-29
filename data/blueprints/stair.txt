@@ -1,0 +1,31 @@
+; A stair up one storey: in from the south at the floor, out north 5 m up.
+; 12 risers of 0.42 m on 0.5 m treads; the landing stands on the solid row under it.
+cells 1 2
+storeys 2
+ceiling 3
+tags stair
+weight 2
+legend
+  ^ stairs north 0 5
+
+plan 0
+########
+########
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#ssssss#
+
+plan 1
+#nnnnnn#
+#......#
+#      #
+#      #
+#      #
+#      #
+#      #
+#      #
+########

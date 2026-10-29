@@ -20,8 +20,11 @@
                (:file "sword")
                (:file "menu")
                (:file "level")
+               (:file "kit")
+               (:file "generate")
                (:file "main"))
-  :depends-on (:trial
+  :depends-on (:hexmaw-blueprints
+               :trial
                :trial-glfw
                :trial-png
                :trial-gltf

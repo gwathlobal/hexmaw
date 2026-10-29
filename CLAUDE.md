@@ -15,8 +15,10 @@ one bolt spell with a hit reaction.
 Opens the game window and an eval server on `127.0.0.1:7171` (`HEXMAW_EVAL_PORT` to
 change it). `HEXMAW_SWANK_PORT=4005 ./run.sh` also starts Swank for an editor.
 The game opens in a 1280×720 window; `HEXMAW_FULLSCREEN=1 ./run.sh` starts it fullscreen.
-It starts on the main menu with the world frozen; `HEXMAW_SKIP_MENU=1 ./run.sh` starts
-straight in play, or run `tools/hd '(game (start-game))'` after launching.
+It starts on the main menu with the world frozen, the test level behind it. Start game
+generates a new level (`start-game`); Debug level plays the greybox test level, where the
+creatures in development live (`start-debug-level`). `HEXMAW_SKIP_MENU=1 ./run.sh` starts
+straight in play on the test level, or run `tools/hd '(game (start-game))'` after launching.
 The process exits when the window closes.
 
 Every Lisp session on this project goes through `boot.lisp`:
@@ -60,7 +62,7 @@ runs on the game thread between frames, for example
 `tools/hd '(game (respawn *player*))'`. Reads such as `(feet *player*)` don't need it.
 
 `tools/compare_shots.sh DIR` saves a fixed set of views (spawn, the imp from several
-angles, a bolt in flight, the corridor, the imp under a torch, the test room) to
+angles, a bolt in flight, the corridor, the imp under a torch, the shrine) to
 `DIR/<shot>.png`, for comparing
 rendering changes; `SHOTS="spawn bolt"` limits it. It leaves the game paused.
 
@@ -149,7 +151,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   empties `*rooms*` and `*portals*` and ends with `link-rooms`, which finds the room on each
   side of every portal along its thinnest axis and drops the portals that don't lead into
   a room on both sides (walled-off doorways). A placed block is one room, its bounds walls
-  and all, and each connector is a flat 3 × 3 m portal. A lamp lights the rooms it stands in
+  and all, and each connector is a flat portal its doorway's size; sealing one
+  (`seal-connector`) takes its portal away. A lamp lights the rooms it stands in
   (one room, or both rooms of a portal it's in; a lamp with a source is found again each
   frame) and the rooms beyond up to 4 portals within its radius, but only along lines that
   pass through the opening: within the portal's thickness, the line must stay inside it.
@@ -169,7 +172,7 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   Assets live in `data/` (Trial pool `hexmaw`, defined at the top of greybox.lisp,
   the first file with an asset).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
-  death and revival; wandering, hunting and attacking the player, and the walk and attack
+  death, and revival after `*revive-time*`, on the test level only (`*level*`, defined here); wandering, hunting and attacking the player, and the walk and attack
   animations), `*creatures*` for hit tests, bodies (collision between actors), and the `imp`. A creature's
   `death-animation` plays once on death, front view from every angle, and its last frame
   stays as the corpse until revival; without one it collapses into the floor. The `acolyte`
@@ -188,6 +191,12 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   limits every facing change, in walks, idle hunting and an attack's wind-up.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
+- `src/blueprint.lisp`: builds blocks from text blueprints (`data/blueprints/*.txt`), in its own
+  system `hexmaw-blueprints` (no Trial) so `tools/blueprint` starts in a second; see
+  "Blueprints" below.
+- `src/kit.lisp`: the kit (`kit-blocks`, every `.glb` in `data/blocks/`) and the gallery level
+  that lays it out (`build-kit-gallery`, `kit-goto`).
+- `src/generate.lisp`: the level generator (`generate-level`); see "Generated levels" below.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites.
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
@@ -251,11 +260,16 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
   (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
-  Transitions: `start-game`, `pause-game`, `resume-game`, `show-title`,
+  Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
+  to `:generated` or `:test`, put the loading screen up (`:loading`) for
+  `*loading-frames*` ticks, then rebuild the scene; `*new-run*` tells `setup-scene` to put
+  the new player at the spawn point, fresh, and start play), `pause-game`, `resume-game`, `show-title`,
   `exit-to-title` (the pause menu's exit: back to the main menu, with the level put back
   in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
-  A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons`.
+  A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
+  loading screen is one with no buttons). Hovering a button gives it the keyboard
+  focus, so one button is lit at a time.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
@@ -272,8 +286,12 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
 - `src/player.lisp`: first-person controller and box collision.
-- `src/level.lisp`: the greybox test level. A new room or doorway in it needs its
-  `add-room` / `add-portal`, or torches light through its walls.
+- `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
+  or `:generated`), then links rooms and builds the nav grid; and the greybox test level
+  (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
+  torches light through its walls. Its corridor ends in the `shrine` block. A doorway
+  needs floor through its wall too, or the nav grid (and so creatures and
+  `check-reachable`) can't cross it.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
@@ -294,7 +312,8 @@ To test movement without a mouse or keyboard (in play, not on a menu), hold keys
 ## Creature movement
 
 `build-level` ends with `build-nav-grid`, which cuts the level into 0.5 m cells
-(`*nav-cell*`) and records for each its floor height, headroom and clearance (the widest
+(`*nav-cell*`), measured a tile of `*nav-tile*` cells at a time against only the solids
+near it, and records for each its floor height, headroom and clearance (the widest
 body that fits, to 0.125 m, up to 2 m; solids less than 0.45 m above the floor don't count,
 so steps aren't walls). A creature fits a cell when clearance ≥ its `body-radius` and
 headroom ≥ its `sprite-height`, and moves to a neighbour when the floors differ by at most
@@ -583,27 +602,142 @@ tools/overlay_strip.py art/torch/strips/unlit art/torch/strips/flame data/sprite
 
 ## Level blocks
 
-Blocks are hand-authored pieces of dungeon, one `.glb` each in `data/blocks/`, drawn
-with the greybox shader in their material colours. Authoring conventions (Blender or
-`tools/make_test_block.py`, which generates `test-room.glb` as a stand-in):
+Blocks are pieces of dungeon, one `.glb` each in `data/blocks/`, drawn with the greybox
+shader in their material colours. Most are built from text blueprints (next section); a
+Blender export that keeps the conventions works the same. Conventions:
 
 - Metres, +Y up, the block's origin at its centre on the floor.
+- The grid: a block is whole 4 m cells across (`*cell-size*`) and whole 5 m storeys tall
+  (`*storey-height*`, in `hexmaw.blueprint`). Storey k's floor is at 5k, on a slab
+  from 5k − 0.5. A corridor is one cell: a 3 m doorway and two 0.5 m walls.
 - Every mesh object is drawn and its bounding box is a solid, unless its name starts
-  with `deco_` (drawn, no collision). Model collision as boxes: a sloped or L-shaped
-  object's bounding box is the whole box around it.
-- Empties named `connector_<anything>` mark doorways, on the outer face of the wall.
-  A connector faces the direction from the origin to it, snapped to N/E/S/W. Doorways
-  are 3 × 3 m (`*doorway-width*`, `*doorway-height*`). Light passes between blocks only
-  through connectors: a block is one room for lighting, so its walls stop light from a
-  block stacked above, below or beside it.
+  with `deco_` (drawn, no collision) or `plug_`. Model collision as boxes: a sloped or
+  L-shaped object's bounding box is the whole box around it.
+- Empties named `connector_<rest>` mark doorways, on the block's outer face, at the middle
+  of a cell edge, on a storey's floor. A connector faces out through the face it lies on.
+  Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m), anything else
+  a `door` (3 × 3 m); `*connector-kinds*` lists them, and only one kind joins itself. Light
+  passes between blocks only through connectors: a block is one room for lighting, so its
+  walls stop light from a block stacked above, below or beside it.
+- Meshes named `plug_<rest>` fill the doorway of `connector_<rest>`, flush with the wall.
+  They're left out when the block is placed; `seal-connector` puts them in, and takes the
+  doorway's portal away, to shut a doorway nothing is attached to. A block without one
+  is walled off outside instead, into the next cell, with a warning.
 - Empties named `spawn_<monster>` (e.g. `spawn_imp`) place a monster facing the
-  empty's −Z.
-- A material's base colour is the piece's colour; textures aren't read yet.
+  empty's −Z; empties named `torch_<anything>` a torch whose flame stands there
+  (`add-torch` stands it off the nearest wall).
+- The scene's glTF extras may give `tags` (`room`, `corridor`, `stair`, `start`) and a
+  `weight`, for the generator. Blender exports a scene's custom properties there.
+- A material's base colour is the piece's colour; textures aren't read yet. Blender's
+  duplicate suffix (`.001`) is ignored in every name.
 
-`(attach-block 'test-room container "connector_south" :at point :facing :south)` places a
+`(attach-block 'shrine container "connector_south" :at point :facing :south)` places a
 block so that connector sits at `point`, opening toward `:south`, and returns the block's
-connectors in world space for the next block or `seal-connector`. Blocks turn in quarter
-turns only. Re-saving a `.glb` and running `tools/hd reset` picks up the new version.
+doorways as `connector` objects (`connector-name`, `-location`, `-direction`, `-kind`,
+`-storey`), all open, for the next block or `(seal-connector container c)`. `place-block`
+places one by its origin and quarter turns (`:spawns NIL` leaves its monsters out);
+`attach-placement`, `block-world-bounds` and `block-cells` say where a block would go
+before placing it. Blocks turn in quarter turns only. Re-saving a `.glb` and running
+`tools/hd reset` picks up the new version.
+
+## Blueprints
+
+A blueprint, `data/blueprints/<name>.txt`, draws a block top-down in text; `tools/blueprint`
+builds it into `data/blocks/<name>.glb` (`tools/blueprint chamber stair` builds those,
+`--check` only checks), and the game builds a block whose blueprint is newer when it
+loads it, so after editing one `tools/hd reset` shows it. Errors give `file:line:col`.
+`chamber.txt`:
+
+```
+; The general-purpose room. Its doorways plug, so it is any 1- to 4-door room.
+cells 3 3              ; footprint in cells, west-east then north-south
+tags room start        ; for the generator; weight 4 makes it 4 times as likely as 1
+weight 4
+legend                 ; this file's characters, indented: char action[, action...]
+  i spawn imp south
+
+plan 0                 ; storey 0, north up, to the next blank line
+#########nnnnnn#########
+#......................#
+T......................T
+#......................#
+#......................#
+w......................e
+w..........ii..........e
+w......................e
+#......................#
+#......................#
+T......................T
+#......................#
+#########ssssss#########
+```
+
+A column is 0.5 m wide; a row is 1 m deep, except the first and last, the 0.5 m walls. So
+a plan is 8 columns and 4 rows per cell, plus one row: a doorway is 6 columns on a north
+or south wall and 3 rows on an east or west one. Nothing inside a block can be thinner
+than 1 m north to south. Other header lines: `storeys N` (one `plan K` each, K from 0),
+`ceiling H` (inside height of the top storey, default 4; corridors use 3), `material NAME
+R G B` (defaults `floor`, `wall`, `ceiling`, `stair`), `mirror yes` (also builds
+`<name>-mirror`, flipped west to east, for pieces a turn can't make: `cell`, `tower`) and
+`grid free` (skips the grid checks).
+
+Built-in characters: `#` wall (from the storey's floor to the next storey's, or to the
+ceiling; on storey 0 down through the floor slab), `.` floor, space open (no floor slab: a drop to the storey below), `n e s w` a
+door-kind doorway, which must be on that side's border, and `T` a torch at 2.4 m (on a
+border wall it goes just inside the room). Legend actions: `wall [material]`, `floor`,
+`open`, `box Y0 Y1 [material]` (solid from Y0 to Y1 above the storey's floor; `top` is the
+storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
+[material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
+`torch Y` and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
+(one of `*spawn-pool*` by weight), picked as the block is placed (`spawn-choice`, from
+`*block-random*`, which the generator binds to its own state). They combine with commas: `I box 0 0.8 dais, spawn
+acolyte south` stands the acolyte on the dais. Each connected group of one spawn character
+is one monster at its centre, so `ii` centres one on a 1 m spot. Characters with the same
+column merge into as few boxes as possible. No two faces may lie in one plane facing one
+way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
+under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
+numbered `_2` and on when a side has several, lower storey first, and its plug.
+
+The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-end` (a
+niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
+`arch` (beams and torches, the way into a room), `narrow` and `narrowing` (to a narrow
+doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
+rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight), `crypt`
+(sarcophagi) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
+up to it). Every piece must let the player walk between all its doorways (drops don't
+count), or the generator builds places that are a one-way trip.
+
+To walk the kit: `tools/hd '(progn (setf *level* :gallery) (reload-scene))'` lays every
+block out in two rows, corridors and stairs in front, rooms behind, each with one doorway
+open toward the spawn and the rest plugged, and `(game (kit-goto "chamber"))` stands the
+player outside one. Upper storeys are only reachable by moving the player there.
+
+## Generated levels
+
+The main menu's Start game builds one; `(setf *level* :generated)` and a reset do too
+(`generate-level`):
+it starts in a block tagged `start` (its monsters left out, the player and
+`*spawn-point*` at its centre), keeps a frontier of open doorways, and picks one at a time:
+from a room it adds a corridor or stair, from a corridor another corridor (less likely the
+longer the run, `*corridor-run*`) or a room, by weight, trying each of the block's
+doorways of the same kind turned to face it until one fits in free grid cells
+(`*generator-storeys*` bounds how high and low). A doorway that meets an open one joins
+it, which makes loops; one that runs into another block's wall is plugged, as is every
+doorway still open at the end. It stops at `*generator-rooms*` rooms. `*level-seed*` fixes
+the seed (NIL picks one); `*last-level-seed*` is the last level's, and
+`(level-map)` prints its cells a storey at a time. The generator draws from its own random
+state, since monsters use `random` as they spawn. `*generator-blocks*` limits the blocks it
+uses (NIL: every block with tags). A doorway left opening onto nothing is a bug and logs a
+warning. Two doorways that meet share one portal (`drop-portal` removes the other), since
+the shader takes only 32. A stair still open when the rooms are in gets one more piece,
+so no stair ends in a plug.
+
+Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
+player must be able to walk from the spawn point to every placed block's doorways, on the
+nav grid with the player's size and step (`nav-reached`, which is both ways, since steps
+go up as well as down), and every creature must be able to walk to the spawn point at its
+own size and step from a cell its body fits where it lives (`stranded-creatures`). Each
+doorway or creature that fails logs a warning.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,

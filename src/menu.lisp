@@ -88,6 +88,11 @@ cut loose from the old scene's passes."
    :text alloy:text
    :pattern *menu-text-color*))
 
+;; The mouse moves the keyboard's selection too, so only one button is ever lit.
+(defmethod (setf alloy:hovered-p) :after (value (button menu-button))
+  (when (and value (not (alloy:focus button)))
+    (setf (alloy:focus button) :weak)))
+
 (defclass menu-panel (trial-alloy:panel) ()
   (:documentation "A full-screen menu: a title over a column of buttons."))
 
@@ -119,7 +124,13 @@ cut loose from the old scene's passes."
 
 (defclass main-menu (menu-panel) ())
 (defmethod panel-title ((panel main-menu)) "HEXMAW")
-(defmethod panel-buttons ((panel main-menu)) '(("Start game" start-game) ("Exit game" exit-game)))
+(defmethod panel-buttons ((panel main-menu))
+  '(("Start game" start-game) ("Debug level" start-debug-level) ("Exit game" exit-game)))
+
+(defclass loading-screen (menu-panel) ()
+  (:documentation "Up while a level is built (:LOADING), which freezes the frame for a second or two."))
+(defmethod panel-title ((panel loading-screen)) "Building the level...")
+(defmethod panel-buttons ((panel loading-screen)) ())
 
 (defclass pause-menu (menu-panel) ())
 (defmethod panel-title ((panel pause-menu)) "Paused")
@@ -129,6 +140,7 @@ cut loose from the old scene's passes."
   "The panel class that belongs on screen in the current state, or NIL."
   (case *game-state*
     (:title 'main-menu)
+    (:loading 'loading-screen)
     (:paused 'pause-menu)))
 
 ;;; Transitions.
@@ -147,12 +159,31 @@ cut loose from the old scene's passes."
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
   (place-camera player))
 
+(defvar *new-run* NIL
+  "True while the scene is rebuilt for a new run: SETUP-SCENE then puts the new player at
+the spawn point, fresh, instead of where the old one stood.")
+
+(defparameter *loading-frames* 3
+  "Ticks the loading screen is up before the level is built, so it is on screen while
+the build holds the frame.")
+
+(defvar *loading-countdown* NIL "Ticks left before START-LEVEL's rebuild, or NIL.")
+
+(defun start-level (level)
+  "Leave the main menu for a new run on LEVEL (see *LEVEL*): put the loading screen up,
+then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE starts play."
+  (setf *level* level
+        *new-run* T
+        *game-state* :loading
+        *loading-countdown* *loading-frames*))
+
 (defun start-game ()
-  "Leave the main menu: a fresh player at the spawn point, and play."
-  (when *player*
-    (reset-player *player*)
-    (capture-mouse *player*))
-  (setf *game-state* :playing))
+  "Start a run on a newly generated level (a new seed unless *LEVEL-SEED* is set)."
+  (start-level :generated))
+
+(defun start-debug-level ()
+  "Start a run on the greybox test level, where the creatures in development live."
+  (start-level :test))
 
 (defun pause-game ()
   (when (eq *game-state* :playing)
@@ -221,6 +252,10 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
     (when action
       (setf *menu-action* NIL)
       (funcall action)))
+  (when *loading-countdown*
+    (when (<= (decf *loading-countdown*) 0)
+      (setf *loading-countdown* NIL)
+      (maybe-reload-scene)))
   (when (fresh menu-controller)
     (setf (fresh menu-controller) NIL)
     (trial-alloy:hide-panel 'menu-panel))

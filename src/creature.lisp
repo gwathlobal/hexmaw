@@ -4,8 +4,8 @@
 ;;; plays its flinch (stagger; without a hurt animation, a squash), slides it back along the blow (knockback)
 ;;; and freezes the action for a moment (hit-stop). At zero health it plays its
 ;;; death animation and stays down as a corpse (or, without one, collapses into the
-;;; floor); for now it then revives at its spawn point, so there is always
-;;; something to shoot at.
+;;; floor). On the test level it then revives at its spawn point, so there is always
+;;; something to shoot at; elsewhere the dead stay dead.
 
 (defparameter *hit-stop-time* 0.06 "Seconds the world freezes when a hit lands.")
 (defparameter *flash-time* 0.15)
@@ -44,8 +44,13 @@ leaves the player room to back out of the blow during the wind-up.")
 (defvar *player* NIL "The player in the current scene.")
 
 (defvar *game-state* :title
-  "What the game is doing: :TITLE (main menu), :PLAYING or :PAUSED. Menus (menu.lisp)
-change it; anything but :PLAYING freezes the world.")
+  "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING or
+:PAUSED. Menus (menu.lisp) change it; anything but :PLAYING freezes the world.")
+
+(defvar *level* :test
+  "Which level BUILD-LEVEL (level.lisp) builds: :TEST, the greybox test level where the
+creatures in development live; :GALLERY, every level block laid out (kit.lisp); or
+:GENERATED (generate.lisp). Only the test level revives its dead.")
 
 (defun frozen-p ()
   (or (< 0.0 *hit-stop*)
@@ -748,7 +753,8 @@ flinch, 0 to 1."
         (settle creature dt))
       (when (dead creature)
         (incf (dead creature) dt)
-        (when (and *revive-time* (< (+ (death-duration creature) *revive-time*) (dead creature))
+        (when (and *revive-time* (eq *level* :test)
+                   (< (+ (death-duration creature) *revive-time*) (dead creature))
                    ;; Wait for whoever stands on its spawn point to move.
                    (let ((home (home creature)))
                      (not (body-overlapping (vx home) (+ (vy home) 0.05) (vz home)

@@ -1,0 +1,15 @@
+; A corridor segment that marks the way into a room: a torch either side, two beams overhead.
+cells 1 1
+ceiling 3
+tags corridor
+weight 2
+material beam 0.35 0.25 0.18
+legend
+  = floor, deco 2.7 3 beam
+
+plan 0
+#nnnnnn#
+#======#
+T......T
+#======#
+#ssssss#

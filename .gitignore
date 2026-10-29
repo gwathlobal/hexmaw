@@ -1,5 +1,5 @@
 # Project-local Quicklisp (Trial comes from the Shirakumo dist)
-/.ql/
+/.ql
 
 # Compiled Lisp
 *.fasl

@@ -1,0 +1,18 @@
+; A guard post or prison cell. Its doors are off-centre: a 2-cell wall has no middle.
+cells 2 2
+tags room
+weight 2
+mirror yes
+legend
+  i spawn imp|knight north
+
+plan 0
+################
+#..............e
+#..............e
+#..............e
+T..............#
+#......ii......#
+#..............#
+#..............#
+#ssssss#########

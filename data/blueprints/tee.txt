@@ -1,0 +1,12 @@
+; A corridor branching both ways.
+cells 1 1
+ceiling 3
+tags corridor
+weight 2
+
+plan 0
+########
+w......e
+w......e
+w......e
+#ssssss#

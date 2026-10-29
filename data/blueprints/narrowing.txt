@@ -1,0 +1,14 @@
+; Joins a full doorway (south) to a narrow one (north).
+cells 1 1
+ceiling 3
+tags corridor
+weight 1
+legend
+  n door narrow
+
+plan 0
+##nnnn##
+##....##
+#......#
+#......#
+#ssssss#
