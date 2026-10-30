@@ -1,0 +1,58 @@
+; The high room the high quarter ends in: a 9 m vault, a 2.5 m terrace along the north
+; and an upper walkway at 5 m over it, with a doorway out at the top. The ogre bounds
+; floor, terrace, walkway; the player takes the stairs, the middle then the east. The
+; stairs have 1 m treads, so the ogre can walk them too.
+cells 4 4
+storeys 2
+tags room high high-end
+weight 3
+material stone 0.55 0.52 0.48
+material pillar 0.62 0.36 0.30
+legend
+  H door high
+  b box 0 top stone                 ; under the walkway
+  t box 0 2.5 stone                 ; the terrace
+  d stairs north 0 2.5
+  u stairs north 2.5 5
+  o box 0 top pillar
+  P wall pillar                     ; the pillar over storey 1, with no slab under it
+  L spawn ogre south
+  a spawn imp|acolyte south
+
+plan 0
+################################
+#bbbbbbbbbbbbbbbbbbbbbuuuuuubbb#
+#bbbbbbbbbbbbbbbbbbbbbuuuuuubbb#
+#bbbbbbbbbbbbbbbbbbbbbuuuuuubbb#
+#bbbbbbbbbbbbbbbbbbbbbuuuuuubbb#
+#tttttttttttttttttttttuuuuuuttt#
+#tttttttttttttttttttttuuuuuuttt#
+#tttttttttttttttttttttttttttttt#
+#............dddddd............#
+w............dddddd............e
+w............dddddd............e
+w............dddddd............e
+#............dddddd............#
+T............dddddd............T
+#.....oo.......LL.......oo.....#
+#..............................#
+####T####HHHHHHHHHHHHHH####T####
+
+plan 1
+####T####nnnnnn############T####
+#.....................      ...#
+T...aa................      ...T
+#.....................      ...#
+#.....................      ...#
+#                              #
+#                              #
+#                              #
+#                              #
+T                              T
+#                              #
+#                              #
+#                              #
+#                              #
+#     PP                PP     #
+#                              #
+####T######################T####

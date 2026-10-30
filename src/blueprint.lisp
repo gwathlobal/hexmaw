@@ -30,10 +30,12 @@
 (defparameter *storey-height* 5.0 "Storey K's floor is K times this many metres up.")
 (defparameter *border* 0.5 "How thick the border walls and the floor and ceiling slabs are.")
 (defparameter *max-riser* 0.45 "The most a stair step rises: the player's *STEP-HEIGHT*.")
-(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 1.0))
+(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 1.0)
+                                   ("high" 7.0 4.5))
   "Each kind of doorway: its name, width and height in metres, and for a river the width of
 lava down its middle, between two banks. Each kind joins only itself. One wider than a cell
-spans two and is centred on the boundary between them.")
+spans two and is centred on the boundary between them. A high doorway joins the high blocks,
+two storeys tall; at 4.5 m its lintel still lies in its own storey.")
 (defparameter *default-ceiling* 4.0)
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3

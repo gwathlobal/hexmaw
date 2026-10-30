@@ -18,7 +18,7 @@
 (defparameter *save-version* 1 "Bumped when old saves can no longer be read.")
 (defparameter *saved-generator-settings*
   '(*generator-rooms* *generator-attempts* *corridor-run* *generator-storeys* *generator-blocks* *spawn-pool*
-    *river-length* *max-rivers* *start-clearance*)
+    *river-length* *max-rivers* *high-length* *max-high-networks* *start-clearance*)
   "The variables besides the seed that decide a generated level.")
 
 (defun save-path (slot)

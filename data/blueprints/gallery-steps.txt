@@ -1,0 +1,71 @@
+; A high gallery climbing one storey in two 2.5 m steps: two leaps for the ogre, two
+; flights for the player, the lower against the west wall, the upper in the east, straight
+; up to the floor before the north doorway. Their 1 m treads let the ogre walk them too.
+cells 2 4
+storeys 3
+tags corridor high
+weight 1
+material stone 0.55 0.52 0.48
+legend
+  H door high
+  b box 0 top stone                 ; under the upper floor
+  t box 0 2.5 stone                 ; the step
+  d stairs north 0 2.5
+  u stairs north 2.5 5
+
+plan 0
+################
+#bbbbbbbbbbbbbb#
+#bbbbbbbbuuuuuu#
+#bbbbbbbbuuuuuu#
+#ttttttttuuuuuu#
+#ttttttttuuuuuu#
+#ttttttttuuuuuu#
+#ttttttttuuuuuu#
+#tttttttttttttt#
+#dddddd........#
+#dddddd........T
+#dddddd........#
+#dddddd........#
+#dddddd........#
+#dddddd........#
+T..............T
+#HHHHHHHHHHHHHH#
+
+plan 1
+#HHHHHHHHHHHHHH#
+#..............#
+T........      #
+#........      T
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+T              T
+#              #
+#              #
+#              #
+#              #
+#              #
+################
+
+plan 2
+################
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+#              #
+################

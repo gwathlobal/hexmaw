@@ -1,0 +1,30 @@
+; A high gallery between high rooms, 7 m wide and 9 m tall: room for the ogre to leap
+; down its length, and for the player to sidestep it. Pilasters break up the walls.
+cells 2 2
+storeys 2
+tags corridor high
+weight 4
+legend
+  H door high
+
+plan 0
+#HHHHHHHHHHHHHH#
+#..............#
+##............##
+#..............#
+T..............T
+#..............#
+##............##
+#..............#
+#HHHHHHHHHHHHHH#
+
+plan 1
+################
+#              #
+##            ##
+#              #
+T              T
+#              #
+##            ##
+#              #
+################

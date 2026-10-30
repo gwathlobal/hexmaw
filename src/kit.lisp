@@ -163,9 +163,15 @@ that can't walk to the player. Returns both."
 ;;; - every probe reaches another doorway's: no bank or corner leads nowhere;
 ;;; - a river end (tag RIVER-END) joins all of them: a river's two banks meet only at its
 ;;;   ends and crossings, so with an end at each end both banks of every piece stay walkable;
-;;; - every monster reaches the first doorway.
+;;; - every monster reaches the first doorway;
+;;; - in a high block (tag HIGH), every doorway reaches every other at *HIGH-BODY*'s size,
+;;;   walking: the ogre's leaps are shortcuts there, never its only way.
 
 (defvar *check-block* NIL "The block *LEVEL* :BLOCK builds.")
+
+(defparameter *high-body* '(1.0 2.7 0.45)
+  "The radius, height and step a high block must let walk between all its doorways: the ogre,
+without its leaps.")
 
 (defun build-check-block (container)
   (let ((doors (place-block *check-block* container :at (vec 0 0 0) :turns 0)))
@@ -205,7 +211,20 @@ that can't walk to the player. Returns both."
                              do (push (format NIL "~a doesn't reach ~a" (label a) (label b)) problems))))))
       (dolist (c (stranded-creatures))
         (push (format NIL "~a at ~a can't reach ~a" (type-of c) (home c) (connector-name (first *level-doorways*)))
-              problems)))
+              problems))
+      (when (member :high (block-tags name))
+        (destructuring-bind (r h step) *high-body*
+          (let ((cells (loop for c in *level-doorways*
+                             collect (cons c (multiple-value-list
+                                              (nav-nearest-fitting (first (doorway-probes c)) r h :search 2 :reach 1.5))))))
+            (loop for (a . (i j k)) in cells
+                  for seen = (and i (nav-reached i j k r h step))
+                  do (if (null i)
+                         (push (format NIL "~a: no floor for the ogre" (connector-name a)) problems)
+                         (loop for (b . (bi bj bk)) in cells
+                               unless (or (eq a b) (and bi (= 1 (sbit seen (nav-index bi bj bk)))))
+                                 do (push (format NIL "the ogre can't walk from ~a to ~a" (connector-name a) (connector-name b))
+                                          problems))))))))
     (remove-duplicates (nreverse problems) :test #'string=)))
 
 (defun check-kit (&optional names)
