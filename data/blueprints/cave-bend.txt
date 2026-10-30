@@ -1,0 +1,24 @@
+; A cave passage turning a quarter, at 45 degrees.
+; Its plan is drawn by tools/cave_plans.py.
+cells 2 2
+tags corridor
+weight 2
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+
+
+plan 0
+#nnnnnn#########
+#......\\#######
+#........\\#####
+#\\........\\###
+###\\........\\#
+#####\\........e
+#######........e
+#######........e
+################

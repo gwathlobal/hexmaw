@@ -1,0 +1,32 @@
+; A wide lava river turning from the south to the east, a doorway onto the inner bank.
+; Its plan is drawn by tools/cave_plans.py.
+cells 3 3
+tags corridor river
+weight 3
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ lava
+  ( diagonal / floor -0.4 0, lava    ; a shore: floor on one half, lava on the other
+  ) diagonal \ floor -0.4 0, lava
+  R door river                       ; a wide river's doorway: bank
+  = door river, lava                 ; and lava
+
+plan 0
+########################
+#########..............R
+#########..............R
+#########......((~~~~~~=
+#########....((~~~~~~~~=
+w............~~~~~~~~~~=
+w............~~~~~~~~((R
+w............~~~~~~((..R
+#########....~~~~~~....#
+#########....~~~~~~....#
+#########....~~~~~~....#
+#########....~~~~~~....#
+#########RRRR======RRRR#

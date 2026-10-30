@@ -10,6 +10,7 @@
 ;;;;   ceiling 4          inside height of the top storey
 ;;;;   tags room start    for the generator, with WEIGHT
 ;;;;   material dais 0.58 0.47 0.30
+;;;;   remap wall rock    draw what would be wall (border, lintels, plugs) in rock
 ;;;;   legend             one indented line per character: char action[, action...]
 ;;;;     % box 0 0.8 dais
 ;;;;   plan 0             storey 0, north up, to the next blank line
@@ -29,8 +30,10 @@
 (defparameter *storey-height* 5.0 "Storey K's floor is K times this many metres up.")
 (defparameter *border* 0.5 "How thick the border walls and the floor and ceiling slabs are.")
 (defparameter *max-riser* 0.45 "The most a stair step rises: the player's *STEP-HEIGHT*.")
-(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5))
-  "Each kind of doorway: its name, width and height in metres. Only one kind joins itself.")
+(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 1.0))
+  "Each kind of doorway: its name, width and height in metres, and for a river the width of
+lava down its middle, between two banks. Each kind joins only itself. One wider than a cell
+spans two and is centred on the boundary between them.")
 (defparameter *default-ceiling* 4.0)
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3
@@ -86,6 +89,8 @@
    (grid-free :initform NIL :accessor grid-free :documentation "True to skip the grid checks.")
    (mirror :initform NIL :accessor mirror :documentation "True to also build <name>-mirror.")
    (materials :initform (copy-tree *materials*) :accessor materials)
+   (remaps :initform () :accessor remaps
+           :documentation "(FROM . TO) material names: the block draws TO wherever it would draw FROM.")
    (legend :initform (make-hash-table) :accessor legend
            :documentation "Character -> (line . actions), for the characters this file defines.")
    (plans :initform () :accessor plans :documentation "One plan per storey, storey 0 first.")))
@@ -153,6 +158,30 @@
             ((string-equal op "lava")
              (list :lava (if args (parse-number (first args) line) *lava-depth*)
                    (if (second args) (parse-number (second args) line) *lava-surface*)))
+            ((string-equal op "diagonal")
+             ;; diagonal DIR [material] [Y0 Y1] [SIDE], in any order after DIR.
+             (let ((dir (arg 0)) (material "wall") (heights ()) (side NIL))
+               (unless (member dir '("/" "\\") :test #'string=)
+                 (fail line NIL "diagonal takes / or \\, got ~s." dir))
+               (dolist (word (rest args))
+                 (cond ((member word '("ne" "nw" "se" "sw") :test #'string-equal)
+                        (setf side (intern (string-upcase word) :keyword)))
+                       ((or (string-equal word "top") (find-if #'digit-char-p word))
+                        (push (parse-height word line) heights))
+                       (T (setf material word))))
+               (unless (member (length heights) '(0 2))
+                 (fail line NIL "diagonal takes both heights, Y0 and Y1, or neither."))
+               (when (and side (not (member side (if (string= dir "/") '(:nw :se) '(:ne :sw)))))
+                 (fail line NIL "A ~a diagonal is solid on its ~a side or its ~a side, not ~(~a~)." dir
+                       (if (string= dir "/") "nw" "ne") (if (string= dir "/") "se" "sw") side))
+               (setf heights (nreverse heights))
+               (list :diagonal material (char dir 0) (first heights) (second heights) side)))
+            ((string-equal op "pit")
+             (let ((depth (if args (parse-number (first args) line) *lava-depth*)))
+               ;; The pit's floor is what is left of the slab.
+               (unless (< 0 depth *border*)
+                 (fail line NIL "A pit is more than 0 and less than ~a m deep, the floor slab." *border*))
+               (list :pit depth)))
             ((string-equal op "torch")
              (list :torch (if args (parse-number (first args) line) *torch-height*)))
             ((string-equal op "spawn")
@@ -189,6 +218,11 @@
              (setf (materials blueprint)
                    (cons (cons name (mapcar (lambda (w) (parse-number w line)) (rest args)))
                          (remove name (materials blueprint) :key #'first :test #'string=)))))
+          ((string-equal key "remap") (need 2)
+           (let ((from (string-downcase (first args))))
+             (when (string= from "lava") (fail line NIL "lava can't be remapped: its boxes are the liquid."))
+             (setf (remaps blueprint)
+                   (acons from (string-downcase (second args)) (remove from (remaps blueprint) :key #'car :test #'string=)))))
           ((string-equal key "grid") (need 1) (setf (grid-free blueprint) (string-equal (first args) "free")))
           ((string-equal key "mirror") (need 1) (setf (mirror blueprint) (string-equal (first args) "yes")))
           (T (fail line NIL "Unknown keyword ~s." key)))))
@@ -248,12 +282,18 @@
           (#\. '((:floor)))
           (#\Space '((:open)))
           ((#\n #\e #\s #\w) '((:door "door")))
-          (#\T `((:torch ,*torch-height*)))))))
+          (#\T `((:torch ,*torch-height*)))
+          (#\/ '((:diagonal "wall" #\/ NIL NIL NIL)))
+          (#\\ '((:diagonal "wall" #\\ NIL NIL NIL)))))))
 
 (defun side-letter (char)
   (case char (#\n :north) (#\e :east) (#\s :south) (#\w :west)))
 
 (defun action (kind actions) (find kind actions :key #'first))
+
+(defun remapped (blueprint material)
+  "The material BLUEPRINT draws in place of MATERIAL."
+  (or (cdr (assoc material (remaps blueprint) :test #'string-equal)) material))
 
 (defun wall-like-p (actions)
   (or (action :wall actions) (action :torch actions)))
@@ -322,10 +362,13 @@
       (maphash (lambda (char entry)
                  (declare (ignore char))
                  (dolist (a (cdr entry))
-                   (let ((material (case (first a) ((:box :deco) (fourth a)) (:stairs (fifth a)) (:wall (second a)))))
+                   (let ((material (case (first a) ((:box :deco) (fourth a)) (:stairs (fifth a)) ((:wall :diagonal) (second a)))))
                      (when (and material (not (assoc material (materials blueprint) :test #'string-equal)))
                        (fail (car entry) NIL "No material ~s; add a material line." material)))))
                (legend blueprint))
+      (loop for (from . to) in (remaps blueprint)
+            unless (assoc to (materials blueprint) :test #'string-equal)
+              do (fail NIL NIL "remap ~a ~a: no material ~s; add a material line." from to to))
       (dolist (plan plans)
         (loop for row across (rows plan) for r from 0 for line from (line plan)
               do (loop for char across row for c from 0
@@ -393,7 +436,9 @@
                (dolist (rc (append cells (list NIL)))
                  (let* ((char (and rc (char (aref rows (first rc)) (second rc))))
                         (door (and char (action :door (char-actions blueprint char)))))
-                   (if (and current door (char= char (getf current :char)))
+                   ;; A doorway is the cells of one kind side by side, whatever their
+                   ;; characters: a river's lava cells and bank cells make one.
+                   (if (and current door (string-equal (second door) (getf current :kind)))
                        (setf (getf current :end) rc)
                        (progn (when current (push current runs))
                               (setf current (and door (list :side side :char char :kind (second door)
@@ -416,6 +461,44 @@
         (not (or (action :open actions) (action :wall actions)
                  (and border (action :torch actions))))))))
 
+(defun diagonal-extent (blueprint k actions)
+  "The heights above storey K's floor that the diagonal in ACTIONS runs between: its own,
+or from the cell's floor (a pit's, lava's, or an open cell's slab bottom) to the top."
+  (let ((diagonal (action :diagonal actions))
+        (pit (or (action :lava actions) (action :pit actions)))
+        (top (- (storey-top blueprint k) (storey-base k))))
+    (flet ((height (h) (if (eq h :top) top h)))
+      (if (fourth diagonal)
+          (values (height (fourth diagonal)) (height (fifth diagonal)))
+          (values (cond (pit (- (second pit))) ((action :open actions) (- *border*)) (T 0.0))
+                  top)))))
+
+(defun cell-covers-p (blueprint k r c y0 y1)
+  "True if cell R C of storey K is solid all the way from Y0 to Y1 above the storey's floor:
+its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
+  (let* ((plan (find k (plans blueprint) :key #'storey))
+         (rows (rows plan))
+         (actions (char-actions blueprint (char (aref rows r) c)))
+         (border (or (= r 0) (= c 0) (= r (1- (length rows))) (= c (1- (length (aref rows 0))))))
+         (top (- (storey-top blueprint k) (storey-base k)))
+         (spans ()))
+    (flet ((height (h) (if (eq h :top) top h)))
+      (when (or (action :wall actions) (and border (action :torch actions)))
+        (push (cons (- *border*) top) spans))
+      (when (slab-cell-p blueprint k r c)
+        (let ((pit (or (action :lava actions) (action :pit actions))))
+          (push (cons (- *border*) (if pit (- (second pit)) 0.0)) spans)))
+      (dolist (a actions)
+        (case (first a)
+          (:box (push (cons (height (second a)) (height (third a))) spans))
+          (:door (push (cons (third (connector-kind (second a))) top) spans)))))
+    ;; Covered if the spans, end to end, leave no gap from Y0 to Y1.
+    (let ((reach y0))
+      (dolist (span (sort spans #'< :key #'car))
+        (when (<= (car span) (+ reach 1e-3))
+          (setf reach (max reach (cdr span)))))
+      (<= (- y1 1e-3) reach))))
+
 (defun blueprint-geometry (blueprint)
   "The boxes, empties and scene extras of BLUEPRINT's block."
   (let* ((*file* (path blueprint))
@@ -423,8 +506,14 @@
          (w (block-width blueprint)) (d (block-depth blueprint)))
     (multiple-value-bind (nr nc) (plan-size blueprint)
       (labels ((box (prefix material solid x0 y0 z0 x1 y1 z1)
-                 (let ((name (format NIL "~a~a_~d" prefix material (incf (gethash (list prefix material) counts 0)))))
+                 (let* ((material (remapped blueprint material))
+                        (name (format NIL "~a~a_~d" prefix material (incf (gethash (list prefix material) counts 0)))))
                    (push (list name material solid x0 y0 z0 x1 y1 z1) boxes)))
+               (wedge (material cut x0 y0 z0 x1 y1 z1)
+                 ;; A wedge is a box with a corner cut: wedge_<cut>_..., its cut the
+                 ;; corner's number (1 north-east, 2 north-west, 3 south-west, 4 south-east).
+                 (let ((name (format NIL "wedge_~d_~a_~d" cut material (incf (gethash (list "wedge" material) counts 0)))))
+                   (push (list name material T x0 y0 z0 x1 y1 z1 cut) boxes)))
                (cell-centre (r c)
                  (multiple-value-bind (x0 x1) (col-span blueprint c)
                    (multiple-value-bind (z0 z1) (row-span blueprint r)
@@ -454,9 +543,10 @@
                          ;; and no two top faces share a plane.
                          (cap (if (slab-cell-p blueprint (1+ k) r c) (- top *border*) top)))
                     (when (slab-cell-p blueprint k r c)
-                      ;; Under lava the slab is the pit's floor, and the lava fills it.
-                      (let ((lava (action :lava actions)))
-                        (span r c (- base *border*) (if lava (- base (second lava)) base) "floor" T)
+                      ;; In a pit the slab is the pit's floor, and lava may fill it.
+                      (let* ((lava (action :lava actions))
+                             (pit (or lava (action :pit actions))))
+                        (span r c (- base *border*) (if pit (- base (second pit)) base) "floor" T)
                         (when lava
                           (span r c (- base (second lava)) (- base (third lava)) "lava" :liquid))))
                     (dolist (a actions)
@@ -522,6 +612,48 @@
                           (push (list (format NIL "torch_~d" (incf (gethash "torch" counts 0)))
                                       (list x (+ base (second torch)) z) NIL)
                                 empties))))))))
+            ;; Diagonals: each pair of / or \ (or a diagonal action) is a 1 m square cut
+            ;; along the diagonal it draws, solid on one side over its heights: rock to the
+            ;; top, a pit's dry edge, a shelf's. The solid side is its SIDE, or the side
+            ;; whose neighbours are solid over the same heights.
+            (dotimes (r nr)
+              (let ((c 0))
+                (loop while (< c nc)
+                      do (let* ((char (char (aref rows r) c))
+                                (actions (char-actions blueprint char))
+                                (diagonal (action :diagonal actions)))
+                           (if (not diagonal)
+                               (incf c)
+                               (let ((line (+ (line plan) r)))
+                                 (unless (and (< (1+ c) nc) (char= char (char (aref rows r) (1+ c))))
+                                   (fail line (1+ c) "~s draws a 1 m square, two columns wide: write it as a pair." (string char)))
+                                 (multiple-value-bind (y0 y1) (diagonal-extent blueprint k actions)
+                                   (flet ((solid-at (rr cc)
+                                            (if (and (< -1 rr nr) (< -1 cc nc))
+                                                (if (cell-covers-p blueprint k rr cc y0 y1) 1 0)
+                                                1)))
+                                     (let* ((dir (third diagonal))
+                                            (north (+ (solid-at (1- r) c) (solid-at (1- r) (1+ c))))
+                                            (south (+ (solid-at (1+ r) c) (solid-at (1+ r) (1+ c))))
+                                            (west (solid-at r (1- c)))
+                                            (east (solid-at r (+ c 2)))
+                                            ;; / runs south-west to north-east, \ north-west to south-east.
+                                            (a (if (char= dir #\/) (+ north west) (+ north east)))
+                                            (b (if (char= dir #\/) (+ south east) (+ south west)))
+                                            ;; The cut corner is on the side away from the solid half.
+                                            (cut (case (sixth diagonal)
+                                                   (:ne 3) (:nw 4) (:se 2) (:sw 1)
+                                                   (T (cond ((= a b)
+                                                             (fail line (1+ c) "Can't tell which side of ~s is solid: put solid beside one side only, or give it a side." (string char)))
+                                                            ((char= dir #\/) (if (< b a) 4 2))
+                                                            (T (if (< b a) 3 1)))))))
+                                       (multiple-value-bind (x0) (col-span blueprint c)
+                                         (multiple-value-bind (z0 z1) (row-span blueprint r)
+                                           (let ((x1 (nth-value 1 (col-span blueprint (1+ c))))
+                                                 (cap (if (slab-cell-p blueprint (1+ k) r c) (- top *border*) top)))
+                                             (wedge (remapped blueprint (second diagonal)) cut
+                                                    x0 (+ base y0) z0 x1 (min cap (+ base y1)) z1)))))))
+                                 (incf c 2)))))))
             ;; Doorways: a connector on the outer face and a plug filling the hole.
             (dolist (run (door-runs blueprint plan))
               (destructuring-bind (&key side char kind start end) run
@@ -538,9 +670,27 @@
                   (unless (near (- hi lo) (second spec))
                     (fail line column "A ~a doorway is ~,1f m wide (~d ~a); this one is ~,1f m." kind (second spec)
                           (if ns (round (second spec) 0.5) (round (second spec))) (if ns "columns" "rows") (- hi lo)))
+                  ;; One cell wide, it is centred on a cell's middle; two, on the boundary.
                   (unless (or (grid-free blueprint)
-                              (near (mod (+ centre (/ (if ns w d) 2)) *cell-size*) (/ *cell-size* 2)))
-                    (fail line column "This doorway isn't centred on a cell's edge."))
+                              (let ((off (mod (+ centre (/ (if ns w d) 2)) *cell-size*)))
+                                (if (oddp (round (+ (second spec) 1) *cell-size*))
+                                    (near off (/ *cell-size* 2))
+                                    (or (near off 0) (near off *cell-size*)))))
+                    (fail line column "This doorway isn't centred on a cell's edge~:[~; (a ~a doorway spans two cells: centre it on the boundary between them)~]."
+                          (< *cell-size* (second spec)) kind))
+                  ;; A river's lava runs down its middle, LAVA wide, the rest is bank, so
+                  ;; every doorway of a kind meets every other.
+                  (when (fourth spec)
+                    (loop for i from (if ns (second start) (first start)) to (if ns (second end) (first end))
+                          for rc = (if ns (list (first start) i) (list i (second start)))
+                          for mid = (/ (+ (if ns (col-span blueprint i) (row-span blueprint i))
+                                          (nth-value 1 (if ns (col-span blueprint i) (row-span blueprint i))))
+                                       2)
+                          for lava = (action :lava (char-actions blueprint (char (aref rows (first rc)) (second rc))))
+                          do (unless (eq (not lava) (not (< (abs (- mid centre)) (/ (fourth spec) 2))))
+                               (fail (+ (line plan) (first rc)) (1+ (second rc))
+                                     "A ~a doorway has ~a m of lava down its middle and bank on each side; this cell should be ~:[bank~;lava~]."
+                                     kind (fourth spec) (not lava)))))
                   (push (list :storey k :side side :kind kind :along centre
                               :position (ecase side
                                           (:north (list centre base (/ d -2)))
@@ -552,7 +702,21 @@
                                         (:north (list (- centre half) base (/ d -2) (+ centre half) y1 (+ (/ d -2) *border*)))
                                         (:south (list (- centre half) base (- (/ d 2) *border*) (+ centre half) y1 (/ d 2)))
                                         (:west (list (/ w -2) base (- centre half) (+ (/ w -2) *border*) y1 (+ centre half)))
-                                        (:east (list (- (/ w 2) *border*) base (- centre half) (/ w 2) y1 (+ centre half))))))
+                                        (:east (list (- (/ w 2) *border*) base (- centre half) (/ w 2) y1 (+ centre half)))))
+                              ;; Under a river's lava the floor is sunk, so its plug goes down
+                              ;; to the pit's floor there, or the lava shows beneath it.
+                              :lava-plug (when (fourth spec)
+                                           (let* ((depth (or (loop for i from (if ns (second start) (first start))
+                                                                     to (if ns (second end) (first end))
+                                                                   for ch = (if ns (char (aref rows (first start)) i) (char (aref rows i) (second start)))
+                                                                   thereis (second (action :lava (char-actions blueprint ch))))
+                                                             *lava-depth*))
+                                                  (y0 (- base depth)) (lh (/ (fourth spec) 2)))
+                                             (ecase side
+                                               (:north (list (- centre lh) y0 (/ d -2) (+ centre lh) base (+ (/ d -2) *border*)))
+                                               (:south (list (- centre lh) y0 (- (/ d 2) *border*) (+ centre lh) base (/ d 2)))
+                                               (:west (list (/ w -2) y0 (- centre lh) (+ (/ w -2) *border*) base (+ centre lh)))
+                                               (:east (list (- (/ w 2) *border*) y0 (- centre lh) (/ w 2) base (+ centre lh)))))))
                         doors))))))
         ;; The ceiling over the whole block.
         (let ((top (storey-top blueprint (1- (storeys blueprint)))))
@@ -566,7 +730,10 @@
                    (n (incf (gethash stem seen 0)))
                    (suffix (if (= n 1) stem (format NIL "~a_~d" stem n))))
               (push (list (format NIL "connector_~a" suffix) (getf door :position) NIL) empties)
-              (push (list* (format NIL "plug_~a" suffix) "wall" T (getf door :plug)) boxes))))
+              (push (list* (format NIL "plug_~a" suffix) (remapped blueprint "wall") T (getf door :plug)) boxes)
+              ;; A second piece of the same plug (blocks.lisp drops the ".001").
+              (when (getf door :lava-plug)
+                (push (list* (format NIL "plug_~a.001" suffix) (remapped blueprint "wall") T (getf door :lava-plug)) boxes)))))
         (values (nreverse boxes) (nreverse empties)
                 (let ((extras (make-hash-table :test 'equal)))
                   (setf (gethash "tags" extras) (coerce (tags blueprint) 'vector)
@@ -578,17 +745,19 @@
 
 ;;; Mirroring west to east, for pieces a quarter turn can't make.
 
-(defun mirror-char (c) (case c (#\e #\w) (#\w #\e) (T c)))
+(defun mirror-char (c) (case c (#\e #\w) (#\w #\e) (#\/ #\\) (#\\ #\/) (T c)))
 (defun mirror-direction (d) (case d (:east :west) (:west :east) (T d)))
 (defun mirror-action (a)
   (case (first a)
     (:stairs (list* :stairs (mirror-direction (second a)) (cddr a)))
     (:spawn (list :spawn (second a) (mirror-direction (third a))))
+    (:diagonal (list :diagonal (second a) (if (char= (third a) #\/) #\\ #\/) (fourth a) (fifth a)
+                     (case (sixth a) (:ne :nw) (:nw :ne) (:se :sw) (:sw :se))))
     (T a)))
 
 (defun mirrored (blueprint)
   (let ((m (make-instance 'blueprint :name (format NIL "~a-mirror" (name blueprint)) :path (path blueprint))))
-    (dolist (slot '(cells storeys ceiling-height tags weight grid-free materials))
+    (dolist (slot '(cells storeys ceiling-height tags weight grid-free materials remaps))
       (setf (slot-value m slot) (slot-value blueprint slot)))
     (maphash (lambda (char entry)
                (setf (gethash (mirror-char char) (legend m))
@@ -625,6 +794,26 @@
     ((0 0 1) ((,(- sx) ,(- sy) ,sz) (,sx ,(- sy) ,sz) (,sx ,sy ,sz) (,(- sx) ,sy ,sz)))
     ((0 0 -1) ((,sx ,(- sy) ,(- sz)) (,(- sx) ,(- sy) ,(- sz)) (,(- sx) ,sy ,(- sz)) (,sx ,sy ,(- sz))))))
 
+(defun wedge-faces (sx sy sz cut)
+  "Each face of a box with half-sizes SX SY SZ and corner CUT cut away (1 north-east, 2
+north-west, 3 south-west, 4 south-east): its normal and corners, counter-clockwise outside."
+  (let* ((ring (list (list (- sx) sz 3) (list sx sz 4) (list sx (- sz) 1) (list (- sx) (- sz) 2)))
+         (tri (remove cut ring :key #'third))
+         (cx (/ (reduce #'+ tri :key #'first) 3)) (cz (/ (reduce #'+ tri :key #'second) 3))
+         (faces (list (list '(0 1 0) (loop for (x z) in tri collect (list x sy z)))
+                      (list '(0 -1 0) (loop for (x z) in (reverse tri) collect (list x (- sy) z))))))
+    (loop for (p q) on (append tri (list (first tri)))
+          while q
+          do (destructuring-bind (px pz qx qz) (list (first p) (second p) (first q) (second q))
+               ;; Outward is (-dz, dx) along P to Q, if that points away from the middle.
+               (when (< (+ (* (- (- qz pz)) (- (/ (+ px qx) 2) cx)) (* (- qx px) (- (/ (+ pz qz) 2) cz))) 0)
+                 (rotatef px qx) (rotatef pz qz))
+               (let* ((nx (- (- qz pz))) (nz (- qx px)) (len (sqrt (+ (* nx nx) (* nz nz)))))
+                 (push (list (list (/ nx len) 0 (/ nz len))
+                             (list (list px (- sy) pz) (list qx (- sy) qz) (list qx sy qz) (list px sy pz)))
+                       faces))))
+    faces))
+
 (defun write-glb (path blueprint boxes empties extras)
   (let ((blob (octets))
         (views ()) (accessors ()) (meshes ()) (nodes ())
@@ -638,19 +827,23 @@
                (push (apply #'obj "bufferView" view "componentType" component "count" count "type" type more) accessors)
                (1- (length accessors))))
       (dolist (b boxes)
-        (destructuring-bind (name material solid x0 y0 z0 x1 y1 z1) b
+        (destructuring-bind (name material solid x0 y0 z0 x1 y1 z1 &optional cut) b
           (declare (ignore solid))
           (let ((sx (/ (- x1 x0) 2)) (sy (/ (- y1 y0) 2)) (sz (/ (- z1 z0) 2))
-                (positions (octets)) (normals (octets)) (indices (octets)))
-            (loop for (normal corners) in (box-faces sx sy sz)
-                  for base from 0 by 4
+                (positions (octets)) (normals (octets)) (indices (octets))
+                (vertices 0) (index-count 0))
+            (loop for (normal corners) in (if cut (wedge-faces sx sy sz cut) (box-faces sx sy sz))
+                  for n = (length corners)
                   do (dolist (p corners) (dolist (x p) (put-f32 positions x)))
-                     (dotimes (k 4) (dolist (x normal) (put-f32 normals x)))
-                     (dolist (i '(0 1 2 0 2 3)) (put-u16 indices (+ base i))))
-            (let ((pos (accessor (view positions 34962) 5126 24 "VEC3"
+                     (dotimes (k n) (dolist (x normal) (put-f32 normals x)))
+                     (dolist (i (if (= n 4) '(0 1 2 0 2 3) '(0 1 2)))
+                       (put-u16 indices (+ vertices i))
+                       (incf index-count))
+                     (incf vertices n))
+            (let ((pos (accessor (view positions 34962) 5126 vertices "VEC3"
                                  "min" (vector (- sx) (- sy) (- sz)) "max" (vector sx sy sz)))
-                  (nrm (accessor (view normals 34962) 5126 24 "VEC3"))
-                  (idx (accessor (view indices 34963) 5123 36 "SCALAR")))
+                  (nrm (accessor (view normals 34962) 5126 vertices "VEC3"))
+                  (idx (accessor (view indices 34963) 5123 index-count "SCALAR")))
               (push (obj "name" name
                          "primitives" (vector (obj "attributes" (obj "POSITION" pos "NORMAL" nrm)
                                                    "indices" idx

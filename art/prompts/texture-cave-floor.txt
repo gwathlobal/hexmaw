@@ -1,0 +1,5 @@
+THE SURFACE: the FLOOR of a natural cave, seen from straight above: uneven bedrock worn by feet, with rubble and packed earth.
+- Broad patches of flat grey-brown bedrock with cracks, between which lie loose pebbles, small broken stones and gravel bedded in dark packed earth and grit.
+- No slabs, no tiles, no straight joints, no paving: nothing laid by hand.
+- Dull brown-grey, a little warmer and darker than the rock walls, low contrast.
+- Evenly spread over the whole image, with no big feature at the centre, so it tiles.

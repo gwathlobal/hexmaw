@@ -27,6 +27,15 @@ least 2 GB of heap. Dependencies come from the project-local Quicklisp in `.ql/`
 (Shirakumo dist, not checked in), and ASDF is limited to this folder because other
 projects under `~/common-lisp/` ship conflicting copies of Trial's dependencies.
 
+A git worktree (`.claude/worktrees/<name>`) has no `.ql/` of its own: symlink the main
+checkout's, `ln -s "$(git rev-parse --git-common-dir)/../.ql" .ql`, and leave the link there
+(`/.ql` in .gitignore covers it; don't delete it when done). Port 7171 is usually the
+main checkout's game, and `tools/hd` and the reload hook talk to it by default, so editing
+`src/` in a worktree reloads the main checkout's copy of that file into that game. Run the
+worktree's own game on a free port (`ss -ltnp` shows the taken ones) and pass the port to
+every command: `HEXMAW_EVAL_PORT=7181 ./run.sh`, `HEXMAW_EVAL_PORT=7181 tools/hd status`.
+`tools/hd '(namestring (root))'` says which checkout a game runs from.
+
 ## Standalone build
 
 ```bash
@@ -151,6 +160,24 @@ Tick handlers and render methods run 100 times a second. Avoid allocating in the
 no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`,
 `nv+`, or reuse preallocated ones. SBCL's GC pauses show up as hitches.
 
+Every GL call costs on the CPU: cl-opengl saves and restores the float modes around each
+one, and a uniform set by name is a string-hash lookup. An entity is about 20 calls a
+frame whatever its size, so the level's block boxes aren't entities (they're batched,
+see "Level blocks"), and a uniform that is the same for every entity of a program goes
+under `(when (first-this-frame-p program) ...)` in its render method, set by the first
+entity drawn with it each frame (greybox.lisp; `main`'s render counts `*render-frame*`).
+
+Measuring: vsync is on, so the frame rate stops at the monitor's (120 Hz here, 8.3 ms).
+For the real cost, turn it off for the measurement, `(game (setf (vsync *context*) :off))`
+(back with `:on`), and time the GPU with a GL timer query (`gl:begin-query :time-elapsed`
+inside one `(game ...)`, `gl:end-query` in a later one, divided by the frames between).
+`*show-fps*` shows the frame counter. `sb-sprof` (`(require :sb-sprof)`) profiles the
+`render-loop` thread; in `:cpu` mode it only sees CPU time, so time spent waiting on the
+driver (a foreign `ioctl`, the swap) shows only in `:time` mode. Frozen world (hit-stop),
+12 spots × 2 views, vsync off: seed 38 (no caves, 319 boxes) 3.3 ms a frame, 2.6 of them
+GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching they were
+11.9 and 20.0 ms.
+
 ## Layout and conventions
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
@@ -159,7 +186,8 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   whose `light_at` lights the level and billboards from the `lamp-block` uniform buffer.
 - `src/lights.lisp`: point lights (`lamp`s in `*lamps*`, which `build-level` empties).
   `add-torch x y z` places a `torch` whose flame stands on y, `*torch-stand-off*` out from
-  the nearest wall within `*torch-wall-reach*` (`wall-near`), with a flickering lamp in the
+  the nearest square wall within `*torch-wall-reach*` (`wall-near`; a wedge's diagonal
+  doesn't count, so keep torches off diagonal rock), with a flickering lamp in the
   flame. The torch is one sprite, torch and flame together, turned about +Y to face the
   camera like a billboard but fullbright like an effect. The stand-off is more than half
   its width, so it never sinks into the wall. `attach-glow` gives an entity a
@@ -194,8 +222,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   left out and those below darkened by `*map-depth-fade*` per storey. Cull face is off: the
   inside of a cut box shows its back faces, drawn in `*map-cut-color*` as the cut face, and
   at the depth of the cut plane they're seen through (`gl_FragDepth`, from `*map-eye*` and
-  the piece's world box, `piece-low`/`piece-high`), so the floor a pillar stands on can't
-  flicker against it. The storey just above the shown one is a ghost: its outside only, in
+  the piece's world box, `piece-low`/`piece-high`, and a wedge's cut corner, `piece-cut`), so
+  the floor a pillar stands on can't flicker against it. Map twins are never batched
+  (`with-block-batches`): one per piece, drawn only under the map camera. The storey just above the shown one is a ghost: its outside only, in
   `*map-ghost-color*` on 1 pixel in `*map-ghost-stipple*` (no blending, so no draw order).
   Colours come from `*map-colors*` by surface. `place-block` makes a `map-block` (bounds,
   `revealed`) in `*map-blocks*` (placement order; `build-level` empties it) and binds
@@ -312,7 +341,10 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   (`hurt-player ... :shove NIL`: the pain flash, no shove or hit-stop) and by creatures
   (`burn`: a flash, no flinch or blood; one standing in it walks to the nearest dry cell,
   `escape-liquid`), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
-  hangs `*glow-height*` over it. The nav grid flags each cell under lava (`nav-hazard`), and
+  hangs `*glow-height*` over it, one per `:glow-spacing` of the pool's length. One nearer
+  than that to a lamp already hung over the same kind is left out and its colour added to
+  that lamp's: an irregular pool is many boxes, every lamp sent costs every lit pixel, and
+  lamps that close lit like one brighter one anyway. The nav grid flags each cell under lava (`nav-hazard`), and
   `*nav-hazards*` says what the nav questions make of it: `:avoid`, the default, keeps out
   (so wandering, retreat, `show-nav` and `check-reachable` stay dry, and a generated level
   always has a dry way); `:wade` lets a path through at `*nav-wade-cost*` (3) times the
@@ -335,7 +367,9 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   attacker, `*blood-per-damage*` per point within `*blood-drops*`. A death adds `bleed-out`,
   a burst every way (`death-blood`, 0 for the acolyte, which burns; `bleeds` NIL for no
   blood at all). Drops fly under `*blood-gravity*` and stick where they cross a solid's face
-  as splats, flat on the floor or a wall (a ceiling only stops their rise). `lay-splat`
+  as splats, flat on the floor or a wall (a ceiling only stops their rise; a drop that goes
+  in through a wedge's diagonal is gone, since a splat lies on a square face only, and a gib
+  bounces off one, `diagonal-entry-p`, `reflect-off-diagonal`). `lay-splat`
   picks the splat: a drop faster than `*streak-speed*` across the floor smears into a streak
   pointing the way it went (snapped to a quarter turn), a bigger drop on a wall may run down
   it (`*drip-chance*`), and the rest are one of three round variants, turned and mirrored at
@@ -491,7 +525,21 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   "Standalone build" above.
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
-(north). Collision is axis-aligned boxes in `*solids*`, resolved one axis at a time.
+(north). Collision is axis-aligned boxes in `*solids*`, resolved one axis at a time, and
+wedges: a solid with a 7th value is a box with one vertical corner cut away along the
+diagonal between the corners beside it (`make-solid`'s `cut`: 1 north-east, 2 north-west,
+3 south-west, 4 south-east; `corner-cut`), a 45° wall when the box is square. Every
+question about solids goes through greybox.lisp: `solid-overlapping` (an upright box),
+`solid-at` (a point, gore.lisp), `solid-covers-p` (heights over a point); all of them
+apply the diagonal (`%wedge-depth`). Moving into a diagonal stops flush against it
+(`solid-flush`) and turns the stopped part of the move along the wall (`slide-along`;
+the player's `move-flat`, `move-creature`), so walking straight at a 45° wall slides along
+it as in Doom. Once a level is built, `index-solids` files every solid under the 4 m
+columns it reaches into, and a question looks only in the columns it touches
+(`do-solids-near`): a body question takes about 0.2 µs and a 10 m `clear-path-p` 0.07 ms on
+seed 11, against 75 µs and 5 ms when they walked all 586 solids with untyped arithmetic.
+When `*solids*` isn't the vector indexed (the nav grid binds it to the solids near a tile)
+or has grown since (a box added from the REPL), they walk it whole, typed.
 Actors (the player and live creatures, not corpses) are bodies: upright boxes that block
 each other the same way, found by `body-overlapping` rather than kept in `*solids*`,
 since they move. A new kind of actor gives methods on `body-feet`, `body-radius`,
@@ -520,8 +568,8 @@ floors are a step apart. A point is in the layer under it, the highest floor at 
 `*nav-layer-above*` above its feet (`nav-layer`, `nav-floor-at x y z`), so anything that
 asks about a place passes its height too. A straight walk (`nav-line-clear-p`) must also end
 on the floor its target is on, not the one above or below. The geometry questions
-go through `floor-candidates`, `ceiling-above` and `fits-at-p`, the only code that knows solids
-are boxes. The test level's annex, east of the hall through its east doorway, is a lower room
+go through `floor-candidates`, `ceiling-above` and `fits-at-p`, which ask the solid questions
+above, so wedges' diagonals shape the grid like any wall. The test level's annex, east of the hall through its east doorway, is a lower room
 with an upper room right on top of it and a stair shaft joining them; an imp lives upstairs.
 
 A creature wanders: it stands for `*wander-pause*` seconds, then `nav-reachable-spot` picks
@@ -650,14 +698,17 @@ line to see what will be sent.
 
 ## Level textures
 
-Level faces are textured in world space: every face is axis-aligned, so the greybox shader
-lays a texture flat on it by the two world axes in its plane (walls by x or z and y, floors
-and ceilings by x and z), at `*texels-per-metre*` (64, the monsters' density). A texture's
+Level faces are textured in world space: the greybox shader lays a texture flat on each
+face (floors and ceilings by x and z, walls by the distance along the wall and y, which on
+an X wall is z and on a Z wall x, and on a 45° wall its diagonal; `face_texel`). The wall's
+direction is snapped to the nearest 45°: the face normal comes from screen-space derivatives,
+and its slight noise times a world position 100 m out scattered a diagonal's texture by texels
+from pixel to pixel. A wall at any other angle would need that snap changed. Textures are laid at `*texels-per-metre*` (64, the monsters' density). A texture's
 pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and walls line up
 across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
 sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
 `:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`, `:stair`, `:stone`,
-`:beam`, `:sarcophagus`), tinted by
+`:beam`, `:sarcophagus`, `:rock`, `:cave-floor`), tinted by
 `:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
 
 A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
@@ -688,7 +739,12 @@ tools/make_texture.py art/textures/stone-2.png data/textures/dressed-stone --met
 tools/make_texture.py art/textures/beam-2.png data/textures/timber --metres 2
 tools/make_texture.py art/textures/sarcophagus-side-3.png data/textures/sarcophagus-side --metres 2 --strip 0.8 --brightness 0.78
 tools/make_texture.py art/textures/sarcophagus-lid-1.png data/textures/sarcophagus-lid --metres 2 --brightness 0.78
+tools/make_texture.py art/textures/rock-1.png data/textures/rock --metres 4
+tools/make_texture.py art/textures/cave-floor-2.png data/textures/cave-floor --metres 4
 ```
+
+The caves' `rock` is fractured bedrock with no courses, for their walls and ceilings;
+`cave-floor` is bedrock, pebbles and packed earth, under rock sides.
 
 The stair's treads (`stair-tread`) are a straight 4 × 4 grid of slabs on 2 m, so their joints
 fall on the 0.5 m treads the stair pieces have; its risers and flanks are `stair-side`, small
@@ -1034,11 +1090,17 @@ Blender export that keeps the conventions works the same. Conventions:
 - Every mesh object is drawn and its bounding box is a solid, unless its name starts
   with `deco_` (drawn, no collision), `plug_`, or `lava_` (not drawn: its bounding box is
   a lava volume, its top the surface, in a pit whose floor is a solid). Model collision as boxes: a sloped or
-  L-shaped object's bounding box is the whole box around it.
+  L-shaped object's bounding box is the whole box around it. One named `wedge_<n>_<rest>`
+  is that box with corner n cut away (1 north-east, 2 north-west, 3 south-west, 4
+  south-east, as the block lies; turned with it): its mesh must be that prism, unrotated.
 - Empties named `connector_<rest>` mark doorways, on the block's outer face, at the middle
   of a cell edge, on a storey's floor. A connector faces out through the face it lies on.
-  Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m), anything else
-  a `door` (3 × 3 m); `*connector-kinds*` lists them, and only one kind joins itself. Light
+  Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m),
+  `connector_river_north` a `river` (7 × 3.5 m, two cells, 3 m of lava down its middle
+  between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, 1 m of lava between
+  1 m banks), anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
+  fourth value is its lava width), and each kind joins only itself. A doorway two cells
+  wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
 - Meshes named `plug_<rest>` fill the doorway of `connector_<rest>`, flush with the wall.
@@ -1064,12 +1126,22 @@ places one by its origin and quarter turns (`:spawns NIL` leaves its monsters ou
 before placing it. Blocks turn in quarter turns only. Re-saving a `.glb` and running
 `tools/hd reset` picks up the new version.
 
+While `build-level` runs (`with-block-batches`), placed pieces don't become entities:
+`enter-piece` adds each piece's triangles, turned into world space, to a batch per look
+(surface textures and colour), and `flush-block-batches` enters each batch as one
+`block-piece`, so a level is a handful of draws instead of hundreds. The greybox shader
+works in world space, so the picture is the same; what's lost is Trial's culling of each
+box against the view, which costs the GPU a little (0.4 ms on seed 38, 0.7 on seed 11). A piece
+placed outside `build-level` is entered on its own as before. `*blocks*` (the read
+blocks) outlives reloads, and pieces read before batching existed have no `:mesh`, so
+they are entered on their own too; `(clrhash *blocks*)` and a reset re-read them.
+
 ## Blueprints
 
 A blueprint, `data/blueprints/<name>.txt`, draws a block top-down in text; `tools/blueprint`
 builds it into `data/blocks/<name>.glb` (`tools/blueprint chamber stair` builds those,
 `--check` only checks), and the game builds a block whose blueprint is newer when it
-loads it, so after editing one `tools/hd reset` shows it. Errors give `file:line:col`.
+loads it, so after editing one `tools/hd reset` shows it. It builds with the blueprint code loaded in it: after changing src/blueprint.lisp, `tools/hd reload-system` first, or a blueprint using something new fails to build in the game (a runtime error every frame, and an empty level) even though `tools/blueprint` builds it. Errors give `file:line:col`.
 `chamber.txt`:
 
 ```
@@ -1104,18 +1176,39 @@ than 1 m north to south. Other header lines: `storeys N` (one `plan K` each, K f
 R G B` (defaults `floor`, `wall`, `ceiling`, `stair`; a material named after a surface in
 `*surfaces*` is drawn with its textures, the rest flat in their colour, so a material
 still waiting for its texture stands out), `mirror yes` (also builds
-`<name>-mirror`, flipped west to east, for pieces a turn can't make: `cell`, `tower`) and
-`grid free` (skips the grid checks).
+`<name>-mirror`, flipped west to east, for pieces a turn can't make: `cell`, `tower`),
+`remap FROM TO` (draws material TO wherever the block would draw FROM, built-in pieces
+included: `remap wall rock` makes every `#`, door lintel and plug rock, `remap floor
+cave-floor` the floor slab; not `lava`) and `grid free` (skips the grid checks).
 
 Built-in characters: `#` wall (from the storey's floor to the next storey's, or to the
 ceiling; on storey 0 down through the floor slab), `.` floor, space open (no floor slab: a drop to the storey below), `n e s w` a
-door-kind doorway, which must be on that side's border, and `T` a torch at 2.4 m (on a
-border wall it goes just inside the room). Legend actions: `wall [material]`, `floor`,
+door-kind doorway, which must be on that side's border, `T` a torch at 2.4 m (on a
+border wall it goes just inside the room), and `/` and `\` a 45° wall: always a pair, `//`
+or `\\`, a 1 m square cut along the diagonal the character draws, rock on the side whose
+neighbours (the cells above and beside the pair) are more wall, floor on the other, and
+an error when it can't tell. A staircase of pairs moving 2 columns a row is one straight
+45° wall; each pair is a `wedge_` prism of the `wall` material (remapped like walls),
+standing on the cell's floor slab. The legend action `diagonal DIR [material] [Y0 Y1]
+[SIDE]` (DIR `/` or `\`) is the same with any character and any extent: Y0 Y1 as `box`'s
+(default: the cell's floor, a pit's or lava's in one, an `open` cell's slab bottom, to
+the top), so besides rock it draws the 45° edges of pits and pools (`diagonal / floor
+-0.4 0, lava`: floor on one half, lava filling the other; `, pit` for a dry pit), shelves
+(`diagonal / cave-floor 0 0.4`), hanging rock (`diagonal \ rock 3 top`) and drops (`diagonal
+/ floor -0.5 0, open`, half a slab). Its solid half is the side whose neighbours are solid
+over the whole Y0..Y1 (a wall, a box, the floor slab up to its top, a pit's to its floor;
+a diagonal neighbour doesn't count), or SIDE (`ne`, `nw`, `se`, `sw`) for what the
+neighbours can't decide, such as a 2 × 2 m diamond column of four pairs with no core.
+Combined with `lava`, a full-height diagonal stands in the pit and the lava fills its open
+half (the caves' `<` and `>`). A pool's lava box runs under the floor half too, hidden
+under it; standing there doesn't burn, since liquid checks look just above the feet. Legend actions: `wall [material]`, `floor`,
 `open`, `box Y0 Y1 [material]` (solid from Y0 to Y1 above the storey's floor; `top` is the
 storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
 [material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
 `lava [DEPTH SURFACE]` (that cell's floor slab sinks to DEPTH below the floor, 0.4 by
-default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `torch Y`
+default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `pit
+[DEPTH]` (the same sunken slab, 0.4 by default and less than the slab's 0.5, with no
+lava: a dry dip, under a step so it is walked through), `torch Y`
 and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy and necromancer 1 each), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
@@ -1125,7 +1218,12 @@ is one monster at its centre, so `ii` centres one on a 1 m spot. Characters with
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
 under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
-numbered `_2` and on when a side has several, lower storey first, and its plug.
+numbered `_2` and on when a side has several, lower storey first, and its plug. A doorway
+is the border cells of one kind side by side, whatever their characters, so a river's is
+lava cells (`= door river, lava`) between bank cells (`R door river`); its middle lava
+width must be lava and the rest bank, so any river doorway meets any other (`- door stream,
+lava` and `S door stream` for a stream's). Wide, it is 14 columns on a north or south face
+and 7 rows on an east or west one, centred on a cell boundary.
 
 The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-end` (a
 niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
@@ -1134,8 +1232,45 @@ doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2
 rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
 bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
-up to it). Every piece must let the player walk between all its doorways (drops don't
-count), or the generator builds places that are a one-way trip.
+up to it); caves `cave` (wavy 45° walls, an octagonal pillar, an octagonal shelf and
+hanging rock, a lava pool against the rock and a dry pit, both with 45° shores), `lava-lake`
+(a causeway with 45° edges across lava, a bridge east) and
+`cave-passage` (a corridor at 45°, 2 × 2 cells), `grotto` (small, a diamond column),
+`cavern` (4 × 3: two pillars, a shelf, hanging rock), `lava-chasm` (a 3 m band of lava, a
+running jump or a 45° causeway) and `magma-pool` (an island on a causeway), and the cave
+connectors `cave-bend` and `cave-fork`; and the lava rivers (below): wide `river`,
+`river-ford` (bridged, doorways on both banks), `river-bend` and `river-cavern` (a room the
+river runs through, bridged), narrow `stream` and `stream-bend`, `river-narrows` (wide to
+narrow), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror.
+Every piece must let the player walk between all its doorways (drops don't
+count), or the generator builds places that are a one-way trip. `(check-kit)` checks it, for
+every block or a list of names: it builds each alone (`*level*` `:block`, `*check-block*`)
+and reports what's wrong (`block-problems`): ordinary doorways that don't reach each other,
+a doorway or bank that leads to no other doorway, a river end that doesn't join both banks,
+a monster that can't reach the first doorway. Leave passages at least 1.5 m wide: the nav
+grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 1 m gap
+beside a column had none.
+
+Caves are blueprints like the rest: rock is wall characters inside the rectangle (every
+`#` is rock under `remap wall rock`), 45° rock is `/` and `\` pairs, or `<` and `>` where it
+stands in lava, shelves are `box 0 H cave-floor`, low rock `box H top rock`, dips `pit` or
+`lava`, and each has 45° edges through `diagonal` with its heights. Every edge in every cave
+block runs at 0° or 45°. Their plans are drawn by `tools/cave_plans.py` (`tools/cave_plans.py
+NAME` redraws one, `--check` says which differ), one spec per block: the room's outline as
+the first open and first rock column at each row boundary (a line moving 2 columns makes a
+diagonal pair), then regions inside it (pools, pits, shelves, hanging rock, causeways),
+each with its own pair characters, rock in lava, and doorway strings; the header and legend
+stay hand-written in the blueprint, and the tool rewrites the rows after `plan 0`. A pair
+can't tell its side when both outer sides are other diagonals: move it, or give it a SIDE.
+So walls and pools are octagonal, not round, floors and ceilings stay flat and terraced,
+dips go no deeper than the slab (deeper hollows need the floor
+raised round them), their mouths are ordinary doorways on the grid, and each is one room
+for lighting: a passage that doubles back inside one block lights through the rock
+between, so keep a cave one open space. Shaped pools merge into fewer lava boxes than
+stepped ones (seed 11: 23 lava surfaces against 33, 3.0 ms a frame against 4.1, vsync off).
+A cave is 80 to 90 boxes and wedges, about four times a chamber: that many solids for collision, but drawn in the level's batches. Keep
+shelves clear of doorways: one 0.8 m shelf a column inside a doorway left 0.5 m of floor,
+too narrow for the player, and `check-reachable` found whole regions cut off.
 
 To walk the kit: `tools/hd '(progn (setf *level* :gallery) (reload-scene))'` lays every
 block out in two rows, corridors and stairs in front, rooms behind, each with one doorway
@@ -1147,8 +1282,11 @@ stands the player outside one. Upper storeys are only reachable by moving the pl
 
 The main menu's Start game builds one; `(setf *level* :generated)` and a reset do too
 (`generate-level`):
-it starts in a block tagged `start` (its monsters left out, the player and
-`*spawn-point*` at its centre), keeps a frontier of open doorways, and picks one at a time:
+it starts in a block tagged `start` (the player and `*spawn-point*` at its centre, and no
+monster spawns within `*start-clearance*`, 16 m, of it: a neighbour's monster looking
+through the start room's doorway charged the player the moment the level began;
+`*spawn-clearance*` holds the point while the level is built, and the spawn's random
+choice is still made, so a seed builds the same level), keeps a frontier of open doorways, and picks one at a time:
 from a room it adds a corridor or stair, from a corridor another corridor (less likely the
 longer the run, `*corridor-run*`) or a room, by weight, trying each of the block's
 doorways of the same kind turned to face it until one fits in free grid cells
@@ -1163,8 +1301,24 @@ warning. Two doorways that meet share one portal (`drop-portal` removes the othe
 the shader takes only 32. A stair still open when the rooms are in gets one more piece,
 so no stair ends in a plug.
 
+Rivers: a river is the blocks joined through `river` and `stream` doorways. The first river
+block comes in like any corridor or room, through an ordinary doorway (river pieces are
+tagged `river` as well as `corridor` or `room`, ends `river-end` and `room`), and starts a
+river with a target length of `*river-length*` blocks (5 to 9) shared by its arms. Its open
+river doorways are tried before any other (`next-door`): with pieces until the river has
+its length, then only ends (one river doorway and ordinary doorways onward), an end still
+tried ahead of a plug when no piece fits, and at the room quota every open arm gets its end.
+So an arm ends in an end block, in a join with another river doorway, or, if nothing fits,
+in a plug, and the dungeon carries on from the ends and the pieces' side doorways. After
+`*max-rivers*` (1) rivers, river blocks leave the ordinary choices. `*level-rivers*` holds
+the last level's (`river-pieces`, `river-target`, `river-ends`), the log line says how each
+ended, and `(level-map)` draws river blocks as `~`. A river's two banks meet only at its
+ends and crossings (fords, the cavern's bridge), so ends join both banks. On 20 seeds every
+level had one river of 7 to 11 blocks, and the player walked seed 11's 92 m along a bank.
+
 Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
-player must be able to walk from the spawn point to every placed block's doorways, on the
+player must be able to walk from the spawn point to every placed block's doorways (both
+banks of a river's: `doorway-probes`), on the
 nav grid with the player's size and step (`nav-reached`, which is both ways, since steps
 go up as well as down), and every creature must be able to walk to the spawn point at its
 own size and step from a cell its body fits where it lives (`stranded-creatures`). Each

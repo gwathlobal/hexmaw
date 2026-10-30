@@ -25,7 +25,8 @@ speed, :TEXTURE its surface, and :GLOW the colour of the lamps over it (NIL for 
 (defclass liquid ()
   ((kind :initarg :kind :reader liquid-kind)
    (bounds :initarg :bounds :reader liquid-bounds
-           :documentation "#(min-x min-y min-z max-x max-y max-z) as a solid's; max-y is the surface.")))
+           :documentation "#(min-x min-y min-z max-x max-y max-z) as a solid's; max-y is the surface.")
+   (glows :initform () :accessor liquid-glows :documentation "The lamps it hung over itself.")))
 
 (defvar *liquids* (make-array 0 :adjustable T :fill-pointer T)
   "Every liquid in the level. BUILD-LEVEL empties it.")
@@ -70,9 +71,10 @@ it (DAMAGE 0) the timer starts over, so a burn comes *LAVA-TICK* after stepping 
     (setf (liquid-clock liquid-surface) (mod (+ (liquid-clock liquid-surface) dt) 1000.0))))
 
 (defmethod render :before ((surface liquid-surface) (program shader-program))
-  (set-fog-uniforms program)
-  (setf (uniform program "surface_texture") 0)
-  (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0))
+  (when (first-this-frame-p program)
+    (set-fog-uniforms program)
+    (setf (uniform program "surface_texture") 0)
+    (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0)))
   (setf (uniform program "time") (float (liquid-clock surface) 0f0)))
 
 (define-class-shader (liquid-surface :fragment-shader)
@@ -99,8 +101,9 @@ void main(){
 CONTAINER: the volume, its surface and, if it glows, the lamps over it."
   (let* ((s (make-solid x0 y0 z0 x1 y1 z1))
          (w (- (aref s 3) (aref s 0))) (d (- (aref s 5) (aref s 2)))
-         (top (aref s 4)))
-    (vector-push-extend (make-instance 'liquid :kind kind :bounds s) *liquids*)
+         (top (aref s 4))
+         (liquid (make-instance 'liquid :kind kind :bounds s)))
+    (vector-push-extend liquid *liquids*)
     ;; On the automap, a thin slab at the surface.
     (add-map-piece container (// 'trial 'unit-cube)
                    (vec (/ (+ (aref s 0) (aref s 3)) 2) (- top 0.02) (/ (+ (aref s 2) (aref s 5)) 2))
@@ -114,17 +117,31 @@ CONTAINER: the volume, its surface and, if it glows, the lamps over it."
            container)
     (let ((glow (liquid-property kind :glow)))
       (when glow
-        ;; Lamps spaced along the pool's longer side, down its middle.
-        (let* ((along-x (<= d w))
+        ;; Lamps spaced along the pool's longer side, down its middle. An irregular pool
+        ;; is many boxes side by side, so a lamp nearer than the spacing to one already
+        ;; hung over this kind is left out, its colour added to that one's: every lamp
+        ;; sent costs every lit pixel, and lamps that close lit as one brighter lamp.
+        (let* ((spacing (liquid-property kind :glow-spacing))
+               (along-x (<= d w))
                (len (if along-x w d))
-               (n (max 1 (ceiling len (liquid-property kind :glow-spacing)))))
+               (n (max 1 (ceiling len spacing))))
           (dotimes (i n)
-            (let ((f (/ (+ i 0.5) n)))
-              (add-lamp (if along-x
-                            (vec (+ (aref s 0) (* f w)) (+ top *glow-height*) (/ (+ (aref s 2) (aref s 5)) 2))
-                            (vec (/ (+ (aref s 0) (aref s 3)) 2) (+ top *glow-height*) (+ (aref s 2) (* f d))))
-                        (apply #'vec glow) (liquid-property kind :glow-radius)
-                        :flicker (liquid-property kind :glow-flicker)))))))))
+            (let* ((f (/ (+ i 0.5) n))
+                   (at (if along-x
+                           (vec (+ (aref s 0) (* f w)) (+ top *glow-height*) (/ (+ (aref s 2) (aref s 5)) 2))
+                           (vec (/ (+ (aref s 0) (aref s 3)) 2) (+ top *glow-height*) (+ (aref s 2) (* f d))))))
+              (let ((near NIL) (nearest spacing))
+                (loop for other across *liquids*
+                      when (eq (liquid-kind other) kind)
+                        do (dolist (lamp (liquid-glows other))
+                             (let ((distance (vdistance (location lamp) at)))
+                               (when (< distance nearest)
+                                 (setf near lamp nearest distance)))))
+                (if near
+                    (nv+ (color near) (apply #'vec glow))
+                    (push (add-lamp at (apply #'vec glow) (liquid-property kind :glow-radius)
+                                    :flicker (liquid-property kind :glow-flicker))
+                          (liquid-glows liquid)))))))))))
 
 (defun add-lava (container x0 z0 x1 z1 &key (floor 0.0)
                                             (depth hexmaw.blueprint:*lava-depth*)

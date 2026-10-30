@@ -63,12 +63,15 @@ upstairs."
         (fill-pointer *map-blocks*) 0
         *level-doorways* ())
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0)
-  (ecase *level*
-    (:test (build-test-level container))
-    (:gallery (build-kit-gallery container))
-    (:generated (if *pending-load*
-                    (generate-saved-level container *pending-load*)
-                    (generate-level container))))
+  (with-block-batches (container)
+    (ecase *level*
+      (:test (build-test-level container))
+      (:gallery (build-kit-gallery container))
+      (:block (build-check-block container))
+      (:generated (if *pending-load*
+                      (generate-saved-level container *pending-load*)
+                      (generate-level container)))))
+  (index-solids)
   ;; Last, once every solid, room and portal is in.
   (link-rooms)
   (build-nav-grid)

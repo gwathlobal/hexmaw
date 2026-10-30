@@ -7,7 +7,10 @@
 ;;;  - Metres, +Y up, the block's origin at its centre on the floor. On the grid, a block
 ;;;    is whole 4 m cells across and whole 5 m storeys tall.
 ;;;  - Every mesh object is drawn and its bounding box is a solid, unless its name
-;;;    starts with "deco_" (drawn, no collision) or "plug_" (see below).
+;;;    starts with "deco_" (drawn, no collision) or "plug_" (see below). One named
+;;;    "wedge_<n>_..." is that box with a vertical corner cut away along the diagonal
+;;;    (n: 1 north-east, 2 north-west, 3 south-west, 4 south-east, as the block lies),
+;;;    a 45° wall when the box is square; the mesh must be that shape.
 ;;;  - Empties named "connector_<rest>" mark doorways, on the block's outer face. A
 ;;;    connector faces out through the face it lies on. <rest> starting with a kind and
 ;;;    "_" (connector_narrow_north) gives its kind, else it's a door.
@@ -30,6 +33,12 @@
 (defun gltf-node-transform (node)
   "NODE's transform within its file, parents included."
   (org.shirakumo.fraf.trial.gltf::gltf-node-transform* node))
+
+(defun wedge-name-cut (name)
+  "The corner a piece named wedge_<n>_... has cut away (1 to 4), or 0."
+  (if (and (< 7 (length name)) (string-equal "wedge_" name :end2 6) (digit-char-p (char name 6)))
+      (digit-char-p (char name 6))
+      0))
 
 (defun prefixp (prefix string)
   (and (<= (length prefix) (length string))
@@ -142,12 +151,14 @@
                             for data in (gltf-mesh-data mesh)
                             for bounds = (primitive-bounds primitive transform)
                             for piece = (list :name name
+                                              :mesh data
                                               :vertex-array (make-vertex-array data NIL)
                                               :color (primitive-color primitive)
                                               :material (primitive-material-name primitive)
                                               :transform transform
                                               :bounds bounds
-                                              :solid (not (or (prefixp "deco_" name) (prefixp "lava_" name))))
+                                              :solid (not (or (prefixp "deco_" name) (prefixp "lava_" name)))
+                                              :cut (wedge-name-cut name))
                             do (setf low (vmin low (first bounds)) high (vmax high (second bounds)))
                                (cond ((prefixp "plug_" name)
                                       (push (cons (subseq name (length "plug_")) piece) plugs))
@@ -260,33 +271,122 @@ its origin and its quarter turns."
   "Every doorway of the blocks placed in the level, plugged or not. BUILD-LEVEL empties it,
 and CHECK-REACHABLE walks to each.")
 
+;;; Batching. Every entity costs about 20 GL calls a frame whatever its size, and a
+;;; jagged block is dozens of boxes, so while a level is built (WITH-BLOCK-BATCHES) the
+;;; pieces don't become entities: their triangles are gathered in world space, one batch
+;;; per look (textures and colour), and each batch is drawn as one BLOCK-PIECE. The
+;;; greybox shader works in world space, so nothing shows the difference.
+
+(defvar *block-batches* NIL
+  "While a level is built, the batches ENTER-PIECE adds to: (textures colour) -> a list
+of (vertex-data faces), newest first. NIL enters each piece on its own.")
+
+(defmacro with-block-batches ((container) &body body)
+  "Run BODY with the block pieces it places batched, then enter the batches into CONTAINER."
+  `(let ((*block-batches* (make-hash-table :test 'equal)))
+     (multiple-value-prog1 (progn ,@body)
+       (flush-block-batches ,container))))
+
+(defun batch-piece (piece textures color world rotation)
+  "Add PIECE's triangles, placed by WORLD and turned by ROTATION, to their batch."
+  (let* ((tf (getf piece :transform))
+         (mesh (getf piece :mesh))
+         (placed (transform (funcall world (tlocation tf)) (vcopy (tscaling tf)) (q* rotation (trotation tf))))
+         (attributes (vertex-attributes mesh))
+         (stride (vertex-attribute-stride mesh))
+         (location (vertex-attribute-offset 'location mesh))
+         (normal (and (member 'normal attributes) (vertex-attribute-offset 'normal mesh)))
+         (data (copy-seq (vertex-data mesh)))
+         (point (vec3)))
+    (loop for i from 0 below (length data) by stride
+          do (flet ((turn (offset place)
+                      (setf (vx point) (aref data (+ i offset))
+                            (vy point) (aref data (+ i offset 1))
+                            (vz point) (aref data (+ i offset 2)))
+                      (let ((p (if place (t*p placed point) (q* (trotation placed) point))))
+                        (setf (aref data (+ i offset)) (vx p)
+                              (aref data (+ i offset 1)) (vy p)
+                              (aref data (+ i offset 2)) (vz p)))))
+               (turn location T)
+               (when normal (turn normal NIL))))
+    (push (list data (faces mesh) attributes)
+          (gethash (list textures (list (vx color) (vy color) (vz color) (vw color))) *block-batches*))))
+
+(defun flush-block-batches (container)
+  "Enter each batch of *BLOCK-BATCHES* into CONTAINER as one BLOCK-PIECE, and empty it."
+  (maphash (lambda (key parts)
+             (destructuring-bind (textures (r g b a)) key
+               (let* ((parts (reverse parts))
+                      (attributes (third (first parts)))
+                      (stride (loop for a in attributes sum (vertex-attribute-size a)))
+                      (data (make-array (reduce #'+ parts :key (lambda (p) (length (first p))))
+                                        :element-type 'single-float))
+                      (faces (make-array (reduce #'+ parts :key (lambda (p) (length (second p))))
+                                         :element-type '(unsigned-byte 32)))
+                      (d 0) (f 0))
+                 (loop for (part-data part-faces) in parts
+                       for base = (floor d stride)
+                       do (replace data part-data :start1 d)
+                          (loop for index across part-faces
+                                do (setf (aref faces f) (+ base index)) (incf f))
+                          (incf d (length part-data)))
+                 (enter (make-instance 'block-piece
+                                       :vertex-array (make-vertex-array
+                                                      (make-instance 'mesh-data :vertex-data data :faces faces
+                                                                                :vertex-form :triangles
+                                                                                :vertex-attributes attributes)
+                                                      NIL)
+                                       :color (vec4 r g b a)
+                                       :face-textures textures)
+                        container))))
+           *block-batches*)
+  (clrhash *block-batches*))
+
 (defun enter-piece (piece container world rotation)
   "Enter PIECE of a block, its points placed by WORLD and turned by ROTATION, into
-CONTAINER, and add its solid to *SOLIDS*."
+CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*."
   (let* ((tf (getf piece :transform))
          (textures (surface-textures (getf piece :material)))
-         (location (funcall world (tlocation tf)))
-         (orientation (q* rotation (trotation tf)))
-         (scaling (vcopy (tscaling tf))))
-    ;; Its twin on the automap, in the block being placed (automap.lisp).
-    (add-map-piece container (getf piece :vertex-array) location orientation scaling
+         (color (if textures (vec4 1 1 1 1) (getf piece :color)))
+         (cut (or (getf piece :cut) 0)))
+    ;; Its twin on the automap, in the block being placed (automap.lisp). Never batched:
+    ;; the map shows a block's pieces only once it's revealed.
+    (add-map-piece container (getf piece :vertex-array)
+                   (funcall world (tlocation tf)) (q* rotation (trotation tf)) (vcopy (tscaling tf))
                    (funcall world (first (getf piece :bounds))) (funcall world (second (getf piece :bounds)))
-                   :surface (getf piece :material) :color (getf piece :color))
-    (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
-                                       :color (if textures (vec4 1 1 1 1) (getf piece :color))
-                                       :face-textures textures
-                                       :location location
-                                       :orientation orientation
-                                       :scaling scaling)
-           container)
+                   :surface (getf piece :material) :color (getf piece :color)
+                   :cut (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf)))))
+    ;; A block read before batching existed (*BLOCKS* outlives reloads) has no :MESH.
+    (if (and *block-batches* (getf piece :mesh))
+        (batch-piece piece textures color world rotation)
+        (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
+                                           :color color
+                                           :face-textures textures
+                                           :location (funcall world (tlocation tf))
+                                           :orientation (q* rotation (trotation tf))
+                                           :scaling (vcopy (tscaling tf)))
+               container))
     (when (getf piece :solid)
       (destructuring-bind (lo hi) (getf piece :bounds)
         (let* ((a (funcall world lo)) (b (funcall world hi))
-               (min (vmin a b)) (max (vmax a b)))
-          (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)) *solids*))))))
+               (min (vmin a b)) (max (vmax a b))
+               (cut (or (getf piece :cut) 0)))
+          (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)
+                                          (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf)))))
+                              *solids*))))))
+
+(defun turn-cut (cut rotation)
+  "Wedge corner CUT (1 to 4) as it lies once turned by ROTATION, a quarter turn about Y."
+  (multiple-value-bind (east south) (case cut (1 (values 1 -1)) (2 (values -1 -1)) (3 (values -1 1)) (4 (values 1 1)))
+    (let ((d (q* rotation (vec east 0 south))))
+      (corner-cut (< 0 (vx d)) (< 0 (vz d))))))
 
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1))
   "What a block's spawn_any picks from, each monster with its weight.")
+
+(defvar *spawn-clearance* NIL
+  "(point . metres) while a level is generated: no block spawns a monster that close to
+the point, the player's start.")
 
 (defvar *block-random* (make-random-state T)
   "Picks among a spawn's choices. The generator binds it to its own, seeded, state.")
@@ -332,13 +432,17 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
           (let ((w (world p)))
             (add-torch container (vx w) (vy w) (vz w))))
         (dolist (spawn (and spawns (getf def :spawns)))
+          ;; The choice is made even for a spawn left out, so a seed builds the same level.
           (let* ((kind (spawn-choice (getf spawn :kind)))
-                 (class (find-symbol (string-upcase kind) '#:hexmaw)))
-            (if (and class (find-class class NIL) (subtypep class 'creature))
-                (spawn-creature (make-instance class :location (world (getf spawn :position))
+                 (class (find-symbol (string-upcase kind) '#:hexmaw))
+                 (at (world (getf spawn :position))))
+            (cond
+              ((and *spawn-clearance* (< (vdistance at (car *spawn-clearance*)) (cdr *spawn-clearance*))))
+              ((and class (find-class class NIL) (subtypep class 'creature))
+                (spawn-creature (make-instance class :location at
                                                      :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))
-                                container)
-                (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind))))
+                                container))
+              (T (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind)))))
         (loop for c in (getf def :connectors)
               for portal in portals
               collect (let ((plugs (getf c :plugs)))

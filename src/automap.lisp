@@ -104,17 +104,24 @@ block's bounds start under its floor slab and end on its ceiling slab."
 (define-shader-entity map-piece (vertex-entity colored-entity transformed-entity)
   ((map-block :initarg :map-block :initform NIL :reader map-block)
    (low :initarg :low :initform (vec 0 0 0) :reader piece-low :documentation "Min corner of its box, in world space.")
-   (high :initarg :high :initform (vec 0 0 0) :reader piece-high))
+   (high :initarg :high :initform (vec 0 0 0) :reader piece-high)
+   (cut :initarg :cut :initform (vec 0 0 0) :reader piece-cut
+        :documentation "A wedge's cut-away corner as (east south 1), 0 or 1 each; all 0 for a box."))
   (:documentation "A box of the level as the automap draws it."))
 
 (defun add-map-piece (container vertex-array location orientation scaling low high
-                      &key surface (color (vec 0.6 0.6 0.6)))
+                      &key surface (color (vec 0.6 0.6 0.6)) (cut 0))
   "Enter a map twin of a piece of level geometry into CONTAINER, belonging to *MAP-BLOCK*.
-LOW and HIGH are the corners of its box in world space. SURFACE (a surface or liquid name)
-picks its colour from *MAP-COLORS*, else COLOR."
+LOW and HIGH are the corners of its box in world space; CUT is the corner a wedge has cut
+away as it lies (1 to 4, see MAKE-SOLID), or 0 for a box. SURFACE (a surface or liquid
+name) picks its colour from *MAP-COLORS*, else COLOR."
   (enter (make-instance 'map-piece :vertex-array vertex-array
                                    :map-block *map-block*
                                    :low (vmin low high) :high (vmax low high)
+                                   :cut (if (= 0 cut)
+                                            (vec 0 0 0)
+                                            (multiple-value-bind (east south) (cut-sides cut)
+                                              (vec east south 1)))
                                    :color (map-color surface color)
                                    :location (vcopy location)
                                    :orientation (qcopy orientation)
@@ -141,7 +148,8 @@ picks its colour from *MAP-COLORS*, else COLOR."
     (setf (uniform program "ghost_stipple") (max 1 (round *map-ghost-stipple*)))
     (setf (uniform program "map_eye") *map-eye*)
     (setf (uniform program "piece_low") (piece-low piece))
-    (setf (uniform program "piece_high") (piece-high piece))))
+    (setf (uniform program "piece_high") (piece-high piece))
+    (setf (uniform program "piece_cut") (piece-cut piece))))
 
 (define-class-shader (map-piece :fragment-shader)
   "in vec3 v_world_position;
@@ -150,6 +158,7 @@ uniform mat4 projection_matrix;
 uniform vec3 map_eye;
 uniform vec3 piece_low;
 uniform vec3 piece_high;
+uniform vec3 piece_cut;
 uniform vec3 ghost_color;
 uniform int ghost_stipple;
 uniform float focus_storey;
@@ -179,13 +188,16 @@ void main(){
   // Through the cut, the inside of a box: draw it as the cut face, and at the cut plane it
   // is seen through rather than where it lies, so nothing inside the box (the floor a
   // pillar stands on) can lie level with it and flicker. Only where the line of sight
-  // crosses the plane over the box's own top: elsewhere the inside is seen through a side,
-  // which hides it. A box under the cut has no inside to see, and seen from under the plane
-  // there's no cut face.
+  // crosses the plane over the piece's own top (a box's, or a wedge's but the corner it has
+  // cut away): elsewhere the inside is seen through a side, which hides it. A piece under the
+  // cut has no inside to see, and seen from under the plane there's no cut face.
   if(!gl_FrontFacing){
     if(cut < piece_high.y && cut < map_eye.y){
       vec3 q = map_eye + (p - map_eye) * ((cut - map_eye.y) / (p.y - map_eye.y));
-      if(all(greaterThanEqual(q.xz, piece_low.xz - 0.001)) && all(lessThanEqual(q.xz, piece_high.xz + 0.001))){
+      vec2 uv = (q.xz - piece_low.xz) / max(piece_high.xz - piece_low.xz, vec2(0.0001));
+      bool on_top = all(greaterThanEqual(uv, vec2(-0.001))) && all(lessThanEqual(uv, vec2(1.001)))
+                    && (piece_cut.z == 0.0 || 0.999 <= abs(uv.x - piece_cut.x) + abs(uv.y - piece_cut.y));
+      if(on_top){
         vec4 clip = projection_matrix * view_matrix * vec4(q, 1.0);
         gl_FragDepth = clamp(clip.z / clip.w * 0.5 + 0.5, 0.0, 1.0);
       }

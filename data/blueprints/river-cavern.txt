@@ -1,0 +1,38 @@
+; A cavern with a wide lava river through it, a bridge, doorways onto both banks.
+; Its plan is drawn by tools/cave_plans.py.
+cells 3 4
+tags room river
+weight 2
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ lava
+  ( diagonal / floor -0.4 0, lava    ; a shore: floor on one half, lava on the other
+  ) diagonal \ floor -0.4 0, lava
+  R door river                       ; a wide river's doorway: bank
+  = door river, lava                 ; and lava
+  i spawn any east
+  j spawn any west
+
+plan 0
+#########RRRR======RRRR#
+#######//....~~~~~~....#
+#####//......~~~~~~....#
+###//........~~~~~~....#
+#//..ii....((~~~~((....#
+w..........~~~~~~......#
+w..........~~~~~~......#
+w..........~~~~~~......#
+#..........))~~~~))....#
+#\\..........~~~~~~....e
+###\\........~~~~~~....e
+#####\\................e
+#######\\..............#
+#########....~~~~~~.jj.#
+#########....~~~~~~....#
+#########....~~~~~~....#
+#########RRRR======RRRR#

@@ -66,6 +66,7 @@
       (setf (vx clear) (vx color) (vy clear) (vy color) (vz clear) (vz color) (vw clear) 1.0))))
 
 (defmethod render :before ((main main) target)
+  (incf *render-frame*)
   ;; The nearest lights, for every lit shader this frame (lights.lisp). The map draws nothing lit.
   (unless (eq *game-state* :map)
     (gather-lights)))

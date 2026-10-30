@@ -1,0 +1,44 @@
+; A natural cavern with every edge at 0 or 45 degrees: wavy rock walls (/ and \ pairs,
+; < and > where the rock stands in lava), a lava pool against the north-west rock with
+; 45-degree shores ( ), a dry pit [ ], an octagonal pillar, an octagonal shelf { } and
+; octagonal rock hanging from the ceiling A B. Every # is rock (remap wall rock).
+cells 3 3
+tags room
+weight 2
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ lava
+  < diagonal /, lava                 ; 45-degree rock with lava in its open half
+  > diagonal \, lava
+  ( diagonal / floor -0.4 0, lava    ; a pool's shore: floor on one half, lava on the other
+  ) diagonal \ floor -0.4 0, lava
+  o pit                              ; dry, 0.4 m down
+  [ diagonal / floor -0.4 0, pit     ; the pit's edge
+  ] diagonal \ floor -0.4 0, pit
+  , box 0 0.4 cave-floor             ; a shelf, one step up
+  { diagonal / cave-floor 0 0.4      ; the shelf's edge
+  } diagonal \ cave-floor 0 0.4
+  v box 3 top rock                   ; rock hanging from the 4 m ceiling to 3 m
+  A diagonal / rock 3 top            ; its edge
+  B diagonal \ rock 3 top
+  i spawn any south
+
+plan 0
+########Tnnnnnn#########
+#####//..........\\#####
+#####........{{,,}}\\###
+###<<~~~~~)).,,,,,,..###
+#<<~~~~~~~~~.}},,{{..\\#
+w..))~~~~~~~...AAvvBB..e
+w....))~~~((ii.vvvvvv..e
+w....[[oo]]....BBvvAA..e
+#\\..oooooo//##\\....//#
+###..]]oo[[######..//###
+###\\......\\##//..#####
+#####\\..........//#####
+#########ssssssT########

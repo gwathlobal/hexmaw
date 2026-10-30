@@ -1,0 +1,25 @@
+; A natural passage running at 45 degrees from the north-west doorway to the south-east
+; one, low in the middle.
+cells 2 2
+tags corridor
+ceiling 3
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  , box 0 0.4 cave-floor
+  v box 2.2 top rock
+
+plan 0
+#nnnnnn#########
+#......\\#######
+#\\......\\#####
+###\\..vv..\\###
+#####\\.vv...\\#
+#######\\......#
+#########..,,..#
+#########......#
+#########ssssss#

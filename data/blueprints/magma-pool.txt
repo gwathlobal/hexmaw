@@ -1,0 +1,32 @@
+; A round lava pool with an island, reached by a causeway from the north.
+; Its plan is drawn by tools/cave_plans.py.
+cells 3 3
+tags room
+weight 1
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ lava
+  ( diagonal / floor -0.4 0, lava    ; a shore: floor on one half, lava on the other
+  ) diagonal \ floor -0.4 0, lava
+  < diagonal /, lava                 ; 45-degree rock standing in lava
+  > diagonal \, lava
+  i spawn any north
+
+plan 0
+#########nnnnnn#########
+#####//..........\\#####
+###//..............\\###
+#//....((~~..~~))....\\#
+#....((~~~~..~~~~))....#
+w....~~~~((..))~~~~....e
+w....~~~~..ii..~~~~....e
+w....~~~~))..((~~~~....e
+#\\..))~~~~~~~~~~((..//#
+###\\..))~~~~~~((..//###
+#####\\..........//#####
+#######\\......//#######
+########################

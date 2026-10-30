@@ -1,0 +1,5 @@
+THE SURFACE: the natural ROCK WALL of a cave hewn by nature, not by masons, as in the caverns of Hexen, Heretic or Daggerfall.
+- No courses, no blocks, no mortar, no straight lines: one continuous face of rough, fractured bedrock, broken into irregular angular facets and ledges of many sizes, with jagged cracks and fissures running in every direction.
+- Dark grey-brown rock with a faint warm cast, a few facets a little lighter or redder, others darker; small pits, chips and veins of a slightly different stone.
+- The deepest cracks near-black. Somewhat darker than a dungeon wall, so the cave feels heavier.
+- Evenly spread over the whole image, with no big feature at the centre, so it tiles.
