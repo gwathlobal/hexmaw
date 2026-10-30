@@ -56,6 +56,9 @@ A file the game reads at run time goes through `(data-path "sprites/...")`, a pa
 development (the executable's folder in a build), and ASDF is gone from the binary. In the
 binary blocks are never rebuilt (`hexmaw.blueprint:*build-blocks*` is NIL).
 
+The binary is a release version: the build hook sets `*debug-version*` (dev.lisp, T in
+development) to NIL, which hides the main menu's Debug level and Settings' Debug minimap.
+
 ## Live reload: how changes reach the game
 
 A PostToolUse hook (`.claude/settings.json` → `tools/claude-reload-hook.sh`) reloads
@@ -183,6 +186,39 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   instead; 0, the default, turns them off. Torches stop flickering while the world is
   frozen. Rooms keep light from going through walls (`src/rooms.lisp`, below), but there
   are no shadows within a room. Effects and the HUD stay unlit.
+- `src/automap.lisp`: the automap's model. Every box the level draws gets a `map-piece` twin
+  (`add-map-piece`, from `add-box`, `enter-piece` and `add-liquid`) sharing its vertex array
+  and transform, drawn by a map shader: unlit, each storey cut open `*map-cut-height*` (2 m)
+  above its floor (`floor((y + 0.49) / 5)` decides a point's storey, so a wall's top under the
+  slab above is its own storey's), the storeys above the shown one (`*map-focus-storey*`)
+  left out and those below darkened by `*map-depth-fade*` per storey. Cull face is off: the
+  inside of a cut box shows its back faces, drawn in `*map-cut-color*` as the cut face, and
+  at the depth of the cut plane they're seen through (`gl_FragDepth`, from `*map-eye*` and
+  the piece's world box, `piece-low`/`piece-high`), so the floor a pillar stands on can't
+  flicker against it. The storey just above the shown one is a ghost: its outside only, in
+  `*map-ghost-color*` on 1 pixel in `*map-ghost-stipple*` (no blending, so no draw order).
+  Colours come from `*map-colors*` by surface. `place-block` makes a `map-block` (bounds,
+  `revealed`) in `*map-blocks*` (placement order; `build-level` empties it) and binds
+  `*map-block*` so its pieces and plugs belong to it; pieces of no block (the test level's
+  boxes, the gallery's ground) always show. `*map-debug*` is the Settings checkbox;
+  `map-debug-p` is it in a debug version only.
+- `src/map-view.lisp`: the automap screen. M in play sets `*game-state*` `:map` (frozen) and
+  the map view's tick swaps the scene's camera for a `map-camera` orbiting `map-target`
+  (`map-yaw`, player convention, so the player's facing is up the screen when it opens;
+  `map-pitch`; `map-distance`); Esc or M closes. Trial draws what the active camera's
+  `in-view-p` accepts, so under the map camera only `map-drawn-p` things draw (map pieces of
+  revealed blocks, `map-overlay`s), and the player's camera never draws map pieces or
+  overlays. Overlays are pushed onto the near plane in their vertex shader, so they're on
+  top whatever the draw order: the player's arrow, the hint line and, with the debug
+  minimap, creature markers (`map-markers`, one entity drawing a cube per creature) and
+  block names (`map-label`, projected through the camera's `view-projection` each tick).
+  The tick also reveals the block the player stands in (`reveal-map-at`). `reset-run`
+  clears the reveals; a save keeps them (`:map`, block indices). Controls: left drag turns
+  and tilts, right drag pans, wheel zooms; WASD pan, Q/E turn, R/F tilt, +/- zoom, Page
+  Up/Down or Shift+wheel change the storey (`step-map-storey`, within the explored range,
+  `map-storey-range`), Space re-centres on the player. The hint line says when there's more
+  above or below. To drive it:
+  `(game (open-map))`, then `(map-camera *map-view*)`'s accessors and `*map-focus-storey*`.
 - `src/rooms.lisp`: rooms and portals, so light stays in its room. A room (`add-room`) is a
   box of air, its walls, floor and ceiling outside it; a portal (`add-portal`) is a box
   joining two rooms, a doorway through a wall's thickness or a flat opening. `build-level`
@@ -397,7 +433,7 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   on every screen, counting frames in its render and updating every `*fps-interval*`.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
-  (`:title`, `:playing`, `:paused`, defined in creature.lisp) decides which is up;
+  (`:title`, `:playing`, `:paused`, `:map`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
@@ -413,8 +449,10 @@ no `vec`/`v+`/`list` per frame. Mutate existing vectors with `(setf (vx v) ...)`
   one row is lit at a time. `panel-width` is the column's width (`*menu-width*`; the slot
   panels' is wider, for their labels).
   Settings (`open-settings`, on both menus) covers the menu it came from while
-  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has one
-  option so far, Show FPS (`*show-fps*`, in memory only, kept across reloads).
+  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Show
+  FPS (`*show-fps*`, in memory only, kept across reloads) and, in a debug version
+  (`*debug-version*`), Debug minimap (`*map-debug*`: the automap shows every block, creature
+  markers and block names). The main menu's Debug level is also debug-version only.
   Load game (both menus) and Save game (the pause menu, on a generated level only) cover it
   the same way while `*slot-menu*` is `:load` or `:save`: a row per slot in `*save-slots*`
   (1 to 3, then the quicksave), labelled by `slot-info`, and Back (`close-slot-menu`). After
@@ -1136,8 +1174,8 @@ Controls: click the window to capture the mouse, Esc to pause (release the mouse
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands (or the mouse
 wheel to cycle them), left click to
-attack (swing, or cast the bolt), F5 to quicksave and F9 to quickload (generated levels
-only), F12 for a screenshot.
+attack (swing, or cast the bolt), M for the automap (see `src/map-view.lisp`), F5 to
+quicksave and F9 to quickload (generated levels only), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,

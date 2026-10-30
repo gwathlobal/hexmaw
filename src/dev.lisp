@@ -9,6 +9,9 @@
 (defvar *game-thread* NIL)
 (defvar *render-pass* NIL "The pass the game world draws into.")
 (defvar *output-pass* NIL "The last pass, what reaches the screen: the world with the menus over it.")
+(defvar *debug-version* T
+  "True in development: the main menu offers the debug level and Settings the debug
+minimap. The standalone build (dist.lisp) sets it to NIL, a release version.")
 
 (defun root ()
   "The project folder, or the executable's in a standalone build (dist.lisp)."

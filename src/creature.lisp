@@ -44,8 +44,9 @@ leaves the player room to back out of the blow during the wind-up.")
 (defvar *player* NIL "The player in the current scene.")
 
 (defvar *game-state* :title
-  "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING or
-:PAUSED. Menus (menu.lisp) change it; anything but :PLAYING freezes the world.")
+  "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING,
+:PAUSED or :MAP (the automap, map-view.lisp). Menus (menu.lisp) change it; anything but
+:PLAYING freezes the world.")
 
 (defvar *level* :test
   "Which level BUILD-LEVEL (level.lisp) builds: :TEST, the greybox test level where the

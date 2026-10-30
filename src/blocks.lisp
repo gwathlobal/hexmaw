@@ -263,14 +263,21 @@ and CHECK-REACHABLE walks to each.")
 (defun enter-piece (piece container world rotation)
   "Enter PIECE of a block, its points placed by WORLD and turned by ROTATION, into
 CONTAINER, and add its solid to *SOLIDS*."
-  (let ((tf (getf piece :transform))
-        (textures (surface-textures (getf piece :material))))
+  (let* ((tf (getf piece :transform))
+         (textures (surface-textures (getf piece :material)))
+         (location (funcall world (tlocation tf)))
+         (orientation (q* rotation (trotation tf)))
+         (scaling (vcopy (tscaling tf))))
+    ;; Its twin on the automap, in the block being placed (automap.lisp).
+    (add-map-piece container (getf piece :vertex-array) location orientation scaling
+                   (funcall world (first (getf piece :bounds))) (funcall world (second (getf piece :bounds)))
+                   :surface (getf piece :material) :color (getf piece :color))
     (enter (make-instance 'block-piece :vertex-array (getf piece :vertex-array)
                                        :color (if textures (vec4 1 1 1 1) (getf piece :color))
                                        :face-textures textures
-                                       :location (funcall world (tlocation tf))
-                                       :orientation (q* rotation (trotation tf))
-                                       :scaling (vcopy (tscaling tf)))
+                                       :location location
+                                       :orientation orientation
+                                       :scaling scaling)
            container)
     (when (getf piece :solid)
       (destructuring-bind (lo hi) (getf piece :bounds)
@@ -301,8 +308,10 @@ CONTAINER, and add its solid to *SOLIDS*."
 seen from above. Enters its pieces into CONTAINER, adds its solids to *SOLIDS*, its room
 and doorway portals, its torches, and spawns its monsters unless SPAWNS is NIL. Its
 doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNECTOR."
-  (let ((def (find-block name))
-        (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0)))))
+  (let* ((def (find-block name))
+         (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0))))
+         (*map-block* (multiple-value-call #'add-map-block name (block-world-bounds name at turns)))
+         (map-block *map-block*))
     (flet ((world (point) (nv+ (turn-point point turns) at)))
       ;; The whole block is one room, walls and all, and its doorways are portals.
       (multiple-value-bind (low high) (block-world-bounds name at turns)
@@ -341,8 +350,10 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
                                               :kind (getf c :kind) :storey (getf c :storey) :portal portal
                                               :plug (when plugs
                                                       (lambda (container)
-                                                        (dolist (piece plugs)
-                                                          (enter-piece piece container #'world rotation)))))
+                                                        ;; Sealed later, but still part of this block's map.
+                                                        (let ((*map-block* map-block))
+                                                          (dolist (piece plugs)
+                                                            (enter-piece piece container #'world rotation))))))
                                *level-doorways*))))))))
 
 (defun add-doorway-portal (position direction &optional (kind "door"))

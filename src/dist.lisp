@@ -8,7 +8,9 @@
 
 (deploy:define-hook (:build hexmaw) ()
   ;; The blocks were built before the dump; the blueprints aren't shipped.
-  (setf hexmaw.blueprint:*build-blocks* NIL))
+  (setf hexmaw.blueprint:*build-blocks* NIL)
+  ;; A build is a release version: no debug level or debug minimap.
+  (setf *debug-version* NIL))
 
 (deploy:define-hook (:boot hexmaw) ()
   ;; Found when the image was built, on the build machine; find it again on the player's.
