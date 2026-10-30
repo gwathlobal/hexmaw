@@ -17,6 +17,7 @@
                (:file "creature")
                (:file "flyer")
                (:file "necromancer")
+               (:file "ogre")
                (:file "blocks")
                (:file "fx")
                (:file "lights")

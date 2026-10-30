@@ -6,7 +6,7 @@ storeys 2
 tags room
 weight 1
 legend
-  i spawn any south
+  i spawn any-ogre south
   a spawn acolyte south
   ^ stairs north 0 5
 

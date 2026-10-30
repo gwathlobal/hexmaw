@@ -283,22 +283,30 @@ On a step the eye keeps its height and eases to the new one."
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
     (place-camera player)))
 
-(defun hurt-player (player amount from &key (shove T))
+(defun shove-player (player from speed &optional lift)
+  "Push PLAYER away from point FROM at SPEED m/s, and with LIFT, up at that many m/s."
+  (let* ((feet (feet player))
+         (vel (velocity player))
+         (speed (float speed 0f0))
+         (dx (- (vx feet) (vx from)))
+         (dz (- (vz feet) (vz from)))
+         (len (sqrt (+ (* dx dx) (* dz dz)))))
+    (when (< 1f-4 len)
+      (incf (vx vel) (* speed (/ dx len)))
+      (incf (vz vel) (* speed (/ dz len))))
+    (when lift
+      (setf (vy vel) (max (vy vel) (float lift 0f0))))))
+
+(defun hurt-player (player amount from &key (shove T) lift)
   "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
-from FROM and hit-stop. Without SHOVE (a burn) only the flash. At zero health the run
-starts over."
+from FROM and hit-stop. SHOVE is T for *PLAYER-KNOCKBACK*, a speed in m/s, or NIL (a
+burn: only the flash). LIFT, in m/s, also throws the player up off their feet, where a
+shove carries much further than on the ground. At zero health the run starts over."
   (when (< 0 (health player))
     (decf (health player) amount)
     (setf (pain player) *pain-time*)
     (when shove
-      (let* ((feet (feet player))
-             (vel (velocity player))
-             (dx (- (vx feet) (vx from)))
-             (dz (- (vz feet) (vz from)))
-             (len (sqrt (+ (* dx dx) (* dz dz)))))
-        (when (< 1f-4 len)
-          (incf (vx vel) (* *player-knockback* (/ dx len)))
-          (incf (vz vel) (* *player-knockback* (/ dz len)))))
+      (shove-player player from (if (eq shove T) *player-knockback* shove) lift)
       (hit-stop))
     (when (<= (health player) 0)
       ;; No death screen yet. Not now: this runs inside a creature's tick, and

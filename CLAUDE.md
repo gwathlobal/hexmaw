@@ -267,6 +267,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   current one, so `attack` runs any of them, and `release-attack` (what lands on the hit
   frame), `face-attack-target` (what it turns to through the wind-up) and `hunt-from-range`
   are generics with the caster's behaviour as the default.
+- `src/ogre.lisp`: the `ogre`, the big one (2.7 m, `body-radius` 1.0), which leaps and pushes
+  the player around. See "The ogre" under "Creature movement" below.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
 - `src/blueprint.lisp`: builds blocks from text blueprints (`data/blueprints/*.txt`), in its own
@@ -520,7 +522,13 @@ To test movement without a mouse or keyboard (in play, not on a menu), hold keys
 (`*nav-cell*`), measured a tile of `*nav-tile*` cells at a time against only the solids
 near it, and records for each its floor height, headroom and clearance (the widest
 body that fits, to 0.125 m, up to 2 m; solids less than 0.45 m above the floor don't count,
-so steps aren't walls). A creature fits a cell when clearance ≥ its `body-radius` and
+so steps aren't walls, nor more than 2 m above it, `*nav-clearance-height*`). A body taller
+than that (the ogre) asks a second clearance instead, `tall-clearance`, measured from
+`*nav-tall-lift*` (0.9 m) up to `*nav-tall-height*` (2.7 m), and must have a `step-height` of
+0.9: a body 1 m out from its centre on a stair reaches over the next two steps, 0.83 m up,
+so with the usual 0.45 a stair was a wall to it. Measuring everyone's clearance to 2.7 m
+instead let the lintel of every 2.5 m `narrow` doorway close the cells in front of it to the
+player. A creature fits a cell when clearance ≥ its `body-radius` and
 headroom ≥ its `sprite-height`, and moves to a neighbour when the floors differ by at most
 its `step-height`, so one grid serves every size. The grid is layered: each 0.5 m column
 keeps every floor with room above it, lowest first (a room and the room above it, or a
@@ -627,9 +635,53 @@ test level the necromancer stands at the back of the hall, behind the imp; set
 `(hurt (aref *creatures* 0) 30)` (no overkill: a corpse, not gibs) and set it hunting with
 `(setf (alert necromancer) 30.0)`.
 
+### The ogre
+
+The `ogre` (ogre.lisp) is the big one: 2.7 m tall, a body 1 m out from its centre, 120
+health, slow, barely moved by knockback (0.15). It fits the 3 m doorways, corridors and
+stairs, not `narrow` doorways, 2 m stair shafts or the narrow passages of caves, so it is the
+creature that can't follow the player everywhere; with no path it stands facing the player
+and tries again (`chase`'s fallback). Nor can it climb the kit's `stair`: one tread up from
+the 3 m doorway at its foot, its head is above that doorway's 3 m ceiling, which its 1 m
+reach still overlaps. Stairs for it would need a taller foot. Two attacks:
+
+- **Leap** (`special-attack`, which `hunt` asks before anything else; cooldown
+  `*leap-cooldown*`, 6 s): with the player 4 to 12 m away across, at most 2.5 m up or 6 m down
+  and in sight, `plan-leap` takes the cell under the player its body fits
+  (`nav-nearest-fitting`) and an arc to it under `*leap-gravity*`, its top `*leap-apex*` (2 m)
+  over the higher end, lowered under the lowest ceiling along the way, and refused under
+  `*leap-min-apex*` or faster than `*leap-max-speed*`; then it sweeps its body along the arc
+  (`arc-clear-p`), so a leap never passes through a wall or ceiling. In a 4 m room its feet
+  rise 1.2 m; in a 3 m corridor it can't leap. It crouches for `*leap-windup*` (the warning),
+  then flies (`fly-leap`, from its `keep-height`, which runs every tick, so a hit can't leave
+  it hanging), aimed at where the player stood. A wall or body in its way (the player's)
+  cuts it short, and it drops (`drop-ogre`). Landing (`land-leap`) it `quake`s: everything
+  with its feet within `*quake-reach-height*` (0.4 m) of that floor and within
+  `*quake-radius*` (3.5 m), the player and its own allies alike, takes `*quake-damage*` and is
+  thrown away, full against its body and nothing at the rim; the player is thrown up as
+  well (`*quake-player-lift*`), since a shove on the ground dies in a tenth of a second.
+  Jumping as it lands dodges it all. It stands `*leap-recover*` (1.2 s) after.
+- **Slam** up close: the timed blow, and a hit throws the player back and up
+  (`hurt-player`'s `:shove` speed and `:lift`; `shove-player` does it without damage). The
+  maul's impact, `*slam-impact*` in front, shoves everything within `*slam-quake-radius*`
+  (no damage), so a near miss still shoves the player.
+
+It sees `sight-rise` (6.5 m) up and down, not 3. `*leap-debug*` logs every leap, every refusal
+and why, and what each shockwave hits. On the test level it stands in the hall's east, by
+the annex doorway (it fits the lower room, not the stair shaft). Generated levels have it
+from `any` and the `hall`'s choice; the `cavern` and `balcony` spawn `any-ogre`, since one
+there couldn't reach its own doorways (`check-kit` with `*spawn-pool*` set to only ogres
+checks every block for it). Each block fits it, but the way to the start often doesn't (a
+`stair`, a cave passage, a `narrow` doorway, the far bank of a river), so about half the
+ogres a level spawns are stranded, guarding their part of the level, and
+`check-reachable` warns about each. On seeds 1 to 20 and 38, 11 levels had an ogre and 9
+of those were stranded.
+`*ogre-dust*` names the effect animation puffed round a landing and the slam's impact
+(`ogre-dust`, preloaded by `setup-scene`; NIL for none).
+
 `tools/hd '(game (show-nav))'` lays green tiles on the cells within 8 m of the player that
 an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
-`(hide-nav)` or a reset clears them. `tools/hd status` shows each creature's `brain`
+`(hide-nav)` or a reset clears them; `(show-nav :radius 1.0 :height 2.7)` shows the ogre's. `tools/hd status` shows each creature's `brain`
 (`idle`, `walking` or `attacking`).
 
 ## Generating art
@@ -1007,6 +1059,30 @@ python3 tools/slice_frames.py art/necromancer/death.png data/sprites/necromancer
 python3 tools/slice_frames.py art/skeleton/death.png data/sprites/skeleton --pixel 3.94 --anchor bottom --filter box death:8
 ```
 
+The ogre (hunched, grey-green hide, tusks, iron bands and hide wrappings, a two-handed stone
+maul) is `art/ogre/turnaround-2.png` (`art/prompts/ogre-turnaround.txt`, the imp's, acolyte's,
+knight's and harpy's sheets as style references), sliced at `--height 173` for its 2.7 m.
+Its walk, slam (wind-up overhead, swing, the maul in the floor, recover), leap (crouch, in the
+air with the maul raised, landed with it driven down) and flinch are made the necromancer's
+way with `tools/gen_monster_views.sh ogre <anim> ...`; the walk front, `walk-front.png`, is
+`walk-front-c-1.png` with `walk-front-c-2.png`'s third cell. The death (`ogre-death.txt`)
+falls face down beside the maul, and the dust (`ogre-dust.txt`) is a burst of grit standing
+on the floor. In the side, back-quarter and back leap sheets the crouch's maul reached across
+the cyan line into the airborne cell, and the airborne frame carried it: the stray pieces
+were painted magenta in `art/ogre/leap-{side,back-quarter,back}.png`, so look at a sheet's
+cells for a neighbour's pieces before stacking.
+
+```bash
+python3 tools/slice_turnaround.py art/ogre/turnaround-2.png data/sprites/ogre/turnaround --height 173 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk slam leap hurt; do python3 tools/stack_views.py art/ogre/$a-sheet.png $(for v in $V; do echo art/ogre/$a-$v.png; done) --height 1384 --frame 1 --blank 1; done
+for a in walk:20 slam:20 leap:15 hurt:10; do python3 tools/slice_frames.py art/ogre/${a%:*}-sheet.png data/sprites/ogre --pixel 8 --anchor bottom --filter box $a; done
+python3 tools/slice_frames.py art/ogre/death.png data/sprites/ogre --pixel 2.6 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/ogre/dust.png data/sprites/ogre --pixel 4.3 --anchor bottom --filter box dust:6
+```
+
+Its `define-fx-animation` sizes are the strips' cell heights over the turnaround's 173 px.
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -1171,7 +1247,9 @@ default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `p
 [DEPTH]` (the same sunken slab, 0.4 by default and less than the slab's 0.5, with no
 lava: a dry dip, under a step so it is walked through), `torch Y`
 and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy and necromancer 1 each), picked as the
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer and ogre 1
+each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+tight for them, as the `cavern` and `balcony` are for the ogre), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
@@ -1190,7 +1268,7 @@ The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-
 niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
 `arch` (beams and torches, the way into a room), `narrow` and `narrowing` (to a narrow
 doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
-rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
+rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy, necromancer or ogre), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
 bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
 up to it); caves `cave` (wavy 45° walls, an octagonal pillar, an octagonal shelf and
@@ -1304,5 +1382,8 @@ pillars; a bolt at its front comes back at the player, one at its back hurts it,
 `(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
 The harpy hovers over the hall's south-east, by the east doorway: `(setf (alert harpy) 6.0)`
 sets it hunting, and `(dive-left harpy)` is non-NIL while it dives (hurt it then to down it).
+The ogre stands in the hall's east: `(setf *leap-debug* t)` and `(setf (alert ogre) 30.0)` with
+the player 4 to 12 m from it, and the log says where it leaps and what the shockwave hits;
+`(airborne ogre)` is true in the air, and `*hit-stop*` 1000 then freezes it there.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (next weapon).

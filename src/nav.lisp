@@ -11,7 +11,9 @@
 ;;;  - headroom: from the floor up to the lowest solid above it;
 ;;;  - clearance: the widest body (half-width, as for collision boxes) that fits
 ;;;    standing there. Solids lower than *NAV-WALL-ABOVE* above the floor don't count,
-;;;    so steps and low ledges aren't walls.
+;;;    so steps and low ledges aren't walls. Measured up to *NAV-CLEARANCE-HEIGHT*, and
+;;;    again for bodies taller than that (tall-clearance), from *NAV-TALL-LIFT* (their
+;;;    longer stride) up to *NAV-TALL-HEIGHT*.
 ;;;
 ;;; A cell is I J K: column I J, layer K. A body of radius R, height H fits a cell when
 ;;; clearance >= R and headroom >= H. It can move to a cell in a neighbouring column
@@ -31,6 +33,15 @@
   "Clearance ignores solids that rise less than this above the floor: steps aren't walls.")
 (defparameter *nav-clearance-height* 2.0
   "Clearance is measured up to this height above the floor, or up to the headroom if lower.")
+(defparameter *nav-tall-height* 2.7
+  "Clearance for bodies taller than *NAV-CLEARANCE-HEIGHT* (the ogre) is measured again up
+to this height. Measuring everyone's that high would let a lintel over a 2.5 m doorway
+close the cells in front of it to the player.")
+(defparameter *nav-tall-lift* 0.9
+  "The tall clearance ignores solids lower than this above the floor: a tall body has the
+stride to step that high, and must (its STEP-HEIGHT), or a stair is a wall to it. A body
+1 m out from its centre on a stair's 0.5 m treads reaches over the next two steps, 0.83 m
+up.")
 (defparameter *nav-open-headroom* 100.0 "Headroom of a cell with nothing above it.")
 (defparameter *nav-layer-above* 0.5
   "A point is on a floor up to this far above it: a body stepping up is already on the
@@ -50,6 +61,8 @@ step, and its feet may sit a little below the floor it settles onto.")
 A column's floors come first, lowest first.")
    (headroom :initarg :headroom :reader nav-headroom)
    (clearance :initarg :clearance :reader nav-clearance)
+   (tall-clearance :initarg :tall-clearance :reader nav-tall-clearance
+                   :documentation "Clearance up to *NAV-TALL-HEIGHT*, for tall bodies.")
    (hazard :initarg :hazard :reader nav-hazard
            :documentation "A bit per cell I J K, set where its floor is under lava (liquids.lisp).")))
 
@@ -93,9 +106,9 @@ it. :IGNORE treats them as any floor, for flyers. Creatures bind it while they t
         maximize (aref s 3) into x1 maximize (aref s 5) into z1
         finally (return (values x0 z0 x1 z1))))
 
-(defun measure-clearance (x y z headroom)
-  (let ((height (- (min headroom *nav-clearance-height*) *nav-wall-above*))
-        (above (+ y *nav-wall-above*)))
+(defun measure-clearance (x y z headroom &optional (limit *nav-clearance-height*) (lift *nav-wall-above*))
+  (let ((height (- (min headroom limit) lift))
+        (above (+ y lift)))
     (loop for r from *nav-radius-step* to (+ *nav-max-radius* 1f-4) by *nav-radius-step*
           while (fits-at-p x above z r height)
           maximize r into widest
@@ -160,6 +173,7 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
                                                             :initial-element most-negative-single-float))
               (headroom (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
               (clearance (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
+              (tall (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
               (hazard (make-array (list width depth layers) :element-type 'bit :initial-element 0)))
           (do-nav-tiles (i j width depth cell x0 z0)
             (let ((x (centre-x i)) (z (centre-z j)))
@@ -170,11 +184,15 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
                          (setf (aref floors i j k) y
                                (aref headroom i j k) (float room 0f0)
                                (aref clearance i j k) (measure-clearance x y z room)
+                               ;; Under a ceiling too low for a tall body it doesn't matter.
+                               (aref tall i j k) (if (< *nav-clearance-height* room)
+                                                     (measure-clearance x y z room *nav-tall-height* *nav-tall-lift*)
+                                                     0f0)
                                (aref hazard i j k) (if (< 0 (hazard-at x (+ y 0.05) z)) 1 0))))))
           (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
                                                     :layers layers :floors floors
                                                     :headroom headroom :clearance clearance
-                                                    :hazard hazard)))))))
+                                                    :tall-clearance tall :hazard hazard)))))))
 
 ;;; Cells.
 
@@ -200,11 +218,15 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
             (setf found k)
             (return found))))))
 
+(defun clearance-for (height grid)
+  "The clearance array that answers for a body HEIGHT tall."
+  (if (< *nav-clearance-height* height) (nav-tall-clearance grid) (nav-clearance grid)))
+
 (defun nav-fits-p (i j k radius height &optional (grid *nav-grid*))
   "True if a body RADIUS out from its centre and HEIGHT tall can stand in cell I J K."
   (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)) (< -1 k (nav-layers grid))
        (nav-floor i j k grid)
-       (<= radius (aref (nav-clearance grid) i j k))
+       (<= radius (aref (clearance-for height grid) i j k))
        (<= height (aref (nav-headroom grid) i j k))))
 
 (defun nav-layer-near (i j floor radius height step &optional (grid *nav-grid*))
@@ -212,7 +234,7 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
 fits, whose floor is at most STEP away, the nearest if several. NIL if there is none.
 Path searches ask this for every neighbour, so it reads the arrays directly."
   (when (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)))
-    (let ((floors (nav-floors grid)) (clearance (nav-clearance grid)) (headroom (nav-headroom grid))
+    (let ((floors (nav-floors grid)) (clearance (clearance-for height grid)) (headroom (nav-headroom grid))
           (hazard (nav-hazard grid)) (dry (eq *nav-hazards* :avoid))
           (best NIL) (best-d 0.0))
       (declare (type (simple-array single-float (* * *)) floors clearance headroom)
