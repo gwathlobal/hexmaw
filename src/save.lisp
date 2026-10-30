@@ -35,7 +35,7 @@
   (:method-combination append :most-specific-last))
 
 (defmethod saved-slots append ((player player))
-  '(feet rotation velocity grounded eye health pain burn-timer mana cast-timer cast-time
+  '(feet rotation velocity grounded eye health pain burn-timer wading mana cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     block-raise bash-time bash-pending))
 

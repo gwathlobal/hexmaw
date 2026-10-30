@@ -343,11 +343,13 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   whose floor is an ordinary solid `*lava-depth*` (0.4 m, under a step) below the floor
   around it, its surface `*lava-surface*` (0.1 m) below, so walking in and out is a step
   down and up and the feet sink. Everything else asks `liquid-at x y z`. `*liquid-kinds*`
-  says what a kind does: `:damage` per second, paid every `*lava-tick*` by the player
-  (`hurt-player ... :shove NIL`: the pain flash, no shove or hit-stop) and by creatures
-  (`burn`: a flash, no flinch or blood; one standing in it walks to the nearest dry cell,
-  `escape-liquid`), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
-  hangs `*glow-height*` over it, one per `:glow-spacing` of the pool's length. One nearer
+  says what a kind does: `:damage` per second, paid on stepping in and then every
+  `*lava-tick*` (`burn-due`) by the player (`hurt-player ... :shove NIL`: the pain flash,
+  no shove or hit-stop) and by creatures (`burn`: a flash, no flinch or blood; one standing
+  in it walks to the nearest dry cell, `escape-liquid`), `:speed` on the player's walk (kept
+  through a jump from it until it lands outside, `wading`), `:jump` on the speed of a jump
+  from it (lava's 0.7 halves its height), and `:glow`, the lamps `add-liquid` hangs
+  `*glow-height*` over it, one per `:glow-spacing` of the pool's length. One nearer
   than that to a lamp already hung over the same kind is left out and its colour added to
   that lamp's: an irregular pool is many boxes, every lamp sent costs every lit pixel, and
   lamps that close lit like one brighter one anyway. The nav grid flags each cell under lava (`nav-hazard`), and
