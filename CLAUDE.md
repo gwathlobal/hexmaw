@@ -36,6 +36,35 @@ worktree's own game on a free port (`ss -ltnp` shows the taken ones) and pass th
 every command: `HEXMAW_EVAL_PORT=7181 ./run.sh`, `HEXMAW_EVAL_PORT=7181 tools/hd status`.
 `tools/hd '(namestring (root))'` says which checkout a game runs from.
 
+## Standalone build
+
+```bash
+tools/build-dist
+```
+
+Builds the game into `dist/` (gitignored), about 200 MB: `hexmaw`, the executable,
+the native libraries it loads (GLFW, evdev), and `pool/` with the assets: `pool/hexmaw/`
+is `data/` without the blueprints, beside Trial's own pools and the font cache. Copy `dist/`
+anywhere and run `dist/hexmaw`; it needs no SBCL, Quicklisp or source tree. It takes
+about 2.5 minutes and needs `patchelf` (`apt install patchelf`), which Deploy uses on the
+libraries it ships. It builds every block from its blueprint first, so the shipped `.glb`
+files are current.
+
+`asdf:make` does the dumping: `hexmaw.asd` sends it to Deploy's `deploy-op`, with
+`dist-main` (`src/dist.lisp`) as the entry point. The binary starts on the main menu with no
+eval server; `HEXMAW_EVAL_PORT=7272 dist/hexmaw` starts one, so `tools/hd` (given the
+same `HEXMAW_EVAL_PORT`) can drive a build. `HEXMAW_FULLSCREEN=1` works as with `run.sh`.
+Trial's log, `trial.log`, and F12 screenshots land beside the executable; an error that
+escapes shows a message box. Saves go to `$XDG_DATA_HOME/hexmaw/saves/` as in
+development; the binary works that folder out when it starts (`dist.lisp`'s boot hook),
+since `*save-directory*` was set on the build machine. The 4 GB heap is a limit kept from
+the build, not memory used.
+
+A file the game reads at run time goes through `(data-path "sprites/...")`, a path under
+`data/`: in the binary it resolves to `pool/hexmaw/`. `root` is the project only in
+development (the executable's folder in a build), and ASDF is gone from the binary. In the
+binary blocks are never rebuilt (`hexmaw.blueprint:*build-blocks*` is NIL).
+
 ## Live reload: how changes reach the game
 
 A PostToolUse hook (`.claude/settings.json` → `tools/claude-reload-hook.sh`) reloads
@@ -246,6 +275,26 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
 - `src/kit.lisp`: the kit (`kit-blocks`, every `.glb` in `data/blocks/`) and the gallery level
   that lays it out (`build-kit-gallery`, `kit-goto`).
 - `src/generate.lisp`: the level generator (`generate-level`); see "Generated levels" below.
+- `src/save.lisp`: saving and loading generated runs, one file per slot in `*save-directory*`
+  (`$XDG_DATA_HOME/hexmaw/saves/`, usually `~/.local/share/hexmaw/saves/`:
+  `slot-1.sav` .. `slot-3.sav`, `quick.sav`). A save doesn't store the level: it keeps the
+  seed and the generator's settings (`*saved-generator-settings*`), and the level's cells
+  (`level-layout`) to check that the rebuild is the same level; one built from changed blocks
+  isn't, and its save then starts fresh, with a warning. What it stores is everything that
+  changes in play, so a load is the moment of the save, nothing in flight lost: the player,
+  every creature by its index in `*creatures*` (raised skeletons recreated), every effect in
+  the scene (projectiles, circles, impacts, with their glows), the blood pool's arrays,
+  `*hit-stop*` and the random states. Damage and knockback roll from their own state
+  (`*roll-random*`, spells.lisp), since blood and wandering draw from `random` a number of
+  times a frame that varies with the frame rate: so a reload rolls the same as before it.
+  An object saves the slots `saved-slots` names (an `append` generic; a name with no slot
+  is an accessor, as `location` is), so **a new slot that changes in play needs adding
+  there**. Values go through `encode-value`: vecs as `(:vec ...)`, references to the player,
+  creatures, spells, abilities and animations as tagged lists, anything else an error that
+  stops the save. `load-game` starts a run as `start-level` does with `*pending-load*` set;
+  `build-level` builds the saved seed and `setup-scene` ends with `restore-run`, which leaves
+  the game paused. Reloading save.lisp resets `*save-directory*`; to test without touching
+  real saves, `(setf *save-directory* #p"/some/dir/")` after each reload.
 - `src/liquids.lisp`: liquids, lava for now (water will be another kind). A liquid is a box of
   volume in `*liquids*` (`build-level` empties it), never a solid: it fills a sunken pit
   whose floor is an ordinary solid `*lava-depth*` (0.4 m, under a step) below the floor
@@ -393,10 +442,17 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
   loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
   button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
-  variable. Hovering a row gives it the keyboard focus, so one row is lit at a time.
+  variable; an action may also be a closure. Hovering a row gives it the keyboard focus, so
+  one row is lit at a time. `panel-width` is the column's width (`*menu-width*`; the slot
+  panels' is wider, for their labels).
   Settings (`open-settings`, on both menus) covers the menu it came from while
   `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has one
   option so far, Show FPS (`*show-fps*`, in memory only, kept across reloads).
+  Load game (both menus) and Save game (the pause menu, on a generated level only) cover it
+  the same way while `*slot-menu*` is `:load` or `:save`: a row per slot in `*save-slots*`
+  (1 to 3, then the quicksave), labelled by `slot-info`, and Back (`close-slot-menu`). After
+  a save the pause menu's title says where it went (`*save-note*`). F5 quicksaves and F9
+  quickloads (`quicksave`, `quickload`, from the menu controller). See `src/save.lisp`.
   `panel-splash` names a picture in `data/splash/` to cover the screen with (the main
   menu's `title`, the loading screen's `loading`, and Settings' over the main menu; see
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
@@ -426,6 +482,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
 - `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
+- `src/dist.lisp`: the standalone build's entry point (`dist-main`) and its Deploy hooks; see
+  "Standalone build" above.
 
 Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
 (north). Collision is axis-aligned boxes in `*solids*`, resolved one axis at a time, and
@@ -1231,7 +1289,8 @@ Controls: click the window to capture the mouse, Esc to pause (release the mouse
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands (or the mouse
 wheel to cycle them), left click to
-attack (swing, or cast the bolt), F12 for a screenshot.
+attack (swing, or cast the bolt), F5 to quicksave and F9 to quickload (generated levels
+only), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,

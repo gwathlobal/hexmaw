@@ -11,7 +11,15 @@
 (defvar *output-pass* NIL "The last pass, what reaches the screen: the world with the menus over it.")
 
 (defun root ()
-  (asdf:system-source-directory :hexmaw))
+  "The project folder, or the executable's in a standalone build (dist.lisp)."
+  (if (deploy:deployed-p)
+      (deploy:runtime-directory)
+      (asdf:system-source-directory :hexmaw)))
+
+(defun data-path (file)
+  "FILE under data/, the HEXMAW pool. Read game files through this, not ROOT:
+a standalone build ships data/ as its pool, pool/hexmaw/ beside the executable."
+  (pool-path 'hexmaw file))
 
 (defun env-integer (name)
   (let ((value (uiop:getenv name)))

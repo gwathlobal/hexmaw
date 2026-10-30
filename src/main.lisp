@@ -42,7 +42,10 @@
     (setf *render-pass* (make-instance 'render-pass)
           *output-pass* blend)
     (connect (port *render-pass* 'color) (port blend 'a-pass) scene)
-    (connect (port ui 'color) (port blend 'b-pass) scene)))
+    (connect (port ui 'color) (port blend 'b-pass) scene))
+  ;; A loaded game: the save over the level just built from its seed (save.lisp).
+  (when *pending-load*
+    (restore-run scene)))
 
 (defmethod update :around ((main main) tt dt fc)
   (setf *game-thread* (bt:current-thread))

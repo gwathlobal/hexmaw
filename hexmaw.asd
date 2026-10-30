@@ -1,5 +1,11 @@
 (asdf:defsystem hexmaw
   :description "First-person real-time roguelike POC."
+  ;; asdf:make builds the standalone executable into dist/ (tools/build-dist, src/dist.lisp).
+  ;; Deploy puts the build pathname under bin/, hence the ../.
+  :defsystem-depends-on (:deploy)
+  :build-operation "deploy-op"
+  :build-pathname "../dist/hexmaw"
+  :entry-point "hexmaw::dist-main"
   :serial T
   :pathname "src/"
   :components ((:file "package")
@@ -25,7 +31,9 @@
                (:file "level")
                (:file "kit")
                (:file "generate")
-               (:file "main"))
+               (:file "save")
+               (:file "main")
+               (:file "dist"))
   :depends-on (:hexmaw-blueprints
                :trial
                :trial-glfw

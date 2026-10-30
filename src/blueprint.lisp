@@ -22,7 +22,7 @@
   (:use #:cl)
   (:export #:*cell-size* #:*storey-height* #:*connector-kinds* #:*lava-depth* #:*lava-surface*
            #:blueprint-error #:read-blueprint #:blueprint-names #:blueprint-path
-           #:build-blueprint #:build-blueprints #:ensure-block #:main))
+           #:build-blueprint #:build-blueprints #:*build-blocks* #:ensure-block #:main))
 
 (in-package #:hexmaw.blueprint)
 
@@ -932,9 +932,13 @@ Returns the summaries."
                 (probe-file (blueprint-path (subseq name 0 (- (length name) 7)))))
            (subseq name 0 (- (length name) 7))))))
 
+(defvar *build-blocks* T
+  "Whether ENSURE-BLOCK builds anything. A standalone build turns it off: it ships its
+blocks built, and has no blueprints to build them from.")
+
 (defun ensure-block (name)
   "Build block NAME from its blueprint if the .glb is missing or older. True if it was built."
-  (let ((source (blueprint-for-block name)))
+  (let ((source (and *build-blocks* (blueprint-for-block name))))
     (when source
       (let ((glb (probe-file (block-output-path name))))
         (when (or (null glb) (< (file-write-date glb) (file-write-date (blueprint-path source))))

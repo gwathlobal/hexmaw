@@ -12,7 +12,7 @@
 
 (defun kit-blocks ()
   "The name of every block in data/blocks/, sorted."
-  (sort (mapcar #'pathname-name (directory (merge-pathnames "data/blocks/*.glb" (root))))
+  (sort (mapcar #'pathname-name (directory (data-path "blocks/*.glb")))
         #'string<))
 
 (defun block-tags (name) (getf (find-block name) :tags))
