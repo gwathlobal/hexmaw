@@ -30,6 +30,7 @@
 (defparameter *sword-arc* 0.8 "Radians either side of the view the blade sweeps through.")
 (defparameter *sword-damage* '(10 16))
 (defparameter *sword-knockback* 3.0 "Speed in m/s a hit slides the creature away.")
+(defparameter *sword-pain-bonus* 0 "Percent a hit adds to the creature's PAIN-CHANCE.")
 
 (defparameter *block-raise-time* 0.12 "Seconds to raise the shield to block, and again to lower it.")
 (defparameter *bash-frame-times* '(0.08 0.06 0.12 0.08)
@@ -39,6 +40,8 @@
 (defparameter *bash-arc* 0.6 "Radians either side of the view the bash reaches.")
 (defparameter *bash-damage* '(2 4))
 (defparameter *bash-knockback* 6.0 "Speed in m/s a bash slides the creature away.")
+(defparameter *bash-pain-bonus* 50
+  "Percent a bash adds to the creature's PAIN-CHANCE: staggering is what it is for.")
 
 (defparameter *sword-height* 1.04
   "Vertical art scale: the strip's cell height times the scale is about this fraction
@@ -165,13 +168,13 @@ either side of where the player faces, level with the player, and not behind a w
 (defun swing-hit (player)
   (let ((target (swing-target player)))
     (when target
-      (hurt target (roll *sword-damage*) :from (feet player))
+      (hurt target (roll *sword-damage*) :from (feet player) :pain-bonus *sword-pain-bonus*)
       (push-creature target (v- (location target) (feet player)) (float *sword-knockback* 0f0)))))
 
 (defun bash-hit (player)
   (let ((target (swing-target player *bash-reach* *bash-arc*)))
     (when target
-      (hurt target (roll *bash-damage*) :from (feet player))
+      (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus *bash-pain-bonus*)
       (push-creature target (v- (location target) (feet player)) (float *bash-knockback* 0f0)))))
 
 (defun update-weapons (player dt)

@@ -36,6 +36,8 @@
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
   (enter (make-instance 'menu-controller) scene)
+  ;; The automap screen (map-view.lisp), after the player: its camera mustn't become the scene's.
+  (add-map-view scene)
   ;; The game draws into one pass and the menus (Alloy) into another; the blend
   ;; puts the menus on top and is what reaches the screen.
   (let ((ui (persistent-menu-ui))
@@ -58,15 +60,17 @@
   (when (eq *game-state* :playing)
     (setf *hit-stop* (max 0.0 (- *hit-stop* dt))))
   (advance-light-clock dt)
-  ;; Clear to the fog colour so geometry fades into the background.
+  ;; Clear to the fog colour so geometry fades into the background; the map has its own.
   (when *render-pass*
-    (let ((clear (clear-color *render-pass*)))
-      (setf (vx clear) (vx *fog-color*) (vy clear) (vy *fog-color*) (vz clear) (vz *fog-color*) (vw clear) 1.0))))
+    (let ((clear (clear-color *render-pass*))
+          (color (if (eq *game-state* :map) *map-background* *fog-color*)))
+      (setf (vx clear) (vx color) (vy clear) (vy color) (vz clear) (vz color) (vw clear) 1.0))))
 
 (defmethod render :before ((main main) target)
   (incf *render-frame*)
-  ;; The nearest lights, for every lit shader this frame (lights.lisp).
-  (gather-lights))
+  ;; The nearest lights, for every lit shader this frame (lights.lisp). The map draws nothing lit.
+  (unless (eq *game-state* :map)
+    (gather-lights)))
 
 (defmethod render :around ((main main) target)
   (handler-bind ((error (lambda (e) (guard-runtime-error e :render))))
@@ -85,6 +89,7 @@
                   (:title "main menu up, world frozen (start with (game (start-game)))")
                   (:paused "paused, world frozen (resume with (game (resume-game)))")
                   (:loading "building a level, world frozen")
+                  (:map "map open, world frozen (close with (game (close-map)))")
                   (T "playing"))
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
                 (health *player*) (floor (mana *player*)) (weapon *player*)

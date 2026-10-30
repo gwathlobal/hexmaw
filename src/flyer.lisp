@@ -89,6 +89,10 @@ as it lands, then sprawled, its head down, for the corpse."
           ((< (- (dead flyer) at) *crash-time*) 1)
           (T 2))))
 
+;; A hit in its dive always breaks it off, and KEEP-HEIGHT downs it.
+(defmethod always-pained-p ((flyer flyer))
+  (and (dive-left flyer) T))
+
 ;; Its flinch is a mid-air one; on the floor it squashes its knockdown pose instead.
 (defmethod flinch-p ((flyer flyer))
   (and (<= (downed flyer) 0) (<= (launching flyer) 0)))
@@ -283,4 +287,5 @@ length, against a wall or a body, or on the strike."
    (wander-radius :initform 5.0)
    (gibs :initform '((:flesh 0 0 1 2 4 5 6 7 7)))
    (gib-scale :initform 1.1)
+   (pain-chance :initform 50)
    (max-health :initform 20)))

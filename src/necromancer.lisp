@@ -68,6 +68,7 @@
    (chase-speed :initform 2.1)
    (wander-radius :initform 3.0)
    (knockback-scale :initform 0.8)
+   (pain-chance :initform 40)
    (max-health :initform 20)))
 
 (defun spawn-raised-skeleton (corpse container)
@@ -145,6 +146,8 @@
    (walk-speed :initform 1.0)
    (chase-speed :initform 1.6)
    (wander-radius :initform 2.0)
+   ;; Frail: a hit usually breaks its cast, the raise's channel too.
+   (pain-chance :initform 70)
    (max-health :initform 35)))
 
 (defmethod initialize-instance :after ((necromancer necromancer) &key)

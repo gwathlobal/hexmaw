@@ -185,7 +185,9 @@ A vector is written in place, since some slots have only a reader."
                                        :summoned (summoned creature)
                                        :state (object-state creature)))
         :effects (mapcar #'effect-record (level-effects))
-        :blood (when *blood-pool* (blood-record *blood-pool*))))
+        :blood (when *blood-pool* (blood-record *blood-pool*))
+        ;; The blocks the automap shows, by placement order (map-view.lisp).
+        :map (revealed-block-indices)))
 
 ;;; Files.
 
@@ -330,6 +332,7 @@ A vector is written in place, since some slots have only a reader."
     (restore-effect record scene))
   (when (and *blood-pool* (getf save :blood))
     (restore-blood *blood-pool* (getf save :blood)))
+  (reveal-block-indices (getf save :map))
   (let ((globals (getf save :globals)))
     (setf *hit-stop* (getf globals :hit-stop)
           *light-clock* (getf globals :light-clock))

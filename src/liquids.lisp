@@ -104,6 +104,11 @@ CONTAINER: the volume, its surface and, if it glows, the lamps over it."
          (top (aref s 4))
          (liquid (make-instance 'liquid :kind kind :bounds s)))
     (vector-push-extend liquid *liquids*)
+    ;; On the automap, a thin slab at the surface.
+    (add-map-piece container (// 'trial 'unit-cube)
+                   (vec (/ (+ (aref s 0) (aref s 3)) 2) (- top 0.02) (/ (+ (aref s 2) (aref s 5)) 2))
+                   (quat) (vec w 0.04 d)
+                   (vec (aref s 0) (- top 0.04) (aref s 2)) (vec (aref s 3) top (aref s 5)) :surface kind)
     (enter (make-instance 'liquid-surface
                           :surface-texture (// 'hexmaw (liquid-property kind :texture))
                           :location (vec (/ (+ (aref s 0) (aref s 3)) 2) top (/ (+ (aref s 2) (aref s 5)) 2))
