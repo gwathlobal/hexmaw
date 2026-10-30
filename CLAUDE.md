@@ -533,11 +533,16 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
   to `*cast-release*`.
 - `src/sword.lisp`: the sword and weapon switching. The player holds one weapon (`*weapons*`:
-  1 the sword, 2 the casting hands); switching lowers one off screen and raises the next.
+  1 the sword, 2 the casting hands, 3 the spear); switching lowers one off screen and raises the next.
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
   so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
   blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
-  `*sword-arc*`, not behind a wall. Number keys pick a weapon, the mouse wheel cycles
+  `*sword-arc*`, not behind a wall. The sword's slash and the spear's thrust are both swings,
+  through the same `swing-time`: generics on the weapon's keyword give each its timing and blow
+  (`swing-frame-times`, `swing-hit-frame`, `swing-reach`, `swing-arc`, `swing-damage`,
+  `swing-knockback`, `swing-pain-bonus`), and generics on the sprite which weapon it draws
+  for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
+  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon, the mouse wheel cycles
   (`cycle-weapon`). The weapon slots above the HP bar (`weapon-bar`) show one icon per
   weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
@@ -556,6 +561,17 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   rolls for pain with `*bash-pain-bonus*`
   (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
   frame: idle, `*shield-raise-frames*` rising, the block held, then the bash's.
+- `src/spear.lisp`: the spear, held in both hands, so no shield (the right button does
+  nothing with it; block and bash ask for `:sword`). Against the sword it reaches further
+  (`*spear-reach*` 3.5 m against 2) in a narrower arc (`*spear-arc*` 0.3 rad), staggers more
+  (`*spear-pain-bonus*` 35) and is slower: the thrust plays `*thrust-frame-times*` (0.68 s
+  against 0.53) and lands at full extension, `*thrust-hit-frame*` (0.24 s in, against 0.23).
+  Its sprite (`spear`) is a subclass of the sword's, drawn from `data/sprites/spear/spear`,
+  at the sword's art pixel size (`sword-scale`) and sunk as far (`*sword-drop*`), but placed
+  by its aim (`weapon-aim`, `*spear-aim*`: the point at full extension) on the screen's
+  middle rather than against the right edge, so the thrust goes where the player looks on any
+  screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
+  (`art/spear/spear-frames.txt` says how).
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
@@ -980,6 +996,20 @@ tools/make_shield.py art/sword-shield/shield-frames.txt data/sprites/sword/shiel
 
 The picture's bottom edge cuts the shield, so no frame may lift it on screen (the frames file
 says how far is safe), and the shield can't turn: the bash is a push straight out.
+
+The spear (`art/spear/`) is one generated picture per pose, the whole 1536 × 1024 canvas
+being the screen, both gauntlets on the shaft, their forearms running off the bottom edge so
+the one sprite can stand against the bottom-right corner: `art/prompts/spear-common.txt` plus
+`spear-<pose>.txt` (idle, drawback, thrust, extend, recover), with the sword's idle frame
+(`art/sword-shield/ref-sword-idle.png`) as the reference, the other poses adding
+`spear-follow.txt` and the chosen idle picture as the second. `tools/make_shield.py
+--corner right` places them against the bottom-right corner, as the sword sits, from
+`art/spear/spear-frames.txt` (4 idle entries, then the 8 of the thrust):
+
+```bash
+tools/gen_image.py art/spear/extend.png --prompt "$(cat art/prompts/spear-{common,extend,follow}.txt)" --ref art/sword-shield/ref-sword-idle.png --ref art/spear/idle-2.png --size 1536x1024 -n 2
+tools/make_shield.py --corner right art/spear/spear-frames.txt data/sprites/spear/spear
+```
 
 Generators can't keep a motion sequence across a grid of first-person poses, and they draw
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
@@ -1478,16 +1508,16 @@ doorway or creature that fails logs a warning.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
-Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands (or the mouse
-wheel to cycle them), left click to
-attack (swing, or cast the bolt), right button held to raise the shield (sword only; a left
+Space to jump, C or Ctrl to crouch, 1 for the sword, 2 for the casting hands and 3 for the
+spear (or the mouse wheel to cycle them), left click to
+attack (swing, thrust, or cast the bolt), right button held to raise the shield (sword only; a left
 click while it's up bashes), M for the automap (see `src/map-view.lisp`), F5 to quicksave
 and F9 to quickload (generated levels only), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
-0.23 s in; stand within 2 m of the imp, facing it); `(setf (block-raise *player*) 1.0)` under hit-stop
+0.23 s in; stand within 2 m of the imp, facing it), and with `:3` thrusts the spear (0.24 s in, within 3.5 m); `(setf (block-raise *player*) 1.0)` under hit-stop
 shows the raised shield, and with it raised `(player-attack *player*)` bashes (`block-held`
 is what the right button sets; without it the shield comes down again once the world runs); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the

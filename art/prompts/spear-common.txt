@@ -1,0 +1,19 @@
+Pixel-art first-person weapon view for a Doom/Hexen-style dungeon game: the player's own two armoured hands holding a SPEAR with both hands, seen from the player's eyes, from behind, as in Hexen or Heretic, where the weapon sprite sits at the bottom of the screen. One single frame, not a sprite sheet.
+
+REFERENCE IMAGE 1 is the game's existing first-person SWORD frame: a right gauntlet (steel plates, brass rivets, a leather-and-brass cuff, a steel vambrace running off the bottom-right corner) holding an arming sword. It sets the style: the pixel size, the dark outline weight, the shading, the colours, and the scale of the hand. Draw the same gauntlet, cuff and vambrace at the same size; the left gauntlet is its mirror twin.
+
+THE SPEAR: a war spear about as long as a man is tall. A straight ash-wood shaft, dark brown, wrapped with a leather grip where the rear hand holds it and bound with a brass ring below the head. The head is a long leaf-shaped steel blade with a raised central rib and a brass socket, polished and sharp. The shaft is rigid and perfectly straight: from its butt behind the right hand to the spearhead's point it is one straight line, never bent or kinked where the hands hold it.
+
+THE GRIP, held two-handed and low, like a boar spear: the RIGHT hand grips the rear of the shaft near the bottom-right corner of the screen, its forearm and vambrace running off the bottom-right edge. The LEFT hand grips the shaft further forward, lower and left of the right hand, near the bottom edge of the screen right of its middle, its forearm running off the bottom edge. The shaft runs from behind the right hand (off the bottom-right edge) forward between the two hands and on toward the middle of the screen, the spearhead pointing forward into the distance.
+
+THE PICTURE
+- The whole 1536 x 1024 canvas is the player's screen.
+- The camera is the player's eyes: the hands are the nearest things, much bigger than they would be in a third-person view. No body, no shoulders, no head, no legs.
+- Both forearms run off the BOTTOM or bottom-right edge of the screen, never off the left edge.
+
+STRICT RULES
+- Background: flat pure magenta (#FF00FF) everywhere around the hands and spear: no floor, no walls, no gradient, no vignette, no glow, no shadow.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels and no pink or purple glow bleeding into the background.
+- No text, labels, frame borders, grid lines, motion blur or effects. Only the two hands and the spear.
+
+THIS POSE:

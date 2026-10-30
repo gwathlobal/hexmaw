@@ -1,0 +1,25 @@
+; The spear's strip, for tools/make_shield.py --corner right:
+;   SOURCE SCALE SX SY X Y
+; Every picture is the whole screen, so each is placed by its bottom-right corner
+; (1536, 1024), 8 art pixels right of the strip's screen corner and 32 below it (lowered
+; so the spearhead rides below the middle of the view). Nothing in them reaches the
+; picture's right edge (both forearms leave through the bottom), so the game can place
+; the strip by its aim instead (*SPEAR-AIM*: extend-1's tip, x 767, is
+; (1536 - 767) * 0.254 - 8 = 187 art pixels left of the corner) and centre the thrust.
+
+; Idle: the rest pose, breathing a pixel up and down.
+idle-2.png      0.254 1536 1024 -8 -32
+idle-2.png      0.254 1536 1024 -8 -31
+idle-2.png      0.254 1536 1024 -8 -30
+idle-2.png      0.254 1536 1024 -8 -31
+
+; The thrust: rest, drawing back, drawn back (a little lower), the thrust, full
+; extension, pulling back (the thrust again), recovery, rest.
+idle-2.png      0.254 1536 1024 -8 -32
+drawback-1.png  0.254 1536 1024 -8 -32
+drawback-1.png  0.254 1536 1024 -8 -34
+thrust-1.png    0.254 1536 1024 -8 -32
+extend-1.png    0.254 1536 1024 -8 -32
+thrust-1.png    0.254 1536 1024 -8 -32
+recover-1.png   0.254 1536 1024 -8 -32
+idle-2.png      0.254 1536 1024 -8 -32
