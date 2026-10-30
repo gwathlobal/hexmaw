@@ -1,0 +1,20 @@
+; A passage full of water to its roof, two cells long: swum on one breath, between cisterns.
+cells 1 2
+ceiling 3
+tags corridor flooded
+weight 3
+legend
+  ~ water top
+  n door underwater, water top
+  s door underwater, water top
+
+plan 0
+#nnnnnn#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#ssssss#

@@ -20,7 +20,7 @@
 
 (defpackage #:hexmaw.blueprint
   (:use #:cl)
-  (:export #:*cell-size* #:*storey-height* #:*connector-kinds* #:*lava-depth* #:*lava-surface*
+  (:export #:*cell-size* #:*storey-height* #:*connector-kinds* #:*lava-depth* #:*lava-surface* #:*water-surface*
            #:blueprint-error #:read-blueprint #:blueprint-names #:blueprint-path
            #:build-blueprint #:build-blueprints #:*build-blocks* #:ensure-block #:main))
 
@@ -31,22 +31,29 @@
 (defparameter *border* 0.5 "How thick the border walls and the floor and ceiling slabs are.")
 (defparameter *max-riser* 0.45 "The most a stair step rises: the player's *STEP-HEIGHT*.")
 (defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 3.0)
-                                   ("high" 7.0 4.5) ("ice" 3.0 3.0))
+                                   ("high" 7.0 4.5) ("ice" 3.0 3.0) ("underwater" 3.0 3.0)
+                                   ("canal" 7.0 3.5 3.0))
   "Each kind of doorway: its name, width and height in metres, and for a river the width of
 lava down its middle, between two banks; a stream's lava fills it wall to wall, no banks.
 Each kind joins only itself. One wider than a cell spans two and is centred on the boundary
 between them. A high doorway joins the high blocks, two storeys tall; at 4.5 m its lintel
 still lies in its own storey. An ice cave's ice doorways join only ice caves and the ice
-gates that lead into them.")
+gates that lead into them. An underwater doorway, full of water, joins a flooded passage
+to the cisterns at either end of it. A canal's doorway is a river's with deep water in
+place of lava: open down its middle to the water filling the storey below, which runs on
+through the wall under it.")
 (defparameter *default-ceiling* 4.0)
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3
   "How far into the room a torch drawn on a border wall goes; ADD-TORCH stands it off the wall.")
 (defparameter *lava-depth* 0.4 "Metres a lava pit's floor lies below the storey's floor: less than a step.")
 (defparameter *lava-surface* 0.1 "Metres the lava's surface lies below the storey's floor.")
+(defparameter *water-surface* 0.3
+  "Metres deep water's surface lies below the floor of the storey above it: the ledge round a
+pool stands this far out of the water, within a step.")
 (defparameter *materials*
   '(("floor" 0.45 0.42 0.38) ("wall" 0.62 0.6 0.56) ("ceiling" 0.32 0.31 0.3) ("stair" 0.4 0.46 0.56)
-    ("lava" 1.0 0.45 0.1) ("ice" 0.72 0.86 0.95)
+    ("lava" 1.0 0.45 0.1) ("water" 0.2 0.36 0.45) ("ice" 0.72 0.86 0.95)
     ("ice-rock" 0.55 0.68 0.78) ("snow" 0.78 0.82 0.86))
   "The colours every blueprint has; its MATERIAL lines add to them or replace them.")
 
@@ -163,6 +170,10 @@ gates that lead into them.")
             ((string-equal op "lava")
              (list :lava (if args (parse-number (first args) line) *lava-depth*)
                    (if (second args) (parse-number (second args) line) *lava-surface*)))
+            ((string-equal op "water")
+             ;; water [Y]: to Y above the storey's floor, TOP, or by default *WATER-SURFACE*
+             ;; under the next storey's floor.
+             (list :water (and args (parse-height (first args) line))))
             ((string-equal op "diagonal")
              ;; diagonal DIR [material] [Y0 Y1] [SIDE], in any order after DIR.
              (let ((dir (arg 0)) (material "wall") (heights ()) (side NIL))
@@ -225,7 +236,8 @@ gates that lead into them.")
                          (remove name (materials blueprint) :key #'first :test #'string=)))))
           ((string-equal key "remap") (need 2)
            (let ((from (string-downcase (first args))))
-             (when (string= from "lava") (fail line NIL "lava can't be remapped: its boxes are the liquid."))
+             (when (member from '("lava" "water") :test #'string=)
+               (fail line NIL "~a can't be remapped: its boxes are the liquid." from))
              (setf (remaps blueprint)
                    (acons from (string-downcase (second args)) (remove from (remaps blueprint) :key #'car :test #'string=)))))
           ((string-equal key "grid") (need 1) (setf (grid-free blueprint) (string-equal (first args) "free")))
@@ -332,6 +344,14 @@ gates that lead into them.")
 
 (defun storey-base (k) (* k *storey-height*))
 
+(defun under-canal-channel-p (blueprint k r c)
+  "True if cell R C of storey K lies under the open channel of a canal's doorway."
+  (let ((above (find (1+ k) (plans blueprint) :key #'storey)))
+    (and above
+         (let* ((actions (char-actions blueprint (char (aref (rows above) r) c)))
+                (door (action :door actions)))
+           (and (action :open actions) door (string= (second door) "canal"))))))
+
 (defun storey-top (blueprint k)
   "How high storey K's walls go: the next storey's floor, or the ceiling for the top one."
   (if (= k (1- (storeys blueprint)))
@@ -385,6 +405,8 @@ gates that lead into them.")
                                  (fail line (1+ c) "A corner must be wall."))
                                 ((and corner (action :torch actions))
                                  (fail line (1+ c) "A torch can't stand in a corner."))
+                                ;; Under a canal's doorway its water runs on through the wall.
+                                ((and border (action :water actions) (under-canal-channel-p blueprint (storey plan) r c)))
                                 ((and border (not (or (wall-like-p actions) (action :door actions))))
                                  (fail line (1+ c) "The border must be wall, torch or doorway, not ~s." (string char)))
                                 ((and (not border) (action :door actions))
@@ -568,6 +590,18 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                               (or (second (action :floor actions)) "floor") T)
                         (when lava
                           (span r c (- base (second lava)) (- base (third lava)) "lava" :liquid))))
+                    ;; Deep water stands on the cell's floor, up to its height, and never
+                    ;; above the slab over it or a doorway's lintel: a flooded cell.
+                    (let ((water (action :water actions)) (door (action :door actions)))
+                      (when water
+                        (span r c base
+                              (min cap
+                                   (if door (+ base (third (connector-kind (second door)))) top)
+                                   (case (second water)
+                                     ((NIL) (- top *water-surface*))
+                                     (:top top)
+                                     (T (+ base (second water)))))
+                              "water" :liquid)))
                     (dolist (a actions)
                       (case (first a)
                         (:wall (span r c wall-bottom cap (second a) T))
@@ -700,17 +734,20 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                           (< *cell-size* (second spec)) kind))
                   ;; A river's lava runs down its middle, LAVA wide, the rest is bank (none
                   ;; when it is the doorway's width), so every doorway of a kind meets every other.
+                  ;; A canal's middle is open, down to its water in the storey below.
                   (when (fourth spec)
                     (loop for i from (if ns (second start) (first start)) to (if ns (second end) (first end))
                           for rc = (if ns (list (first start) i) (list i (second start)))
                           for mid = (/ (+ (if ns (col-span blueprint i) (row-span blueprint i))
                                           (nth-value 1 (if ns (col-span blueprint i) (row-span blueprint i))))
                                        2)
-                          for lava = (action :lava (char-actions blueprint (char (aref rows (first rc)) (second rc))))
+                          for actions = (char-actions blueprint (char (aref rows (first rc)) (second rc)))
+                          for lava = (or (action :lava actions) (action :open actions))
+                          for what = (if (string= kind "canal") "open channel" "lava")
                           do (unless (eq (not lava) (not (< (abs (- mid centre)) (/ (fourth spec) 2))))
                                (fail (+ (line plan) (first rc)) (1+ (second rc))
-                                     "~:[A ~a doorway has ~a m of lava down its middle and bank on each side~;A ~a doorway is all lava~*~]; this cell should be ~:[bank~;lava~]."
-                                     (<= (second spec) (fourth spec)) kind (fourth spec) (not lava)))))
+                                     "~:[A ~a doorway has ~a m of ~a down its middle and bank on each side~;A ~a doorway is all ~*~a~]; this cell should be ~:[bank~;~a~]."
+                                     (<= (second spec) (fourth spec)) kind (fourth spec) what (not lava) what))))
                   (push (list :storey k :side side :kind kind :along centre
                               :wall (border-wall blueprint rows (first start) (second start))
                               :position (ecase side
@@ -725,13 +762,16 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                         (:west (list (/ w -2) base (- centre half) (+ (/ w -2) *border*) y1 (+ centre half)))
                                         (:east (list (- (/ w 2) *border*) base (- centre half) (/ w 2) y1 (+ centre half)))))
                               ;; Under a river's lava the floor is sunk, so its plug goes down
-                              ;; to the pit's floor there, or the lava shows beneath it.
+                              ;; to the pit's floor there, or the lava shows beneath it. Under a
+                              ;; canal's open channel, down a storey to the water's bottom.
                               :lava-plug (when (fourth spec)
-                                           (let* ((depth (or (loop for i from (if ns (second start) (first start))
-                                                                     to (if ns (second end) (first end))
-                                                                   for ch = (if ns (char (aref rows (first start)) i) (char (aref rows i) (second start)))
-                                                                   thereis (second (action :lava (char-actions blueprint ch))))
-                                                             *lava-depth*))
+                                           (let* ((depth (if (string= kind "canal")
+                                                             *storey-height*
+                                                             (or (loop for i from (if ns (second start) (first start))
+                                                                         to (if ns (second end) (first end))
+                                                                       for ch = (if ns (char (aref rows (first start)) i) (char (aref rows i) (second start)))
+                                                                       thereis (second (action :lava (char-actions blueprint ch))))
+                                                                 *lava-depth*)))
                                                   (y0 (- base depth)) (lh (/ (fourth spec) 2)))
                                              (ecase side
                                                (:north (list (- centre lh) y0 (/ d -2) (+ centre lh) base (+ (/ d -2) *border*)))

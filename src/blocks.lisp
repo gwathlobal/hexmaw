@@ -7,7 +7,8 @@
 ;;;  - Metres, +Y up, the block's origin at its centre on the floor. On the grid, a block
 ;;;    is whole 4 m cells across and whole 5 m storeys tall.
 ;;;  - Every mesh object is drawn and its bounding box is a solid, unless its name
-;;;    starts with "deco_" (drawn, no collision) or "plug_" (see below). One named
+;;;    starts with "deco_" (drawn, no collision), "plug_" (see below), or "lava_" or
+;;;    "water_" (not drawn: a liquid's volume, liquids.lisp). One named
 ;;;    "wedge_<n>_..." is that box with a vertical corner cut away along the diagonal
 ;;;    (n: 1 north-east, 2 north-west, 3 south-west, 4 south-east, as the block lies),
 ;;;    a 45° wall when the box is square; the mesh must be that shape.
@@ -43,6 +44,11 @@
 (defun prefixp (prefix string)
   (and (<= (length prefix) (length string))
        (string-equal prefix string :end2 (length prefix))))
+
+(defun liquid-name-kind (name)
+  "The liquid kind a piece named NAME is the volume of, or NIL."
+  (cond ((prefixp "lava_" name) :lava)
+        ((prefixp "water_" name) :water)))
 
 (defun base-name (name)
   "NAME without a Blender duplicate's suffix, \".001\"."
@@ -157,14 +163,14 @@
                                               :material (primitive-material-name primitive)
                                               :transform transform
                                               :bounds bounds
-                                              :solid (not (or (prefixp "deco_" name) (prefixp "lava_" name)))
+                                              :solid (not (or (prefixp "deco_" name) (liquid-name-kind name)))
                                               :cut (wedge-name-cut name))
                             do (setf low (vmin low (first bounds)) high (vmax high (second bounds)))
                                (cond ((prefixp "plug_" name)
                                       (push (cons (subseq name (length "plug_")) piece) plugs))
                                      ;; A liquid's mesh is only its volume; LIQUID-SURFACE draws it.
-                                     ((prefixp "lava_" name)
-                                      (push (list :kind :lava :bounds bounds) liquids))
+                                     ((liquid-name-kind name)
+                                      (push (list :kind (liquid-name-kind name) :bounds bounds) liquids))
                                      (T
                                       (push piece pieces)))))
                      ((prefixp "connector_" name)

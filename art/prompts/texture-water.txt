@@ -1,0 +1,5 @@
+THE SURFACE: dark, still DUNGEON WATER in a stone cistern, seen from straight above, like the water flats of Hexen, Heretic or Quake.
+- Deep murky blue-green to slate teal, dark overall: water in an unlit underground pool, not a sunny sea. No sky reflection, no white foam, no sand or stones showing through.
+- Gentle ripple pattern: soft irregular bands and wavy cells of a few slightly lighter and darker teal tones, with thin pale cyan-grey glints on some ripple crests, sparse, like faint light catching the water.
+- The ripples are small and evenly spread over the whole image, with no big wave, swirl or feature at the centre, so it tiles.
+- A few hard-edged tones only, like the lava flats: crisp pixel art, no smooth gradients.

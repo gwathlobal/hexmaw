@@ -1,6 +1,9 @@
 # Project-local Quicklisp (Trial comes from the Shirakumo dist)
 /.ql
 
+# A checkout's own eval port (tools/hd, run.sh, the reload hook)
+/.eval-port
+
 # Compiled Lisp
 *.fasl
 *.fas

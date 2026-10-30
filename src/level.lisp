@@ -1,7 +1,7 @@
 (in-package #:hexmaw)
 
 ;;; Greybox test level: a 20 x 20 m hall with pillars, a jumpable platform, a
-;;; two-storey annex east and a corridor north to a shrine. Units are metres, +Y is up, the
+;;; two-storey annex east and a corridor north to a shrine, with a pool beside it. Units are metres, +Y is up, the
 ;;; player spawns facing -Z (north). Rebuilt on every scene reload.
 
 (defun build-annex (container)
@@ -133,7 +133,15 @@ upstairs."
       (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :surface :wall)
       (add-torch container -1.0 2.2 -18)
       ;; The shrine block (data/blueprints/shrine.txt) at the corridor's end, attached by
-      ;; its south doorway. Its other doorways are plugged.
-      (dolist (c (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south))
-        (unless (string-equal (connector-name c) "connector_south")
-          (seal-connector container c))))))
+      ;; its south doorway. West of it the pool (pool.txt), deep water under a ledge,
+      ;; through its east doorway; their other doorways are plugged.
+      (let* ((shrine (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south))
+             (west (find "connector_west" shrine :key #'connector-name :test #'string-equal)))
+        (dolist (c shrine)
+          (unless (member (connector-name c) '("connector_south" "connector_west") :test #'string-equal)
+            (seal-connector container c)))
+        (dolist (c (attach-block 'pool container "connector_east" :at (connector-location west) :facing :east))
+          (if (string-equal (connector-name c) "connector_east")
+              ;; Two doorways that meet share one portal.
+              (drop-portal c)
+              (seal-connector container c)))))))

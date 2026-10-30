@@ -1,0 +1,41 @@
+; A pool with a way on under the water: a ledge 2 m wide all round, 0.3 m over deep water
+; filling the storey below, and an underwater doorway at the bottom of the west wall into
+; a flooded passage. The end of a flooded run; its ledge doorways go on into the dungeon.
+cells 3 3
+storeys 2
+tags room cistern
+weight 3
+legend
+  ~ water
+  u door underwater, water
+  i spawn any south
+
+plan 0
+########################
+########################
+########################
+#####~~~~~~~~~~~~~~#####
+#####~~~~~~~~~~~~~~#####
+u~~~~~~~~~~~~~~~~~~#####
+u~~~~~~~~~~~~~~~~~~#####
+u~~~~~~~~~~~~~~~~~~#####
+#####~~~~~~~~~~~~~~#####
+#####~~~~~~~~~~~~~~#####
+########################
+########################
+########################
+
+plan 1
+#########nnnnnn#########
+#......................#
+#..........ii..........#
+T....              ....T
+#....              ....#
+w....              ....e
+w....              ....e
+w....              ....e
+#....              ....#
+T....              ....T
+#......................#
+#......................#
+#########ssssss#########

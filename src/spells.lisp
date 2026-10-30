@@ -124,7 +124,10 @@ horizontal part counts."))
    (homing :initarg :homing :initform NIL :accessor homing
            :documentation "Radians a second it turns after the player, or NIL; a shield that
 turns it aside ends it.")
-   (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)))
+   (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)
+   (submerged :initform NIL :accessor submerged
+              :documentation "True while it is in a liquid: one cast under water flies on in it,
+and bursts only on entering one from outside.")))
 
 ;; It strikes from behind itself, along its flight, and pushes along it.
 (defmethod effect-origin ((source spell-projectile))
@@ -140,6 +143,7 @@ turns it aside ends it.")
                                   :homing (spell-homing spell)
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
+    (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T))
     (nv* (projectile-velocity projectile) (float (projectile-speed spell) 0f0))
     (enter projectile container)
     (attach-glow projectile (light-color spell) (light-radius spell))
@@ -230,14 +234,15 @@ seconds, keeping its speed."
       (when (and (homing spell-projectile) *player* (not (eq (caster spell-projectile) *player*)))
         (steer spell-projectile (float dt 0f0)))
       (nv+* loc (projectile-velocity spell-projectile) dt)
-      (let ((victim (projectile-victim spell-projectile loc r)))
+      (let ((victim (projectile-victim spell-projectile loc r))
+            (entered (and (liquid-at (vx loc) (vy loc) (vz loc)) (not (submerged spell-projectile)))))
+        (setf (submerged spell-projectile) (and (liquid-at (vx loc) (vy loc) (vz loc)) T))
         (cond ((and victim (deflects-p victim spell-projectile))
                (deflect victim spell-projectile))
               (victim
                (apply-spell (spell spell-projectile) victim spell-projectile)
                (impact spell-projectile))
-              ((or (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))
-                   (liquid-at (vx loc) (vy loc) (vz loc)))
+              ((or (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)) entered)
                (impact spell-projectile))
               ((< (or (spell-lifetime (spell spell-projectile)) *projectile-lifetime*) (age spell-projectile))
                (despawn spell-projectile)))))))

@@ -1,0 +1,31 @@
+; A canal with a bridge over it, and a doorway onto each bank by the bridge: the way across.
+cells 2 2
+storeys 2
+tags corridor canal
+weight 2
+legend
+  ~ water
+  B door canal
+  C door canal, open
+
+plan 0
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+
+plan 1
+#BBBBCCCCCCBBBB#
+w....      ....e
+w..............e
+w..............e
+#....      ....#
+T....      ....T
+#....      ....#
+#....      ....#
+#BBBBCCCCCCBBBB#

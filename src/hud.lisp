@@ -1,7 +1,7 @@
 (in-package #:hexmaw)
 
 ;;; Heads-up display: health and mana in the lower-left corner, each a label, a
-;;; bar and the numbers, and the frame counter in the upper-left when it's on. HUD elements are ordinary scene entities drawn with a
+;;; bar and the numbers, breath above them while it is short, and the frame counter in the upper-left when it's on. HUD elements are ordinary scene entities drawn with a
 ;;; pixel-space orthographic projection at the near plane, so they stay on top
 ;;; whatever order the scene draws in. Text uses Trial's built-in 9x17 pixel font.
 
@@ -12,6 +12,7 @@
 (defparameter *hud-text-color* (vec4 0.92 0.88 0.78 1))
 (defparameter *health-bar-color* (vec4 0.78 0.14 0.10 1))
 (defparameter *mana-bar-color* (vec4 0.22 0.38 0.90 1))
+(defparameter *breath-bar-color* (vec4 0.62 0.84 0.92 1))
 (defparameter *hud-bar-back-color* (vec4 0.06 0.05 0.06 0.8))
 
 (defconstant +glyph-height+ 17)
@@ -93,6 +94,19 @@ void main(){
   if(color.a < 0.01) discard;
 }")
 
+;;; Breath: a bar over the others, only while the player has less than a full breath.
+
+(define-shader-entity breath-element () ())
+
+(defun breath-shown-p ()
+  (and *player* (< (breath *player*) *breath-time*)))
+
+(defmethod hud-shown-p ((element breath-element))
+  (and (call-next-method) (breath-shown-p)))
+
+(define-shader-entity breath-bar (breath-element hud-bar) ())
+(define-shader-entity breath-text (breath-element hud-text) ())
+
 (defun make-hud-text (&optional (text "") (class 'hud-text))
   (make-instance class :text text :font-size (float +glyph-height+ 0f0)
                            :foreground *hud-text-color* :background (vec4 0 0 0 0)))
@@ -149,6 +163,37 @@ void main(){
   color = pain_color;
 }")
 
+;;; Under water: the whole view, the hands with it, turned blue. The colour multiplies what
+;;; is drawn, so the darks stay dark. Drawn after the water's see-through surface (LATE-RANK),
+;;; behind the bars like the pain flash.
+
+(defparameter *underwater-tint* (vec 0.45 0.68 1.0) "What the view is multiplied by under water.")
+
+(define-shader-entity underwater-tint (hud-element vertex-entity transformed-entity)
+  ((vertex-array :initform (// 'hexmaw 'hud-quad))))
+
+(defmethod hud-shown-p ((tint underwater-tint))
+  (and (call-next-method) *eye-underwater* (not (eq *game-state* :map))))
+
+(defmethod late-rank ((tint underwater-tint)) 1)
+
+(defmethod render :around ((tint underwater-tint) (program shader-program))
+  (with-depth-mask NIL
+    (gl:blend-func :dst-color :zero)
+    (unwind-protect (call-next-method)
+      (gl:blend-func :src-alpha :one-minus-src-alpha))))
+
+(defmethod render :before ((tint underwater-tint) (program shader-program))
+  (setf (uniform program "tint_color") *underwater-tint*))
+
+(define-class-shader (underwater-tint :fragment-shader)
+  "uniform vec3 tint_color;
+out vec4 color;
+
+void main(){
+  color = vec4(tint_color, 1.0);
+}")
+
 ;;; The HUD: owns the elements, keeps them in place and in sync with the player.
 
 (defclass hud (entity listener)
@@ -159,16 +204,20 @@ void main(){
    (mana-label :initform (make-hud-text "MP") :reader mana-label)
    (mana-bar :initform (make-instance 'hud-bar :fill-color *mana-bar-color*) :reader mana-bar)
    (mana-text :initform (make-hud-text) :reader mana-text)
+   (breath-label :initform (make-hud-text "AIR" 'breath-text) :reader breath-label)
+   (breath-bar :initform (make-instance 'breath-bar :fill-color *breath-bar-color*) :reader breath-bar)
    (pain-flash :initform (make-instance 'pain-flash) :reader pain-flash)
+   (underwater-tint :initform (make-instance 'underwater-tint) :reader underwater-tint)
    (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
    (shown-health :initform NIL :accessor shown-health)
    (shown-mana :initform NIL :accessor shown-mana)))
 
 (defun hud-elements (hud)
   ;; The flash first, so the bars draw over it.
-  (list (pain-flash hud)
+  (list (pain-flash hud) (underwater-tint hud)
         (health-label hud) (health-bar hud) (health-text hud)
         (mana-label hud) (mana-bar hud) (mana-text hud)
+        (breath-label hud) (breath-bar hud)
         (fps-display hud)))
 
 (defun add-hud (container)
@@ -183,10 +232,11 @@ void main(){
 
 (defun hud-top ()
   "Pixels from the bottom edge to the top of the bars, for what stacks above them."
-  (+ (hud-row-y 1) +glyph-height+))
+  (+ (hud-row-y (if (breath-shown-p) 2 1)) +glyph-height+))
 
 (defun layout-hud (hud)
-  "Rows from the bottom: mana, then health. Each row is a label, a bar and the numbers."
+  "Rows from the bottom: mana, health, then breath. Each row is a label, a bar and the
+numbers; breath has none."
   (let* ((margin *hud-margin*)
          (bar-x (+ margin (* 3 9)))
          ;; Whole pixels only: a bar on a half pixel loses an edge row.
@@ -196,16 +246,18 @@ void main(){
              (place bar bar-x (+ y bar-dy))
              (setf (vx (scaling bar)) (float *hud-bar-width* 0f0)
                    (vy (scaling bar)) (float *hud-bar-height* 0f0))
-             (place value (+ bar-x *hud-bar-width* 8) y)))
+             (when value
+               (place value (+ bar-x *hud-bar-width* 8) y))))
       (row (hud-row-y 0) (mana-label hud) (mana-bar hud) (mana-text hud))
-      (row (hud-row-y 1) (health-label hud) (health-bar hud) (health-text hud))))
+      (row (hud-row-y 1) (health-label hud) (health-bar hud) (health-text hud))
+      (row (hud-row-y 2) (breath-label hud) (breath-bar hud) NIL)))
   (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* +glyph-height+))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
-  (let ((flash (pain-flash hud)))
-    (place flash 0 0 -0.5)
-    (setf (vx (scaling flash)) (float (width *context*) 0f0)
-          (vy (scaling flash)) (float (height *context*) 0f0))))
+  (dolist (cover (list (pain-flash hud) (underwater-tint hud)))
+    (place cover 0 0 -0.5)
+    (setf (vx (scaling cover)) (float (width *context*) 0f0)
+          (vy (scaling cover)) (float (height *context*) 0f0))))
 
 (define-handler (hud tick) ()
   (when *player*
@@ -213,7 +265,8 @@ void main(){
           (mp (floor (mana *player*))))
       (setf (strength (pain-flash hud)) (/ (pain *player*) *pain-time*)
             (fill-fraction (health-bar hud)) (/ (float hp) *player-max-health*)
-            (fill-fraction (mana-bar hud)) (/ (mana *player*) *max-mana*))
+            (fill-fraction (mana-bar hud)) (/ (mana *player*) *max-mana*)
+            (fill-fraction (breath-bar hud)) (/ (breath *player*) *breath-time*))
       ;; Re-uploading text costs a buffer update, so only when the number changes.
       (unless (eql hp (shown-health hud))
         (setf (shown-health hud) hp
