@@ -345,15 +345,15 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   down and up and the feet sink. Everything else asks `liquid-at x y z`. `*liquid-kinds*`
   says what a kind does: `:damage` per second, paid every `*lava-tick*` by the player
   (`hurt-player ... :shove NIL`: the pain flash, no shove or hit-stop) and by creatures
-  (`burn`: a flash, no flinch or blood; one standing in it walks to the nearest dry cell,
-  `escape-liquid`), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
+  (`burn`: a flash, no flinch or blood; one standing idle in it walks to the nearest dry
+  cell, `escape-liquid`, which looks up to 6 m off for one mid-stream), `:speed` on the player's walk, and `:glow`, the lamps `add-liquid`
   hangs `*glow-height*` over it, one per `:glow-spacing` of the pool's length. One nearer
   than that to a lamp already hung over the same kind is left out and its colour added to
   that lamp's: an irregular pool is many boxes, every lamp sent costs every lit pixel, and
   lamps that close lit like one brighter one anyway. The nav grid flags each cell under lava (`nav-hazard`), and
   `*nav-hazards*` says what the nav questions make of it: `:avoid`, the default, keeps out
-  (so wandering, retreat, `show-nav` and `check-reachable` stay dry, and a generated level
-  always has a dry way); `:wade` lets a path through at `*nav-wade-cost*` (3) times the
+  (so wandering, retreat and `show-nav` stay dry); `check-reachable` wades, since a stream
+  is lava wall to wall and the only way past it is through; `:wade` lets a path through at `*nav-wade-cost*` (3) times the
   cost per step but no straight walk across, so it takes the short way over; `:ignore`
   is any floor. A creature thinks under its `nav-hazards`: `:avoid` for walkers, whose
   chase falls back to `:wade` only when no dry way reaches the player within
@@ -1103,9 +1103,9 @@ Blender export that keeps the conventions works the same. Conventions:
   of a cell edge, on a storey's floor. A connector faces out through the face it lies on.
   Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m),
   `connector_river_north` a `river` (7 × 3.5 m, two cells, 3 m of lava down its middle
-  between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, 1 m of lava between
-  1 m banks), anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
-  fourth value is its lava width), and each kind joins only itself. A doorway two cells
+  between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, all lava, no
+  banks), anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
+  fourth value is its lava width, a stream's its whole width: `flooded-kind-p`), and each kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
@@ -1227,8 +1227,8 @@ under a floor slab of the storey above stops 0.5 m short, under the slab. A door
 numbered `_2` and on when a side has several, lower storey first, and its plug. A doorway
 is the border cells of one kind side by side, whatever their characters, so a river's is
 lava cells (`= door river, lava`) between bank cells (`R door river`); its middle lava
-width must be lava and the rest bank, so any river doorway meets any other (`- door stream,
-lava` and `S door stream` for a stream's). Wide, it is 14 columns on a north or south face
+width must be lava and the rest bank, so any river doorway meets any other (a stream's is
+lava wall to wall, `- door stream, lava`). Wide, it is 14 columns on a north or south face
 and 7 rows on an east or west one, centred on a cell boundary.
 
 The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-end` (a
@@ -1246,14 +1246,16 @@ hanging rock, a lava pool against the rock and a dry pit, both with 45° shores)
 running jump or a 45° causeway) and `magma-pool` (an island on a causeway), and the cave
 connectors `cave-bend` and `cave-fork`; and the lava rivers (below): wide `river`,
 `river-ford` (bridged, doorways on both banks), `river-bend` and `river-cavern` (a room the
-river runs through, bridged), narrow `stream` and `stream-bend`, `river-narrows` (wide to
-narrow), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror.
+river runs through, bridged), narrow `stream` and `stream-bend` (lava wall to wall, no bank: the only way along is
+wading, and it burns), `river-narrows` (wide to narrow: the banks run out and its last cell
+is all lava), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror.
 Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip. `(check-kit)` checks it, for
 every block or a list of names: it builds each alone (`*level*` `:block`, `*check-block*`)
 and reports what's wrong (`block-problems`): ordinary doorways that don't reach each other,
 a doorway or bank that leads to no other doorway, a river end that doesn't join both banks,
-a monster that can't reach the first doorway. Leave passages at least 1.5 m wide: the nav
+a monster that can't reach the first doorway. A block with a stream doorway is checked
+wading (it can't be crossed dry), the rest dry, so a wide river's banks still walk dry. Leave passages at least 1.5 m wide: the nav
 grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 1 m gap
 beside a column had none.
 
@@ -1319,15 +1321,18 @@ in a plug, and the dungeon carries on from the ends and the pieces' side doorway
 `*max-rivers*` (1) rivers, river blocks leave the ordinary choices. `*level-rivers*` holds
 the last level's (`river-pieces`, `river-target`, `river-ends`), the log line says how each
 ended, and `(level-map)` draws river blocks as `~`. A river's two banks meet only at its
-ends and crossings (fords, the cavern's bridge), so ends join both banks. On 20 seeds every
+ends and crossings (fords, the cavern's bridge), so ends join both banks; a stream has
+no banks, so a river that narrows is waded from there on, and the dungeon past it is
+reached through lava. On 20 seeds every
 level had one river of 7 to 11 blocks, and the player walked seed 11's 92 m along a bank.
 
 Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
 player must be able to walk from the spawn point to every placed block's doorways (both
-banks of a river's: `doorway-probes`), on the
-nav grid with the player's size and step (`nav-reached`, which is both ways, since steps
+banks of a river's: `doorway-probes`; a stream's middle, in the lava), on the
+nav grid with the player's size and step, wading where it must (`:wade`) (`nav-reached`, which is both ways, since steps
 go up as well as down), and every creature must be able to walk to the spawn point at its
-own size and step from a cell its body fits where it lives (`stranded-creatures`). Each
+own size and step from a cell its body fits where it lives (`stranded-creatures`, wading
+too, as a chase does when there's no dry way). Each
 doorway or creature that fails logs a warning.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open

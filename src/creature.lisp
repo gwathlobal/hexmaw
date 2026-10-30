@@ -352,11 +352,16 @@ flinch, blood or hit-stop, which would freeze the game every burn."
       (setf (dead creature) 0.0))))
 
 (defun escape-liquid (creature)
-  "Set CREATURE, standing in lava, walking to the nearest dry cell."
+  "Set CREATURE, standing in lava, walking to the nearest dry cell. In the middle of a
+stream, lava wall to wall, that is several metres off, so look further if need be."
   (when *nav-grid*
     (multiple-value-bind (i j k)
-        (let ((*nav-hazards* :avoid))
-          (nav-nearest-fitting (location creature) (body-radius creature) (sprite-height creature) :search 4))
+        (let ((*nav-hazards* :avoid)
+              (loc (location creature)) (r (body-radius creature)) (h (sprite-height creature)))
+          (multiple-value-bind (i j k) (nav-nearest-fitting loc r h :search 4)
+            (if i
+                (values i j k)
+                (nav-nearest-fitting loc r h :search 12))))
       (when i
         (setf (path creature) (list (nav-point i j k))
               (brain creature) :walking

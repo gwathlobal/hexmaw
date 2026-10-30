@@ -1,4 +1,4 @@
-; A narrow lava river turning from the south to the west.
+; A narrow lava river turning from the south to the west, lava wall to wall.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 2 2
 tags corridor river
@@ -11,18 +11,16 @@ remap ceiling rock
 remap floor cave-floor
 legend
   ~ lava
-  ( diagonal / floor -0.4 0, lava    ; a shore: floor on one half, lava on the other
-  ) diagonal \ floor -0.4 0, lava
-  S door stream                      ; a narrow river's doorway: bank
-  - door stream, lava                ; and lava
+  > diagonal \, lava                 ; 45-degree rock standing in lava
+  - door stream, lava                ; a narrow river's doorway: all lava
 
 plan 0
 ################
-S..............#
--~~~~~~~~~~~~..#
-S........))~~..#
-#..........~~..#
-#..........~~..#
-#..........~~..#
-#..........~~..#
-#########SS--SS#
+-~~~~~~~~~~~~>>#
+-~~~~~~~~~~~~~~#
+-~~~~~~~~~~~~~~#
+#######>>~~~~~~#
+#########~~~~~~#
+#########~~~~~~#
+#########~~~~~~#
+#########------#

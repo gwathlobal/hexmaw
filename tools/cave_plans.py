@@ -16,7 +16,7 @@ A blueprint's header and legend are written by hand; this replaces the rows afte
 - rock in lava: LAVA_ROCK turns a rock pair with lava beside it into `<` or `>`, which stand
   in the lava.
 - doorways: put strings on the border. A wide river doorway is `RRRR======RRRR` on a north or
-  south face and `RR===RR` on an east or west one; a stream's `SS--SS` and `S-S`.
+  south face and `RR===RR` on an east or west one; a stream's, all lava, `------` and `---`.
 
 Then `tools/blueprint NAME` builds the block, and in the game `(check-kit '("NAME"))` checks
 its doorways and monsters reach each other.
@@ -32,7 +32,7 @@ PIT = {'/': '[', '\\': ']'}
 SHELF = {'/': '{', '\\': '}'}
 HANG = {'/': 'A', '\\': 'B'}
 WIDE_NS, WIDE_EW = 'RRRR======RRRR', 'RR===RR'
-NARROW_NS, NARROW_EW = 'SS--SS', 'S-S'
+NARROW_NS, NARROW_EW = '------', '---'
 
 
 def blank(wide, deep):
@@ -253,29 +253,34 @@ def river_cavern():
 
 
 def stream():
+    # Lava wall to wall: no bank to walk, so wading it is the only way along.
     g = blank(1, 2)
     put(g, 0, 1, NARROW_NS); put(g, 8, 1, NARROW_NS); down(g, 0, 5, 'www')
-    outline(g, L=[1] * 8, R=[7] * 8)
-    fill(g, range(1, 8), (3, 4), '~')
+    outline(g, L=[1] * 8, R=[7] * 8, fill='~')
     return g
 
 
 def stream_bend():
     g = blank(2, 2)
     put(g, 8, 9, NARROW_NS); down(g, 0, 1, NARROW_EW)
-    outline(g, L=[1] * 8, R=[15] * 8)
-    region(g, 2, L=[1, 1], R=[13, 13], fill='~', pairs=POOL)
-    region(g, 3, L=[9, 11, 11, 11, 11, 11], R=[13] * 6, fill='~', pairs=POOL)
+    outline(g, L=[1] * 8, R=[15] * 8, fill='~')
+    fill(g, range(4, 8), range(1, 9), '#')
+    # 45-degree rock on the bend's outer and inner corners.
+    put(g, 1, 13, '\\\\'); put(g, 4, 7, '\\\\')
+    lava_rock(g)
     return g
 
 
 def river_narrows():
     g = blank(2, 3)
-    # A one-cell doorway sits in one cell, so the river narrows toward the east one.
+    # A one-cell doorway sits in one cell, so the river narrows toward the east one: the
+    # banks run out and its last cell is lava wall to wall.
     put(g, 12, 1, WIDE_NS); put(g, 0, 9, NARROW_NS)
-    outline(g, L=[9, 7, 5, 3, 1, 1, 1, 1, 1, 1, 1, 1], R=[15] * 12)
-    region(g, 1, L=[11, 11, 11, 9, 7, 5, 5, 5, 5, 5, 5, 5], R=[13, 13, 13, 13, 11, 11, 11, 11, 11, 11, 11, 11],
+    outline(g, L=[9, 9, 9, 9, 9, 7, 5, 3, 1, 1, 1, 1], R=[15] * 12)
+    region(g, 1, L=[9, 9, 9, 9, 9, 7, 5, 5, 5, 5, 5, 5], R=[15, 15, 15, 15, 15, 13, 11, 11, 11, 11, 11, 11],
            fill='~', pairs=POOL)
+    lava_rock(g)
+    put(g, 7, 3, '//')  # the west bank's tip, dry
     return g
 
 
@@ -304,7 +309,9 @@ def stream_spring():
     g = blank(2, 2)
     put(g, 8, 9, NARROW_NS); put(g, 0, 1, 'nnnnnn'); down(g, 0, 5, 'www')
     outline(g, L=[1] * 8, R=[11, 13, 15, 15, 15, 15, 15, 15])
-    region(g, 2, L=[9, 7, 7, 9, 11, 11], R=[13, 15, 15, 13, 13, 13], fill='~', pairs=POOL)
+    # The stream comes in wall to wall for 3 m before the pool opens out.
+    region(g, 2, L=[9, 7, 7, 9, 9, 9, 9], R=[13, 15, 15, 15, 15, 15, 15], fill='~', pairs=POOL)
+    fill(g, (5, 6, 7), [8], '#')
     lava_rock(g)
     return g
 

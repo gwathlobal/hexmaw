@@ -9,12 +9,13 @@
 ;;; loops; one that runs into another block's wall is plugged. When enough rooms are
 ;;; in, or nothing more fits, every doorway still open is plugged.
 ;;;
-;;; Rivers: blocks joined through river and stream doorways (lava down the middle). The
-;;; first river block comes in like any corridor or room, through an ordinary doorway, and
-;;; starts a river with a target length in blocks. Its open river doorways are tried
-;;; before any other, with river pieces until the river has its length and ends from then
-;;; on, so each arm ends in an end block (whose other doorways go on into the dungeon), in
-;;; a join with another river doorway, or, if nothing fits, in a plug.
+;;; Rivers: blocks joined through river doorways (lava down the middle, between banks) and
+;;; stream doorways (lava wall to wall, waded). The first river block comes in like any
+;;; corridor or room, through an ordinary doorway, and starts a river with a target length
+;;; in blocks. Its open river doorways are tried before any other, with river pieces until
+;;; the river has its length and ends from then on, so each arm ends in an end block (whose
+;;; other doorways go on into the dungeon), in a join with another river doorway, or, if
+;;; nothing fits, in a plug.
 
 (defparameter *level-seed* NIL "The generator's seed, or NIL for a new one every build.")
 (defvar *last-level-seed* NIL "The seed of the last generated level, to build it again.")
