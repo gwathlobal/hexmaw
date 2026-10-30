@@ -85,11 +85,23 @@ rectangle (X0 Z0 X1 Z1), in as few boxes as it takes."
 (defun doorway-inside (connector)
   "A point 1 m inside CONNECTOR's block from its doorway, just above its floor: in front
 of the plug, if it is plugged."
-  (let ((p (connector-location connector)))
+  (first (doorway-probes connector)))
+
+(defun doorway-probes (connector)
+  "Where to stand 1 m inside CONNECTOR's doorway, just above its floor: its middle, or for
+a river's (lava down the middle) the middle of each bank."
+  (let ((p (connector-location connector))
+        (spec (assoc (connector-kind connector) hexmaw.blueprint:*connector-kinds* :test #'string-equal)))
     (multiple-value-bind (dx dz)
         (ecase (connector-direction connector)
           (:north (values 0 -1)) (:south (values 0 1)) (:west (values -1 0)) (:east (values 1 0)))
-      (vec (- (vx p) dx) (+ (vy p) 0.1) (- (vz p) dz)))))
+      (let ((x (- (vx p) dx)) (y (+ (vy p) 0.1)) (z (- (vz p) dz)))
+        (if (fourth spec)
+            ;; Along the doorway, halfway across each bank.
+            (let ((off (/ (+ (second spec) (fourth spec)) 4)))
+              (list (vec (+ x (* off (abs dz))) y (+ z (* off (abs dx))))
+                    (vec (- x (* off (abs dz))) y (- z (* off (abs dx))))))
+            (list (vec x y z)))))))
 
 (defun unreachable-doorways (&key (from *spawn-point*) (doorways *level-doorways*))
   "The DOORWAYS a player can't walk to from FROM, on the nav grid."
@@ -100,9 +112,12 @@ of the plug, if it is plugged."
           (let ((seen (nav-reached si sj sk r h step)))
             (remove-if (lambda (c)
                          ;; A body can't stand right against a plug, and inside a stair's
-                         ;; doorway the floor climbs, so look a little around and above.
-                         (multiple-value-bind (i j k) (nav-nearest-fitting (doorway-inside c) r h :search 2 :reach 1.5)
-                           (and i (= 1 (sbit seen (nav-index i j k))))))
+                         ;; doorway the floor climbs, so look a little around and above. A
+                         ;; river's doorway counts only if both its banks do.
+                         (every (lambda (probe)
+                                  (multiple-value-bind (i j k) (nav-nearest-fitting probe r h :search 2 :reach 1.5)
+                                    (and i (= 1 (sbit seen (nav-index i j k))))))
+                                (doorway-probes c)))
                        doorways))))))
 
 (defun stranded-creatures (&key (from *spawn-point*))
@@ -139,3 +154,71 @@ that can't walk to the player. Returns both."
     (dolist (c stranded)
       (v:warn :hexmaw "~a at ~a can't walk to the spawn point." (type-of c) (home c)))
     (values lost stranded)))
+
+;;; Checking one block: *LEVEL* :BLOCK is *CHECK-BLOCK* alone, every doorway open. Each
+;;; doorway has its probes (a river's, one per bank), and what joins what on the nav grid
+;;; at the player's size decides it is sound:
+;;;
+;;; - its ordinary doorways reach each other;
+;;; - every probe reaches another doorway's: no bank or corner leads nowhere;
+;;; - a river end (tag RIVER-END) joins all of them: a river's two banks meet only at its
+;;;   ends and crossings, so with an end at each end both banks of every piece stay walkable;
+;;; - every monster reaches the first doorway.
+
+(defvar *check-block* NIL "The block *LEVEL* :BLOCK builds.")
+
+(defun build-check-block (container)
+  (let ((doors (place-block *check-block* container :at (vec 0 0 0) :turns 0)))
+    (when doors
+      (v<- *spawn-point* (doorway-inside (first doors))))))
+
+(defun block-problems (name)
+  "What is wrong with block NAME, built alone as *LEVEL* :BLOCK, as a list of strings."
+  (let* ((r *player-radius*) (h *player-height*) (step *step-height*)
+         (probes (loop for c in *level-doorways*
+                       append (loop for p in (doorway-probes c)
+                                    collect (list c p (multiple-value-list
+                                                       (nav-nearest-fitting p r h :search 2 :reach 1.5))))))
+         (problems ()))
+    (flet ((ordinary-p (c) (not (fourth (assoc (connector-kind c) hexmaw.blueprint:*connector-kinds*
+                                               :test #'string-equal))))
+           (label (probe) (format NIL "~a~:[~; (a bank)~]" (connector-name (first probe))
+                                  (rest (doorway-probes (first probe))))))
+      (let ((reach (loop for probe in probes
+                         collect (destructuring-bind (i j k) (third probe)
+                                   (and i (nav-reached i j k r h step))))))
+        (flet ((joined (a b)
+                 (let ((seen (nth (position a probes) reach)))
+                   (destructuring-bind (i j k) (third b)
+                     (and seen i (= 1 (sbit seen (nav-index i j k))))))))
+          (loop for a in probes
+                do (cond ((null (first (third a)))
+                          (push (format NIL "~a: no floor to stand on" (label a)) problems))
+                         ((and (< 1 (length *level-doorways*))
+                               (notany (lambda (b) (and (not (eq (first a) (first b))) (joined a b))) probes))
+                          (push (format NIL "~a leads to no other doorway" (label a)) problems))))
+          (let ((ordinary (remove-if-not (lambda (p) (ordinary-p (first p))) probes))
+                (all-joined (member :river-end (block-tags name))))
+            (loop for a in (if all-joined probes ordinary)
+                  do (loop for b in (if all-joined probes ordinary)
+                           when (and (not (eq (first a) (first b))) (not (joined a b)))
+                             do (push (format NIL "~a doesn't reach ~a" (label a) (label b)) problems))))))
+      (dolist (c (stranded-creatures))
+        (push (format NIL "~a at ~a can't reach ~a" (type-of c) (home c) (connector-name (first *level-doorways*)))
+              problems)))
+    (remove-duplicates (nreverse problems) :test #'string=)))
+
+(defun check-kit (&optional names)
+  "Build every block in NAMES (or the kit) alone and check it (BLOCK-PROBLEMS). Returns
+a list of (name problem...) for those with any; NIL is a clean kit. Rebuilds the scene
+for each, then puts the level back. Call it from the eval server, not inside GAME."
+  (let ((level *level*) (problems ()))
+    (unwind-protect
+         (dolist (name (or names (kit-blocks)))
+           (setf *check-block* name *level* :block)
+           (reload-scene)
+           (let ((found (block-problems name)))
+             (when found (push (cons name found) problems))))
+      (setf *level* level)
+      (reload-scene))
+    (nreverse problems)))

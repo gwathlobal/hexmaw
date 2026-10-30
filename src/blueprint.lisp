@@ -30,8 +30,10 @@
 (defparameter *storey-height* 5.0 "Storey K's floor is K times this many metres up.")
 (defparameter *border* 0.5 "How thick the border walls and the floor and ceiling slabs are.")
 (defparameter *max-riser* 0.45 "The most a stair step rises: the player's *STEP-HEIGHT*.")
-(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5))
-  "Each kind of doorway: its name, width and height in metres. Only one kind joins itself.")
+(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 1.0))
+  "Each kind of doorway: its name, width and height in metres, and for a river the width of
+lava down its middle, between two banks. Each kind joins only itself. One wider than a cell
+spans two and is centred on the boundary between them.")
 (defparameter *default-ceiling* 4.0)
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3
@@ -434,7 +436,9 @@
                (dolist (rc (append cells (list NIL)))
                  (let* ((char (and rc (char (aref rows (first rc)) (second rc))))
                         (door (and char (action :door (char-actions blueprint char)))))
-                   (if (and current door (char= char (getf current :char)))
+                   ;; A doorway is the cells of one kind side by side, whatever their
+                   ;; characters: a river's lava cells and bank cells make one.
+                   (if (and current door (string-equal (second door) (getf current :kind)))
                        (setf (getf current :end) rc)
                        (progn (when current (push current runs))
                               (setf current (and door (list :side side :char char :kind (second door)
@@ -666,9 +670,27 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                   (unless (near (- hi lo) (second spec))
                     (fail line column "A ~a doorway is ~,1f m wide (~d ~a); this one is ~,1f m." kind (second spec)
                           (if ns (round (second spec) 0.5) (round (second spec))) (if ns "columns" "rows") (- hi lo)))
+                  ;; One cell wide, it is centred on a cell's middle; two, on the boundary.
                   (unless (or (grid-free blueprint)
-                              (near (mod (+ centre (/ (if ns w d) 2)) *cell-size*) (/ *cell-size* 2)))
-                    (fail line column "This doorway isn't centred on a cell's edge."))
+                              (let ((off (mod (+ centre (/ (if ns w d) 2)) *cell-size*)))
+                                (if (oddp (round (+ (second spec) 1) *cell-size*))
+                                    (near off (/ *cell-size* 2))
+                                    (or (near off 0) (near off *cell-size*)))))
+                    (fail line column "This doorway isn't centred on a cell's edge~:[~; (a ~a doorway spans two cells: centre it on the boundary between them)~]."
+                          (< *cell-size* (second spec)) kind))
+                  ;; A river's lava runs down its middle, LAVA wide, the rest is bank, so
+                  ;; every doorway of a kind meets every other.
+                  (when (fourth spec)
+                    (loop for i from (if ns (second start) (first start)) to (if ns (second end) (first end))
+                          for rc = (if ns (list (first start) i) (list i (second start)))
+                          for mid = (/ (+ (if ns (col-span blueprint i) (row-span blueprint i))
+                                          (nth-value 1 (if ns (col-span blueprint i) (row-span blueprint i))))
+                                       2)
+                          for lava = (action :lava (char-actions blueprint (char (aref rows (first rc)) (second rc))))
+                          do (unless (eq (not lava) (not (< (abs (- mid centre)) (/ (fourth spec) 2))))
+                               (fail (+ (line plan) (first rc)) (1+ (second rc))
+                                     "A ~a doorway has ~a m of lava down its middle and bank on each side; this cell should be ~:[bank~;lava~]."
+                                     kind (fourth spec) (not lava)))))
                   (push (list :storey k :side side :kind kind :along centre
                               :position (ecase side
                                           (:north (list centre base (/ d -2)))
@@ -680,7 +702,21 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                         (:north (list (- centre half) base (/ d -2) (+ centre half) y1 (+ (/ d -2) *border*)))
                                         (:south (list (- centre half) base (- (/ d 2) *border*) (+ centre half) y1 (/ d 2)))
                                         (:west (list (/ w -2) base (- centre half) (+ (/ w -2) *border*) y1 (+ centre half)))
-                                        (:east (list (- (/ w 2) *border*) base (- centre half) (/ w 2) y1 (+ centre half))))))
+                                        (:east (list (- (/ w 2) *border*) base (- centre half) (/ w 2) y1 (+ centre half)))))
+                              ;; Under a river's lava the floor is sunk, so its plug goes down
+                              ;; to the pit's floor there, or the lava shows beneath it.
+                              :lava-plug (when (fourth spec)
+                                           (let* ((depth (or (loop for i from (if ns (second start) (first start))
+                                                                     to (if ns (second end) (first end))
+                                                                   for ch = (if ns (char (aref rows (first start)) i) (char (aref rows i) (second start)))
+                                                                   thereis (second (action :lava (char-actions blueprint ch))))
+                                                             *lava-depth*))
+                                                  (y0 (- base depth)) (lh (/ (fourth spec) 2)))
+                                             (ecase side
+                                               (:north (list (- centre lh) y0 (/ d -2) (+ centre lh) base (+ (/ d -2) *border*)))
+                                               (:south (list (- centre lh) y0 (- (/ d 2) *border*) (+ centre lh) base (/ d 2)))
+                                               (:west (list (/ w -2) y0 (- centre lh) (+ (/ w -2) *border*) base (+ centre lh)))
+                                               (:east (list (- (/ w 2) *border*) y0 (- centre lh) (/ w 2) base (+ centre lh)))))))
                         doors))))))
         ;; The ceiling over the whole block.
         (let ((top (storey-top blueprint (1- (storeys blueprint)))))
@@ -694,7 +730,10 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                    (n (incf (gethash stem seen 0)))
                    (suffix (if (= n 1) stem (format NIL "~a_~d" stem n))))
               (push (list (format NIL "connector_~a" suffix) (getf door :position) NIL) empties)
-              (push (list* (format NIL "plug_~a" suffix) (remapped blueprint "wall") T (getf door :plug)) boxes))))
+              (push (list* (format NIL "plug_~a" suffix) (remapped blueprint "wall") T (getf door :plug)) boxes)
+              ;; A second piece of the same plug (blocks.lisp drops the ".001").
+              (when (getf door :lava-plug)
+                (push (list* (format NIL "plug_~a.001" suffix) (remapped blueprint "wall") T (getf door :lava-plug)) boxes)))))
         (values (nreverse boxes) (nreverse empties)
                 (let ((extras (make-hash-table :test 'equal)))
                   (setf (gethash "tags" extras) (coerce (tags blueprint) 'vector)

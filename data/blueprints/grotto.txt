@@ -1,0 +1,28 @@
+; A small round cave with a diamond column.
+; Its plan is drawn by tools/cave_plans.py.
+cells 2 2
+tags room
+weight 2
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  1 diagonal / se                    ; a diamond column, its four quarters
+  2 diagonal \ sw
+  3 diagonal \ ne
+  4 diagonal / nw
+  i spawn any south
+
+plan 0
+#########nnnnnn#
+###//..........#
+#//............#
+#.....1122.....#
+#.....3344.....#
+w..............#
+w........ii..//#
+w..........//###
+################

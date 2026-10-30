@@ -376,6 +376,10 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1))
   "What a block's spawn_any picks from, each monster with its weight.")
 
+(defvar *spawn-clearance* NIL
+  "(point . metres) while a level is generated: no block spawns a monster that close to
+the point, the player's start.")
+
 (defvar *block-random* (make-random-state T)
   "Picks among a spawn's choices. The generator binds it to its own, seeded, state.")
 
@@ -418,13 +422,17 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
           (let ((w (world p)))
             (add-torch container (vx w) (vy w) (vz w))))
         (dolist (spawn (and spawns (getf def :spawns)))
+          ;; The choice is made even for a spawn left out, so a seed builds the same level.
           (let* ((kind (spawn-choice (getf spawn :kind)))
-                 (class (find-symbol (string-upcase kind) '#:hexmaw)))
-            (if (and class (find-class class NIL) (subtypep class 'creature))
-                (spawn-creature (make-instance class :location (world (getf spawn :position))
+                 (class (find-symbol (string-upcase kind) '#:hexmaw))
+                 (at (world (getf spawn :position))))
+            (cond
+              ((and *spawn-clearance* (< (vdistance at (car *spawn-clearance*)) (cdr *spawn-clearance*))))
+              ((and class (find-class class NIL) (subtypep class 'creature))
+                (spawn-creature (make-instance class :location at
                                                      :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))
-                                container)
-                (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind))))
+                                container))
+              (T (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind)))))
         (loop for c in (getf def :connectors)
               for portal in portals
               collect (let ((plugs (getf c :plugs)))

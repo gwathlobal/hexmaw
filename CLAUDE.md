@@ -998,8 +998,12 @@ Blender export that keeps the conventions works the same. Conventions:
   south-east, as the block lies; turned with it): its mesh must be that prism, unrotated.
 - Empties named `connector_<rest>` mark doorways, on the block's outer face, at the middle
   of a cell edge, on a storey's floor. A connector faces out through the face it lies on.
-  Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m), anything else
-  a `door` (3 × 3 m); `*connector-kinds*` lists them, and only one kind joins itself. Light
+  Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m),
+  `connector_river_north` a `river` (7 × 3.5 m, two cells, 3 m of lava down its middle
+  between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, 1 m of lava between
+  1 m banks), anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
+  fourth value is its lava width), and each kind joins only itself. A doorway two cells
+  wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
 - Meshes named `plug_<rest>` fill the doorway of `connector_<rest>`, flush with the wall.
@@ -1117,7 +1121,12 @@ is one monster at its centre, so `ii` centres one on a 1 m spot. Characters with
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
 under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
-numbered `_2` and on when a side has several, lower storey first, and its plug.
+numbered `_2` and on when a side has several, lower storey first, and its plug. A doorway
+is the border cells of one kind side by side, whatever their characters, so a river's is
+lava cells (`= door river, lava`) between bank cells (`R door river`); its middle lava
+width must be lava and the rest bank, so any river doorway meets any other (`- door stream,
+lava` and `S door stream` for a stream's). Wide, it is 14 columns on a north or south face
+and 7 rows on an east or west one, centred on a cell boundary.
 
 The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-end` (a
 niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
@@ -1129,17 +1138,32 @@ bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round
 up to it); caves `cave` (wavy 45° walls, an octagonal pillar, an octagonal shelf and
 hanging rock, a lava pool against the rock and a dry pit, both with 45° shores), `lava-lake`
 (a causeway with 45° edges across lava, a bridge east) and
-`cave-passage` (a corridor at 45°, 2 × 2 cells), each with a mirror.
+`cave-passage` (a corridor at 45°, 2 × 2 cells), `grotto` (small, a diamond column),
+`cavern` (4 × 3: two pillars, a shelf, hanging rock), `lava-chasm` (a 3 m band of lava, a
+running jump or a 45° causeway) and `magma-pool` (an island on a causeway), and the cave
+connectors `cave-bend` and `cave-fork`; and the lava rivers (below): wide `river`,
+`river-ford` (bridged, doorways on both banks), `river-bend` and `river-cavern` (a room the
+river runs through, bridged), narrow `stream` and `stream-bend`, `river-narrows` (wide to
+narrow), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror.
 Every piece must let the player walk between all its doorways (drops don't
-count), or the generator builds places that are a one-way trip.
+count), or the generator builds places that are a one-way trip. `(check-kit)` checks it, for
+every block or a list of names: it builds each alone (`*level*` `:block`, `*check-block*`)
+and reports what's wrong (`block-problems`): ordinary doorways that don't reach each other,
+a doorway or bank that leads to no other doorway, a river end that doesn't join both banks,
+a monster that can't reach the first doorway. Leave passages at least 1.5 m wide: the nav
+grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 1 m gap
+beside a column had none.
 
 Caves are blueprints like the rest: rock is wall characters inside the rectangle (every
 `#` is rock under `remap wall rock`), 45° rock is `/` and `\` pairs, or `<` and `>` where it
 stands in lava, shelves are `box 0 H cave-floor`, low rock `box H top rock`, dips `pit` or
-`lava`, and each has 45° edges through `diagonal` with its heights. Every edge in `cave`,
-`lava-lake` and `cave-passage` runs at 0° or 45°; their plans were drawn from outlines (a
-row's edge moving 2 columns is a diagonal pair; rock first, then pools, pits, shelves and
-hanging rock, each region with its own pair characters), so redraw them the same way. A pair
+`lava`, and each has 45° edges through `diagonal` with its heights. Every edge in every cave
+block runs at 0° or 45°. Their plans are drawn by `tools/cave_plans.py` (`tools/cave_plans.py
+NAME` redraws one, `--check` says which differ), one spec per block: the room's outline as
+the first open and first rock column at each row boundary (a line moving 2 columns makes a
+diagonal pair), then regions inside it (pools, pits, shelves, hanging rock, causeways),
+each with its own pair characters, rock in lava, and doorway strings; the header and legend
+stay hand-written in the blueprint, and the tool rewrites the rows after `plan 0`. A pair
 can't tell its side when both outer sides are other diagonals: move it, or give it a SIDE.
 So walls and pools are octagonal, not round, floors and ceilings stay flat and terraced,
 dips go no deeper than the slab (deeper hollows need the floor
@@ -1161,8 +1185,11 @@ stands the player outside one. Upper storeys are only reachable by moving the pl
 
 The main menu's Start game builds one; `(setf *level* :generated)` and a reset do too
 (`generate-level`):
-it starts in a block tagged `start` (its monsters left out, the player and
-`*spawn-point*` at its centre), keeps a frontier of open doorways, and picks one at a time:
+it starts in a block tagged `start` (the player and `*spawn-point*` at its centre, and no
+monster spawns within `*start-clearance*`, 16 m, of it: a neighbour's monster looking
+through the start room's doorway charged the player the moment the level began;
+`*spawn-clearance*` holds the point while the level is built, and the spawn's random
+choice is still made, so a seed builds the same level), keeps a frontier of open doorways, and picks one at a time:
 from a room it adds a corridor or stair, from a corridor another corridor (less likely the
 longer the run, `*corridor-run*`) or a room, by weight, trying each of the block's
 doorways of the same kind turned to face it until one fits in free grid cells
@@ -1177,8 +1204,24 @@ warning. Two doorways that meet share one portal (`drop-portal` removes the othe
 the shader takes only 32. A stair still open when the rooms are in gets one more piece,
 so no stair ends in a plug.
 
+Rivers: a river is the blocks joined through `river` and `stream` doorways. The first river
+block comes in like any corridor or room, through an ordinary doorway (river pieces are
+tagged `river` as well as `corridor` or `room`, ends `river-end` and `room`), and starts a
+river with a target length of `*river-length*` blocks (5 to 9) shared by its arms. Its open
+river doorways are tried before any other (`next-door`): with pieces until the river has
+its length, then only ends (one river doorway and ordinary doorways onward), an end still
+tried ahead of a plug when no piece fits, and at the room quota every open arm gets its end.
+So an arm ends in an end block, in a join with another river doorway, or, if nothing fits,
+in a plug, and the dungeon carries on from the ends and the pieces' side doorways. After
+`*max-rivers*` (1) rivers, river blocks leave the ordinary choices. `*level-rivers*` holds
+the last level's (`river-pieces`, `river-target`, `river-ends`), the log line says how each
+ended, and `(level-map)` draws river blocks as `~`. A river's two banks meet only at its
+ends and crossings (fords, the cavern's bridge), so ends join both banks. On 20 seeds every
+level had one river of 7 to 11 blocks, and the player walked seed 11's 92 m along a bank.
+
 Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
-player must be able to walk from the spawn point to every placed block's doorways, on the
+player must be able to walk from the spawn point to every placed block's doorways (both
+banks of a river's: `doorway-probes`), on the
 nav grid with the player's size and step (`nav-reached`, which is both ways, since steps
 go up as well as down), and every creature must be able to walk to the spawn point at its
 own size and step from a cell its body fits where it lives (`stranded-creatures`). Each

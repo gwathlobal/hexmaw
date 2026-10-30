@@ -1,0 +1,28 @@
+; A wide lava river, north to south, with a doorway onto its west bank.
+; Its plan is drawn by tools/cave_plans.py.
+cells 2 2
+tags corridor river
+weight 3
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ lava
+  R door river                       ; a wide river's doorway: bank
+  S door stream                      ; a narrow river's doorway: bank
+  = door river, lava                 ; and lava
+  - door stream, lava                ; and lava
+
+plan 0
+#RRRR======RRRR#
+#....~~~~~~....#
+#....~~~~~~....#
+#....~~~~~~..//#
+#....~~~~~~..###
+w....~~~~~~..\\#
+w....~~~~~~....#
+w....~~~~~~....#
+#RRRR======RRRR#

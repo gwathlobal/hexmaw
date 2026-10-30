@@ -1,0 +1,35 @@
+; A big cave: two octagonal pillars, an octagonal shelf, hanging rock.
+; Its plan is drawn by tools/cave_plans.py.
+cells 4 3
+tags room
+weight 2
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  , box 0 0.4 cave-floor             ; a shelf, one step up
+  { diagonal / cave-floor 0 0.4      ; the shelf's edge
+  } diagonal \ cave-floor 0 0.4
+  v box 3 top rock                   ; rock hanging from the 4 m ceiling to 3 m
+  A diagonal / rock 3 top            ; its edge
+  B diagonal \ rock 3 top
+  i spawn any south
+  j spawn any north
+
+plan 0
+#########nnnnnn#################
+#####//................\\#######
+###//..........{{,,,,}}..\\#####
+#//.....//##\\.,,,,,,,,....\\###
+#.......######.}},,,,{{......\\#
+w.......\\##//.................e
+w..............ii..............e
+w......AAvvBB......//##\\......e
+#\\....vvvvvv......######....//#
+###\\..BBvvAAjj....\\##//..//###
+#####\\..................//#####
+#######\\..............//#######
+#################ssssss#########
