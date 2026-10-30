@@ -1,0 +1,16 @@
+; A flooded passage turning a corner.
+cells 1 1
+ceiling 3
+tags corridor flooded
+weight 2
+legend
+  ~ water top
+  n door underwater, water top
+  e door underwater, water top
+
+plan 0
+#nnnnnn#
+#~~~~~~e
+#~~~~~~e
+#~~~~~~e
+########

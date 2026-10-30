@@ -1,7 +1,7 @@
 (in-package #:hexmaw)
 
 ;;; Greybox test level: a 20 x 20 m hall with pillars, a jumpable platform, a
-;;; two-storey annex east and a corridor north to a shrine. Units are metres, +Y is up, the
+;;; two-storey annex east and a corridor north to a shrine, with a pool beside it. Units are metres, +Y is up, the
 ;;; player spawns facing -Z (north). Rebuilt on every scene reload.
 
 (defun build-annex (container)
@@ -122,6 +122,9 @@ upstairs."
     (spawn-creature (make-instance 'harpy :location (vec 6 0 7) :facing (- (/ pi 2))) container)
     ;; A necromancer at the back of the hall, behind the imp, facing the spawn point.
     (spawn-creature (make-instance 'necromancer :location (vec -2 0 -8) :facing pi) container)
+    ;; An ogre in the east of the hall, by the annex doorway, which it just fits through;
+    ;; the annex's stair shaft and the platform's steps test where it can follow.
+    (spawn-creature (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
     (build-annex container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))
@@ -133,7 +136,15 @@ upstairs."
       (add-box container 1.5 0 z1  (+ 1.5 w) 3 z0 :surface :wall)
       (add-torch container -1.0 2.2 -18)
       ;; The shrine block (data/blueprints/shrine.txt) at the corridor's end, attached by
-      ;; its south doorway. Its other doorways are plugged.
-      (dolist (c (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south))
-        (unless (string-equal (connector-name c) "connector_south")
-          (seal-connector container c))))))
+      ;; its south doorway. West of it the pool (pool.txt), deep water under a ledge,
+      ;; through its east doorway; their other doorways are plugged.
+      (let* ((shrine (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south))
+             (west (find "connector_west" shrine :key #'connector-name :test #'string-equal)))
+        (dolist (c shrine)
+          (unless (member (connector-name c) '("connector_south" "connector_west") :test #'string-equal)
+            (seal-connector container c)))
+        (dolist (c (attach-block 'pool container "connector_east" :at (connector-location west) :facing :east))
+          (if (string-equal (connector-name c) "connector_east")
+              ;; Two doorways that meet share one portal.
+              (drop-portal c)
+              (seal-connector container c)))))))

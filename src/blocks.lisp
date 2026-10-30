@@ -7,7 +7,8 @@
 ;;;  - Metres, +Y up, the block's origin at its centre on the floor. On the grid, a block
 ;;;    is whole 4 m cells across and whole 5 m storeys tall.
 ;;;  - Every mesh object is drawn and its bounding box is a solid, unless its name
-;;;    starts with "deco_" (drawn, no collision) or "plug_" (see below). One named
+;;;    starts with "deco_" (drawn, no collision), "plug_" (see below), or "lava_" or
+;;;    "water_" (not drawn: a liquid's volume, liquids.lisp). One named
 ;;;    "wedge_<n>_..." is that box with a vertical corner cut away along the diagonal
 ;;;    (n: 1 north-east, 2 north-west, 3 south-west, 4 south-east, as the block lies),
 ;;;    a 45° wall when the box is square; the mesh must be that shape.
@@ -43,6 +44,11 @@
 (defun prefixp (prefix string)
   (and (<= (length prefix) (length string))
        (string-equal prefix string :end2 (length prefix))))
+
+(defun liquid-name-kind (name)
+  "The liquid kind a piece named NAME is the volume of, or NIL."
+  (cond ((prefixp "lava_" name) :lava)
+        ((prefixp "water_" name) :water)))
 
 (defun base-name (name)
   "NAME without a Blender duplicate's suffix, \".001\"."
@@ -157,14 +163,14 @@
                                               :material (primitive-material-name primitive)
                                               :transform transform
                                               :bounds bounds
-                                              :solid (not (or (prefixp "deco_" name) (prefixp "lava_" name)))
+                                              :solid (not (or (prefixp "deco_" name) (liquid-name-kind name)))
                                               :cut (wedge-name-cut name))
                             do (setf low (vmin low (first bounds)) high (vmax high (second bounds)))
                                (cond ((prefixp "plug_" name)
                                       (push (cons (subseq name (length "plug_")) piece) plugs))
                                      ;; A liquid's mesh is only its volume; LIQUID-SURFACE draws it.
-                                     ((prefixp "lava_" name)
-                                      (push (list :kind :lava :bounds bounds) liquids))
+                                     ((liquid-name-kind name)
+                                      (push (list :kind (liquid-name-kind name) :bounds bounds) liquids))
                                      (T
                                       (push piece pieces)))))
                      ((prefixp "connector_" name)
@@ -392,7 +398,7 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
     (let ((d (q* rotation (vec east 0 south))))
       (corner-cut (< 0 (vx d)) (< 0 (vz d))))))
 
-(defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1))
+(defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1))
   "What a block's spawn_any picks from, each monster with its weight.")
 
 (defvar *spawn-clearance* NIL
@@ -403,15 +409,20 @@ the point, the player's start.")
   "Picks among a spawn's choices. The generator binds it to its own, seeded, state.")
 
 (defun spawn-choice (kind)
-  "The monster a spawn of KIND places: KIND itself, one of \"a|b|c\" (alike), or for
-\"any\" one of *SPAWN-POOL* by weight."
-  (let* ((choices (if (string-equal kind "any")
-                      *spawn-pool*
-                      (mapcar (lambda (k) (list k 1)) (uiop:split-string kind :separator "|"))))
-         (pick (random (reduce #'+ choices :key #'second) *block-random*)))
+  "The monster a spawn of KIND places: KIND itself, one of \"a|b|c\" (alike), for
+\"any\" one of *SPAWN-POOL* by weight, or for \"any-a|b\" one of the pool but those (a
+block too tight for them)."
+  (let* ((choices (cond ((string-equal kind "any") *spawn-pool*)
+                        ((and (< 4 (length kind)) (string-equal kind "any-" :end1 4))
+                         (let ((left-out (uiop:split-string (subseq kind 4) :separator "|")))
+                           (remove-if (lambda (choice) (member (first choice) left-out :test #'string-equal))
+                                      *spawn-pool*)))
+                        (T (mapcar (lambda (k) (list k 1)) (uiop:split-string kind :separator "|")))))
+         (pick (and choices (random (reduce #'+ choices :key #'second) *block-random*))))
     (loop for (name weight) in choices
           do (decf pick weight)
           when (< pick 0) return name
+          ;; NIL when every choice was left out.
           finally (return (first (car (last choices)))))))
 
 (defun place-block (name container &key (at (vec 0 0 0)) (turns 0) (spawns T))
@@ -445,9 +456,10 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
         (dolist (spawn (and spawns (getf def :spawns)))
           ;; The choice is made even for a spawn left out, so a seed builds the same level.
           (let* ((kind (spawn-choice (getf spawn :kind)))
-                 (class (find-symbol (string-upcase kind) '#:hexmaw))
+                 (class (and kind (find-symbol (string-upcase kind) '#:hexmaw)))
                  (at (world (getf spawn :position))))
             (cond
+              ((null kind))
               ((and *spawn-clearance* (< (vdistance at (car *spawn-clearance*)) (cdr *spawn-clearance*))))
               ((and class (find-class class NIL) (subtypep class 'creature))
                 (spawn-creature (make-instance class :location at

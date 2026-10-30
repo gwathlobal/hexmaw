@@ -11,7 +11,9 @@
 ;;;  - headroom: from the floor up to the lowest solid above it;
 ;;;  - clearance: the widest body (half-width, as for collision boxes) that fits
 ;;;    standing there. Solids lower than *NAV-WALL-ABOVE* above the floor don't count,
-;;;    so steps and low ledges aren't walls.
+;;;    so steps and low ledges aren't walls. Measured up to *NAV-CLEARANCE-HEIGHT*, and
+;;;    again for bodies taller than that (tall-clearance), from *NAV-TALL-LIFT* (their
+;;;    longer stride) up to *NAV-TALL-HEIGHT*.
 ;;;
 ;;; A cell is I J K: column I J, layer K. A body of radius R, height H fits a cell when
 ;;; clearance >= R and headroom >= H. It can move to a cell in a neighbouring column
@@ -22,6 +24,13 @@
 ;;;
 ;;; The geometry questions go through FLOOR-CANDIDATES, CEILING-ABOVE and FITS-AT-P,
 ;;; so nothing else here depends on solids being axis-aligned boxes.
+;;;
+;;; Deep water (liquids.lisp) adds a layer: its surface, where it has room above it, is a
+;;; floor too, so a pool's surface is a cell a step below the ledge round it. Each cell's
+;;; WATER code says whether it is such a surface (1) or a floor under deep water (2): the
+;;; pool's bottom, a flooded passage. Walkers keep out of both; a flyer hovers over the
+;;; surface; the player swims through both (*NAV-HAZARDS* :SWIM), diving from a surface to
+;;; the bottom under it.
 
 (defparameter *nav-cell* 0.5 "Grid cell size in metres.")
 (defparameter *nav-radius-step* 0.125 "Clearance is measured in steps of this many metres.")
@@ -31,7 +40,17 @@
   "Clearance ignores solids that rise less than this above the floor: steps aren't walls.")
 (defparameter *nav-clearance-height* 2.0
   "Clearance is measured up to this height above the floor, or up to the headroom if lower.")
+(defparameter *nav-tall-height* 2.7
+  "Clearance for bodies taller than *NAV-CLEARANCE-HEIGHT* (the ogre) is measured again up
+to this height. Measuring everyone's that high would let a lintel over a 2.5 m doorway
+close the cells in front of it to the player.")
+(defparameter *nav-tall-lift* 0.9
+  "The tall clearance ignores solids lower than this above the floor: a tall body has the
+stride to step that high, and must (its STEP-HEIGHT), or a stair is a wall to it. A body
+1 m out from its centre on a stair's 0.5 m treads reaches over the next two steps, 0.83 m
+up.")
 (defparameter *nav-open-headroom* 100.0 "Headroom of a cell with nothing above it.")
+(defparameter *nav-deep* 1.0 "Water this deep over a floor makes it a floor under deep water, swum over.")
 (defparameter *nav-layer-above* 0.5
   "A point is on a floor up to this far above it: a body stepping up is already on the
 step, and its feet may sit a little below the floor it settles onto.")
@@ -50,16 +69,23 @@ step, and its feet may sit a little below the floor it settles onto.")
 A column's floors come first, lowest first.")
    (headroom :initarg :headroom :reader nav-headroom)
    (clearance :initarg :clearance :reader nav-clearance)
+   (tall-clearance :initarg :tall-clearance :reader nav-tall-clearance
+                   :documentation "Clearance up to *NAV-TALL-HEIGHT*, for tall bodies.")
    (hazard :initarg :hazard :reader nav-hazard
            :documentation "A bit per cell I J K, set where its floor is under lava (liquids.lisp).")
    (footing :initarg :footing :reader nav-footing
-            :documentation "Per cell I J K, its floor's footing code (SURFACE-FOOTING), 0 for none.")))
+            :documentation "Per cell I J K, its floor's footing code (SURFACE-FOOTING), 0 for none.")
+   (water :initarg :water :reader nav-water
+          :documentation "Per cell I J K: 1 where its floor is deep water's surface, 2 where it is
+under deep water, 0 for neither.")))
 
 (defvar *nav-hazards* :avoid
-  "How the nav questions treat cells under lava. :AVOID, the default, keeps out of them.
-:WADE lets paths through them, each step there costing *NAV-WADE-COST* times as much,
-but no straight walk crosses them, so a path through lava keeps to the short way across
-it. :IGNORE treats them as any floor, for flyers. Creatures bind it while they think.")
+  "How the nav questions treat cells under lava and in deep water. :AVOID, the default,
+keeps out of both. :WADE lets paths through lava, each step there costing *NAV-WADE-COST*
+times as much, but no straight walk crosses it, so a path through lava keeps to the short
+way across it. :IGNORE treats lava as any floor and lets paths over deep water's surface,
+for flyers. :SWIM wades lava and swims, over deep water and under it, for the player.
+Creatures bind it while they think.")
 (defparameter *nav-wade-cost* 3.0
   "How many times as costly a step through lava is to a path that may wade.")
 
@@ -95,9 +121,9 @@ it. :IGNORE treats them as any floor, for flyers. Creatures bind it while they t
         maximize (aref s 3) into x1 maximize (aref s 5) into z1
         finally (return (values x0 z0 x1 z1))))
 
-(defun measure-clearance (x y z headroom)
-  (let ((height (- (min headroom *nav-clearance-height*) *nav-wall-above*))
-        (above (+ y *nav-wall-above*)))
+(defun measure-clearance (x y z headroom &optional (limit *nav-clearance-height*) (lift *nav-wall-above*))
+  (let ((height (- (min headroom limit) lift))
+        (above (+ y lift)))
     (loop for r from *nav-radius-step* to (+ *nav-max-radius* 1f-4) by *nav-radius-step*
           while (fits-at-p x above z r height)
           maximize r into widest
@@ -153,32 +179,45 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
            (layers 0))
       (flet ((centre-x (i) (+ x0 (* (+ i 0.5) cell)))
              (centre-z (j) (+ z0 (* (+ j 0.5) cell))))
-        ;; Find every column's floors first: the deepest column sizes the layers.
+        ;; Find every column's floors first: the deepest column sizes the layers. Deep
+        ;; water's surfaces are floors too, marked by SURFACES.
         (do-nav-tiles (i j width depth cell x0 z0)
-          (let ((floors (column-floors (centre-x i) (centre-z j))))
-            (setf (aref columns i j) floors
+          (let* ((surfaces (water-surfaces (centre-x i) (centre-z j)))
+                 (floors (sort (append surfaces (column-floors (centre-x i) (centre-z j))) #'<)))
+            (setf (aref columns i j) (cons floors surfaces)
                   layers (max layers (length floors)))))
         (let ((floors (make-array (list width depth layers) :element-type 'single-float
                                                             :initial-element most-negative-single-float))
               (headroom (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
               (clearance (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
+              (tall (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
               (hazard (make-array (list width depth layers) :element-type 'bit :initial-element 0))
-              (footing (make-array (list width depth layers) :element-type '(unsigned-byte 8) :initial-element 0)))
+              (footing (make-array (list width depth layers) :element-type '(unsigned-byte 8) :initial-element 0))
+              (water (make-array (list width depth layers) :element-type '(unsigned-byte 8) :initial-element 0)))
           (do-nav-tiles (i j width depth cell x0 z0)
             (let ((x (centre-x i)) (z (centre-z j)))
-              (loop for y in (aref columns i j)
+              (loop with (column . surfaces) = (aref columns i j)
+                    for y in column
                     for k from 0
                     do (let ((room (let ((top (ceiling-above x y z)))
                                      (if top (- top y) *nav-open-headroom*))))
                          (setf (aref floors i j k) y
                                (aref headroom i j k) (float room 0f0)
                                (aref clearance i j k) (measure-clearance x y z room)
+                               ;; Under a ceiling too low for a tall body it doesn't matter.
+                               (aref tall i j k) (if (< *nav-clearance-height* room)
+                                                     (measure-clearance x y z room *nav-tall-height* *nav-tall-lift*)
+                                                     0f0)
                                (aref hazard i j k) (if (< 0 (hazard-at x (+ y 0.05) z)) 1 0)
-                               (aref footing i j k) (surface-footing (floor-footing x y z)))))))
+                               (aref footing i j k) (surface-footing (floor-footing x y z))
+                               (aref water i j k) (cond ((member y surfaces) 1)
+                                                        ((swim-liquid-at x (+ y *nav-deep*) z) 2)
+                                                        (T 0)))))))
           (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
                                                     :layers layers :floors floors
                                                     :headroom headroom :clearance clearance
-                                                    :hazard hazard :footing footing)))))))
+                                                    :tall-clearance tall :hazard hazard :footing footing
+                                                    :water water)))))))
 
 ;;; Cells.
 
@@ -204,11 +243,15 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
             (setf found k)
             (return found))))))
 
+(defun clearance-for (height grid)
+  "The clearance array that answers for a body HEIGHT tall."
+  (if (< *nav-clearance-height* height) (nav-tall-clearance grid) (nav-clearance grid)))
+
 (defun nav-fits-p (i j k radius height &optional (grid *nav-grid*))
   "True if a body RADIUS out from its centre and HEIGHT tall can stand in cell I J K."
   (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)) (< -1 k (nav-layers grid))
        (nav-floor i j k grid)
-       (<= radius (aref (nav-clearance grid) i j k))
+       (<= radius (aref (clearance-for height grid) i j k))
        (<= height (aref (nav-headroom grid) i j k))))
 
 (defun nav-layer-near (i j floor radius height step &optional (grid *nav-grid*))
@@ -216,11 +259,16 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
 fits, whose floor is at most STEP away, the nearest if several. NIL if there is none.
 Path searches ask this for every neighbour, so it reads the arrays directly."
   (when (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)))
-    (let ((floors (nav-floors grid)) (clearance (nav-clearance grid)) (headroom (nav-headroom grid))
+    (let ((floors (nav-floors grid)) (clearance (clearance-for height grid)) (headroom (nav-headroom grid))
           (hazard (nav-hazard grid)) (dry (eq *nav-hazards* :avoid))
+          (water (nav-water grid))
+          ;; The most water code allowed: surfaces for flyers, under water too for swimmers.
+          (wet (case *nav-hazards* (:swim 2) (:ignore 1) (T 0)))
           (best NIL) (best-d 0.0))
       (declare (type (simple-array single-float (* * *)) floors clearance headroom)
-               (type (simple-array bit (* * *)) hazard))
+               (type (simple-array bit (* * *)) hazard)
+               (type (simple-array (unsigned-byte 8) (* * *)) water)
+               (type fixnum wet))
       (dotimes (k (nav-layers grid) best)
         (let ((y (aref floors i j k)))
           ;; A column's floors come first, so the first missing one ends them.
@@ -229,7 +277,8 @@ Path searches ask this for every neighbour, so it reads the arrays directly."
           (let ((d (abs (- y floor))))
             (when (and (<= d step) (or (null best) (< d best-d))
                        (<= radius (aref clearance i j k)) (<= height (aref headroom i j k))
-                       (not (and dry (= 1 (aref hazard i j k)))))
+                       (not (and dry (= 1 (aref hazard i j k))))
+                       (<= (aref water i j k) wet))
               (setf best k best-d d))))))))
 
 (defun nav-point (i j k &optional (grid *nav-grid*))
@@ -333,7 +382,7 @@ reached) and each cell's previous cell on its path (-1 for none). While *NAV-HAZ
          (open (make-array 64 :adjustable T :fill-pointer 0))
          (start (nav-index si sj sk grid))
          (hazard (nav-hazard grid))
-         (wade-cost (if (eq *nav-hazards* :wade) (float *nav-wade-cost* 0f0) 1f0)))
+         (wade-cost (if (member *nav-hazards* '(:wade :swim)) (float *nav-wade-cost* 0f0) 1f0)))
     (setf (aref dist start) 0.0)
     (vector-push-extend start open)
     ;; Dijkstra with a plain list of open cells: a wander radius reaches a few hundred.
@@ -364,9 +413,26 @@ reached) and each cell's previous cell on its path (-1 for none). While *NAV-HAZ
                                            (vector-push-extend nc open)))))))))
     (values dist parent)))
 
+(defun nav-dives (i j k radius height &optional (grid *nav-grid*))
+  "The other water cells of column I J that a swimmer in water cell I J K can dive or rise
+to, through open water with nothing solid between: the bottom under a surface and the
+surface over it."
+  (let ((water (nav-water grid)))
+    (when (< 0 (aref water i j k))
+      (loop for k2 from 0 below (nav-layers grid)
+            for y2 = (nav-floor i j k2 grid)
+            while y2
+            when (and (/= k k2) (< 0 (aref water i j k2))
+                      (nav-fits-p i j k2 radius height grid)
+                      (let ((lo (min k k2)) (hi (max k k2)))
+                        (<= (nav-floor i j hi grid)
+                            (+ (nav-floor i j lo grid) (aref (nav-headroom grid) i j lo) 1f-3))))
+              collect k2))))
+
 (defun nav-reached (si sj sk radius height step &optional (grid *nav-grid*))
   "Every cell a body can walk to from cell SI SJ SK, however far: a bit per NAV-INDEX.
-Steps go up and down alike, so it can walk back from all of them too."
+Steps go up and down alike, so it can walk back from all of them too. While
+*NAV-HAZARDS* is :SWIM it also dives and rises through deep water (NAV-DIVES)."
   (let* ((seen (make-array (* (nav-width grid) (nav-depth grid) (nav-layers grid))
                            :element-type 'bit :initial-element 0))
          (queue (make-array 256 :adjustable T :fill-pointer 0))
@@ -384,15 +450,21 @@ Steps go up and down alike, so it can walk back from all of them too."
                                 do (let ((nc (nav-index (+ i di) (+ j dj) nk grid)))
                                      (when (= 0 (sbit seen nc))
                                        (setf (sbit seen nc) 1)
-                                       (vector-push-extend nc queue)))))))
+                                       (vector-push-extend nc queue)))))
+               (when (eq *nav-hazards* :swim)
+                 (dolist (nk (nav-dives i j k radius height grid))
+                   (let ((nc (nav-index i j nk grid)))
+                     (when (= 0 (sbit seen nc))
+                       (setf (sbit seen nc) 1)
+                       (vector-push-extend nc queue)))))))
     seen))
 
 (defun nav-line-clear-p (a b radius height step &optional (grid *nav-grid*))
   "True if a body standing at point A can walk the straight line to point B: it fits
 every cell along it, no floor change between them is more than STEP, and it arrives on
-the floor B is on, not one above or below it. Unless *NAV-HAZARDS* is :IGNORE, the
-line keeps out of lava, even for a path that may wade."
-  (let* ((*nav-hazards* (if (eq *nav-hazards* :ignore) :ignore :avoid))
+the floor B is on, not one above or below it. Unless *NAV-HAZARDS* is :IGNORE or :SWIM,
+the line keeps out of lava and water, even for a path that may wade."
+  (let* ((*nav-hazards* (if (member *nav-hazards* '(:ignore :swim)) *nav-hazards* :avoid))
          (dx (- (vx b) (vx a))) (dz (- (vz b) (vz a)))
          (samples (max 1 (ceiling (sqrt (+ (* dx dx) (* dz dz))) (/ (nav-cell-size grid) 4))))
          (floor (nav-floor-at (vx a) (vy a) (vz a) grid)))
@@ -480,7 +552,7 @@ the body fits) can't be reached."
   (setf *nav-tiles* ()))
 
 (defun show-nav (&key (within 8.0) (radius 0.35) (height 1.5) (grid *nav-grid*))
-  "Lay a thin green tile (blue on ice) on every cell within WITHIN metres of the player
+  "Lay a thin green tile (blue on ice, teal on deep water's surface) on every cell within WITHIN metres of the player
 where a body RADIUS wide and HEIGHT tall fits, on every floor. Run in GAME. HIDE-NAV, or a scene
 reset, removes them."
   (hide-nav)
@@ -495,7 +567,9 @@ reset, removes them."
               (when (< (vsqrdistance p feet) (* within within))
                 (push (add-box scene (- (vx p) half) (vy p) (- (vz p) half)
                                (+ (vx p) half) (+ (vy p) 0.03) (+ (vz p) half)
-                               :color (if (< 0 (aref (nav-footing grid) i j k)) (vec 0.3 0.6 1.0) (vec 0.2 0.8 0.3))
+                               :color (cond ((= 1 (aref (nav-water grid) i j k)) (vec 0.1 0.75 0.8))
+                                            ((< 0 (aref (nav-footing grid) i j k)) (vec 0.3 0.6 1.0))
+                                            (T (vec 0.2 0.8 0.3)))
                                :solid NIL)
                       *nav-tiles*)))))))
     (length *nav-tiles*)))

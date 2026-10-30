@@ -27,6 +27,10 @@ it has gone past it, and makes for the next.")
   "Most percent chance a hit has to make a creature flinch, whatever its PAIN-CHANCE and
 the weapon's bonus: some hits always pass it by, so it can't be held in its flinch.")
 (defparameter *settle-speed* 3.0 "Metres per second a creature rises or sinks to the floor under it.")
+(defparameter *float-sink* 0.6
+  "Share of its height a creature afloat in deep water is drawn below the surface it is on.")
+(defparameter *flounder-speed* 0.4 "Share of its walking speed a creature afloat makes for the shore at.")
+(defparameter *creature-drown-damage* 6.0 "Health per second a creature afloat in deep water loses.")
 (defparameter *stuck-time* 0.5 "Seconds a walking creature stays blocked before it gives up its path.")
 (defparameter *stuck-pause* 0.3 "Seconds it stands after giving up before it plans another walk.")
 (defparameter *sight-range* 10.0 "Metres within which a creature sees the player in front of it.")
@@ -348,7 +352,7 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
       (setf (dead creature) 0.0))))
 
 (defun burn (creature amount)
-  "Take AMOUNT health from CREATURE standing in lava: a flash and it notices, but no
+  "Take AMOUNT health from CREATURE standing in lava or drowning: a flash and it notices, but no
 flinch, blood or hit-stop, which would freeze the game every burn."
   (unless (dead creature)
     (decf (health creature) amount)
@@ -359,8 +363,9 @@ flinch, blood or hit-stop, which would freeze the game every burn."
       (setf (dead creature) 0.0))))
 
 (defun escape-liquid (creature)
-  "Set CREATURE, standing in lava, walking to the nearest dry cell. In the middle of a
-stream, lava wall to wall, that is several metres off, so look further if need be."
+  "Set CREATURE, standing in lava or afloat in deep water, walking to the nearest dry cell.
+In the middle of a stream, lava wall to wall, or of a pool that is several metres off, so
+look further if need be."
   (when *nav-grid*
     (multiple-value-bind (i j k)
         (let ((*nav-hazards* :avoid)
@@ -421,7 +426,43 @@ friction: on ice by the footing's, and while it walks there it climbs steps as i
               (setf (vx kb) (* (vx kb) (/ slower speed)) (vz kb) (* (vz kb) (/ slower speed))))))))
 
 (defun walking-speed (creature)
-  (if (hunting-p creature) (or (chase-speed creature) (walk-speed creature)) (walk-speed creature)))
+  (* (if (hunting-p creature) (or (chase-speed creature) (walk-speed creature)) (walk-speed creature))
+     (if (afloat-p creature) *flounder-speed* 1.0)))
+
+;;; Deep water (liquids.lisp): its surface is a floor on the nav grid, so a walker shoved
+;;; in settles onto it like any floor, and is drawn sunk to the chest. Afloat it can't
+;;; fight: it flounders toward the nearest dry floor, slowed and drowning, and walks out
+;;; up the step onto the ledge. Its paths otherwise keep out of water.
+
+(defgeneric floats-p (creature)
+  (:documentation "True if CREATURE ends up afloat on deep water it gets onto: a walker.
+A flyer hovers over it.")
+  (:method ((creature creature)) T))
+
+(defun afloat-p (creature)
+  "True if CREATURE stands on deep water's surface."
+  (and (floats-p creature)
+       (let* ((loc (location creature))
+              (water (swim-liquid-at (vx loc) (- (vy loc) 0.05) (vz loc))))
+         (and water (< (- (aref (liquid-bounds water) 4) (vy loc)) 0.1)))))
+
+(defvar *sink-offset* (vec3) "Scratch: how far an afloat creature is drawn below its location.")
+
+;; Afloat, drawn sunk: the water's surface, drawn after it, covers what is below. Before
+;; the sprite's own transform, so the offset is in world space.
+(defmethod apply-transforms :around ((creature creature))
+  (when (afloat-p creature)
+    (setf (vy *sink-offset*) (float (- (* *float-sink* (sprite-height creature))) 0f0))
+    (translate *sink-offset*))
+  (call-next-method))
+
+(defun flounder (creature dt)
+  "Make for the nearest dry floor (ESCAPE-LIQUID) for DT seconds: CREATURE is afloat."
+  (unless (and (eq (brain creature) :walking) (path creature))
+    (stop-walking creature 0.0)
+    (escape-liquid creature))
+  (when (eq (brain creature) :walking)
+    (walk-path creature dt)))
 
 (defun update-footing (creature)
   "Find the footing CREATURE stands on. Stepping onto ice mid-walk, it carries its walk's
@@ -452,8 +493,9 @@ speed onto it as momentum, so it doesn't stall at the edge."
         (idle-timer creature) pause))
 
 (defgeneric nav-hazards (creature)
-  (:documentation "How CREATURE's paths treat lava (*NAV-HAZARDS*, nav.lisp): a walker
-keeps out of it, unless only a way through it reaches the player; a flyer ignores it.")
+  (:documentation "How CREATURE's paths treat lava and deep water (*NAV-HAZARDS*, nav.lisp):
+a walker keeps out of them, wading lava only when no other way reaches the player; a flyer
+ignores lava and paths over water.")
   (:method ((creature creature)) :avoid))
 
 (defgeneric move-lift (creature)
@@ -592,12 +634,17 @@ skids instead (SKID-PATH)."
         (feet (feet *player*)))
     (turn-to creature (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet))) dt)))
 
+(defgeneric sight-rise (creature)
+  (:documentation "Metres above or below it that CREATURE notices the player: the rooms
+it can do something about. The ogre, which leaps down, looks further.")
+  (:method ((creature creature)) 3.0))
+
 (defun sees-player-p (creature)
   (let* ((loc (location creature))
          (feet (feet *player*))
          (distance (sqrt (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2)))))
     (and (< 0 (health *player*))
-         (< (abs (- (vy feet) (vy loc))) 3.0)
+         (< (abs (- (vy feet) (vy loc))) (sight-rise creature))
          (or (< distance *hearing-range*)
              (and (< distance *sight-range*)
                   (< (player-angle creature) #.(float (/ pi 2) 0f0))))
@@ -689,9 +736,16 @@ range and in sight, else close in."))
 a caster, or a flyer that dives from out of reach.")
   (:method ((creature creature)) (attack-spell creature)))
 
+(defgeneric special-attack (creature)
+  (:documentation "Start an attack of CREATURE's own if it has one ready and it fits, as
+the ogre's leap: true if it started one. HUNT asks it first, so a chasing creature asks
+every *CHASE-REPLAN*.")
+  (:method ((creature creature)) NIL))
+
 (defun hunt (creature)
   "Attack the player if within reach, or set off along a fresh path toward them."
-  (cond ((ranged-p creature) (hunt-from-range creature))
+  (cond ((special-attack creature))
+        ((ranged-p creature) (hunt-from-range creature))
         ((player-within-p creature (* *attack-start-reach* (attack-reach creature)))
          (start-attack creature))
         (T (chase creature))))
@@ -996,20 +1050,27 @@ after the flinch, block and attack.")
       (slide creature dt)
       (drip-blood creature dt)
       (unless (dead creature)
+        ;; Lava burns, and deep water drowns, what is in it.
         (let* ((loc (location creature))
-               (damage (hazard-at (vx loc) (+ (vy loc) 0.05) (vz loc))))
+               (afloat (afloat-p creature))
+               (damage (if afloat
+                           *creature-drown-damage*
+                           (hazard-at (vx loc) (+ (vy loc) 0.05) (vz loc)))))
           (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt damage)
             (setf (burn-timer creature) timer)
             (when (< 0 due)
               (burn creature due)))
-          (when (and (< 0 damage) (not (dead creature)) (eq (brain creature) :idle))
-            (escape-liquid creature))))
-      (unless (dead creature)
-        (cond ((< 0 (rising creature))
-               (decf (rising creature) dt))
-              ((<= (stagger creature) 0)
-               (let ((*nav-hazards* (nav-hazards creature)))
-                 (think creature dt)))))
+          (when (and (< 0 damage) (not afloat) (not (dead creature)) (eq (brain creature) :idle))
+            (escape-liquid creature))
+          (unless (dead creature)
+            (cond ((< 0 (rising creature))
+                   (decf (rising creature) dt))
+                  ((< 0 (stagger creature)))
+                  (afloat
+                   (flounder creature dt))
+                  (T
+                   (let ((*nav-hazards* (nav-hazards creature)))
+                     (think creature dt)))))))
       (keep-height creature dt)
       (when (dead creature)
         (incf (dead creature) dt)

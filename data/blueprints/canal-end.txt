@@ -1,0 +1,33 @@
+; Where a canal begins or ends: its channel stops under the south wall's walk, which joins
+; the banks, and doorways go on into the dungeon from both banks and the walk.
+cells 2 2
+storeys 2
+tags room canal-end
+weight 2
+legend
+  ~ water
+  B door canal
+  C door canal, open
+  i spawn any north
+
+plan 0
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+################
+################
+################
+################
+
+plan 1
+#BBBBCCCCCCBBBB#
+w....      ....e
+w....      ....e
+w....      ....e
+#....      ....#
+#..............#
+T......ii......T
+#..............#
+#########ssssss#

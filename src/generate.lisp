@@ -12,7 +12,10 @@
 ;;; Networks: blocks joined through their own kind of doorway, which ordinary blocks don't
 ;;; have (*NETWORKS*): rivers, through river doorways (lava down the middle, between banks)
 ;;; and stream doorways (lava wall to wall, waded), and high quarters, through high doorways
-;;; (two storeys of room, for the ogre's leaps). The first block of one comes in like any
+;;; (two storeys of room, for the ogre's leaps), and flooded runs, through underwater
+;;; doorways (passages full of water, swum on one breath, a cistern at each end, whose
+;;; ledges go on into the dungeon), and canals, through canal doorways (a river's, deep
+;;; water in place of lava). The first block of one comes in like any
 ;;; corridor or room, through an ordinary doorway, and starts a network with a target length
 ;;; in blocks. Its open network doorways are tried before any other, with pieces until the
 ;;; network has its length and ends from then on, so each arm ends in an end block (whose
@@ -35,9 +38,17 @@
 (defparameter *max-rivers* 1 "How many rivers a level may start.")
 (defparameter *high-length* '(3 6) "The fewest and most blocks a high quarter runs to before it ends.")
 (defparameter *max-high-networks* 1 "How many high quarters a level may start.")
+(defparameter *flooded-length* '(2 4)
+  "The fewest and most blocks a flooded run has before its ends, its first cistern included:
+short, so it is swum on one breath.")
+(defparameter *max-flooded-networks* 1 "How many flooded runs a level may start.")
+(defparameter *canal-length* '(3 6) "The fewest and most blocks a canal runs to before it ends.")
+(defparameter *max-canals* 1 "How many canals a level may start.")
 (defparameter *networks*
   '((:river ("river" "stream") :river :river-end *river-length* *max-rivers*)
-    (:high ("high") :high :high-end *high-length* *max-high-networks*))
+    (:high ("high") :high :high-end *high-length* *max-high-networks*)
+    (:flooded ("underwater") :flooded :cistern *flooded-length* *max-flooded-networks*)
+    (:canal ("canal") :canal :canal-end *canal-length* *max-canals*))
   "The networks the generator grows: each family, the doorway kinds that join its blocks,
 the tags of its pieces and of its ends, and the variables that hold its length in blocks and
 how many a level may start.")
@@ -100,7 +111,7 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
   (member (fourth (assoc family *networks*)) (block-tags name)))
 
 (defclass network ()
-  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER or :HIGH.")
+  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER, :HIGH, :FLOODED or :CANAL.")
    (target :initarg :target :reader network-target :documentation "How many blocks it runs to.")
    (pieces :initform 0 :accessor network-pieces :documentation "How many blocks it has.")
    (ends :initform () :accessor network-ends :documentation "How each arm ended: :END, :JOIN or :PLUG."))
@@ -308,8 +319,8 @@ Returns the pairs."
 
 (defun level-map (&optional (stream *standard-output*))
   "Print the generated level's cells, a storey at a time, north up: each cell is the first
-letter of its block's name, upper case for rooms, ~ for a river's blocks and ^ for a high
-quarter's."
+letter of its block's name, upper case for rooms, ~ for a river's blocks, ^ for a high
+quarter's, = for a flooded run's and - for a canal's."
   (let ((keys (loop for k being the hash-keys of *level-cells* collect k)))
     (when keys
       (loop for k from (reduce #'min keys :key #'third) to (reduce #'max keys :key #'third)
@@ -320,6 +331,8 @@ quarter's."
                               do (write-char (cond ((null name) #\.)
                                                    ((eq (block-network name) :river) #\~)
                                                    ((eq (block-network name) :high) #\^)
+                                                   ((eq (block-network name) :flooded) #\=)
+                                                   ((eq (block-network name) :canal) #\-)
                                                    ((member :room (block-tags name)) (char-upcase (char name 0)))
                                                    (T (char-downcase (char name 0))))
                                              stream))

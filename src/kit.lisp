@@ -112,8 +112,8 @@ middle, in the lava."
 
 (defun unreachable-doorways (&key (from *spawn-point*) (doorways *level-doorways*))
   "The DOORWAYS a player can't walk to from FROM, on the nav grid, wading through lava if
-need be: it burns, but it is a way."
-  (let ((r *player-radius*) (h *player-height*) (step *step-height*) (*nav-hazards* :wade))
+need be (it burns, but it is a way) and swimming through deep water."
+  (let ((r *player-radius*) (h *player-height*) (step *step-height*) (*nav-hazards* :swim))
     (multiple-value-bind (si sj sk) (and *nav-grid* (nav-nearest-fitting from r h))
       (if (null si)
           doorways
@@ -132,8 +132,10 @@ need be: it burns, but it is a way."
   "The creatures that can't walk to FROM from where they live, each on the nav grid at
 its own size and step. A creature whose own cell is too tight for it can't plan a walk
 at all, so that counts too. Walks go both ways, so one search from FROM per size does. A
-chase wades when there is no dry way (CHASE-PATH), so these walks may too."
-  (let ((searches (make-hash-table :test 'equal)) (stranded ()) (*nav-hazards* :wade))
+walker's chase wades when there is no dry way (CHASE-PATH), so these walks may too, and they
+cross deep water: no creature swims, but one beyond a flooded run waits there for the
+player, who can."
+  (let ((searches (make-hash-table :test 'equal)) (stranded ()) (*nav-hazards* :swim))
     (when *nav-grid*
       (loop for creature across *creatures*
             for r = (float (body-radius creature) 0f0)
@@ -170,10 +172,12 @@ that can't walk to the player. Returns both."
 ;;;
 ;;; - its ordinary doorways reach each other;
 ;;; - every probe reaches another doorway's: no bank or corner leads nowhere;
-;;; - a river end (tag RIVER-END) joins all of them: a river's two banks meet only at its
-;;;   ends and crossings, so with an end at each end both banks of every piece stay walkable;
-;;; - a block with a stream's doorway (lava wall to wall) is checked wading, the rest dry, so
-;;;   a wide river's banks must still walk dry to its doorways;
+;;; - a river end (tag RIVER-END, or a canal's, CANAL-END) joins all of them: a river's two
+;;;   banks meet only at its ends and crossings, so with an end at each end both banks of
+;;;   every piece stay walkable;
+;;; - a block with a stream's doorway (lava wall to wall) is checked wading, one with an
+;;;   underwater doorway swimming, the rest dry, so a wide river's banks must still walk dry
+;;;   to its doorways;
 ;;; - every monster reaches the first doorway;
 ;;; - in a high block (tag HIGH), every doorway reaches every other at *HIGH-BODY*'s size,
 ;;;   walking: the ogre's leaps are shortcuts there, never its only way.
@@ -185,16 +189,20 @@ that can't walk to the player. Returns both."
 without its leaps.")
 
 (defun build-check-block (container)
+  ;; The player comes in by a doorway on dry floor, where monsters can walk to it too.
   (let ((doors (place-block *check-block* container :at (vec 0 0 0) :turns 0)))
     (when doors
-      (v<- *spawn-point* (doorway-inside (first doors))))))
+      (v<- *spawn-point* (doorway-inside (or (find "underwater" doors :key #'connector-kind :test-not #'string-equal)
+                                             (first doors)))))))
 
 (defun block-problems (name)
   "What is wrong with block NAME, built alone as *LEVEL* :BLOCK, as a list of strings."
   (let* ((r *player-radius*) (h *player-height*) (step *step-height*)
-         (*nav-hazards* (if (some (lambda (c) (flooded-kind-p (connector-kind c))) *level-doorways*)
-                            :wade
-                            :avoid))
+         (*nav-hazards* (cond ((some (lambda (c) (string-equal "underwater" (connector-kind c))) *level-doorways*)
+                               :swim)
+                              ((some (lambda (c) (flooded-kind-p (connector-kind c))) *level-doorways*)
+                               :wade)
+                              (T :avoid)))
          (probes (loop for c in *level-doorways*
                        append (loop for p in (doorway-probes c)
                                     collect (list c p (multiple-value-list
@@ -218,7 +226,7 @@ without its leaps.")
                                (notany (lambda (b) (and (not (eq (first a) (first b))) (joined a b))) probes))
                           (push (format NIL "~a leads to no other doorway" (label a)) problems))))
           (let ((ordinary (remove-if-not (lambda (p) (ordinary-p (first p))) probes))
-                (all-joined (member :river-end (block-tags name))))
+                (all-joined (intersection '(:river-end :canal-end) (block-tags name))))
             (loop for a in (if all-joined probes ordinary)
                   do (loop for b in (if all-joined probes ordinary)
                            when (and (not (eq (first a) (first b))) (not (joined a b)))

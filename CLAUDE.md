@@ -31,9 +31,10 @@ A git worktree (`.claude/worktrees/<name>`) has no `.ql/` of its own: symlink th
 checkout's, `ln -s "$(git rev-parse --git-common-dir)/../.ql" .ql`, and leave the link there
 (`/.ql` in .gitignore covers it; don't delete it when done). Port 7171 is usually the
 main checkout's game, and `tools/hd` and the reload hook talk to it by default, so editing
-`src/` in a worktree reloads the main checkout's copy of that file into that game. Run the
-worktree's own game on a free port (`ss -ltnp` shows the taken ones) and pass the port to
-every command: `HEXMAW_EVAL_PORT=7181 ./run.sh`, `HEXMAW_EVAL_PORT=7181 tools/hd status`.
+`src/` in a worktree would reload the main checkout's copy of that file into that game. Give
+the worktree its own port in `.eval-port` (gitignored): `echo 7191 > .eval-port`, a free one
+(`ss -ltnp` shows the taken ones). `run.sh`, `tools/hd` and so the reload hook all read it,
+and `HEXMAW_EVAL_PORT` still overrides it.
 `tools/hd '(namestring (root))'` says which checkout a game runs from.
 
 ## Standalone build
@@ -281,7 +282,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 15, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
+  knight 15, ogre 17, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
@@ -310,6 +311,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   current one, so `attack` runs any of them, and `release-attack` (what lands on the hit
   frame), `face-attack-target` (what it turns to through the wind-up) and `hunt-from-range`
   are generics with the caster's behaviour as the default.
+- `src/ogre.lisp`: the `ogre`, the big one (2.7 m, `body-radius` 1.0), which leaps and pushes
+  the player around. See "The ogre" under "Creature movement" below.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
 - `src/blueprint.lisp`: builds blocks from text blueprints (`data/blueprints/*.txt`), in its own
@@ -338,8 +341,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `build-level` builds the saved seed and `setup-scene` ends with `restore-run`, which leaves
   the game paused. Reloading save.lisp resets `*save-directory*`; to test without touching
   real saves, `(setf *save-directory* #p"/some/dir/")` after each reload.
-- `src/liquids.lisp`: liquids, lava for now (water will be another kind). A liquid is a box of
-  volume in `*liquids*` (`build-level` empties it), never a solid: it fills a sunken pit
+- `src/liquids.lisp`: liquids, lava and water. A liquid is a box of volume in `*liquids*`
+  (`build-level` empties it), never a solid. Lava fills a sunken pit
   whose floor is an ordinary solid `*lava-depth*` (0.4 m, under a step) below the floor
   around it, its surface `*lava-surface*` (0.1 m) below, so walking in and out is a step
   down and up and the feet sink. Everything else asks `liquid-at x y z`. `*liquid-kinds*`
@@ -368,6 +371,30 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   the test level, `add-lava` digs a pit in the hall's south-west (x −9 to −6, z 3 to 7),
   its floor slab left with a hole there; the hall's room reaches down to the slab's
   underside so the glow lights the pit's rim.
+
+  Water is deep only: a pit can sink no further than the 0.5 m slab, so water fills the lower
+  storey of a two-storey block (a pool, a canal) up to `*water-surface*` (0.3 m, blueprint.lisp)
+  under the floor above, or a flooded passage to its roof. `:swim` in its kind marks it;
+  `swim-liquid-at` asks for it. Its surface is a `water-surface` (not lava's fullbright
+  `liquid-surface`; both are `liquid-sheet`s): lit through `light_at` like a floor, from below
+  as a ceiling, see-through (`*water-alpha*`), no depth written and both faces drawn. So it
+  must be drawn after everything it covers: its `late-rank` is 0, and the game's pass
+  (`game-pass`, main.lisp) moves what has one to the end of each frame, by rank, since Trial
+  draws in hash-table order. The underwater tint (hud.lisp) is rank 1, after it. A water box whose top meets a ceiling gets no surface. With the camera
+  in water (`*eye-underwater*`, set by `place-camera`) the fog and clear colour are the
+  water's (`*underwater-fog-color*` and the rest; `fog-color`, greybox.lisp), and the whole
+  view, the hands too, is multiplied by `*underwater-tint*` (a blue; `underwater-tint`,
+  hud.lisp, a quad like the pain flash drawn with `:dst-color :zero` blending). The texture is
+  `data/textures/water.png` (`art/prompts/texture-water.txt`, made like the other textures:
+  `tools/make_texture.py art/textures/water-1.png data/textures/water --metres 4`).
+  The nav grid makes deep water's surface a floor (`water-surfaces`), so a walker shoved in
+  settles onto it like any floor. Afloat (`afloat-p`; never a flyer, `floats-p`) it is drawn
+  sunk by `*float-sink*` of its height (in `apply-transforms`, so the surface covers the
+  rest), doesn't think but flounders (`flounder`, `escape-liquid`) toward the nearest dry
+  floor at `*flounder-speed*`, losing `*creature-drown-damage*` a second (`burn`), and walks
+  out up the step onto the ledge. A projectile bursts on entering a liquid from outside: one
+  cast under water (`submerged`) flies on. The necromancer draws no grave circle under a
+  swimmer. On the test level the `pool` hangs off the shrine's west doorway.
 - `src/footing.lisp`: moving on a slippery footing, Hexen's ice. A footing (`*footings*`,
   greybox.lisp, beside `*surfaces*`) belongs to a surface: whatever is drawn with surface
   `:ice` (a blueprint's `ice` material, `add-box :surface :ice`) is slippery, a box, floor slab
@@ -487,7 +514,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   ```
 
   To look at one: `tools/hd '(game (cast-spell (find-spell (quote grave-spikes)) (v+ (feet *player*) (vec 0 0 -4)) (vec 0 0 1) (scene +main+)))'`.
-- `src/hud.lisp`: HP and mana bars in the lower-left corner, and the red pain flash over
+- `src/hud.lisp`: HP and mana bars in the lower-left corner, an AIR bar over them while
+  breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
   on whole pixels, since a half-pixel position drops an edge row. Overlapping elements
@@ -572,15 +600,25 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   middle rather than against the right edge, so the thrust goes where the player looks on any
   screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
   (`art/spear/spear-frames.txt` says how).
-- `src/player.lisp`: first-person controller and box collision.
+- `src/player.lisp`: first-person controller and box collision. In water to the waist
+  (`*swim-waist*`) the player swims, Quake-style (`swim`): W and S along the view, A and D
+  level, Space up and C or Ctrl down, at `*swim-speed*` (`*swim-run-speed*` with Shift)
+  against `*water-drag*`, sinking at `*swim-sink*` when swimming nowhere below the surface and
+  floating with the eye `*float-eye*` over it. Pushing forward into a ledge at the surface no
+  more than `*climb-out-height*` over the water climbs out (`climb-out`). `breath`
+  (`*breath-time*`, 20 s) runs down while the eye is under water and comes back at
+  `*breath-refill*`; with none left the player drowns, `*drown-damage*` a second
+  (`update-breath`, through `burn-due`).
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
-  torches light through its walls. Its corridor ends in the `shrine` block. The debug `ice-rink`
-  block (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
-  knight on the ice; no tags, so never generated) is retired for now: it hung off the shrine's
-  west doorway, `attach-block` by its `connector_east` facing `:east` with `drop-portal` on
-  its connectors; `(kit-goto "ice-rink")` in the gallery still reaches it. A doorway
+  torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
+  (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
+  `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
+  pool's others plugged. The debug `ice-rink` block (an ice field, a raised ice step, a stone
+  strip, a dry pit to slide into, an imp and a knight on the ice; no tags, so never generated)
+  is retired for now, the pool in its place; `(kit-goto "ice-rink")` in the gallery still
+  reaches it. A doorway
   also needs floor under its wall's thickness: without it the nav grid has no cell there,
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
@@ -623,12 +661,23 @@ To test movement without a mouse or keyboard (in play, not on a menu), hold keys
 (`*nav-cell*`), measured a tile of `*nav-tile*` cells at a time against only the solids
 near it, and records for each its floor height, headroom and clearance (the widest
 body that fits, to 0.125 m, up to 2 m; solids less than 0.45 m above the floor don't count,
-so steps aren't walls). A creature fits a cell when clearance ≥ its `body-radius` and
+so steps aren't walls, nor more than 2 m above it, `*nav-clearance-height*`). A body taller
+than that (the ogre) asks a second clearance instead, `tall-clearance`, measured from
+`*nav-tall-lift*` (0.9 m) up to `*nav-tall-height*` (2.7 m), and must have a `step-height` of
+0.9: a body 1 m out from its centre on a stair reaches over the next two steps, 0.83 m up,
+so with the usual 0.45 a stair was a wall to it. Measuring everyone's clearance to 2.7 m
+instead let the lintel of every 2.5 m `narrow` doorway close the cells in front of it to the
+player. A creature fits a cell when clearance ≥ its `body-radius` and
 headroom ≥ its `sprite-height`, and moves to a neighbour when the floors differ by at most
 its `step-height`, so one grid serves every size. The grid is layered: each 0.5 m column
 keeps every floor with room above it, lowest first (a room and the room above it, or a
 hall and its roof), so a cell is `i j k`, and stairs join the layers because neighbouring
-floors are a step apart. A point is in the layer under it, the highest floor at most
+floors are a step apart. Deep water's surface is a floor too, a step below the ledge round
+it, and each cell's `nav-water` says whether it is such a surface (1) or a floor under deep
+water (2): walkers' paths keep out of both, a flyer's (`:ignore`) go over the surface, and
+`*nav-hazards*` `:swim` (the player's reachability) goes through both and dives from a
+surface to the bottom under it (`nav-dives`). `show-nav` tints surface cells teal. A point
+is in the layer under it, the highest floor at most
 `*nav-layer-above*` above its feet (`nav-layer`, `nav-floor-at x y z`), so anything that
 asks about a place passes its height too. A straight walk (`nav-line-clear-p`) must also end
 on the floor its target is on, not the one above or below. The geometry questions
@@ -730,9 +779,53 @@ test level the necromancer stands at the back of the hall, behind the imp; set
 `(hurt (aref *creatures* 0) 30)` (no overkill: a corpse, not gibs) and set it hunting with
 `(setf (alert necromancer) 30.0)`.
 
+### The ogre
+
+The `ogre` (ogre.lisp) is the big one: 2.7 m tall, a body 1 m out from its centre, 120
+health, slow, barely moved by knockback (0.15). It fits the 3 m doorways, corridors and
+stairs, not `narrow` doorways, 2 m stair shafts or the narrow passages of caves, so it is the
+creature that can't follow the player everywhere; with no path it stands facing the player
+and tries again (`chase`'s fallback). Nor can it climb the kit's `stair`: one tread up from
+the 3 m doorway at its foot, its head is above that doorway's 3 m ceiling, which its 1 m
+reach still overlaps. The high quarter's stairs are made for it (see "Blueprints"). Two attacks:
+
+- **Leap** (`special-attack`, which `hunt` asks before anything else; cooldown
+  `*leap-cooldown*`, 6 s): with the player 4 to 12 m away across, at most 2.5 m up or 6 m down
+  and in sight, `plan-leap` takes the cell under the player its body fits
+  (`nav-nearest-fitting`) and an arc to it under `*leap-gravity*`, its top `*leap-apex*` (2 m)
+  over the higher end, lowered under the lowest ceiling along the way, and refused under
+  `*leap-min-apex*` or faster than `*leap-max-speed*`; then it sweeps its body along the arc
+  (`arc-clear-p`), so a leap never passes through a wall or ceiling. In a 4 m room its feet
+  rise 1.2 m; in a 3 m corridor it can't leap. It crouches for `*leap-windup*` (the warning),
+  then flies (`fly-leap`, from its `keep-height`, which runs every tick, so a hit can't leave
+  it hanging), aimed at where the player stood. A wall or body in its way (the player's)
+  cuts it short, and it drops (`drop-ogre`). Landing (`land-leap`) it `quake`s: everything
+  with its feet within `*quake-reach-height*` (0.4 m) of that floor and within
+  `*quake-radius*` (3.5 m), the player and its own allies alike, takes `*quake-damage*` and is
+  thrown away, full against its body and nothing at the rim; the player is thrown up as
+  well (`*quake-player-lift*`), since a shove on the ground dies in a tenth of a second.
+  Jumping as it lands dodges it all. It stands `*leap-recover*` (1.2 s) after.
+- **Slam** up close: the timed blow, and a hit throws the player back and up
+  (`hurt-player`'s `:shove` speed and `:lift`; `shove-player` does it without damage). The
+  maul's impact, `*slam-impact*` in front, shoves everything within `*slam-quake-radius*`
+  (no damage), so a near miss still shoves the player.
+
+It sees `sight-rise` (6.5 m) up and down, not 3. `*leap-debug*` logs every leap, every refusal
+and why, and what each shockwave hits. On the test level it stands in the hall's east, by
+the annex doorway (it fits the lower room, not the stair shaft). Generated levels have it
+from `any`, the `hall`'s choice and the high quarter's own spawns; the `cavern`, `balcony`,
+`ice-cavern` and `ice-grotto` spawn `any-ogre`, since one there couldn't reach its own
+doorways (`check-kit` with `*spawn-pool*` set to only ogres checks every block for it).
+Each block fits it, but the way to the start may not (a `stair`, a cave passage, a `narrow`
+doorway, the far bank of a river): one stranded there guards its part of the level, and
+`check-reachable` warns. On seeds 1 to 20 and 38, 16 levels had ogres, 39 in all, and 3
+were stranded.
+`*ogre-dust*` names the effect animation puffed round a landing and the slam's impact
+(`ogre-dust`, preloaded by `setup-scene`; NIL for none).
+
 `tools/hd '(game (show-nav))'` lays green tiles on the cells within 8 m of the player that
 an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
-`(hide-nav)` or a reset clears them. `tools/hd status` shows each creature's `brain`
+`(hide-nav)` or a reset clears them; `(show-nav :radius 1.0 :height 2.7)` shows the ogre's. `tools/hd status` shows each creature's `brain`
 (`idle`, `walking` or `attacking`).
 
 ## Generating art
@@ -1159,6 +1252,30 @@ python3 tools/slice_frames.py art/necromancer/death.png data/sprites/necromancer
 python3 tools/slice_frames.py art/skeleton/death.png data/sprites/skeleton --pixel 3.94 --anchor bottom --filter box death:8
 ```
 
+The ogre (hunched, grey-green hide, tusks, iron bands and hide wrappings, a two-handed stone
+maul) is `art/ogre/turnaround-2.png` (`art/prompts/ogre-turnaround.txt`, the imp's, acolyte's,
+knight's and harpy's sheets as style references), sliced at `--height 173` for its 2.7 m.
+Its walk, slam (wind-up overhead, swing, the maul in the floor, recover), leap (crouch, in the
+air with the maul raised, landed with it driven down) and flinch are made the necromancer's
+way with `tools/gen_monster_views.sh ogre <anim> ...`; the walk front, `walk-front.png`, is
+`walk-front-c-1.png` with `walk-front-c-2.png`'s third cell. The death (`ogre-death.txt`)
+falls face down beside the maul, and the dust (`ogre-dust.txt`) is a burst of grit standing
+on the floor. In the side, back-quarter and back leap sheets the crouch's maul reached across
+the cyan line into the airborne cell, and the airborne frame carried it: the stray pieces
+were painted magenta in `art/ogre/leap-{side,back-quarter,back}.png`, so look at a sheet's
+cells for a neighbour's pieces before stacking.
+
+```bash
+python3 tools/slice_turnaround.py art/ogre/turnaround-2.png data/sprites/ogre/turnaround --height 173 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk slam leap hurt; do python3 tools/stack_views.py art/ogre/$a-sheet.png $(for v in $V; do echo art/ogre/$a-$v.png; done) --height 1384 --frame 1 --blank 1; done
+for a in walk:20 slam:20 leap:15 hurt:10; do python3 tools/slice_frames.py art/ogre/${a%:*}-sheet.png data/sprites/ogre --pixel 8 --anchor bottom --filter box $a; done
+python3 tools/slice_frames.py art/ogre/death.png data/sprites/ogre --pixel 2.6 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/ogre/dust.png data/sprites/ogre --pixel 4.3 --anchor bottom --filter box dust:6
+```
+
+Its `define-fx-animation` sizes are the strips' cell heights over the turnaround's 173 px.
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -1214,7 +1331,11 @@ Blender export that keeps the conventions works the same. Conventions:
   banks), `connector_high_north` a `high` (7 × 4.5 m, two cells: the high blocks'),
   `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated levels"),
   anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
-  fourth value is its lava width, a stream's its whole width: `flooded-kind-p`), and each kind joins only itself. A doorway two cells
+  fourth value is its lava width, a stream's its whole width: `flooded-kind-p`),
+  `connector_underwater_north` an `underwater` (3 × 3 m, full of water: a flooded passage's
+  and a cistern's), `connector_canal_north` a `canal` (a river's with deep water: 7 × 3.5 m,
+  its middle 3 m open down to the water filling the storey below, which runs on through the
+  wall under it, so its plug reaches down there too), and each kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
@@ -1324,9 +1445,14 @@ storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR 
 `lava [DEPTH SURFACE]` (that cell's floor slab sinks to DEPTH below the floor, 0.4 by
 default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `pit
 [DEPTH]` (the same sunken slab, 0.4 by default and less than the slab's 0.5, with no
-lava: a dry dip, under a step so it is walked through), `torch Y`
+lava: a dry dip, under a step so it is walked through), `water [Y]` (deep water from the
+cell's floor up to Y, `top` for the storey's top, by default `*water-surface*` (0.3 m) under
+the next storey's floor; never above the slab over the cell or a doorway's lintel; on the
+border only under a canal doorway's open channel), `torch Y`
 and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy and necromancer 1 each), picked as the
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer and ogre 1
+each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+tight for them, as the `cavern` and `balcony` are for the ogre), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
@@ -1347,7 +1473,7 @@ The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-
 niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
 `arch` (beams and torches, the way into a room), `narrow` and `narrowing` (to a narrow
 doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
-rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
+rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy, necromancer or ogre), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
 bridge and banks to every doorway), `ice-hall` (a sheet of ice ringed by a stone rim, pillars on
 the ice) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
@@ -1362,6 +1488,12 @@ connectors `cave-bend` and `cave-fork`; and the lava rivers (below): wide `river
 river runs through, bridged), narrow `stream` and `stream-bend` (lava wall to wall, no bank: the only way along is
 wading, and it burns), `river-narrows` (wide to narrow: the banks run out and its last cell
 is all lava), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror;
+the water blocks: `pool` (a ledge 2 m wide round deep water filling the storey below, 4
+doorways on the ledge), `cistern` (a pool with an underwater doorway at the bottom of its
+west wall: the end of a flooded run), the flooded passages `flooded-passage`, `flooded-bend`
+and `flooded-tee` (full of water to the roof, swum on one breath, no torches), and the canal:
+`canal`, `canal-bend` (mirrored), `canal-ford` (a bridge, doorways onto both banks) and the
+end `canal-end` (the banks joined round the channel's head);
 and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 m vault, a
 2.5 m terrace and a 5 m walkway with a doorway out at the top), `high-hall` (six pillars the
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
@@ -1394,7 +1526,8 @@ a doorway or bank that leads to no other doorway, a river end that doesn't join 
 a monster that can't reach the first doorway, a high block the ogre can't walk between all
 its doorways at `*high-body*` (radius 1.0, 2.7 m, step 0.45: its leaps are shortcuts, never
 its only way). A block with a stream doorway is checked wading (it can't be crossed dry),
-the rest dry, so a wide river's banks still walk dry. Leave passages at least 1.5 m wide: the nav
+one with an underwater doorway swimming (`*nav-hazards*` `:swim`), the rest dry, so a wide
+river's or canal's banks still walk dry; a check starts at a doorway on dry floor. Leave passages at least 1.5 m wide: the nav
 grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 1 m gap
 beside a column had none.
 
@@ -1403,9 +1536,11 @@ inside), so whatever a high doorway opens onto has the height; at 4.5 m its lint
 storey 0. Their tiers rise 2.5 m, the ogre's highest leap. A pillar the full height is `box 0
 top pillar` in plan 0 and `wall pillar` in plan 1 (a wall there has no slab under it, so no
 floor-coloured band at 5 m). A stair the ogre can walk is 3 m wide with 1 m treads (6 rows
-for 2.5 m), and 2 m of floor before its foot: nav clearance is a box over 0.45 m above the
-floor, so for a 1 m radius a tread two steps up within 1 m is a wall, and floor beside a
-flight sees its upper treads as one, so a big body only gets on a flight head-on.
+for 2.5 m), and 2 m of floor before its foot, under a ceiling its head clears a tread up
+(the kit's `stair`, rising from under a 3 m doorway, has neither). A tall body's clearance is
+a box over 0.9 m above the floor (`*nav-tall-lift*`), so two 0.42 m steps within its 1 m
+reach don't block it, but floor beside a flight sees its upper treads as one, so a big body
+only gets on a flight head-on. `*high-body*`'s step of 0.45 is stricter than the ogre's 0.9.
 
 Caves are blueprints like the rest: rock is wall characters inside the rectangle (every
 `#` is rock under `remap wall rock`), 45° rock is `/` and `\` pairs, or `<` and `>` where it
@@ -1459,13 +1594,19 @@ so no stair ends in a plug.
 
 Networks: a network is the blocks joined through doorways ordinary blocks don't have; each
 family is an entry in `*networks*` (its doorway kinds, piece and end tags, and the variables
-for its length and how many a level may have). There are two: rivers, below, and high
+for its length and how many a level may have). There are four: rivers, below; high
 quarters, galleries and high rooms joined through `high` doorways (`high`, ends `high-end`:
-the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level. Both
-grow the same way, with `network` in place of `river` throughout.
+the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level; flooded
+runs, passages joined through `underwater` doorways (`flooded`, ends `cistern`), a cistern at
+each end, `*flooded-length*` (2 to 4 blocks, the first cistern included: short, swum on one
+breath), `*max-flooded-networks*` (1); and canals (`canal`, ends `canal-end`),
+`*canal-length*` (3 to 6), `*max-canals*` (1). All grow the same way, with `network` in place
+of `river` throughout. A cistern has one underwater doorway, so a run ends at it; one reached
+through its ledge starts a run.
 `*level-networks*` holds the last level's (`network-family`, `-pieces`, `-target`, `-ends`),
-the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`. On
-seeds 1 to 20, 9 levels had a high quarter, of 1 to 6 blocks; 4 of them had an arm end in a
+the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`, a
+flooded run's as `=` and a canal's as `-`. On seeds 1 to 30, 19 levels had a canal and 4 a
+flooded run of 4 or 5 blocks. On seeds 1 to 20, 9 levels had a high quarter, of 1 to 6 blocks; 4 of them had an arm end in a
 plug, since the vault, 4 × 4 cells and two storeys, is the only end and often doesn't fit.
 
 Rivers: a river is the blocks joined through `river` and `stream` doorways. The first river
@@ -1500,16 +1641,18 @@ generated in 5 to 10 s before it, under one after.
 Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
 player must be able to walk from the spawn point to every placed block's doorways (both
 banks of a river's: `doorway-probes`; a stream's middle, in the lava), on the
-nav grid with the player's size and step, wading where it must (`:wade`) (`nav-reached`, which is both ways, since steps
+nav grid with the player's size and step, wading and swimming where it must (`:swim`) (`nav-reached`, which is both ways, since steps
 go up as well as down), and every creature must be able to walk to the spawn point at its
 own size and step from a cell its body fits where it lives (`stranded-creatures`, wading
-too, as a chase does when there's no dry way). Each
+too, as a chase does when there's no dry way, and through deep water: no creature swims,
+but one beyond a flooded run or across a canal waits there for the player, who does). Each
 doorway or creature that fails logs a warning.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
-Space to jump, C or Ctrl to crouch, 1 for the sword, 2 for the casting hands and 3 for the
-spear (or the mouse wheel to cycle them), left click to
+Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
+down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
+hands and 3 for the spear (or the mouse wheel to cycle them), left click to
 attack (swing, thrust, or cast the bolt), right button held to raise the shield (sword only; a left
 click while it's up bashes), M for the automap (see `src/map-view.lisp`), F5 to quicksave
 and F9 to quickload (generated levels only), F12 for a screenshot.
@@ -1528,5 +1671,8 @@ pillars; a bolt at its front comes back at the player, one at its back hurts it,
 `(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
 The harpy hovers over the hall's south-east, by the east doorway: `(setf (alert harpy) 6.0)`
 sets it hunting, and `(dive-left harpy)` is non-NIL while it dives (hurt it then to down it).
+The ogre stands in the hall's east: `(setf *leap-debug* t)` and `(setf (alert ogre) 30.0)` with
+the player 4 to 12 m from it, and the log says where it leaps and what the shockwave hits;
+`(airborne ogre)` is true in the air, and `*hit-stop*` 1000 then freezes it there.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (next weapon).

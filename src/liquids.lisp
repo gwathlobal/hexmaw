@@ -1,23 +1,31 @@
 (in-package #:hexmaw)
 
-;;; Liquids: lava now, water later. A liquid is a box of volume, never a solid: it
-;;; lies in a sunken pit whose floor is an ordinary solid, so walking in and out is a
-;;; step down and up, and everything else asks LIQUID-AT whether a point is in one.
-;;; Its kind (*LIQUID-KINDS*) says what being in it does. The surface is drawn by a
-;;; LIQUID-SURFACE quad at the top, fullbright and warped like Quake's, and a liquid
-;;; that glows lights the pit with lamps over it.
+;;; Liquids: lava and water. A liquid is a box of volume, never a solid, and everything
+;;; asks LIQUID-AT whether a point is in one. Lava lies in a sunken pit whose floor is an
+;;; ordinary solid, so walking in and out is a step down and up. Water is deep: it fills
+;;; the lower storey of a two-storey block (a pool, a canal) or a whole flooded passage,
+;;; and the player swims in it. Its kind (*LIQUID-KINDS*) says what being in it does. The
+;;; surface is a quad at the top: lava's (LIQUID-SURFACE) fullbright and warped like
+;;; Quake's, water's (WATER-SURFACE) lit and see-through, drawn after everything else. A
+;;; liquid that glows lights the pit with lamps over it.
 
 (define-asset (hexmaw lava-flow) image #p"textures/lava-flow.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 
+(define-asset (hexmaw water-ripple) image #p"textures/water.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+
 (defparameter *liquid-kinds*
-  '((:lava :damage 12.0 :speed 0.8 :jump 0.7 :texture lava-flow
-     :glow (2.4 1.0 0.3) :glow-radius 7.0 :glow-spacing 4.0 :glow-flicker 0.08))
+  '((:lava :damage 12.0 :speed 0.8 :jump 0.7 :texture lava-flow :surface liquid-surface
+     :glow (2.4 1.0 0.3) :glow-radius 7.0 :glow-spacing 4.0 :glow-flicker 0.08)
+    (:water :damage 0.0 :speed 1.0 :jump 1.0 :texture water-ripple :surface water-surface :swim T))
   "Per kind: :DAMAGE health per second to what stands in it, :SPEED the factor on walking
 speed (kept through a jump from it until landing outside), :JUMP the factor on a jump's
-speed from it (height goes with its square), :TEXTURE its surface, and :GLOW the colour of
-the lamps over it (NIL for none), :GLOW-RADIUS their reach, one per :GLOW-SPACING metres of
-the pool's length.")
+speed from it (height goes with its square), :TEXTURE its surface and :SURFACE the class
+that draws it, :SWIM true for a liquid deep enough to swim in, and :GLOW the colour of the
+lamps over it (NIL for none), :GLOW-RADIUS their reach, one per :GLOW-SPACING metres of the
+pool's length.")
+(defparameter *water-alpha* 0.6 "How much of what lies beyond water's surface it hides.")
 (defparameter *lava-tick* 0.4 "Seconds between the burns of something standing in lava.")
 (defparameter *glow-height* 0.8 "Metres above a liquid's surface that its lamps hang.")
 
@@ -40,6 +48,23 @@ the pool's length.")
         when (and (<= (aref s 0) x (aref s 3)) (<= (aref s 1) y (aref s 4)) (<= (aref s 2) z (aref s 5)))
           return liquid))
 
+(defun swim-liquid-at (x y z)
+  "The liquid one swims in (water) that the point X Y Z is in, or NIL."
+  (let ((liquid (liquid-at x y z)))
+    (and liquid (liquid-property (liquid-kind liquid) :swim) liquid)))
+
+(defun water-surfaces (x z)
+  "The surfaces of the deep water over the point X Z with room above them to float:
+the nav grid's floors there (nav.lisp)."
+  (let ((tops ()))
+    (loop for liquid across *liquids*
+          for s = (liquid-bounds liquid)
+          do (when (and (liquid-property (liquid-kind liquid) :swim)
+                        (<= (aref s 0) x (aref s 3)) (<= (aref s 2) z (aref s 5))
+                        (fits-at-p x (aref s 4) z 0.0 *nav-min-height*))
+               (pushnew (aref s 4) tops :test (lambda (a b) (< (abs (- a b)) 1f-3)))))
+    tops))
+
 (defun hazard-at (x y z)
   "Health per second that standing at X Y Z costs: the damage of the liquid there, or 0."
   (let ((liquid (liquid-at x y z)))
@@ -57,28 +82,41 @@ down, so hopping out and back in doesn't burn sooner."
                                 (max 1 (round (* damage *lava-tick*)))))
           (T (values timer 0)))))
 
-(define-shader-entity liquid-surface (lit-entity vertex-entity transformed-entity listener)
+(define-shader-entity liquid-sheet (lit-entity vertex-entity transformed-entity listener)
   ((vertex-array :initform (// 'hexmaw 'centered-quad))
    (surface-texture :initarg :surface-texture :reader surface-texture)
-   (clock :initform 0.0 :accessor liquid-clock)))
+   (clock :initform 0.0 :accessor liquid-clock))
+  (:documentation "A liquid's surface, a quad lying flat at its top."))
 
-(defmethod stage :after ((surface liquid-surface) (area staging-area))
+(defmethod stage :after ((surface liquid-sheet) (area staging-area))
   (stage (surface-texture surface) area))
 
-(defmethod bind-textures :after ((surface liquid-surface))
+(defmethod bind-textures :after ((surface liquid-sheet))
   (bind (surface-texture surface) :texture0))
 
-(define-handler (liquid-surface tick) (dt)
+(define-handler (liquid-sheet tick) (dt)
   (unless (frozen-p)
     ;; Wrapped, so it stays a small single-float; the shader's waves repeat by then.
-    (setf (liquid-clock liquid-surface) (mod (+ (liquid-clock liquid-surface) dt) 1000.0))))
+    (setf (liquid-clock liquid-sheet) (mod (+ (liquid-clock liquid-sheet) dt) 1000.0))))
 
-(defmethod render :before ((surface liquid-surface) (program shader-program))
+(defmethod render :before ((surface liquid-sheet) (program shader-program))
   (when (first-this-frame-p program)
     (set-fog-uniforms program)
     (setf (uniform program "surface_texture") 0)
-    (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0)))
+    (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0))
+    (when (typep surface 'water-surface)
+      (setf (uniform program "water_alpha") (float *water-alpha* 0f0))))
   (setf (uniform program "time") (float (liquid-clock surface) 0f0)))
+
+(defgeneric late-rank (object)
+  (:documentation "NIL for what the render pass draws in its usual order; for what it draws
+after everything else (GAME-PASS, main.lisp), a rank, lower first: see-through surfaces (0),
+which must cover what lies beyond them, then whole-screen tints (1, hud.lisp), which colour
+all of it.")
+  (:method (object) NIL))
+
+(define-shader-entity liquid-surface (liquid-sheet) ()
+  (:documentation "Lava's surface: opaque and glowing."))
 
 (define-class-shader (liquid-surface :fragment-shader)
   "in vec3 v_world_position;
@@ -99,6 +137,40 @@ void main(){
   color = vec4(fog_lit(vec3(0.0), c, length(v_view_position)), 1.0);
 }")
 
+(define-shader-entity water-surface (liquid-sheet) ()
+  (:documentation "Water's surface: lit like a floor and see-through, from above and below.
+It writes no depth, so it is drawn last (LATE-RANK), over what lies beyond it."))
+
+(defmethod late-rank ((surface water-surface)) 0)
+
+(defmethod render :around ((surface water-surface) (program shader-program))
+  (gl:disable :cull-face)
+  (gl:depth-mask NIL)
+  (call-next-method)
+  (gl:depth-mask T)
+  (gl:enable :cull-face))
+
+(define-class-shader (water-surface :fragment-shader)
+  "in vec3 v_world_position;
+in vec3 v_view_position;
+uniform sampler2D surface_texture;
+uniform float texels_per_metre;
+uniform float time;
+uniform float water_alpha;
+out vec4 color;
+
+void main(){
+  // Laid flat in world XZ like a floor, rippled by small crossed waves and drifting.
+  vec2 p = v_world_position.xz;
+  vec2 st = p + 0.06 * sin(p.yx * 2.3 + time * vec2(0.7, 0.9)) + time * vec2(0.02, 0.015);
+  vec3 c = texture(surface_texture, st * texels_per_metre / vec2(textureSize(surface_texture, 0))).rgb;
+  // Lit on the side it is seen from, as a floor or, from under the water, a ceiling.
+  vec3 n = vec3(0.0, (camera_position.y >= v_world_position.y) ? 1.0 : -1.0, 0.0);
+  vec3 light = band_light(light_at(snap_position(v_world_position), n, 1.0, v_world_position + n * 0.05));
+  vec3 lamp = lamp_part(light);
+  color = vec4(fog_lit(c * (light - lamp), c * lamp, length(v_view_position)), water_alpha);
+}")
+
 (defun add-liquid (container kind x0 y0 z0 x1 y1 z1)
   "Add a liquid of KIND filling the box between the two corners, its surface the top, to
 CONTAINER: the volume, its surface and, if it glows, the lamps over it."
@@ -112,12 +184,14 @@ CONTAINER: the volume, its surface and, if it glows, the lamps over it."
                    (vec (/ (+ (aref s 0) (aref s 3)) 2) (- top 0.02) (/ (+ (aref s 2) (aref s 5)) 2))
                    (quat) (vec w 0.04 d)
                    (vec (aref s 0) (- top 0.04) (aref s 2)) (vec (aref s 3) top (aref s 5)) :surface kind)
-    (enter (make-instance 'liquid-surface
-                          :surface-texture (// 'hexmaw (liquid-property kind :texture))
-                          :location (vec (/ (+ (aref s 0) (aref s 3)) 2) top (/ (+ (aref s 2) (aref s 5)) 2))
-                          :scaling (vec w d 1)
-                          :orientation (qfrom-angle +vx+ (float (- (/ pi 2)) 0f0)))
-           container)
+    ;; A liquid that fills its space to a ceiling (a flooded passage) shows no surface.
+    (unless (solid-overlapping (/ (+ (aref s 0) (aref s 3)) 2) (+ top 0.01) (/ (+ (aref s 2) (aref s 5)) 2) 0.05 0.05)
+      (enter (make-instance (liquid-property kind :surface)
+                            :surface-texture (// 'hexmaw (liquid-property kind :texture))
+                            :location (vec (/ (+ (aref s 0) (aref s 3)) 2) top (/ (+ (aref s 2) (aref s 5)) 2))
+                            :scaling (vec w d 1)
+                            :orientation (qfrom-angle +vx+ (float (- (/ pi 2)) 0f0)))
+             container))
     (let ((glow (liquid-property kind :glow)))
       (when glow
         ;; Lamps spaced along the pool's longer side, down its middle. An irregular pool

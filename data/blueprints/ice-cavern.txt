@@ -18,14 +18,14 @@ legend
   , box 0 0.4 ice                                   ; a shelf of ice, one step up, slippery
   { diagonal / ice 0 0.4                            ; its edge
   } diagonal \ ice 0 0.4
-  j box 0 0.4 ice, spawn any north
+  j box 0 0.4 ice, spawn any-ogre north
   v box 3 top ice-rock                              ; icicles, hanging from 4 m to 3 m
   A diagonal / ice-rock 3 top
   B diagonal \ ice-rock 3 top
   x box 3 top ice-rock, pit 0.2, floor ice          ; the same over the pond
   P diagonal / ice-rock 3 top, pit 0.2, floor ice
   Q diagonal \ ice-rock 3 top, pit 0.2, floor ice
-  i spawn any south
+  i spawn any-ogre south
 
 plan 0
 #########++++++#####T###########

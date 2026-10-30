@@ -35,7 +35,8 @@
   (:method-combination append :most-specific-last))
 
 (defmethod saved-slots append ((player player))
-  '(feet rotation velocity grounded eye health pain burn-timer wading mana cast-timer cast-time
+  '(feet rotation velocity grounded eye health pain burn-timer wading swimming climbing breath drown-timer
+    mana cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     block-raise bash-time bash-pending))
 
@@ -50,11 +51,15 @@
 (defmethod saved-slots append ((necromancer necromancer))
   '(ability cooldowns raise-target))
 
+(defmethod saved-slots append ((ogre ogre))
+  '(attack-kind leap-from leap-to leap-apex leap-duration leap-time airborne falling fall-speed
+    recover leap-cooldown))
+
 (defmethod saved-slots append ((sprite fx-sprite))
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing projectile-velocity))
+  '(spell caster homing projectile-velocity submerged))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))

@@ -1,0 +1,21 @@
+Pixel-art sprite sheet: the pain (flinch) animation of the OGRE, a hulking brute with a two-handed stone maul, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The ogre's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a huge, hulking brute, hunched forward, much broader than a man, with massive rounded shoulders, a barrel chest, a heavy gut, arms thick as tree trunks hanging to its knees and short bowed legs; warty grey-green hide, mottled darker on the back, with old red scars; a small head set low between the shoulders, lank black hair, a heavy underbite jaw with two thick yellow tusks, small yellow eyes; riveted iron bands round both wrists and the upper left arm, a chain with an iron ring hanging across the chest; a ragged brown hide loincloth on a belt, hide strips wound round the shins; and a two-handed STONE MAUL, a grey stone block bound with iron cross-bands on a thick wooden haft ringed with iron, held in its RIGHT hand. Also the shading style.
+2. The ogre standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The maul is held by its RIGHT hand in every frame (when both hands hold it, the right hand is the one nearer the stone head); the iron band on the upper LEFT arm stays on the left. Never swap them, never draw a second maul or a third arm. The head, tusks, chain, bands and loincloth look the same in every frame, and the ogre stays exactly as big and as broad as in reference 2.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 3 the 2 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the ogre standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. It does not hop or float.
+- The whole figure, including the maul when it is raised overhead, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, debris, cracks in the floor, blood or impact effects. Only the ogre and its maul.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE FLINCH: a sharp, readable reaction to a blow, in the spirit of a Doom pain frame. It plays for a third of a second when the ogre is struck by a sword or a fire bolt. It must read clearly as hurt, not as an attack. Its feet stay planted and the maul stays in the right hand, its stone head near the floor.
+- Cell 2, JOLT: the instant of the hit. The head knocked back and to one side, the jaw flung open in a bellow, the eyes squeezed shut, the shoulders and chest jerked back, the free left arm thrown out, the maul's haft swinging out away from the body.
+- Cell 3, STAGGER: a moment later. It hunches forward and lower than standing, the head bowed and shaken, the left hand clutching at its chest, the maul's stone head dropped back onto the floor beside the right foot.
