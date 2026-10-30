@@ -498,9 +498,11 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
-  torches light through its walls. Its corridor ends in the `shrine` block, with the debug
-  `ice-rink` block (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an
-  imp and a knight on the ice; no tags, so never generated) through the shrine's west doorway. A doorway
+  torches light through its walls. Its corridor ends in the `shrine` block. The debug `ice-rink`
+  block (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
+  knight on the ice; no tags, so never generated) is retired for now: it hung off the shrine's
+  west doorway, `attach-block` by its `connector_east` facing `:east` with `drop-portal` on
+  its connectors; `(kit-goto "ice-rink")` in the gallery still reaches it. A doorway
   also needs floor under its wall's thickness: without it the nav grid has no cell there,
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
