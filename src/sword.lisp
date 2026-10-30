@@ -25,6 +25,7 @@
 (defparameter *sword-arc* 0.8 "Radians either side of the view the blade sweeps through.")
 (defparameter *sword-damage* '(10 16))
 (defparameter *sword-knockback* 3.0 "Speed in m/s a hit slides the creature away.")
+(defparameter *sword-pain-bonus* 0 "Percent a hit adds to the creature's PAIN-CHANCE.")
 
 (defparameter *sword-height* 1.04
   "Vertical art scale: the strip's cell height times the scale is about this fraction
@@ -132,7 +133,7 @@ the arc around where the player faces, level with the player, and not behind a w
 (defun swing-hit (player)
   (let ((target (swing-target player)))
     (when target
-      (hurt target (roll *sword-damage*) :from (feet player))
+      (hurt target (roll *sword-damage*) :from (feet player) :pain-bonus *sword-pain-bonus*)
       (push-creature target (v- (location target) (feet player)) (float *sword-knockback* 0f0)))))
 
 (defun update-weapons (player dt)
