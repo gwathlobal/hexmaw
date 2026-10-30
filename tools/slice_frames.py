@@ -119,12 +119,7 @@ def solid_bottom(frame):
     return h - 1
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("sheet")
-    ap.add_argument("out", help="output directory")
-    ap.add_argument("animations", nargs="+", metavar="NAME:FRAMES",
-                    help="animations in sheet order, with their frame counts")
+def add_slice_arguments(ap):
     ap.add_argument("--pixel", type=float, default=1.0, help="source pixels per art pixel (default 1)")
     ap.add_argument("--anchor", choices=("center", "bottom"), default="center",
                     help="keep each frame's cell centre in place, or put its lowest solid row on the bottom edge")
@@ -141,14 +136,17 @@ def main():
     ap.add_argument("--colors", type=int, help="reduce each animation to a palette of this many colours")
     ap.add_argument("--min-pixels", type=int, default=50,
                     help="cells with fewer opaque pixels than this after keying are empty")
-    args = ap.parse_args()
 
+
+def slice_sheet(sheet, source, args):
+    """Slice the image SHEET into ARGS.animations under ARGS.out. SOURCE names what it
+    came from in the indexes."""
     animations = []
     for spec in args.animations:
         name, _, count = spec.partition(":")
         animations.append((name, int(count)))
 
-    src = Image.open(args.sheet).convert("RGBA")
+    src = sheet.convert("RGBA")
     # Find the cells before keying, which erases the cyan separators.
     found = [(l + args.margin, t + args.margin, r - args.margin, b - args.margin) for l, t, r, b in cells(src)]
     px = src.load()
@@ -225,12 +223,23 @@ def main():
             strip = reduce_colors(strip, args.colors)
         strip.save(out / f"{name}.png")
         (out / f"{name}.lisp").write_text(
-            f";;; Written by tools/slice_frames.py from {Path(args.sheet).name}; do not edit.\n"
+            f";;; Written by {source}; do not edit.\n"
             f"(:image \"{name}.png\"\n"
             f" :cell-width {cell_w} :cell-height {cell_h} :gap {GAP}\n"
             f" :frames {count})\n")
         print(f"{out / name}.png: {count} frames of {cell_w}x{cell_h} px "
               f"(source crop {2 * half_w}x{2 * half_h})")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("sheet")
+    ap.add_argument("out", help="output directory")
+    ap.add_argument("animations", nargs="+", metavar="NAME:FRAMES",
+                    help="animations in sheet order, with their frame counts")
+    add_slice_arguments(ap)
+    args = ap.parse_args()
+    slice_sheet(Image.open(args.sheet), f"tools/slice_frames.py from {Path(args.sheet).name}", args)
 
 
 if __name__ == "__main__":
