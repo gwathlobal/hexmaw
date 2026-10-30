@@ -45,7 +45,9 @@
    (health :initform *player-max-health* :accessor health)
    (pain :initform 0.0 :accessor pain :documentation "Seconds of the pain flash left.")
    (burn-timer :initform 0.0 :accessor burn-timer
-               :documentation "Seconds toward the next burn while standing in lava (liquids.lisp).")
+               :documentation "Seconds until the next burn can land (liquids.lisp).")
+   (wading :initform NIL :accessor wading
+           :documentation "Kind of the liquid last stood in, NIL on dry ground: it slows a jump from it.")
    (mana :initform *max-mana* :accessor mana)
    (cast-timer :initform 0.0 :accessor cast-timer)
    (cast-time :initform NIL :accessor cast-time
@@ -257,10 +259,14 @@ On a step the eye keeps its height and eases to the new one."
          (wz (+ (* iz (- (cos yaw))) (* ix (sin yaw))))
          (wlen (sqrt (+ (* wx wx) (* wz wz))))
          (liquid (let ((feet (feet player))) (liquid-at (vx feet) (+ (vy feet) 0.05) (vz feet))))
+         ;; A jump from a liquid stays slowed until it lands outside one.
+         (kind (if (grounded player)
+                   (setf (wading player) (and liquid (liquid-kind liquid)))
+                   (if liquid (liquid-kind liquid) (wading player))))
          (speed (* (cond (crouching *crouch-speed*)
                          ((retained :left-shift) *run-speed*)
                          (T *walk-speed*))
-                   (if liquid (liquid-property (liquid-kind liquid) :speed) 1.0))))
+                   (if kind (liquid-property kind :speed) 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
     ;; Accelerate horizontal velocity toward the wished velocity.
@@ -273,7 +279,7 @@ On a step the eye keeps its height and eases to the new one."
       (incf (vx vel) dvx)
       (incf (vz vel) dvz))
     (when (and (grounded player) (retained :space) (not crouching))
-      (setf (vy vel) (float *jump-speed* 0f0)))
+      (setf (vy vel) (float (* *jump-speed* (if kind (liquid-property kind :jump) 1.0)) 0f0)))
     (decf (vy vel) (* *gravity* dt))
     ;; Steps only while walking: not mid-air, and not on the frame a jump starts.
     (let ((walking (and (grounded player) (<= (vy vel) 0)))

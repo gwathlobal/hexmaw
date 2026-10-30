@@ -150,7 +150,7 @@ WALK-ANIMATION, spread over *STAGGER-TIME*; NIL to squash the standing pose inst
    (stagger :initform 0.0 :accessor stagger)
    (flash :initform 0.0 :accessor flash)
    (burn-timer :initform 0.0 :accessor burn-timer
-               :documentation "Seconds toward the next burn while standing in lava (liquids.lisp).")
+               :documentation "Seconds until the next burn can land (liquids.lisp).")
    (dead :initform NIL :accessor dead :documentation "Seconds since death, or NIL while alive.")
    (death-animation :initarg :death-animation :initform NIL :accessor death-animation
                     :documentation "Frame animation played once on death, its last frame the
