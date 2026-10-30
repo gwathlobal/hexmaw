@@ -18,7 +18,7 @@
 (defparameter *save-version* 1 "Bumped when old saves can no longer be read.")
 (defparameter *saved-generator-settings*
   '(*generator-rooms* *generator-attempts* *corridor-run* *generator-storeys* *generator-blocks* *spawn-pool*
-    *river-length* *max-rivers* *start-clearance*)
+    *river-length* *max-rivers* *high-length* *max-high-networks* *start-clearance*)
   "The variables besides the seed that decide a generated level.")
 
 (defun save-path (slot)
@@ -35,12 +35,13 @@
   (:method-combination append :most-specific-last))
 
 (defmethod saved-slots append ((player player))
-  '(feet rotation velocity grounded eye health pain burn-timer mana cast-timer cast-time
-    pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending))
+  '(feet rotation velocity grounded eye health pain burn-timer wading mana cast-timer cast-time
+    pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
+    block-raise bash-time bash-pending))
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
-    idle-timer path stuck walk-distance knockback stagger flash brace burn-timer dead bleeding
+    idle-timer path stuck walk-distance momentum stagger flash brace burn-timer dead bleeding
     drip-timer gibbed rising stirring))
 
 (defmethod saved-slots append ((flyer flyer))
@@ -188,7 +189,9 @@ A vector is written in place, since some slots have only a reader."
                                        :summoned (summoned creature)
                                        :state (object-state creature)))
         :effects (mapcar #'effect-record (level-effects))
-        :blood (when *blood-pool* (blood-record *blood-pool*))))
+        :blood (when *blood-pool* (blood-record *blood-pool*))
+        ;; The blocks the automap shows, by placement order (map-view.lisp).
+        :map (revealed-block-indices)))
 
 ;;; Files.
 
@@ -333,6 +336,7 @@ A vector is written in place, since some slots have only a reader."
     (restore-effect record scene))
   (when (and *blood-pool* (getf save :blood))
     (restore-blood *blood-pool* (getf save :blood)))
+  (reveal-block-indices (getf save :map))
   (let ((globals (getf save :globals)))
     (setf *hit-stop* (getf globals :hit-stop)
           *light-clock* (getf globals :light-clock))

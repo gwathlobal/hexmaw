@@ -1,7 +1,7 @@
 ; A cave cut by a 3 m band of lava: a running jump, or a 45-degree causeway.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 3 3
-tags room
+tags room cave lava
 weight 1
 mirror yes
 material rock 0.36 0.32 0.3

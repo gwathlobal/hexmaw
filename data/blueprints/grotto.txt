@@ -1,7 +1,7 @@
 ; A small round cave with a diamond column.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 2 2
-tags room
+tags room cave
 weight 2
 mirror yes
 material rock 0.36 0.32 0.3

@@ -1,0 +1,32 @@
+; A small frozen cave: a pond of ice fills it, a diamond column of ice standing in it,
+; and a ledge of snow joins its doorways. Its plan is drawn by tools/cave_plans.py.
+cells 2 2
+tags room
+weight 0.5
+mirror yes
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice                                        ; ice caves join only ice caves and gates
+  _ pit 0.2, floor ice                              ; the frozen pond, a short step down
+  [ diagonal / floor -0.2 0, pit 0.2, floor ice     ; its shore: snow on one half, ice on the other
+  ] diagonal \ floor -0.2 0, pit 0.2, floor ice
+  < diagonal /, pit 0.2, floor ice                  ; 45-degree ice-rock standing in the pond
+  > diagonal \, pit 0.2, floor ice
+  1 diagonal / se, pit 0.2, floor ice               ; the column, its four quarters, in the pond
+  2 diagonal \ sw, pit 0.2, floor ice
+  3 diagonal \ ne, pit 0.2, floor ice
+  4 diagonal / nw, pit 0.2, floor ice
+  i spawn any-ogre south
+
+plan 0
+#########++++++#
+###//..........#
+#//...[[__]]...#
+#...[[__1122]].#
+#...____3344__.#
++...]]______[[.#
++........ii..//#
++..........//###
+################

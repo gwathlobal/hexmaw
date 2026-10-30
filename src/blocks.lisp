@@ -204,16 +204,26 @@
 (defun block-path (name)
   (data-path (format NIL "blocks/~(~a~).glb" name)))
 
+(defvar *block-memo* NIL
+  "While a level is built (BUILD-LEVEL), a table of the definitions FIND-BLOCK has given, by
+name. The generator asks for every block's tags and weight thousands of times a level, and
+each FIND-BLOCK looks at the files: half a millisecond.")
+
 (defun find-block (name)
   "The definition of block NAME (data/blocks/<name>.glb), re-read when the file changes.
 A block with a blueprint is built from it first if the blueprint is newer."
-  (hexmaw.blueprint:ensure-block name)
-  (let* ((path (block-path name))
-         (date (file-write-date path))
-         (cached (gethash (namestring path) *blocks*)))
-    (if (and cached (eql date (car cached)))
-        (cdr cached)
-        (cdr (setf (gethash (namestring path) *blocks*) (cons date (read-block path)))))))
+  (let ((key (and *block-memo* (string-downcase (string name)))))
+    (or (and key (gethash key *block-memo*))
+        (let ((def (progn
+                     (hexmaw.blueprint:ensure-block name)
+                     (let* ((path (block-path name))
+                            (date (file-write-date path))
+                            (cached (gethash (namestring path) *blocks*)))
+                       (if (and cached (eql date (car cached)))
+                           (cdr cached)
+                           (cdr (setf (gethash (namestring path) *blocks*) (cons date (read-block path)))))))))
+          (when key (setf (gethash key *block-memo*) def))
+          def))))
 
 ;;; Where a block goes, before placing it.
 
@@ -347,7 +357,15 @@ of (vertex-data faces), newest first. NIL enters each piece on its own.")
 CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*."
   (let* ((tf (getf piece :transform))
          (textures (surface-textures (getf piece :material)))
-         (color (if textures (vec4 1 1 1 1) (getf piece :color))))
+         (color (if textures (vec4 1 1 1 1) (getf piece :color)))
+         (cut (or (getf piece :cut) 0)))
+    ;; Its twin on the automap, in the block being placed (automap.lisp). Never batched:
+    ;; the map shows a block's pieces only once it's revealed.
+    (add-map-piece container (getf piece :vertex-array)
+                   (funcall world (tlocation tf)) (q* rotation (trotation tf)) (vcopy (tscaling tf))
+                   (funcall world (first (getf piece :bounds))) (funcall world (second (getf piece :bounds)))
+                   :surface (getf piece :material) :color (getf piece :color)
+                   :cut (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf)))))
     ;; A block read before batching existed (*BLOCKS* outlives reloads) has no :MESH.
     (if (and *block-batches* (getf piece :mesh))
         (batch-piece piece textures color world rotation)
@@ -364,7 +382,8 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
                (min (vmin a b)) (max (vmax a b))
                (cut (or (getf piece :cut) 0)))
           (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)
-                                          (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf)))))
+                                          (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf))))
+                                          (surface-footing (getf piece :material)))
                               *solids*))))))
 
 (defun turn-cut (cut rotation)
@@ -405,8 +424,10 @@ block too tight for them)."
 seen from above. Enters its pieces into CONTAINER, adds its solids to *SOLIDS*, its room
 and doorway portals, its torches, and spawns its monsters unless SPAWNS is NIL. Its
 doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNECTOR."
-  (let ((def (find-block name))
-        (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0)))))
+  (let* ((def (find-block name))
+         (rotation (qfrom-angle +vy+ (* turns (float (/ pi 2) 0f0))))
+         (*map-block* (multiple-value-call #'add-map-block name (block-world-bounds name at turns)))
+         (map-block *map-block*))
     (flet ((world (point) (nv+ (turn-point point turns) at)))
       ;; The whole block is one room, walls and all, and its doorways are portals.
       (multiple-value-bind (low high) (block-world-bounds name at turns)
@@ -450,8 +471,10 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
                                               :kind (getf c :kind) :storey (getf c :storey) :portal portal
                                               :plug (when plugs
                                                       (lambda (container)
-                                                        (dolist (piece plugs)
-                                                          (enter-piece piece container #'world rotation)))))
+                                                        ;; Sealed later, but still part of this block's map.
+                                                        (let ((*map-block* map-block))
+                                                          (dolist (piece plugs)
+                                                            (enter-piece piece container #'world rotation))))))
                                *level-doorways*))))))))
 
 (defun add-doorway-portal (position direction &optional (kind "door"))

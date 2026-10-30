@@ -1,0 +1,41 @@
+; The way from a cave into the ice, round a bend: rock at its north doorway, ice at its
+; east one, the two meeting along a 45-degree line under a drift of snow. The generator
+; joins its rock side only to caves. Its plan is drawn by tools/cave_plans.py.
+cells 2 2
+ceiling 3
+tags corridor ice-gate
+weight 2
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  + door ice, floor snow                            ; the ice side
+  % wall ice-rock
+  7 diagonal / ice-rock, floor ice                 ; 45-degree walls show their cell's floor:
+  9 diagonal \ ice-rock, floor ice                 ; ice beyond the drift,
+  b diagonal / ice-rock, floor snow                 ; snow beside it
+  d diagonal \ ice-rock, floor snow
+  q diagonal /, floor snow
+  p diagonal \, floor snow
+  _ floor ice
+  ~ box 0 0.1 snow                                  ; a drift of snow across the join, a short step
+  { diagonal / snow 0 0.1                           ; its 45-degree edges: rock floor beyond this one
+  } diagonal / snow 0 0.1, floor ice                ; and ice beyond this one
+  H diagonal / ice-rock 2.2 top se, floor ice        ; a diamond of ice hanging low: its four quarters
+  J diagonal \ ice-rock 2.2 top sw, floor ice
+  K diagonal \ ice-rock 2.2 top ne, floor ice
+  L diagonal / ice-rock 2.2 top nw, floor ice
+
+plan 0
+#nnnnnn#######%%
+#......pp###%%%%
+#.....{{~pp%%%%%
+#\\.{{~~~~~dd%%%
+###pp~~~}}___99%
+####%dd~_HHJJ__+
+##%%%%%__KKLL__+
+%%%%%%%________+
+%%%%%%%%%%%%%%%%

@@ -2,7 +2,7 @@
 ; standing in the lava), crossed by a causeway from the north doorway to the south one
 ; with 45-degree edges ( ), and a bridge to a landing by the east doorway.
 cells 3 3
-tags room
+tags room cave lava
 weight 1
 mirror yes
 material rock 0.36 0.32 0.3

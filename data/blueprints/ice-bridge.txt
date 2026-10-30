@@ -1,0 +1,25 @@
+; The forge frozen over: ice up to a channel and over the bridge across it, stone banks
+; along the walls so every doorway still reaches the others on firm footing. A skid off
+; the bridge, or a blow on it, ends in the channel.
+; Retired (no tags, so the generator never places it): ice beside lava makes no sense. It
+; comes back when there is water, its channel freezing black water instead of lava.
+cells 3 3
+legend
+  _ floor ice
+  ~ lava
+  i floor ice, spawn any south
+
+plan 0
+#########nnnnnn#########
+#......................#
+T..._______ii_______...T
+#...________________...#
+#...________________...#
+w...~~~~~~____~~~~~~...e
+w...~~~~~~____~~~~~~...e
+w...~~~~~~____~~~~~~...e
+#...________________...#
+#...________________...#
+T...________________...T
+#......................#
+#########ssssss#########

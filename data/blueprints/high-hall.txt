@@ -1,0 +1,70 @@
+; A high nave on the way through the high quarter: six pillars the full 9 m, and a 2.5 m
+; dais in the middle with no steps: a perch the ogre leaps onto, out of the sword's reach,
+; and off again. It starts on the floor, since walking it can't get down.
+cells 4 6
+storeys 2
+tags room high
+weight 2
+material pillar 0.62 0.36 0.30
+material dais 0.58 0.47 0.30
+legend
+  H door high
+  o box 0 top pillar
+  P wall pillar
+  i box 0 2.5 dais
+  L spawn ogre north
+  k spawn knight|acolyte|necromancer south
+
+plan 0
+####T####HHHHHHHHHHHHHH####T####
+#..............................#
+#..............................#
+#..............kk..............#
+T..............................T
+#......oo..............oo......#
+#..............................#
+#..............................#
+#..............................#
+w..............................#
+w............iiiiii............#
+w............iiiiii............#
+#......oo....iiiiii....oo......#
+#............iiiiii............e
+#............iiiiii............e
+#..............................e
+#..............................#
+#..............................#
+#..............LL..............#
+#......oo..............oo......#
+T..............................T
+#..............................#
+#..............................#
+#..............................#
+####T####HHHHHHHHHHHHHH####T####
+
+plan 1
+####T######################T####
+#                              #
+#                              #
+#                              #
+#                              #
+#      PP              PP      #
+#                              #
+T                              T
+#                              #
+#                              #
+#                              #
+#                              #
+#      PP              PP      #
+#                              #
+#                              #
+#                              #
+#                              #
+T                              T
+#                              #
+#      PP              PP      #
+#                              #
+#                              #
+#                              #
+#                              #
+####T######################T####

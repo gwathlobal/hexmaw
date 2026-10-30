@@ -1,7 +1,7 @@
 ; A big cave: two octagonal pillars, an octagonal shelf, hanging rock.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 4 3
-tags room
+tags room cave
 weight 2
 mirror yes
 material rock 0.36 0.32 0.3

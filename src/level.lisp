@@ -1,7 +1,7 @@
 (in-package #:hexmaw)
 
 ;;; Greybox test level: a 20 x 20 m hall with pillars, a jumpable platform, a
-;;; two-storey annex east and a corridor north that runs into the fog. Units are metres, +Y is up, the
+;;; two-storey annex east and a corridor north to a shrine. Units are metres, +Y is up, the
 ;;; player spawns facing -Z (north). Rebuilt on every scene reload.
 
 (defun build-annex (container)
@@ -60,21 +60,25 @@ upstairs."
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
         (fill-pointer *liquids*) 0
+        (fill-pointer *map-blocks*) 0
         *level-doorways* ())
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0)
-  (with-block-batches (container)
-    (ecase *level*
-      (:test (build-test-level container))
-      (:gallery (build-kit-gallery container))
-      (:block (build-check-block container))
-      (:generated (if *pending-load*
-                      (generate-saved-level container *pending-load*)
-                      (generate-level container)))))
-  (index-solids)
-  ;; Last, once every solid, room and portal is in.
-  (link-rooms)
-  (build-nav-grid)
-  (check-reachable))
+  (let ((*block-memo* (make-hash-table :test 'equal)))
+    (with-block-batches (container)
+      (ecase *level*
+        (:test (build-test-level container))
+        (:gallery (build-kit-gallery container))
+        (:block (build-check-block container))
+        (:generated (if *pending-load*
+                        (generate-saved-level container *pending-load*)
+                        (generate-level container)))))
+    (index-solids)
+    ;; Last, once every solid, room and portal is in.
+    (link-rooms)
+    (build-nav-grid)
+    (check-reachable)
+    (when (eq *level* :generated)
+      (check-ice-joins))))
 
 (defun build-test-level (container)
   (let ((h 4.0) (w 0.5))

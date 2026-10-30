@@ -1,4 +1,5 @@
-; A narrow lava river, north to south, with a doorway onto its west bank.
+; A narrow lava river, north to south, lava wall to wall: no bank, so it must be waded.
+; A doorway on the west opens onto it.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 1 2
 tags corridor river
@@ -11,16 +12,15 @@ remap ceiling rock
 remap floor cave-floor
 legend
   ~ lava
-  S door stream                      ; a narrow river's doorway: bank
-  - door stream, lava                ; and lava
+  - door stream, lava                ; a narrow river's doorway: all lava
 
 plan 0
-#SS--SS#
-#..~~..#
-#..~~..#
-#..~~..#
-#..~~..#
-w..~~..#
-w..~~..#
-w..~~..#
-#SS--SS#
+#------#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+w~~~~~~#
+w~~~~~~#
+w~~~~~~#
+#------#

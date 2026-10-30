@@ -3,7 +3,7 @@
 ; 45-degree shores ( ), a dry pit [ ], an octagonal pillar, an octagonal shelf { } and
 ; octagonal rock hanging from the ceiling A B. Every # is rock (remap wall rock).
 cells 3 3
-tags room
+tags room cave
 weight 2
 mirror yes
 material rock 0.36 0.32 0.3
