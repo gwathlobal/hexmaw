@@ -36,7 +36,8 @@
 
 (defmethod saved-slots append ((player player))
   '(feet rotation velocity grounded eye health pain burn-timer mana cast-timer cast-time
-    pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending))
+    pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
+    block-raise bash-time bash-pending))
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending

@@ -473,6 +473,19 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
+  The left hand holds a shield, a sprite of its own (`shield`, a subclass of `sword`) against
+  the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
+  off on screens whose whole-number scale shows fewer art pixels across. It drops and sways
+  with the sword. Both draw at `*weapon-depth*`, behind the bars, the weapon slots and the
+  pain flash. Holding the right button raises the shield over `*block-raise-time*`
+  (`block-raise`, 0 to 1; not during a swing, and it comes down before a weapon switch);
+  fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
+  asked by `hurt-player`, so it covers creatures' spells too) does `*block-damage-scale*` of
+  its damage and shoves `*block-shove-scale*` as far. A left click with it raised bashes
+  (`player-bash`, `*bash-frame-times*`): on `*bash-hit-frame*` the nearest creature within
+  `*bash-reach*` and `*bash-arc*` takes `*bash-damage*` and is pushed `*bash-knockback*`
+  (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
+  frame: idle, `*shield-raise-frames*` rising, the block held, then the bash's.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
@@ -858,6 +871,26 @@ below their pixel grid: `--filter box` averages instead of picking one source pi
 `--colors 48` flattens the speckle onto one palette for all frames. To use the raw render instead,
 slice `art/sword-pixel/sheet.png` with `--exact --margin 0`; `--exact` keys only pure magenta
 and keeps the render's outlines and bluish steel.
+
+The shield started as generated pictures of both hands from behind
+(`art/prompts/sword-shield-common.txt` plus `sword-shield-idle-<a..d>.txt`, the sword's idle
+frame as the reference, `art/sword-shield/idle-*.png`). Only the a-1 grip on the straps was
+right; `sword-shield-merge-rim.txt` put that hand and its straps (`ref-hand-a1.png`, cut from
+it) on a-2's steel-rimmed shield (`ref-shield-a2.png`) drawn bigger, `merge-1.png` giving the
+size, into `art/sword-shield/merge-rim-1.png`. Every frame is that one picture moved and
+scaled, so the grip is the same in all of them: `tools/extend_arm.py` lengthens its forearm
+past the picture's edges along the rays from the arm's vanishing point (so a raised shield
+shows no cut-off arm), and `tools/make_shield.py` places, darkens and palettes the frames
+listed in `art/sword-shield/shield-frames.txt` (scale and where the fist goes on screen,
+counted from the bottom-left corner) into the strip:
+
+```bash
+tools/extend_arm.py art/sword-shield/merge-rim-1.png art/sword-shield/merge-rim-1-arm.png --vanish 234,720 --edge 0,866 --edge 200,1010 --pad 600,500
+tools/make_shield.py art/sword-shield/shield-frames.txt data/sprites/sword/shield
+```
+
+The picture's bottom edge cuts the shield, so no frame may lift it on screen (the frames file
+says how far is safe), and the shield can't turn: the bash is a push straight out.
 
 Generators can't keep a motion sequence across a grid of first-person poses, and they draw
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
@@ -1289,13 +1322,16 @@ Controls: click the window to capture the mouse, Esc to pause (release the mouse
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands (or the mouse
 wheel to cycle them), left click to
-attack (swing, or cast the bolt), F5 to quicksave and F9 to quickload (generated levels
+attack (swing, or cast the bolt), right button held to raise the shield (sword only; a left
+click while it's up bashes), F5 to quicksave and F9 to quickload (generated levels
 only), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
-0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
+0.23 s in; stand within 2 m of the imp, facing it); `(setf (block-raise *player*) 1.0)` under hit-stop
+shows the raised shield, and with it raised `(player-attack *player*)` bashes (`block-held`
+is what the right button sets; without it the shield comes down again once the world runs); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);
