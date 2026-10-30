@@ -727,9 +727,11 @@ tools/make_texture.py art/textures/rock-1.png data/textures/rock --metres 4
 tools/make_texture.py art/textures/cave-floor-2.png data/textures/cave-floor --metres 4
 ```
 
-The `ice` surface (`data/textures/ice.png`, ice over flagstones; its sides too, stone under it)
-came from `art/prompts/texture-ice.txt` as the others did:
-`tools/make_texture.py art/textures/ice-1.png data/textures/ice --metres 4`.
+The `ice` surface (`data/textures/ice.png`, dark clear ice with white crack planes; its sides
+too, stone under it) is the common prompt plus `art/prompts/texture-ice.txt` (ice only, nothing
+showing through) plus a look: `texture-ice-dark.txt`, the one used, `-frosted` or `-glacier`.
+`ice-1` and `ice-2` are an earlier ice-over-flagstones version, dropped.
+`tools/make_texture.py art/textures/ice-dark-2.png data/textures/ice --metres 4`.
 
 The caves' `rock` is fractured bedrock with no courses, for their walls and ceilings;
 `cave-floor` is bedrock, pebbles and packed earth, under rock sides.
