@@ -295,7 +295,11 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (`deflects-p`, `deflect` in spells.lisp) before any effect applies: mirrored off the
   shield's face and sent back as the knight's own (`shield-reflects`; NIL just stops it),
   with `block-hit` (a faint flash, the `block-animation` pose for `*block-time*`, a brace).
-  The block strip has only the covered views. The sword isn't stopped. `turn-speed`
+  The block strip has only the covered views. The sword isn't stopped, but a shield bash
+  from a covered view glances off (`bash-hit`): no harm to the knight, its block pose, and
+  the player thrown back `*bash-recoil*` with the shield knocked down. A creature's
+  `guard-break` (knight 0.8 s, ogre 1.2) is how long its blow knocks a blocking player's
+  shield aside (`break-guard`, player.lisp). `turn-speed`
   (radians per second, NIL for instant) is what lets the player get behind it: `turn-to`
   limits every facing change, in walks, idle hunting and an attack's wind-up.
 - `src/flyer.lisp`: `flyer`, a creature that keeps to the air, and the `harpy`. See "Flyers"
@@ -552,17 +556,27 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (`block-raise`, 0 to 1; not during a swing, and it comes down before a weapon switch);
   fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
   asked by `hurt-player`, so it covers creatures' spells too) does `*block-damage-scale*` of
-  its damage and shoves `*block-shove-scale*` as far. A left click with it raised bashes
+  its damage and shoves `*block-shove-scale*` as far; a blow with `:guard-break` (the knight's,
+  the ogre's slam) also knocks it aside (`break-guard`: down at once, and `guard-broken`
+  keeps it down), and `:unblockable` ones (the ogre's shockwave) ignore it. Raised, it slows
+  the player to `*block-speed-scale*` of a walk, no running. A left click with it raised bashes
   (`player-bash`, `*bash-frame-times*`): on `*bash-hit-frame*` the nearest creature within
-  `*bash-reach*` and `*bash-arc*` takes `*bash-damage*`, is pushed `*bash-knockback*` and
-  rolls for pain with `*bash-pain-bonus*`
+  `*bash-reach*` and `*bash-arc*` takes `*bash-damage*` and is pushed `*bash-knockback*`.
+  It rolls for pain with `*bash-pain-bonus*` only if the creature is winding up an attack
+  (`winding-up-p`, creature.lisp), and never otherwise: a timed interrupt, not a stunlock.
+  Every bash that lands leaves the creature poised (`bash-poise`, `*bash-poise-time*`), when
+  another bash can't stagger it and shoves it only `*poised-bash-knockback*` as far
   (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
   frame: idle, `*shield-raise-frames*` rising, the block held, then the bash's.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
-  torches light through its walls. Its corridor ends in the `shrine` block. The debug `ice-rink`
+  torches light through its walls. Its corridor ends in the `shrine` block. For now every
+  monster on it is an imp: the hall's six stand where the acolyte, knight, harpy,
+  necromancer and ogre did, and the shrine's acolyte is one too (`*spawn-override*`,
+  blocks.lisp, bound around its `attach-block`). The notes below on where those monsters
+  stand describe the level before that. The debug `ice-rink`
   block (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
   knight on the ice; no tags, so never generated) is retired for now: it hung off the shrine's
   west doorway, `attach-block` by its `connector_east` facing `:east` with `drop-portal` on
@@ -633,21 +647,62 @@ a random cell it can walk to within `wander-radius` of its home (or of itself, i
 too far away), and it follows the smoothed path at `walk-speed`, facing the way it goes.
 `settle` eases it onto the floor under it. A hit stops it for `*hurt-pause*`, then it plans
 afresh. It slides along any body in its way (`move-creature`, which also moves knockback);
-blocked for `*stuck-time*`, it gives up the path and plans another after `*stuck-pause*`.
-The nav grid ignores bodies, so paths still run through them.
+stopped dead by another creature's body (`body-ahead`), it steps round it for
+`*sidestep-time*`, mostly across the way it walked (`*sidestep-across*`), on the side away
+from the other's centre, and the other side if that one is shut too (`walk-path`); blocked
+for `*stuck-time*`, it gives up the path and plans another after `*stuck-pause*`.
+The nav grid ignores bodies, so a wanderer's paths run through them. A hunter's don't run
+through bodies that stand still: while it plans (`chase-path`, `flank`) it binds
+`*nav-bodies*` (nav.lisp) to `standing-bodies`, the player and every other live creature not
+walking, within `*body-avoid-range*` and level with it, but not one it already touches. Each
+is a disc of the two bodies' radii that shuts the cells whose centre it covers
+(`nav-layer-near`) and every point of a straight walk (`nav-line-clear-p`, which ignores one
+its start or end lies in, so it may walk out of one or up to the player).
+`*nav-body-mask*` (`nav-body-mask`) stamps the columns the discs may shut into a small
+bit array when the plan starts, so the search asks the bodies only there: a flood over
+25 m of the test hall takes 7 ms with or without them (10.8 ms with them and no mask). Walking bodies don't count, since they have
+moved by the next replan; a hunter that walks into a body that stopped after its plan
+replans at once, round it, instead of stepping round it (`walk-path`). With bodies in
+the way and no way round, it finds no path and waits its turn: five imps down the test
+level's 3 m corridor, two attack side by side and three stand 2 to 3.5 m back. Over three
+runs of five imps hunting a strafing player, contacts between imps fell from about 45 to
+11.
 
 A creature with `attack-damage` also hunts (`think`). It notices the player in front of it
 within `*sight-range*` with nothing solid between them, or anywhere within `*hearing-range*`,
 and whenever it's hit; it stays alert for `*alert-time*` after the last time. While alert it
 runs at `chase-speed`, straight at the player when the nav grid allows a straight walk, else
 along `nav-path-to`, replanned every `*chase-replan*`, as long as the walk is at most
-`*chase-max-walk*` (25 m: a room overhead is a long way round by the stairs). A path search
+`*chase-max-walk*` (25 m: a room overhead is a long way round by the stairs). Within
+`*slot-range*` (6 m) a melee hunter makes for its `attack-slot` instead of the player, so
+a pack surrounds the player rather than queuing behind its leader. It claims a direction
+round the player (`slot-yaw`, kept while it hunts in range, so a hunter shoved out of reach
+steps back to the same spot): the free one nearest the way it comes from, looking a quarter
+of `*slot-spacing*` (0.8 rad, two imps side by side) at a time either side
+(`nearest-open-spot`), at least that far from every other claim and from every hunter
+already standing within its reach of the player. A spot is open when its body fits on the floor there, a step from
+the player's height and not in lava, with no wall between it and the player (`open-spot-p`;
+not a walk from the player's feet, which against a wall it doesn't fit). Starting an attack
+moves its claim to where it stands, unless that crowds another's claim. It yields its claim to
+a nearer hunter that claimed close to it or one standing on it, and gives up (`ban-slot`, off it for `*slot-ban-time*`) one it has no path to (the player and
+the standing pack are in the way of its path) and one it got stuck on the way to. With no spot free (the player's back to a wall leaves two or three)
+it waits: within `*slot-wait-radius*` (2.5 m) plus 1.5 it stands, from further off it comes
+in to that radius and from a metre inside it backs out to it, clear of the others waiting. A path search
 costs a few milliseconds in an open hall, so keep the limit no longer than levels need. Within `*attack-start-reach*` of its
 `attack-reach` it stops and attacks: the frames run on `attack-frame-times` (it turns to
 follow the player through the first), and on `attack-hit-frame` the blow lands if the player
 is still within `attack-reach`, inside `attack-arc` and not behind a wall (`hurt-player`:
 damage, a shove, the pain flash, hit-stop). Backing off during the wind-up dodges it, and a
 hit breaks the attack off. Then it stands `attack-pause` and hunts on.
+
+A creature that `flanks` (the imp, the skeleton) doesn't attack into a raised shield: within
+`*flank-range*` and in front of it (`shield-facing-p`, the shield's arc plus `*flank-margin*`)
+it walks an arc round the player (`flank`, `*flank-steps*` points) to just past the arc, on
+the side it is on, or the other if another creature already makes for that spot (with both
+taken it doesn't flank), and attacks from there. While `flanking` it neither attacks nor
+replans; the flank ends as soon as the shield no longer faces it (lowered, or got past). After one flank it waits
+`*flank-cooldown*` before the next, so a player who keeps turning to face it takes the blow
+on the shield.
 
 A caster (a creature with `attack-spell`, the acolyte) hunts from range instead
 (`hunt-from-range`): within `attack-range` and with a clear line to the player it stops and
@@ -747,8 +802,10 @@ reach still overlaps. The high quarter's stairs are made for it (see "Blueprints
   `*quake-radius*` (3.5 m), the player and its own allies alike, takes `*quake-damage*` and is
   thrown away, full against its body and nothing at the rim; the player is thrown up as
   well (`*quake-player-lift*`), since a shove on the ground dies in a tenth of a second.
-  Jumping as it lands dodges it all. It stands `*leap-recover*` (1.2 s) after.
-- **Slam** up close: the timed blow, and a hit throws the player back and up
+  Jumping as it lands dodges it all; the shield doesn't (`:unblockable`). It stands
+  `*leap-recover*` (1.2 s) after.
+- **Slam** up close: the timed blow, and a hit throws the player back and up (blocked, it
+  knocks the shield aside for its `guard-break`)
   (`hurt-player`'s `:shove` speed and `:lift`; `shove-player` does it without damage). The
   maul's impact, `*slam-impact*` in front, shoves everything within `*slam-quake-radius*`
   (no damage), so a near miss still shoves the player.

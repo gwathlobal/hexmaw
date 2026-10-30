@@ -37,12 +37,13 @@
 (defmethod saved-slots append ((player player))
   '(feet rotation velocity grounded eye health pain burn-timer wading mana cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
-    block-raise bash-time bash-pending))
+    block-raise bash-time bash-pending guard-broken))
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
     idle-timer path stuck walk-distance momentum stagger flash brace burn-timer dead bleeding
-    drip-timer gibbed rising stirring))
+    drip-timer gibbed rising stirring bash-poise flanking flank-timer
+    sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer))
 
 (defmethod saved-slots append ((flyer flyer))
   '(dive-direction dive-left downed landed launching landed-dead fall-speed bob-phase))

@@ -22,13 +22,18 @@ it has gone past it, and makes for the next.")
 (defparameter *death-time* 0.5 "Seconds a creature without a death animation takes to collapse.")
 (defparameter *revive-time* 3.0 "Seconds a corpse lies still before it comes back; NIL to stay dead.")
 (defparameter *wander-pause* '(1.0 3.0) "Least and most seconds a wandering creature stands before moving on.")
-(defparameter *hurt-pause* 0.4 "Seconds a creature stands after a painful hit before it plans a new walk.")
+(defparameter *hurt-pause* 0.2 "Seconds a creature stands after a painful hit before it plans a new walk.")
 (defparameter *max-pain-chance* 75
   "Most percent chance a hit has to make a creature flinch, whatever its PAIN-CHANCE and
 the weapon's bonus: some hits always pass it by, so it can't be held in its flinch.")
 (defparameter *settle-speed* 3.0 "Metres per second a creature rises or sinks to the floor under it.")
 (defparameter *stuck-time* 0.5 "Seconds a walking creature stays blocked before it gives up its path.")
 (defparameter *stuck-pause* 0.3 "Seconds it stands after giving up before it plans another walk.")
+(defparameter *sidestep-time* 0.4
+  "Seconds a walking creature that runs into another creature's body steps round it.")
+(defparameter *sidestep-across* 0.8
+  "How much of a sidestep goes across the way it was walking, from 0 (straight on) to 1
+(straight across): the rest goes on.")
 (defparameter *sight-range* 10.0 "Metres within which a creature sees the player in front of it.")
 (defparameter *hearing-range* 3.0 "Metres within which it notices the player behind it.")
 (defparameter *alert-time* 6.0 "Seconds a creature hunts after it last noticed the player or was hit.")
@@ -45,6 +50,28 @@ is a long walk round by the stairs.")
 (defparameter *attack-start-reach* 0.5
   "Fraction of its ATTACK-REACH within which a creature starts an attack. The rest
 leaves the player room to back out of the blow during the wind-up.")
+(defparameter *flank-range* 5.0
+  "Metres within which a creature that FLANKS walks round a raised shield instead of into it.")
+(defparameter *flank-margin* 0.35
+  "Radians past *BLOCK-ARC* (player.lisp) that a flanking creature makes for, and that it
+still counts as in front of the shield.")
+(defparameter *flank-cooldown* 2.5
+  "Seconds from one flank to the next: a player who keeps turning to face it gets the blow
+on the shield.")
+(defparameter *flank-steps* 3 "Points on the arc a flank walks round the player.")
+(defparameter *slot-range* 6.0
+  "Metres from the player within which melee hunters spread round them (ATTACK-SLOT)
+instead of all making for the player.")
+(defparameter *slot-spacing* 0.8
+  "Least radians, seen from the player, between two melee hunters' attack spots: 0.8 sets
+two imps there side by side.")
+(defparameter *slot-wait-radius* 2.5
+  "Metres from the player that a melee hunter with no free attack spot waits at. One
+nearer than a metre inside it backs out to it, so the pack's waiters never loiter at
+arm's length.")
+(defparameter *slot-ban-time* 2.0
+  "Seconds a melee hunter keeps off an attack spot it couldn't get to: no path, a path
+through the player, or stuck on the way.")
 
 (defvar *hit-stop* 0.0 "Seconds of hit-stop left. While positive, nothing in the world moves.")
 (defvar *roll-random* (make-random-state T)
@@ -104,6 +131,24 @@ for no shield.")
                     :documentation "Frame animation of the block pose, one sequence per view like
 WALK-ANIMATION, spread over *BLOCK-TIME*; NIL to show nothing.")
    (brace :initform 0.0 :accessor brace :documentation "Seconds left of the block pose.")
+   (bash-poise :initform 0.0 :accessor bash-poise
+               :documentation "Seconds left in which a shield bash can't stagger it and barely
+moves it (sword.lisp): set by every bash that lands.")
+   (guard-break :initarg :guard-break :initform NIL :reader guard-break
+                :documentation "Seconds a blow of its that the player's shield blocks knocks the
+shield down for (BREAK-GUARD, player.lisp); NIL for none.")
+   (flanks :initarg :flanks :initform NIL :reader flanks
+           :documentation "True if it walks round to the side of a raised shield instead of
+attacking into it (FLANK).")
+   (flanking :initform NIL :accessor flanking :documentation "True while it walks a flank's path.")
+   (flank-timer :initform 0.0 :accessor flank-timer :documentation "Seconds until it may flank again.")
+   (slot-yaw :initform NIL :accessor slot-yaw
+             :documentation "Direction round the player, as a yaw, of the attack spot it has
+claimed (ATTACK-SLOT), or NIL.")
+   (slot-bans :initform () :accessor slot-bans
+              :documentation "Yaws of attack spots it couldn't get to, kept off for *SLOT-BAN-TIME*.")
+   (slot-ban-timer :initform 0.0 :accessor slot-ban-timer
+                   :documentation "Seconds until it forgets SLOT-BANS.")
    (brain :initform :idle :accessor brain
           :documentation ":IDLE (standing), :WALKING along PATH or :ATTACKING.")
    (alert :initform 0.0 :accessor alert
@@ -140,6 +185,13 @@ WALK-ANIMATION; NIL to attack in the standing pose.")
    (idle-timer :initform (wander-pause) :accessor idle-timer :documentation "Seconds left standing.")
    (path :initform () :accessor path :documentation "Points still to walk to, nearest first.")
    (stuck :initform 0.0 :accessor stuck :documentation "Seconds its walk has been blocked.")
+   (sidestep :initform 0.0 :accessor sidestep
+             :documentation "Seconds left of stepping round a body in its way (WALK-PATH).")
+   (sidestep-side :initform 1 :accessor sidestep-side
+                  :documentation "Which way it steps round: 1 to its right, -1 to its left.")
+   (sidestep-flipped :initform NIL :accessor sidestep-flipped
+                     :documentation "True once this sidestep has turned to the other side, its first
+side being shut too.")
    (walk-distance :initform 0.0 :accessor walk-distance
                   :documentation "Metres walked so far; picks the walk animation's frame.")
    (walk-animation :initarg :walk-animation :initform NIL :accessor walk-animation
@@ -447,6 +499,8 @@ speed onto it as momentum, so it doesn't stall at the edge."
   "Stand still, walking or attacking, for PAUSE seconds."
   (setf (brain creature) :idle
         (path creature) ()
+        (flanking creature) NIL
+        (sidestep creature) 0.0
         (stuck creature) 0.0
         (attack-time creature) NIL
         (idle-timer creature) pause))
@@ -501,12 +555,26 @@ reached near it or once gone past it. Going too slowly for *STUCK-TIME*, it give
            (unless (setf (path creature) (rest (path creature)))
              (stop-walking creature)))
           ((< *stuck-time* (stuck creature))
+           (ban-slot creature)
            (stop-walking creature *stuck-pause*)))))
+
+(defun body-ahead (creature fx fz)
+  "The creature whose body stands in CREATURE's way along FX FZ (a unit vector), or NIL.
+Not the player: a creature walks into the player to attack."
+  (let ((loc (location creature)))
+    (multiple-value-bind (box body)
+        (body-overlapping (+ (vx loc) (* 0.1 fx)) (+ (vy loc) 0.05) (+ (vz loc) (* 0.1 fz))
+                          (float (body-radius creature) 0f0) (- (float (sprite-height creature) 0f0) 0.05)
+                          creature)
+      (declare (ignore box))
+      (and body (not (eq body *player*)) body))))
 
 (defun walk-path (creature dt)
   "Walk DT seconds toward the next point of the path, facing the way it goes. Blocked
-by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path. On ice it
-skids instead (SKID-PATH)."
+by a body it slides along it, and stopped dead by another creature's it steps round it
+for *SIDESTEP-TIME* (the other way if that side is shut too); a hunter stopped by one
+standing still plans afresh instead, round it (STANDING-BODIES), unless it just did.
+Blocked for *STUCK-TIME*, it gives up the path. On ice it skids instead (SKID-PATH)."
   (when (footing creature)
     (return-from walk-path (skid-path creature dt)))
   (let* ((loc (location creature))
@@ -517,17 +585,48 @@ skids instead (SKID-PATH)."
          (speed (walking-speed creature))
          (step (min distance (* speed dt)))
          (x0 (vx loc))
-         (z0 (vz loc)))
+         (z0 (vz loc))
+         (fx (if (< 1f-4 distance) (/ dx distance) 0.0))
+         (fz (if (< 1f-4 distance) (/ dz distance) 0.0))
+         (dodging (< 0.0 (sidestep creature))))
     (when (< 1f-4 distance)
-      (turn-to creature (atan dx (- dz)) dt)
-      (move-creature creature (* step (/ dx distance)) (* step (/ dz distance)) (move-lift creature)))
-    (let ((moved (sqrt (+ (expt (- (vx loc) x0) 2) (expt (- (vz loc) z0) 2)))))
+      ;; Stepping round a body: mostly across the way, a little on. Its right is (-fz, fx).
+      (let* ((side (float (sidestep-side creature) 0f0))
+             (across (if dodging *sidestep-across* 0.0))
+             (mx (+ (* across side (- fz)) (* (- 1.0 across) fx)))
+             (mz (+ (* across side fx) (* (- 1.0 across) fz)))
+             (ml (sqrt (+ (* mx mx) (* mz mz)))))
+        (turn-to creature (atan mx (- mz)) dt)
+        (move-creature creature (* step (/ mx ml)) (* step (/ mz ml)) (move-lift creature))))
+    (let* ((moved (sqrt (+ (expt (- (vx loc) x0) 2) (expt (- (vz loc) z0) 2))))
+           (blocked (and (< 1f-4 distance) (< moved (* 0.25 step))))
+           (dodge (and blocked (not dodging) (body-ahead creature fx fz))))
       (incf (walk-distance creature) moved)
-      (setf (stuck creature) (if (< moved (* 0.25 step)) (+ (stuck creature) dt) 0.0))
+      (when dodging
+        (decf (sidestep creature) dt))
+      (cond ((and dodge (hunting-p creature) (not (flanking creature))
+                  (not (eq (brain dodge) :walking))
+                  (< (replan-timer creature) (- *chase-replan* 0.2)))
+             ;; It stopped after this path was planned: the next plan goes round it.
+             (setf (replan-timer creature) 0.0))
+            (dodge
+             ;; Another creature in the way: step round it, on the side away from its centre.
+             (let ((loc2 (location dodge)))
+               (setf (sidestep-side creature)
+                     (if (< 0 (+ (* (- (vx loc2) (vx loc)) (- fz)) (* (- (vz loc2) (vz loc)) fx))) -1 1)
+                     (sidestep creature) *sidestep-time*
+                     (sidestep-flipped creature) NIL)))
+            ((and blocked dodging (not (sidestep-flipped creature)))
+             ;; That way round is shut too: try the other.
+             (setf (sidestep-side creature) (- (sidestep-side creature))
+                   (sidestep creature) *sidestep-time*
+                   (sidestep-flipped creature) T)))
+      (setf (stuck creature) (if (and blocked (not dodge)) (+ (stuck creature) dt) 0.0))
       (cond ((< (+ (expt (- (vx target) (vx loc)) 2) (expt (- (vz target) (vz loc)) 2)) 1f-6)
              (unless (setf (path creature) (rest (path creature)))
                (stop-walking creature)))
             ((< *stuck-time* (stuck creature))
+             (ban-slot creature)
              (stop-walking creature *stuck-pause*))))))
 
 (defun plan-wander (creature)
@@ -619,23 +718,178 @@ it can do something about. The ogre, which leaps down, looks further.")
               (replan-timer creature) 0.0))
       (setf (alert creature) *alert-time*))))
 
-(defun chase-path (creature)
-  "A path to the player: straight at them when nothing is in the way, else along the nav grid."
-  (let ((loc (ground-point creature))
-        (feet (feet *player*))
+(defun player-bearing (point)
+  "Direction from the player to POINT, as a yaw."
+  (let ((feet (feet *player*)))
+    (atan (- (vx point) (vx feet)) (- (vz feet) (vz point)))))
+
+(defun melee-hunter-p (creature)
+  (and (not (dead creature)) (attack-damage creature) (not (ranged-p creature)) (hunting-p creature)))
+
+(defun angle-between (a b)
+  "Radians between yaws A and B, the short way round."
+  (abs (- (mod (+ (- a b) pi) (* 2 pi)) pi)))
+
+(defun open-spot-p (creature spot)
+  "True if CREATURE fits on the floor at SPOT, within a step of its height, with no wall
+between SPOT and the player. Not a walk from the player's feet: with their back to a wall
+the creature doesn't fit there. Bodies don't count (ATTACK-SLOT keeps spots apart): the cell
+under a spot beside another hunter's may reach into it."
+  (and (let ((*nav-bodies* NIL))
+         (nav-nearest-fitting spot (body-radius creature) (sprite-height creature)
+                              :search 0 :reach (step-height creature)))
+       (clear-path-p spot (feet *player*) 1.0)))
+
+(defun slot-point (creature yaw &optional radius)
+  "The spot at YAW round the player, RADIUS metres off (by default where CREATURE attacks
+from), or NIL if it isn't open (OPEN-SPOT-P)."
+  (let* ((feet (feet *player*))
+         (radius (or radius (+ (body-radius creature) *player-radius*
+                               (* 0.9 *attack-start-reach* (attack-reach creature)))))
+         (spot (vec (+ (vx feet) (* radius (sin yaw))) (vy feet) (- (vz feet) (* radius (cos yaw))))))
+    (when (open-spot-p creature spot)
+      spot)))
+
+(defun nearest-open-spot (creature radius &optional (allowed (constantly T)))
+  "The open spot (SLOT-POINT, RADIUS off) round the player nearest the way CREATURE comes
+from, whose yaw ALLOWED accepts, looking a quarter of *SLOT-SPACING* at a time either
+side. Returns the spot and its yaw, or NIL."
+  (let ((bearing (player-bearing (location creature)))
+        (step (/ *slot-spacing* 4)))
+    (loop for k from 0 to (floor pi step)
+          do (dolist (sign (if (= k 0) '(1) '(1 -1)))
+               (let ((yaw (float (+ bearing (* sign k step)) 0f0)))
+                 (when (funcall allowed yaw)
+                   (let ((spot (slot-point creature yaw radius)))
+                     (when spot
+                       (return-from nearest-open-spot (values spot yaw))))))))))
+
+(defun ban-slot (creature)
+  "Give up CREATURE's attack spot, one it couldn't get to, and keep off it a while."
+  (when (slot-yaw creature)
+    (push (slot-yaw creature) (slot-bans creature))
+    (setf (slot-ban-timer creature) *slot-ban-time*
+          (slot-yaw creature) NIL)))
+
+(defparameter *body-avoid-range* 10.0
+  "Metres from a planning creature within which standing bodies shut its paths (STANDING-BODIES).")
+
+(defun standing-bodies (creature)
+  "The bodies CREATURE's hunting paths keep clear of (*NAV-BODIES*, nav.lisp): the player
+and every other live creature not walking, within *BODY-AVOID-RANGE*, standing level with
+CREATURE, and not one it already touches. A walking one has moved on by the next replan."
+  (let ((loc (location creature))
         (r (body-radius creature))
-        (h (sprite-height creature))
-        (step (step-height creature)))
-    (when *nav-grid*
-      (cond ((nav-line-clear-p loc feet r h step)
-             (list (vcopy feet)))
-            ((nav-path-to loc feet r h step :max-walk *chase-max-walk*))
-            ;; No dry way: through lava, then, the short way across.
-            ((eq *nav-hazards* :avoid)
-             (let ((*nav-hazards* :wade))
-               (nav-path-to loc feet r h step :max-walk *chase-max-walk*)))))))
+        (bodies ()))
+    (flet ((consider (feet radius height)
+             (let ((d2 (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2))))
+               (when (and (< (vy feet) (+ (vy loc) (sprite-height creature)))
+                          (< (vy loc) (+ (vy feet) height))
+                          (< d2 (expt *body-avoid-range* 2))
+                          ;; Not one it touches: it may walk out of that.
+                          (<= (expt (+ r radius) 2) d2))
+                 (push (list (vx feet) (vz feet) radius (- (vy feet) 1.0) (+ (vy feet) 1.0)) bodies)))))
+      (consider (feet *player*) *player-radius* *player-height*)
+      (loop for c across *creatures*
+            unless (or (eq c creature) (dead c) (eq (brain c) :walking))
+              do (consider (location c) (body-radius c) (sprite-height c))))
+    (make-nav-bodies bodies)))
+
+(defun attack-slot (creature)
+  "Where CREATURE, a melee hunter within *SLOT-RANGE* of the player, makes for to attack,
+so a pack surrounds the player instead of queuing. It claims a direction round the player
+(SLOT-YAW) and keeps it while it hunts: the free one nearest the way it comes from, at
+least *SLOT-SPACING* from every other hunter's claim and from every one that stands there
+already, at arm's length (one that got within reach on the way to its own spot). It
+gives its claim up to a hunter nearer the player that claimed close to it or stands on
+it, or when a wall comes between it and the player. Returns the spot; NIL and :WAIT when every spot is taken (the rest of the pack
+waits its turn); NIL further off, or for anything else."
+  (let ((distance (player-distance creature)))
+    (if (not (and *nav-grid* (melee-hunter-p creature) (< distance *slot-range*)))
+        (setf (slot-yaw creature) NIL)
+        (let ((claims (loop for c across *creatures*
+                            when (and (not (eq c creature)) (slot-yaw c) (melee-hunter-p c)
+                                      (< (player-distance c) (+ *slot-range* 1.0)))
+                              collect (cons (slot-yaw c) (player-distance c))))
+              (standing (loop for c across *creatures*
+                              when (and (not (eq c creature)) (not (dead c))
+                                        (player-within-p c (attack-reach c)))
+                                collect (player-bearing (location c))))
+              (own (slot-yaw creature)))
+          (flet ((free-p (yaw nearer-only)
+                   (and (loop for (claim . d) in claims
+                              never (and (or (not nearer-only) (< d distance))
+                                         (< (angle-between yaw claim) (* 0.99 *slot-spacing*))))
+                        (loop for b in standing
+                              never (< (angle-between yaw b) (* 0.99 *slot-spacing*)))
+                        (loop for ban in (slot-bans creature)
+                              never (< (angle-between yaw ban) (* 0.5 *slot-spacing*))))))
+            (or (and own (free-p own T) (slot-point creature own))
+                ;; A new claim: the free spot nearest the way it comes from.
+                (multiple-value-bind (spot yaw)
+                    (nearest-open-spot creature NIL (lambda (yaw) (free-p yaw NIL)))
+                  (setf (slot-yaw creature) yaw)
+                  spot)
+                (values NIL :wait)))))))
+
+(defun chase-path (creature)
+  "A path to the player, or to the creature's ATTACK-SLOT beside them: straight there when
+nothing is in the way, else along the nav grid, round the player and every creature
+standing still (STANDING-BODIES). A slot it can't get to is given up (BAN-SLOT) for
+another; with none, it waits off."
+  (let* ((*nav-bodies* (standing-bodies creature))
+         (*nav-body-mask* (nav-body-mask *nav-bodies* (body-radius creature)))
+         (loc (ground-point creature))
+         (r (body-radius creature))
+         (h (sprite-height creature))
+         (step (step-height creature)))
+    (labels ((path-to (goal)
+               (cond ((nav-line-clear-p loc goal r h step)
+                      (list (vcopy goal)))
+                     ((nav-path-to loc goal r h step :max-walk *chase-max-walk*))
+                     ;; No dry way: through lava, then, the short way across.
+                     ((eq *nav-hazards* :avoid)
+                      (let ((*nav-hazards* :wade))
+                        (nav-path-to loc goal r h step :max-walk *chase-max-walk*)))))
+             (wait-path ()
+               ;; No spot free: stand (NIL) until one is, or come in to *SLOT-WAIT-RADIUS*
+               ;; from further off, or back out to it from close in, clear of the others
+               ;; waiting.
+               (let* ((distance (player-distance creature))
+                      (near (+ *slot-wait-radius* 1.5))
+                      (waiting (loop for c across *creatures*
+                                     when (and (not (eq c creature)) (melee-hunter-p c)
+                                               (< (player-distance c) near))
+                                       collect (player-bearing (location c))))
+                      (spot (and (or (< near distance) (< distance (- *slot-wait-radius* 1.0)))
+                                 (nearest-open-spot creature *slot-wait-radius*
+                                                    (lambda (yaw)
+                                                      (loop for b in waiting
+                                                            never (< (angle-between yaw b) (* 0.6 *slot-spacing*))))))))
+                 (and spot (path-to spot)))))
+      (when *nav-grid*
+        ;; A spot it can't get to is given up for the next nearest, a few times.
+        (loop repeat 3
+              do (multiple-value-bind (slot wait) (attack-slot creature)
+                   (cond (slot
+                          (let ((path (path-to slot)))
+                            (if path
+                                (return path)
+                                (ban-slot creature))))
+                         (wait (return (wait-path)))
+                         (T (return (path-to (feet *player*))))))
+              finally (return (wait-path)))))))
 
 (defun start-attack (creature)
+  ;; It attacks from where it got within reach, which needn't be the spot it claimed:
+  ;; that is its spot now (ATTACK-SLOT), the one to come back to if shoved off it, unless
+  ;; that would crowd another's claim off its own.
+  (when (slot-yaw creature)
+    (let ((bearing (float (player-bearing (location creature)) 0f0)))
+      (when (loop for c across *creatures*
+                  never (and (not (eq c creature)) (slot-yaw c) (melee-hunter-p c)
+                             (< (angle-between bearing (slot-yaw c)) *slot-spacing*)))
+        (setf (slot-yaw creature) bearing))))
   (face-player creature)
   (setf (brain creature) :attacking
         (path creature) ()
@@ -700,10 +954,80 @@ the ogre's leap: true if it started one. HUNT asks it first, so a chasing creatu
 every *CHASE-REPLAN*.")
   (:method ((creature creature)) NIL))
 
+(defun flank-yaw (side)
+  "Direction from the player, as a yaw, to strike past their shield from on SIDE (1 their
+right, -1 their left): just outside the shield's arc."
+  (+ (vy (rotation *player*)) (* side (+ *block-arc* *flank-margin*))))
+
+(defun flank-target (creature side radius)
+  "Where CREATURE stands to strike past the player's shield from SIDE, RADIUS metres off."
+  (let ((feet (feet *player*))
+        (yaw (flank-yaw side)))
+    (vec (+ (vx feet) (* radius (sin yaw))) (vy (location creature)) (- (vz feet) (* radius (cos yaw))))))
+
+(defun flank-side (creature)
+  "The side of the player's facing CREATURE stands on: 1 their right, -1 their left."
+  (let* ((loc (location creature))
+         (feet (feet *player*))
+         (yaw (vy (rotation *player*)))
+         ;; The player's right is (cos, sin) of the yaw.
+         (right (+ (* (- (vx loc) (vx feet)) (cos yaw)) (* (- (vz loc) (vz feet)) (sin yaw)))))
+    (if (< right 0) -1 1)))
+
+(defun flank-taken-p (creature point)
+  "True if another creature already flanks toward a point near POINT."
+  (loop for c across *creatures*
+        thereis (and (not (eq c creature)) (flanking c) (path c)
+                     (let ((end (car (last (path c)))))
+                       (< (+ (expt (- (vx end) (vx point)) 2) (expt (- (vz end) (vz point)) 2))
+                          (* 1.5 1.5))))))
+
+(defun flank (creature)
+  "Walk round the player's raised shield, if CREATURE FLANKS, may again, is near and in
+front of it: along an arc to where it strikes past the shield, on the side it is on,
+or the other if someone else already makes for that one. One creature flanks each side:
+with both taken it doesn't. True if it set off."
+  (when (and (flanks creature)
+             (<= (flank-timer creature) 0)
+             (< (player-distance creature) *flank-range*)
+             (shield-facing-p *player* (location creature) *flank-margin*)
+             *nav-grid*)
+    (let* ((*nav-bodies* (standing-bodies creature))
+           (*nav-body-mask* (nav-body-mask *nav-bodies* (body-radius creature)))
+           (radius (+ (body-radius creature) *player-radius*
+                      (* *attack-start-reach* (attack-reach creature))))
+           (side (let ((side (flank-side creature)))
+                   (cond ((not (flank-taken-p creature (flank-target creature side radius))) side)
+                         ((not (flank-taken-p creature (flank-target creature (- side) radius))) (- side))
+                         (T (return-from flank NIL)))))
+           (feet (feet *player*))
+           (loc (ground-point creature))
+           (from (atan (- (vx loc) (vx feet)) (- (vz feet) (vz loc))))
+           (to (flank-yaw side))
+           ;; The short way round from where it stands to the flank.
+           (turn (- (mod (+ (- to from) pi) (* 2 pi)) pi))
+           (out (max radius (player-distance creature)))
+           (r (body-radius creature))
+           (h (sprite-height creature))
+           (step (step-height creature))
+           (points (loop for i from 1 to *flank-steps*
+                         for yaw = (+ from (* turn (/ i *flank-steps*)))
+                         for d = (if (= i *flank-steps*) radius out)
+                         collect (vec (+ (vx feet) (* d (sin yaw))) (vy loc) (- (vz feet) (* d (cos yaw)))))))
+      (when (loop for a = loc then b
+                  for b in points
+                  always (nav-line-clear-p a b r h step))
+        (setf (path creature) points
+              (brain creature) :walking
+              (flanking creature) T
+              (flank-timer creature) *flank-cooldown*)
+        T))))
+
 (defun hunt (creature)
   "Attack the player if within reach, or set off along a fresh path toward them."
   (cond ((special-attack creature))
         ((ranged-p creature) (hunt-from-range creature))
+        ((flank creature))
         ((player-within-p creature (* *attack-start-reach* (attack-reach creature)))
          (start-attack creature))
         (T (chase creature))))
@@ -712,6 +1036,13 @@ every *CHASE-REPLAN*.")
   (loop for time in (attack-frame-times creature)
         repeat (attack-hit-frame creature)
         sum time))
+
+(defun winding-up-p (creature)
+  "True while CREATURE's attack has yet to land: the moment a shield bash interrupts it."
+  (and (eq (brain creature) :attacking)
+       (attack-pending creature)
+       (attack-time creature)
+       (< (attack-time creature) (attack-hit-time creature))))
 
 (defun attack-frame (creature)
   "The attack animation frame showing ATTACK-TIME seconds in."
@@ -748,7 +1079,8 @@ strike the player if still in reach and in front of it.")
           ((and (player-within-p creature (attack-reach creature))
                 (< (player-angle creature) (attack-arc creature))
                 (clear-path-p (location creature) (feet *player*) 1.0))
-           (hurt-player *player* (roll (attack-damage creature)) (location creature))))))
+           (hurt-player *player* (roll (attack-damage creature)) (location creature)
+                        :guard-break (guard-break creature))))))
 
 (defgeneric face-attack-target (creature dt)
   (:documentation "Turn CREATURE through an attack's wind-up toward what it attacks.")
@@ -786,11 +1118,16 @@ flyer's dive.")
        (when (<= (decf (idle-timer creature) dt) 0)
          (if hunting (hunt creature) (plan-wander creature))))
       (:walking
-       (cond ((and hunting (not (ranged-p creature))
+       ;; A flank is over once the shield no longer faces it: lowered, or got past.
+       (when (and (flanking creature) (not (shield-facing-p *player* (location creature))))
+         (setf (flanking creature) NIL
+               (replan-timer creature) 0.0))
+       (cond ((and hunting (not (ranged-p creature)) (not (flanking creature))
                    (player-within-p creature (* *attack-start-reach* (attack-reach creature))))
               (start-attack creature))
              (T
-              (when (and hunting (<= (decf (replan-timer creature) dt) 0))
+              ;; A flank walks its arc to the end, then hunts afresh.
+              (when (and hunting (not (flanking creature)) (<= (decf (replan-timer creature) dt) 0))
                 (hunt creature))
               (when (eq (brain creature) :walking)
                 (walk-path creature dt))))))))
@@ -1003,7 +1340,12 @@ after the flinch, block and attack.")
       (setf (flash creature) (max 0.0 (- (flash creature) dt))
             (stagger creature) (max 0.0 (- (stagger creature) dt))
             (brace creature) (max 0.0 (- (brace creature) dt))
+            (bash-poise creature) (max 0.0 (- (bash-poise creature) dt))
+            (flank-timer creature) (max 0.0 (- (flank-timer creature) dt))
+            (slot-ban-timer creature) (max 0.0 (- (slot-ban-timer creature) dt))
             (stirring creature) (max 0.0 (- (stirring creature) dt)))
+      (when (and (slot-bans creature) (<= (slot-ban-timer creature) 0))
+        (setf (slot-bans creature) ()))
       (update-footing creature)
       (slide creature dt)
       (drip-blood creature dt)
@@ -1068,6 +1410,8 @@ after the flinch, block and attack.")
    (gibs :initform '((:imp (:head 0) 3) (:flesh 0 0 1 1 2 4 5 6 6 7 7)))
    (attack-damage :initform '(6 10))
    (chase-speed :initform 2.6)
+   ;; Quick and small: it darts round a raised shield.
+   (flanks :initform T)
    (pain-chance :initform 60)
    (max-health :initform 30)))
 
@@ -1170,6 +1514,8 @@ after the flinch, block and attack.")
    ;; A slow, heavy blow: a long wind-up to back out of.
    (attack-frame-times :initform '(0.6 0.15 0.25 0.45))
    (attack-pause :initform 0.9)
+   ;; The mace beats a raised shield aside.
+   (guard-break :initform 0.8)
    (walk-speed :initform 0.9)
    (chase-speed :initform 1.4)
    (wander-radius :initform 2.0)

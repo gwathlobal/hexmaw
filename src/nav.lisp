@@ -76,6 +76,82 @@ it. :IGNORE treats them as any floor, for flyers. Creatures bind it while they t
 (defparameter *nav-wade-cost* 3.0
   "How many times as costly a step through lava is to a path that may wade.")
 
+(defvar *nav-bodies* NIL
+  "Bodies the nav questions keep a body's paths clear of, though the grid ignores bodies:
+NIL, or a single-float vector of five per body (MAKE-NAV-BODIES), X Z RADIUS LOW HIGH, a
+body RADIUS out from its centre at X Z, standing on a floor between LOW and HIGH. A cell is
+shut to a body RADIUS out from its centre whose centre lies within the two radii of one,
+as is every point along a straight walk. A creature binds it while it plans a hunt
+(STANDING-BODIES, creature.lisp); NIL, the default, leaves paths as before. Path searches
+ask it for every neighbour, hence the plain floats.")
+
+(defun make-nav-bodies (entries)
+  "A *NAV-BODIES* vector of ENTRIES, each a list X Z RADIUS LOW HIGH; NIL for none."
+  (when entries
+    (let ((bodies (make-array (* 5 (length entries)) :element-type 'single-float)))
+      (loop for entry in entries
+            for o from 0 by 5
+            do (loop for v in entry
+                     for k from o
+                     do (setf (aref bodies k) (float v 0f0))))
+      bodies)))
+
+(defun nav-body-hit-p (bodies b x z y radius)
+  "True if a body RADIUS out from its centre, standing at X Y Z, overlaps the Bth body of
+BODIES, a *NAV-BODIES* vector."
+  (declare (type (simple-array single-float (*)) bodies) (type (mod 100000) b)
+           (type single-float x z y radius) (optimize speed))
+  (let ((o (* 5 b)))
+    (and (<= (aref bodies (+ o 3)) y (aref bodies (+ o 4)))
+         (< (+ (expt (- x (aref bodies o)) 2) (expt (- z (aref bodies (+ o 1))) 2))
+            (expt (+ radius (aref bodies (+ o 2))) 2)))))
+
+(defun nav-bodies-hit-p (bodies x z y radius)
+  "True if a body RADIUS out from its centre, standing at X Y Z, overlaps any of BODIES."
+  (declare (type (simple-array single-float (*)) bodies) (type single-float x z y radius)
+           (optimize speed))
+  (loop for b of-type (mod 100000) from 0 below (floor (length bodies) 5)
+        thereis (nav-body-hit-p bodies b x z y radius)))
+
+(defvar *nav-body-mask* NIL
+  "NIL, or the columns *NAV-BODIES* may shut to the body planning (NAV-BODY-MASK): a vector
+of I0, J0 and a bit array over the columns from I0 J0. A path search asks the bodies
+themselves only in those columns, so they cost it next to nothing elsewhere.")
+
+(defun nav-body-mask (bodies radius &optional (grid *nav-grid*))
+  "A *NAV-BODY-MASK* for BODIES and a planning body RADIUS out from its centre: the columns
+whose centre lies within the two radii of one, whatever its floor. NIL for no bodies."
+  (when (and bodies grid)
+    (let* ((cell (nav-cell-size grid)) (x0 (nav-x0 grid)) (z0 (nav-z0 grid))
+           (n (floor (length bodies) 5))
+           (reach (loop for b below n maximize (+ radius (aref bodies (+ (* 5 b) 2)))))
+           (i0 (floor (- (loop for b below n minimize (aref bodies (* 5 b))) reach x0) cell))
+           (i1 (floor (- (+ (loop for b below n maximize (aref bodies (* 5 b))) reach) x0) cell))
+           (j0 (floor (- (loop for b below n minimize (aref bodies (1+ (* 5 b)))) reach z0) cell))
+           (j1 (floor (- (+ (loop for b below n maximize (aref bodies (1+ (* 5 b)))) reach) z0) cell))
+           (bits (make-array (list (1+ (- i1 i0)) (1+ (- j1 j0))) :element-type 'bit :initial-element 0)))
+      (dotimes (di (array-dimension bits 0))
+        (dotimes (dj (array-dimension bits 1))
+          (let ((x (+ x0 (* (+ i0 di 0.5) cell)))
+                (z (+ z0 (* (+ j0 dj 0.5) cell))))
+            (when (loop for b below n
+                        for o = (* 5 b)
+                        thereis (< (+ (expt (- x (aref bodies o)) 2) (expt (- z (aref bodies (1+ o))) 2))
+                                   (expt (+ radius (aref bodies (+ o 2))) 2)))
+              (setf (aref bits di dj) 1)))))
+      (vector i0 j0 bits))))
+
+(defun nav-body-masked-p (mask i j)
+  "True if column I J is one of MASK's (*NAV-BODY-MASK*)."
+  (declare (type simple-vector mask) (type fixnum i j) (optimize speed))
+  (let ((bits (svref mask 2))
+        (mi (- i (the fixnum (svref mask 0))))
+        (mj (- j (the fixnum (svref mask 1)))))
+    (declare (type (simple-array bit (* *)) bits))
+    (and (< -1 mi (array-dimension bits 0))
+         (< -1 mj (array-dimension bits 1))
+         (= 1 (aref bits mi mj)))))
+
 ;;; Geometry questions.
 
 (defun floor-candidates (x z)
@@ -238,9 +314,16 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
 fits, whose floor is at most STEP away, the nearest if several. NIL if there is none.
 Path searches ask this for every neighbour, so it reads the arrays directly."
   (when (and (< -1 i (nav-width grid)) (< -1 j (nav-depth grid)))
-    (let ((floors (nav-floors grid)) (clearance (clearance-for height grid)) (headroom (nav-headroom grid))
-          (hazard (nav-hazard grid)) (dry (eq *nav-hazards* :avoid))
-          (best NIL) (best-d 0.0))
+    (let* ((floors (nav-floors grid)) (clearance (clearance-for height grid)) (headroom (nav-headroom grid))
+           (hazard (nav-hazard grid)) (dry (eq *nav-hazards* :avoid))
+           ;; The bodies shut columns only where the mask says they may.
+           (bodies (and *nav-bodies*
+                        (or (null *nav-body-mask*) (nav-body-masked-p *nav-body-mask* i j))
+                        *nav-bodies*))
+           (x (if bodies (float (+ (nav-x0 grid) (* (+ i 0.5) (nav-cell-size grid))) 0f0) 0f0))
+           (z (if bodies (float (+ (nav-z0 grid) (* (+ j 0.5) (nav-cell-size grid))) 0f0) 0f0))
+           (r (float radius 0f0))
+           (best NIL) (best-d 0.0))
       (declare (type (simple-array single-float (* * *)) floors clearance headroom)
                (type (simple-array bit (* * *)) hazard))
       (dotimes (k (nav-layers grid) best)
@@ -251,7 +334,8 @@ Path searches ask this for every neighbour, so it reads the arrays directly."
           (let ((d (abs (- y floor))))
             (when (and (<= d step) (or (null best) (< d best-d))
                        (<= radius (aref clearance i j k)) (<= height (aref headroom i j k))
-                       (not (and dry (= 1 (aref hazard i j k)))))
+                       (not (and dry (= 1 (aref hazard i j k))))
+                       (not (and bodies (nav-bodies-hit-p bodies x z y r))))
               (setf best k best-d d))))))))
 
 (defun nav-point (i j k &optional (grid *nav-grid*))
@@ -413,8 +497,21 @@ Steps go up and down alike, so it can walk back from all of them too."
   "True if a body standing at point A can walk the straight line to point B: it fits
 every cell along it, no floor change between them is more than STEP, and it arrives on
 the floor B is on, not one above or below it. Unless *NAV-HAZARDS* is :IGNORE, the
-line keeps out of lava, even for a path that may wade."
+line keeps out of lava, even for a path that may wade. The line passes no body of
+*NAV-BODIES* but one that A or B already overlaps: it may walk out of one, or into the
+one it makes for."
   (let* ((*nav-hazards* (if (eq *nav-hazards* :ignore) :ignore :avoid))
+         ;; Bodies are checked at each point along the line, not by the cells it crosses.
+         (r (float radius 0f0))
+         (bodies (let ((all *nav-bodies*))
+                   (when all
+                     (loop for k from 0 below (floor (length all) 5)
+                           unless (or (nav-body-hit-p all k (vx a) (vz a) (vy a) r)
+                                      (nav-body-hit-p all k (vx b) (vz b) (vy b) r))
+                             collect k))))
+         (all-bodies *nav-bodies*)
+         (*nav-bodies* NIL)
+         (*nav-body-mask* NIL)
          (dx (- (vx b) (vx a))) (dz (- (vz b) (vz a)))
          (samples (max 1 (ceiling (sqrt (+ (* dx dx) (* dz dz))) (/ (nav-cell-size grid) 4))))
          (floor (nav-floor-at (vx a) (vy a) (vz a) grid)))
@@ -423,7 +520,9 @@ line keeps out of lava, even for a path that may wade."
             for f = (/ s samples)
             do (multiple-value-bind (i j) (nav-cell (+ (vx a) (* f dx)) (+ (vz a) (* f dz)) grid)
                  (let ((k (and i (nav-layer-near i j floor radius height step grid))))
-                   (unless k
+                   (unless (and k (loop for body in bodies
+                                        never (nav-body-hit-p all-bodies body (+ (vx a) (* f dx))
+                                                              (+ (vz a) (* f dz)) floor r)))
                      (return NIL))
                    (setf floor (nav-floor i j k grid))))
             finally (return (eql floor (nav-floor-at (vx b) (vy b) (vz b) grid)))))))

@@ -112,19 +112,13 @@ upstairs."
     ;; Torches on the hall walls, two of them flanking the doorway.
     (loop for (x z) in '((-9.5 0) (9.5 0) (0 9.5) (-5 -9.5) (5 -9.5))
           do (add-torch container x 2.4 z))
-    ;; An imp in the middle of the hall, facing the spawn point.
-    (spawn-creature (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
-    ;; An acolyte up on the platform, facing the spawn point.
-    (spawn-creature (make-instance 'acolyte :location (vec 7.5 1.2 -7.5) :facing -2.6) container)
-    ;; A knight by the west pillars, its shield toward the spawn point.
-    (spawn-creature (make-instance 'knight :location (vec -6 0 0) :facing pi) container)
-    ;; A harpy in the south-east of the hall; it rises to its hover from the floor.
-    (spawn-creature (make-instance 'harpy :location (vec 6 0 7) :facing (- (/ pi 2))) container)
-    ;; A necromancer at the back of the hall, behind the imp, facing the spawn point.
-    (spawn-creature (make-instance 'necromancer :location (vec -2 0 -8) :facing pi) container)
-    ;; An ogre in the east of the hall, by the annex doorway, which it just fits through;
-    ;; the annex's stair shaft and the platform's steps test where it can follow.
-    (spawn-creature (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
+    ;; Imps only for now, to try fighting them with the shield. Where the other monsters
+    ;; stood: the middle of the hall, the platform (the acolyte), the west pillars (the
+    ;; knight), the south-east (the harpy), the back (the necromancer) and by the annex
+    ;; doorway (the ogre).
+    (loop for (x y z facing) in `((0 0 -3 ,pi) (7.5 1.2 -7.5 -2.6) (-6 0 0 ,pi)
+                                  (6 0 7 ,(- (/ pi 2))) (-2 0 -8 ,pi) (7.5 0 1.5 ,(- (/ pi 2))))
+          do (spawn-creature (make-instance 'imp :location (vec x y z) :facing facing) container))
     (build-annex container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))
@@ -137,6 +131,7 @@ upstairs."
       (add-torch container -1.0 2.2 -18)
       ;; The shrine block (data/blueprints/shrine.txt) at the corridor's end, attached by
       ;; its south doorway. Its other doorways are plugged.
-      (dolist (c (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south))
+      (dolist (c (let ((*spawn-override* "imp"))
+                   (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south)))
         (unless (string-equal (connector-name c) "connector_south")
           (seal-connector container c))))))

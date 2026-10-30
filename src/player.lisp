@@ -28,6 +28,8 @@
 (defparameter *block-arc* 1.0 "Radians either side of the view the raised shield covers.")
 (defparameter *block-damage-scale* 0.25 "Fraction of a blocked blow's damage that gets through.")
 (defparameter *block-shove-scale* 0.4 "Fraction of a blocked blow's shove that gets through.")
+(defparameter *block-speed-scale* 0.6
+  "Fraction of the walking speed the player keeps with the shield fully raised; no running.")
 (defparameter *pain-time* 0.35 "Seconds the screen flashes red after the player is hurt.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
@@ -72,7 +74,10 @@
    (bash-time :initform NIL :accessor bash-time
               :documentation "Seconds since the shield bash began, or NIL when not bashing.")
    (bash-pending :initform NIL :accessor bash-pending
-                 :documentation "True until the bash's blow has landed.")))
+                 :documentation "True until the bash's blow has landed.")
+   (guard-broken :initform 0.0 :accessor guard-broken
+                 :documentation "Seconds left before the shield can be raised again, after a
+blow knocked it aside (BREAK-GUARD).")))
 
 (defun capture-mouse (player)
   (lock-cursor (context +main+))
@@ -245,7 +250,8 @@ On a step the eye keeps its height and eases to the new one."
     (return))
   (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
         (cast-timer player) (max 0.0 (- (cast-timer player) dt))
-        (pain player) (max 0.0 (- (pain player) dt)))
+        (pain player) (max 0.0 (- (pain player) dt))
+        (guard-broken player) (max 0.0 (- (guard-broken player) dt)))
   (when (cast-time player)
     (incf (cast-time player) dt)
     (when (and (pending-spell player) (<= *cast-release* (cast-time player)))
@@ -265,9 +271,12 @@ On a step the eye keeps its height and eases to the new one."
          (kind (if (grounded player)
                    (setf (wading player) (and liquid (liquid-kind liquid)))
                    (if liquid (liquid-kind liquid) (wading player))))
+         (raise (block-raise player))
+         ;; The raised shield slows the player to a walk and below.
          (speed (* (cond (crouching *crouch-speed*)
-                         ((retained :left-shift) *run-speed*)
+                         ((and (retained :left-shift) (= 0.0 raise)) *run-speed*)
                          (T *walk-speed*))
+                   (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
                    (if kind (liquid-property kind :speed) 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
@@ -332,11 +341,11 @@ On a step the eye keeps its height and eases to the new one."
     (when lift
       (setf (vy vel) (max (vy vel) (float lift 0f0))))))
 
-(defun shield-blocks-p (player from)
-  "True if PLAYER's shield is fully raised (sword.lisp) and a blow from point FROM comes
-from within *BLOCK-ARC* of where the player faces."
+(defun shield-facing-p (player from &optional (margin 0.0))
+  "True if PLAYER's shield is raised at all (sword.lisp) and point FROM lies within
+*BLOCK-ARC*, plus MARGIN radians, of where the player faces."
   (and (eq (weapon player) :sword)
-       (<= 1.0 (block-raise player))
+       (< 0.0 (block-raise player))
        (let* ((feet (feet player))
               (dx (- (vx from) (vx feet)))
               (dz (- (vz from) (vz feet)))
@@ -344,19 +353,36 @@ from within *BLOCK-ARC* of where the player faces."
               (yaw (vy (rotation player))))
          (and (< 1f-4 len)
               (< (acos (max -1.0 (min 1.0 (/ (- (* dx (sin yaw)) (* dz (cos yaw))) len))))
-                 *block-arc*)))))
+                 (+ *block-arc* margin))))))
 
-(defun hurt-player (player amount from &key (shove T) lift)
+(defun shield-blocks-p (player from)
+  "True if PLAYER's shield is fully raised and a blow from point FROM comes from within
+*BLOCK-ARC* of where the player faces."
+  (and (<= 1.0 (block-raise player))
+       (shield-facing-p player from)))
+
+(defun break-guard (player seconds)
+  "Knock PLAYER's shield aside: down at once, a bash in progress cut off, and not raised
+again for SECONDS."
+  (setf (guard-broken player) (max (guard-broken player) (float seconds 0f0))
+        (block-raise player) 0.0
+        (bash-time player) NIL
+        (bash-pending player) NIL))
+
+(defun hurt-player (player amount from &key (shove T) lift guard-break unblockable)
   "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
 from FROM and hit-stop. SHOVE is T for *PLAYER-KNOCKBACK*, a speed in m/s, or NIL (a
 burn: only the flash). LIFT, in m/s, also throws the player up off their feet, where a
 shove carries much further than on the ground. A blow the raised shield meets
-(SHIELD-BLOCKS-P) does *BLOCK-DAMAGE-SCALE* of its damage, at least 1, and shoves and
-lifts *BLOCK-SHOVE-SCALE* as far. At zero health the run starts over."
+(SHIELD-BLOCKS-P; never an UNBLOCKABLE one) does *BLOCK-DAMAGE-SCALE* of its damage, at
+least 1, and shoves and lifts *BLOCK-SHOVE-SCALE* as far; with GUARD-BREAK it also knocks
+the shield aside for that many seconds (BREAK-GUARD). At zero health the run starts over."
   (when (< 0 (health player))
-    (let ((blocked (and shove (shield-blocks-p player from))))
+    (let ((blocked (and shove (not unblockable) (shield-blocks-p player from))))
       (when blocked
-        (setf amount (max 1 (round (* amount *block-damage-scale*)))))
+        (setf amount (max 1 (round (* amount *block-damage-scale*))))
+        (when guard-break
+          (break-guard player guard-break)))
       (decf (health player) amount)
       (setf (pain player) *pain-time*)
       (when shove

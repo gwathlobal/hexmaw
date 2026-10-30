@@ -399,6 +399,10 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
   "(point . metres) while a level is generated: no block spawns a monster that close to
 the point, the player's start.")
 
+(defvar *spawn-override* NIL
+  "When non-NIL, the monster every block spawn places instead of its own (the debug
+level binds it).")
+
 (defvar *block-random* (make-random-state T)
   "Picks among a spawn's choices. The generator binds it to its own, seeded, state.")
 
@@ -449,7 +453,8 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
             (add-torch container (vx w) (vy w) (vz w))))
         (dolist (spawn (and spawns (getf def :spawns)))
           ;; The choice is made even for a spawn left out, so a seed builds the same level.
-          (let* ((kind (spawn-choice (getf spawn :kind)))
+          (let* ((kind (let ((choice (spawn-choice (getf spawn :kind))))
+                         (and choice (or *spawn-override* choice))))
                  (class (and kind (find-symbol (string-upcase kind) '#:hexmaw)))
                  (at (world (getf spawn :position))))
             (cond

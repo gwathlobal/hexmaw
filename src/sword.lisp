@@ -14,7 +14,9 @@
 ;;; The left hand holds a shield, its own sprite against the bottom-left corner (below).
 ;;; Holding the right button raises it to block (SHIELD-BLOCKS-P, player.lisp); a click
 ;;; while it is up bashes with it: a shove and a little damage, landing on
-;;; *BASH-HIT-FRAME*.
+;;; *BASH-HIT-FRAME*. It staggers only a creature winding up a blow, and each bash leaves
+;;; the creature poised for a moment, so timing the interrupt matters and spamming the
+;;; bash only shoves. Against the knight's shield it glances off.
 
 (define-fx-animation sword "sprites/sword/sword" :fps 5 :loop T)
 
@@ -41,7 +43,15 @@
 (defparameter *bash-damage* '(2 4))
 (defparameter *bash-knockback* 6.0 "Speed in m/s a bash slides the creature away.")
 (defparameter *bash-pain-bonus* 50
-  "Percent a bash adds to the creature's PAIN-CHANCE: staggering is what it is for.")
+  "Percent a bash adds to the creature's PAIN-CHANCE when it lands in the wind-up of the
+creature's attack (WINDING-UP-P): interrupting is what it is for. At any other time a
+bash doesn't stagger.")
+(defparameter *bash-poise-time* 1.5
+  "Seconds after a bash lands in which another bash can't stagger the creature and barely
+moves it.")
+(defparameter *poised-bash-knockback* 0.25 "Fraction of *BASH-KNOCKBACK* a poised creature takes.")
+(defparameter *bash-recoil* 4.0 "Speed in m/s a bash glancing off a shield throws the player back.")
+(defparameter *bash-recoil-guard* 0.5 "Seconds a bash glancing off a shield leaves the player's shield down.")
 
 (defparameter *sword-height* 1.04
   "Vertical art scale: the strip's cell height times the scale is about this fraction
@@ -172,10 +182,22 @@ either side of where the player faces, level with the player, and not behind a w
       (push-creature target (v- (location target) (feet player)) (float *sword-knockback* 0f0)))))
 
 (defun bash-hit (player)
+  "Bash the creature in front of PLAYER. Against a shield that covers it, the bash glances
+off and the player reels back; otherwise it hurts and shoves, staggering only a creature
+winding up an attack and not already poised from a bash."
   (let ((target (swing-target player *bash-reach* *bash-arc*)))
-    (when target
-      (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus *bash-pain-bonus*)
-      (push-creature target (v- (location target) (feet player)) (float *bash-knockback* 0f0)))))
+    (cond ((null target))
+          ((shielded-p target (feet player))
+           (block-hit target)
+           (shove-player player (location target) *bash-recoil*)
+           (break-guard player *bash-recoil-guard*))
+          (T
+           (let* ((poised (< 0.0 (bash-poise target)))
+                  (bonus (if (and (not poised) (winding-up-p target)) *bash-pain-bonus* -100)))
+             (setf (bash-poise target) *bash-poise-time*)
+             (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus bonus)
+             (push-creature target (v- (location target) (feet player))
+                            (float (* *bash-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0)))))))
 
 (defun update-weapons (player dt)
   "Run the swing and the weapon switch. Called from the player's tick while not frozen."
@@ -199,6 +221,7 @@ either side of where the player faces, level with the player, and not behind a w
     (setf (block-raise player)
           (if (or (bash-time player)
                   (and (block-held player)
+                       (<= (guard-broken player) 0.0)
                        (eq (weapon player) :sword)
                        (eq (wanted-weapon player) :sword)
                        (= 0.0 (weapon-lower player))

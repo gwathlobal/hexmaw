@@ -68,6 +68,8 @@
    (chase-speed :initform 2.1)
    (wander-radius :initform 3.0)
    (knockback-scale :initform 0.8)
+   ;; Raised in numbers: they spread round a raised shield.
+   (flanks :initform T)
    (pain-chance :initform 40)
    (max-health :initform 20)))
 
