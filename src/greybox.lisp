@@ -18,6 +18,18 @@
 (defparameter *lamp-fog-start* 6.0)
 (defparameter *lamp-fog-end* 36.0)
 (defparameter *grid-strength* 0.25)
+;; Under water the fog closes in and turns the water's colour; lamps still show a little further.
+(defparameter *underwater-fog-color* (vec 0.02 0.08 0.16))
+(defparameter *underwater-fog-start* 0.5)
+(defparameter *underwater-fog-end* 8.0)
+(defparameter *underwater-lamp-fog-start* 1.0)
+(defparameter *underwater-lamp-fog-end* 14.0)
+(defvar *eye-underwater* NIL
+  "True while the camera is under water (the player's PLACE-CAMERA sets it): the fog is the water's.")
+
+(defun fog-color ()
+  "The colour everything fades into, and the screen is cleared to: the water's under water."
+  (if *eye-underwater* *underwater-fog-color* *fog-color*))
 
 ;;; Level textures: tiling pixel art made by tools/make_texture.py, laid on the faces in
 ;;; world space at *TEXELS-PER-METRE*, the monsters' density, so a 256 px texture covers
@@ -282,11 +294,12 @@ vec3 fog_lit(vec3 color, vec3 glow, float dist){
 
 (defun set-fog-uniforms (program)
   "Set the fog uniforms FOG_LIT reads (lit-entity), shared by every shader that fogs."
-  (setf (uniform program "fog_color") *fog-color*)
-  (setf (uniform program "fog_start") (float *fog-start* 0f0))
-  (setf (uniform program "fog_end") (float *fog-end* 0f0))
-  (setf (uniform program "lamp_fog_start") (float *lamp-fog-start* 0f0))
-  (setf (uniform program "lamp_fog_end") (float *lamp-fog-end* 0f0)))
+  (let ((under *eye-underwater*))
+    (setf (uniform program "fog_color") (fog-color))
+    (setf (uniform program "fog_start") (float (if under *underwater-fog-start* *fog-start*) 0f0))
+    (setf (uniform program "fog_end") (float (if under *underwater-fog-end* *fog-end*) 0f0))
+    (setf (uniform program "lamp_fog_start") (float (if under *underwater-lamp-fog-start* *lamp-fog-start*) 0f0))
+    (setf (uniform program "lamp_fog_end") (float (if under *underwater-lamp-fog-end* *lamp-fog-end*) 0f0))))
 
 (defmethod render :before ((box greybox) (program shader-program))
   (when (first-this-frame-p program)

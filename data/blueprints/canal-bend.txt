@@ -1,0 +1,33 @@
+; A canal turning from north to east: the outer bank runs round the bend, the inner bank
+; is the corner between the doorways.
+cells 2 2
+storeys 2
+tags corridor canal
+weight 2
+mirror yes
+legend
+  ~ water
+  B door canal
+  C door canal, open
+
+plan 0
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~~~~~~
+#####~~~~~~~~~~~
+#####~~~~~~~~~~~
+################
+################
+################
+
+plan 1
+#BBBBCCCCCCBBBB#
+#....      ....B
+T....      ....B
+#....          C
+#....          C
+#....          C
+T..............B
+#..............B
+################

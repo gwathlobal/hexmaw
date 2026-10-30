@@ -1,0 +1,17 @@
+; A flooded passage branching both ways: each arm swims on to its own cistern.
+cells 1 1
+ceiling 3
+tags corridor flooded
+weight 1
+legend
+  ~ water top
+  w door underwater, water top
+  e door underwater, water top
+  s door underwater, water top
+
+plan 0
+########
+w~~~~~~e
+w~~~~~~e
+w~~~~~~e
+#ssssss#

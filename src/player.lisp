@@ -31,6 +31,21 @@
 (defparameter *block-speed-scale* 0.6
   "Fraction of the walking speed the player keeps with the shield fully raised; no running.")
 (defparameter *pain-time* 0.35 "Seconds the screen flashes red after the player is hurt.")
+(defparameter *swim-speed* 3.0)
+(defparameter *swim-run-speed* 4.5)
+(defparameter *swim-acceleration* 10.0 "Metres per second squared toward the swim wished for.")
+(defparameter *water-drag* 3.0
+  "Per second, the share of speed water takes from something moving faster than a swim (a
+dive in, a shove), as an exponential.")
+(defparameter *swim-sink* 0.4 "Metres per second a player sinks at below the surface, swimming nowhere.")
+(defparameter *swim-waist* 0.9 "Metres above the feet that must be in water to swim.")
+(defparameter *float-eye* 0.15 "Metres above the surface the eye floats at.")
+(defparameter *climb-out-height* 0.8 "The highest a ledge may stand over the surface for the player to climb out onto it.")
+(defparameter *climb-speed* 3.0 "Metres per second a climb out rises.")
+(defparameter *climb-time* 1.0 "Seconds a climb out may take before it gives up.")
+(defparameter *breath-time* 20.0 "Seconds the player can stay under water.")
+(defparameter *breath-refill* 5.0 "Seconds of breath regained per second in air.")
+(defparameter *drown-damage* 10.0 "Health per second lost under water with no breath left.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
 
@@ -52,6 +67,12 @@
                :documentation "Seconds until the next burn can land (liquids.lisp).")
    (wading :initform NIL :accessor wading
            :documentation "Kind of the liquid last stood in, NIL on dry ground: it slows a jump from it.")
+   (swimming :initform NIL :accessor swimming :documentation "True while in water up to the waist.")
+   (climbing :initform NIL :accessor climbing
+             :documentation "Seconds left of a climb out of the water onto a ledge, or NIL.")
+   (breath :initform *breath-time* :accessor breath :documentation "Seconds of breath left.")
+   (drown-timer :initform 0.0 :accessor drown-timer
+                :documentation "Seconds until the next drowning damage can land (BURN-DUE).")
    (mana :initform *max-mana* :accessor mana)
    (cast-timer :initform 0.0 :accessor cast-timer)
    (cast-time :initform NIL :accessor cast-time
@@ -236,12 +257,113 @@ On a step the eye keeps its height and eases to the new one."
         (setf (vy feet) y0 (vy vel) vy0))))
 
 (defun place-camera (player)
-  "Put the camera at the player's eye."
+  "Put the camera at the player's eye, and note whether it is under water (the fog)."
   (let ((loc (location player))
         (feet (feet player)))
     (setf (vx loc) (vx feet)
           (vy loc) (+ (vy feet) (float (eye player) 0f0))
-          (vz loc) (vz feet))))
+          (vz loc) (vz feet))
+    (setf *eye-underwater* (swim-liquid-at (vx loc) (vy loc) (vz loc)))))
+
+;;; Swimming, Quake-style: in water to the waist the player swims where they look (W and S
+;;; along the view, A and D level), Space up and C or Ctrl down, against the water's drag,
+;;; sinking slowly when swimming nowhere and floating with the eye just over the surface.
+;;; Pushing forward against a ledge at the surface climbs out onto it.
+
+(defun swim-water (player)
+  "The water PLAYER is in up to the waist, or NIL."
+  (let ((feet (feet player)))
+    (swim-liquid-at (vx feet) (+ (vy feet) *swim-waist*) (vz feet))))
+
+(defun ledge-ahead-p (player surface yaw)
+  "True if a ledge stands ahead of PLAYER no more than *CLIMB-OUT-HEIGHT* over the water's
+SURFACE, with room to stand on it."
+  (let* ((feet (feet player))
+         (reach (+ *player-radius* 0.35))
+         (x (+ (vx feet) (* reach (sin yaw))))
+         (z (- (vz feet) (* reach (cos yaw)))))
+    (and (solid-overlapping x surface z 0.05 *climb-out-height*)
+         (not (solid-overlapping x (+ surface *climb-out-height*) z *player-radius* *player-height*)))))
+
+(defun swim (player water dt ix iz up running yaw)
+  "Move PLAYER through WATER for DT seconds: IX IZ the strafe and forward keys, UP the
+up and down keys (1, 0 or -1)."
+  (let* ((vel (velocity player))
+         (feet (feet player))
+         (surface (aref (liquid-bounds water) 4))
+         (pitch (vx (rotation player)))
+         (cp (cos pitch))
+         (wx (+ (* iz (sin yaw) cp) (* ix (cos yaw))))
+         (wy (+ (* iz (- (sin pitch))) up))
+         (wz (+ (* iz (- (cos yaw)) cp) (* ix (sin yaw))))
+         (len (sqrt (+ (* wx wx) (* wy wy) (* wz wz))))
+         (speed (if running *swim-run-speed* *swim-speed*))
+         (float-y (+ surface *float-eye*))
+         (eye-y (+ (vy feet) *eye-height*))
+         (at-surface (< (- float-y 0.3) eye-y)))
+    (when (< 1.0 len)
+      (setf wx (/ wx len) wy (/ wy len) wz (/ wz len)))
+    ;; Faster than a swim, the water's drag slows it.
+    (when (< (* speed speed) (+ (expt (vx vel) 2) (expt (vy vel) 2) (expt (vz vel) 2)))
+      (let ((keep (exp (- (* *water-drag* dt)))))
+        (setf (vx vel) (* (vx vel) keep) (vy vel) (* (vy vel) keep) (vz vel) (* (vz vel) keep))))
+    ;; Toward the wished velocity. Swimming nowhere, it floats up to the surface when near
+    ;; it, and sinks slowly when below.
+    (let* ((tx (* wx speed))
+           (ty (cond ((< 0 (abs wy)) (* wy speed))
+                     (at-surface (max (- *swim-sink*) (min speed (* 2.0 (- float-y eye-y)))))
+                     (T (- *swim-sink*))))
+           (tz (* wz speed))
+           (dx (- tx (vx vel))) (dy (- ty (vy vel))) (dz (- tz (vz vel)))
+           (dlen (sqrt (+ (* dx dx) (* dy dy) (* dz dz))))
+           (max-dv (* *swim-acceleration* dt)))
+      (when (< max-dv dlen)
+        (let ((f (/ max-dv dlen))) (setf dx (* dx f) dy (* dy f) dz (* dz f))))
+      (incf (vx vel) dx) (incf (vy vel) dy) (incf (vz vel) dz))
+    (let ((vx0 (vx vel)) (vz0 (vz vel)))
+      (setf (grounded player) NIL)
+      (move-horizontal player (* (vx vel) dt) (* (vz vel) dt) NIL)
+      (move-axis player 1 (* (vy vel) dt))
+      ;; The surface holds the eye: swimming up stops there.
+      (let ((over (- (+ (vy feet) *eye-height*) float-y)))
+        (when (and (< 0 over) (< 0 (vy vel)))
+          (setf (vy vel) 0f0)))
+      ;; Pushing forward into a ledge at the surface: climb out.
+      (when (and at-surface (< 0 iz)
+                 (or (/= vx0 (vx vel)) (/= vz0 (vz vel)))
+                 (ledge-ahead-p player surface yaw))
+        (setf (climbing player) *climb-time*)))))
+
+(defun climb-out (player dt yaw)
+  "Rise for DT seconds of a climb out, then step forward onto the ledge once clear of it."
+  (let* ((feet (feet player))
+         (vel (velocity player))
+         (fx (sin yaw)) (fz (- (cos yaw)))
+         (x0 (vx feet)) (z0 (vz feet)))
+    (setf (vx vel) 0f0 (vz vel) 0f0 (vy vel) (float *climb-speed* 0f0)
+          (grounded player) NIL)
+    (move-axis player 1 (* *climb-speed* dt))
+    (move-flat player (* fx 1.5 dt) (* fz 1.5 dt))
+    (decf (climbing player) dt)
+    ;; Over the ledge, or out of time: on with walking, a little forward.
+    (when (or (< (* 1.0 dt) (sqrt (+ (expt (- (vx feet) x0) 2) (expt (- (vz feet) z0) 2))))
+              (<= (climbing player) 0))
+      (setf (climbing player) NIL
+            (vx vel) (float (* fx 2.0) 0f0) (vy vel) 0f0 (vz vel) (float (* fz 2.0) 0f0)))))
+
+(defun update-breath (player dt)
+  "Use up PLAYER's breath while its eye is under water, regain it in air, and drown it
+with none left."
+  (let* ((feet (feet player))
+         (under (swim-liquid-at (vx feet) (+ (vy feet) (eye player)) (vz feet))))
+    (setf (breath player) (if under
+                              (max 0.0 (- (breath player) dt))
+                              (min *breath-time* (+ (breath player) (* *breath-refill* dt)))))
+    (multiple-value-bind (timer damage)
+        (burn-due (drown-timer player) dt (if (and under (<= (breath player) 0)) *drown-damage* 0.0))
+      (setf (drown-timer player) timer)
+      (when (< 0 damage)
+        (hurt-player player damage feet :shove NIL)))))
 
 (define-handler (player tick) (dt)
   (when (frozen-p)
@@ -258,7 +380,6 @@ On a step the eye keeps its height and eases to the new one."
       (release-spell player)))
   (update-weapons player dt)
   (let* ((dt (min dt 0.05))
-         (vel (velocity player))
          (yaw (vy (rotation player)))
          (crouching (or (retained :left-control) (retained :c)))
          (ix (- (if (retained :d) 1.0 0.0) (if (retained :a) 1.0 0.0)))
@@ -280,6 +401,35 @@ On a step the eye keeps its height and eases to the new one."
                    (if kind (liquid-property kind :speed) 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
+    (let ((water (swim-water player)))
+      (setf (swimming player) (and water T))
+      (cond ((climbing player)
+             (climb-out player dt yaw))
+            (water
+             (setf (footing player) NIL)
+             (swim player water dt ix iz
+                   (- (if (retained :space) 1.0 0.0) (if crouching 1.0 0.0))
+                   (retained :left-shift) yaw))
+            (T (walk player dt wx wz wlen speed kind crouching))))
+    (when (< (vy (feet player)) *kill-height*)
+      (respawn player))
+    ;; Standing in lava burns; under water with no breath left, drowning.
+    (let ((feet (feet player)))
+      (multiple-value-bind (timer damage)
+          (burn-due (burn-timer player) dt (hazard-at (vx feet) (+ (vy feet) 0.05) (vz feet)))
+        (setf (burn-timer player) timer)
+        (when (< 0 damage)
+          (hurt-player player damage feet :shove NIL))))
+    (update-breath player dt)
+    ;; Ease the eye toward standing or crouching height, then place the camera.
+    (let ((target (if (and crouching (not (swimming player))) *crouch-eye-height* *eye-height*)))
+      (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
+    (place-camera player)))
+
+(defun walk (player dt wx wz wlen speed kind crouching)
+  "Move PLAYER on foot or through the air for DT seconds, wishing along WX WZ (WLEN long)
+at SPEED, out of liquid KIND if any."
+  (let ((vel (velocity player)))
     (setf (footing player) (and (grounded player)
                                 (let ((feet (feet player))) (floor-footing (vx feet) (vy feet) (vz feet) *player-radius*))))
     (if (footing player)
@@ -312,20 +462,7 @@ On a step the eye keeps its height and eases to the new one."
       (move-horizontal player (* (vx vel) dt) (* (vz vel) dt) walking)
       (move-axis player 1 (* (vy vel) dt))
       (when (and walking (not (grounded player)))
-        (snap-to-ground player)))
-    (when (< (vy (feet player)) *kill-height*)
-      (respawn player))
-    ;; Standing in lava burns.
-    (let ((feet (feet player)))
-      (multiple-value-bind (timer damage)
-          (burn-due (burn-timer player) dt (hazard-at (vx feet) (+ (vy feet) 0.05) (vz feet)))
-        (setf (burn-timer player) timer)
-        (when (< 0 damage)
-          (hurt-player player damage feet :shove NIL))))
-    ;; Ease the eye toward standing or crouching height, then place the camera.
-    (let ((target (if crouching *crouch-eye-height* *eye-height*)))
-      (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
-    (place-camera player)))
+        (snap-to-ground player)))))
 
 (defun shove-player (player from speed &optional lift)
   "Push PLAYER away from point FROM at SPEED m/s, and with LIFT, up at that many m/s."

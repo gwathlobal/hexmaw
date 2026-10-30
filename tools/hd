@@ -12,7 +12,10 @@
 #
 # Exit codes: 0 ok, 1 the request failed (message on stderr), 3 game not running.
 
-port="${HEXMAW_EVAL_PORT:-7171}"
+# A checkout's own .eval-port (gitignored) names its game's port, so a worktree's tools
+# and reload hook reach the game it runs instead of the main checkout's on 7171.
+root="$(cd "$(dirname "$0")/.." && pwd)"
+port="${HEXMAW_EVAL_PORT:-$(cat "$root/.eval-port" 2>/dev/null || echo 7171)}"
 
 lisp_string() {
   local s="${1//\\/\\\\}"

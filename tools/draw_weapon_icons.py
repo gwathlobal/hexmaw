@@ -5,8 +5,8 @@ writes, so the game reads it like any other animation strip:
   tools/draw_weapon_icons.py data/sprites/icons/weapons
 
 writes weapons.png (frames left to right, 2 px transparent gaps) and weapons.lisp.
-Frames, in order: the sword, the fireball (the casting hands). Each is SIZE art pixels
-square, drawn pixel by pixel in the palettes of the sword and bolt sprites, then
+Frames, in order: the sword, the fireball (the casting hands), the spear. Each is SIZE
+art pixels square, drawn pixel by pixel in the palettes of the sword and bolt sprites, then
 outlined in near-black so it reads on any background. The top-left corner of each icon
 is left empty: the game draws the slot's key number there.
 """
@@ -84,6 +84,40 @@ def fireball():
     return px
 
 
+def spear():
+    px = {}
+    steel_light = (232, 232, 222, 255)
+    steel_mid = (176, 178, 172, 255)
+    steel_dark = (110, 112, 112, 255)
+    gold = (226, 188, 70, 255)
+    gold_dark = (150, 112, 30, 255)
+    wood = (122, 66, 34, 255)
+    wood_dark = (84, 42, 22, 255)
+    # Shaft: a long diagonal from the butt (bottom left) up to the head.
+    for i in range(12):
+        x, y = 2 + i, 17 - i
+        px[(x, y)] = wood
+        px[(x + 1, y)] = wood_dark
+    # Leather grip wrapped round the rear of the shaft.
+    for x, y in ((4, 15), (6, 13)):
+        px[(x, y)] = wood_dark
+    # Brass socket below the head.
+    for x, y in ((13, 6), (14, 6), (14, 5)):
+        px[(x, y)] = gold
+    px[(14, 6)] = gold_dark
+    # The head: a leaf blade on the diagonal up to the tip, lit along its rib, widest
+    # in its middle, as the sword's blade is drawn.
+    for i, (x, y) in enumerate(((15, 4), (16, 3), (17, 2), (18, 1))):
+        px[(x, y)] = steel_light
+        if i < 3:
+            px[(x - 1, y)] = steel_mid
+            px[(x + 1, y)] = steel_dark
+        if i in (1, 2):
+            px[(x - 1, y - 1)] = steel_mid
+            px[(x + 1, y + 1)] = steel_dark
+    return px
+
+
 def outlined(px):
     out = dict(px)
     for (x, y) in px:
@@ -96,7 +130,7 @@ def outlined(px):
 def main():
     out = Path(sys.argv[1])
     out.parent.mkdir(parents=True, exist_ok=True)
-    icons = [sword(), fireball()]
+    icons = [sword(), fireball(), spear()]
     strip = Image.new("RGBA", (len(icons) * SIZE + (len(icons) - 1) * GAP, SIZE), (0, 0, 0, 0))
     for i, icon in enumerate(icons):
         for (x, y), c in outlined(icon).items():

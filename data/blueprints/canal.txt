@@ -1,0 +1,32 @@
+; A canal, north to south: deep water 3 m wide in a channel a storey deep, between banks
+; 2 m wide, 0.3 m over the water. A shove off a bank is a swim.
+cells 2 2
+storeys 2
+tags corridor canal
+weight 3
+legend
+  ~ water
+  B door canal                       ; a canal's doorway: bank
+  C door canal, open                 ; and the open channel
+
+plan 0
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+
+plan 1
+#BBBBCCCCCCBBBB#
+#....      ....#
+T....      ....T
+#....      ....#
+#....      ....#
+#....      ....#
+T....      ....T
+#....      ....#
+#BBBBCCCCCCBBBB#

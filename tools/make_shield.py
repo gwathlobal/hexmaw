@@ -23,8 +23,16 @@ art pixels past the screen's. Keying is slice_frames.py's (blue well over green 
 background). Every frame is box-filtered down, darkened by --brightness, desaturated
 by --saturation, and mapped onto one --colors palette, so the frames match.
 
+--corner right pins the frames to the screen's bottom-right corner instead, for a
+weapon held on the right (the spear, data/sprites/spear): X counts leftward from the right edge,
+the margin is kept past the right edge and the bottom, and SX is still counted from the
+picture's left. Such a strip sits as the sword's does, *SWORD-OVERHANG* and *SWORD-DROP*
+art pixels past the corner, so give --margin the same.
+
 Writes <out>.png, the frames in a row with 2 px gaps, and <out>.lisp, the index
 define-fx-animation reads.
+
+  tools/make_shield.py --corner right art/spear/spear-frames.txt data/sprites/spear/spear
 """
 
 import argparse
@@ -82,11 +90,19 @@ def main():
     ap.add_argument("--brightness", type=float, default=0.8)
     ap.add_argument("--saturation", type=float, default=0.8)
     ap.add_argument("--colors", type=int, default=48)
+    ap.add_argument("--corner", choices=("left", "right"), default="left",
+                    help="screen corner the frames are pinned to")
     args = ap.parse_args()
+    # A right-corner strip is built as a left-corner one from mirrored pictures, then
+    # mirrored back.
+    mirror = args.corner == "right"
 
     placed = []   # (image, left, top) in screen art pixels, Y down from the screen's bottom
     for source, scale, sx, sy, x, y in read_frames(args.frames):
         img = keyed(source)
+        if mirror:
+            img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            sx = img.width - sx
         w, h = round(img.width * scale), round(img.height * scale)
         small = grade(box_downscale(img, (w, h)), args.brightness, args.saturation)
         left, top = round(x - sx * scale), round(-y - sy * scale)
@@ -106,7 +122,7 @@ def main():
         # The cell's top-left corner is at screen (-m, top); anything past it is cut.
         cell = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
         cell.paste(img, (left + m, top_y - top), img)
-        cells.append(cell)
+        cells.append(cell.transpose(Image.Transpose.FLIP_LEFT_RIGHT) if mirror else cell)
 
     strip = Image.new("RGBA", (len(cells) * (cell_w + GAP) - GAP, cell_h), (0, 0, 0, 0))
     for i, cell in enumerate(cells):

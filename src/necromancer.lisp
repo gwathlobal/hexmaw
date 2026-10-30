@@ -205,14 +205,15 @@
 
 (defmethod hunt-from-range ((necromancer necromancer))
   "Back off from a player too close; raise a corpse if one is in reach; draw the grave
-circle under a player in range and sight; else throw skulls, or close in."
+circle under a player in range and sight, standing (not swimming: it is drawn on a floor);
+else throw skulls, or close in."
   (let ((distance (player-distance necromancer))
         (corpse NIL))
     (cond ((and (< distance (keep-away necromancer)) (retreat necromancer)))
           ((and (ready-p necromancer :raise) (setf corpse (corpse-to-raise necromancer)))
            (setf (raise-target necromancer) corpse)
            (start-ability necromancer :raise))
-          ((and (ready-p necromancer :nova) (< distance *nova-range*)
+          ((and (ready-p necromancer :nova) (< distance *nova-range*) (not (swimming *player*))
                 (clear-path-p (location necromancer) (feet *player*) (cast-height necromancer)))
            (start-ability necromancer :nova))
           ((and (< distance (attack-range necromancer))

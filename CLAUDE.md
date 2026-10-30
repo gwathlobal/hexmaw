@@ -31,9 +31,10 @@ A git worktree (`.claude/worktrees/<name>`) has no `.ql/` of its own: symlink th
 checkout's, `ln -s "$(git rev-parse --git-common-dir)/../.ql" .ql`, and leave the link there
 (`/.ql` in .gitignore covers it; don't delete it when done). Port 7171 is usually the
 main checkout's game, and `tools/hd` and the reload hook talk to it by default, so editing
-`src/` in a worktree reloads the main checkout's copy of that file into that game. Run the
-worktree's own game on a free port (`ss -ltnp` shows the taken ones) and pass the port to
-every command: `HEXMAW_EVAL_PORT=7181 ./run.sh`, `HEXMAW_EVAL_PORT=7181 tools/hd status`.
+`src/` in a worktree would reload the main checkout's copy of that file into that game. Give
+the worktree its own port in `.eval-port` (gitignored): `echo 7191 > .eval-port`, a free one
+(`ss -ltnp` shows the taken ones). `run.sh`, `tools/hd` and so the reload hook all read it,
+and `HEXMAW_EVAL_PORT` still overrides it.
 `tools/hd '(namestring (root))'` says which checkout a game runs from.
 
 ## Standalone build
@@ -344,8 +345,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `build-level` builds the saved seed and `setup-scene` ends with `restore-run`, which leaves
   the game paused. Reloading save.lisp resets `*save-directory*`; to test without touching
   real saves, `(setf *save-directory* #p"/some/dir/")` after each reload.
-- `src/liquids.lisp`: liquids, lava for now (water will be another kind). A liquid is a box of
-  volume in `*liquids*` (`build-level` empties it), never a solid: it fills a sunken pit
+- `src/liquids.lisp`: liquids, lava and water. A liquid is a box of volume in `*liquids*`
+  (`build-level` empties it), never a solid. Lava fills a sunken pit
   whose floor is an ordinary solid `*lava-depth*` (0.4 m, under a step) below the floor
   around it, its surface `*lava-surface*` (0.1 m) below, so walking in and out is a step
   down and up and the feet sink. Everything else asks `liquid-at x y z`. `*liquid-kinds*`
@@ -374,6 +375,30 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   the test level, `add-lava` digs a pit in the hall's south-west (x −9 to −6, z 3 to 7),
   its floor slab left with a hole there; the hall's room reaches down to the slab's
   underside so the glow lights the pit's rim.
+
+  Water is deep only: a pit can sink no further than the 0.5 m slab, so water fills the lower
+  storey of a two-storey block (a pool, a canal) up to `*water-surface*` (0.3 m, blueprint.lisp)
+  under the floor above, or a flooded passage to its roof. `:swim` in its kind marks it;
+  `swim-liquid-at` asks for it. Its surface is a `water-surface` (not lava's fullbright
+  `liquid-surface`; both are `liquid-sheet`s): lit through `light_at` like a floor, from below
+  as a ceiling, see-through (`*water-alpha*`), no depth written and both faces drawn. So it
+  must be drawn after everything it covers: its `late-rank` is 0, and the game's pass
+  (`game-pass`, main.lisp) moves what has one to the end of each frame, by rank, since Trial
+  draws in hash-table order. The underwater tint (hud.lisp) is rank 1, after it. A water box whose top meets a ceiling gets no surface. With the camera
+  in water (`*eye-underwater*`, set by `place-camera`) the fog and clear colour are the
+  water's (`*underwater-fog-color*` and the rest; `fog-color`, greybox.lisp), and the whole
+  view, the hands too, is multiplied by `*underwater-tint*` (a blue; `underwater-tint`,
+  hud.lisp, a quad like the pain flash drawn with `:dst-color :zero` blending). The texture is
+  `data/textures/water.png` (`art/prompts/texture-water.txt`, made like the other textures:
+  `tools/make_texture.py art/textures/water-1.png data/textures/water --metres 4`).
+  The nav grid makes deep water's surface a floor (`water-surfaces`), so a walker shoved in
+  settles onto it like any floor. Afloat (`afloat-p`; never a flyer, `floats-p`) it is drawn
+  sunk by `*float-sink*` of its height (in `apply-transforms`, so the surface covers the
+  rest), doesn't think but flounders (`flounder`, `escape-liquid`) toward the nearest dry
+  floor at `*flounder-speed*`, losing `*creature-drown-damage*` a second (`burn`), and walks
+  out up the step onto the ledge. A projectile bursts on entering a liquid from outside: one
+  cast under water (`submerged`) flies on. The necromancer draws no grave circle under a
+  swimmer. On the test level the `pool` hangs off the shrine's west doorway.
 - `src/footing.lisp`: moving on a slippery footing, Hexen's ice. A footing (`*footings*`,
   greybox.lisp, beside `*surfaces*`) belongs to a surface: whatever is drawn with surface
   `:ice` (a blueprint's `ice` material, `add-box :surface :ice`) is slippery, a box, floor slab
@@ -493,7 +518,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   ```
 
   To look at one: `tools/hd '(game (cast-spell (find-spell (quote grave-spikes)) (v+ (feet *player*) (vec 0 0 -4)) (vec 0 0 1) (scene +main+)))'`.
-- `src/hud.lisp`: HP and mana bars in the lower-left corner, and the red pain flash over
+- `src/hud.lisp`: HP and mana bars in the lower-left corner, an AIR bar over them while
+  breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
   on whole pixels, since a half-pixel position drops an edge row. Overlapping elements
@@ -539,11 +565,16 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
   to `*cast-release*`.
 - `src/sword.lisp`: the sword and weapon switching. The player holds one weapon (`*weapons*`:
-  1 the sword, 2 the casting hands); switching lowers one off screen and raises the next.
+  1 the sword, 2 the casting hands, 3 the spear); switching lowers one off screen and raises the next.
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
   so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
   blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
-  `*sword-arc*`, not behind a wall. Number keys pick a weapon, the mouse wheel cycles
+  `*sword-arc*`, not behind a wall. The sword's slash and the spear's thrust are both swings,
+  through the same `swing-time`: generics on the weapon's keyword give each its timing and blow
+  (`swing-frame-times`, `swing-hit-frame`, `swing-reach`, `swing-arc`, `swing-damage`,
+  `swing-knockback`, `swing-pain-bonus`), and generics on the sprite which weapon it draws
+  for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
+  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon, the mouse wheel cycles
   (`cycle-weapon`). The weapon slots above the HP bar (`weapon-bar`) show one icon per
   weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
@@ -568,19 +599,39 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   another bash can't stagger it and shoves it only `*poised-bash-knockback*` as far
   (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
   frame: idle, `*shield-raise-frames*` rising, the block held, then the bash's.
-- `src/player.lisp`: first-person controller and box collision.
+- `src/spear.lisp`: the spear, held in both hands, so no shield (the right button does
+  nothing with it; block and bash ask for `:sword`). Against the sword it reaches further
+  (`*spear-reach*` 3.5 m against 2) in a narrower arc (`*spear-arc*` 0.3 rad), staggers more
+  (`*spear-pain-bonus*` 35) and is slower: the thrust plays `*thrust-frame-times*` (0.68 s
+  against 0.53) and lands at full extension, `*thrust-hit-frame*` (0.24 s in, against 0.23).
+  Its sprite (`spear`) is a subclass of the sword's, drawn from `data/sprites/spear/spear`,
+  at the sword's art pixel size (`sword-scale`) and sunk as far (`*sword-drop*`), but placed
+  by its aim (`weapon-aim`, `*spear-aim*`: the point at full extension) on the screen's
+  middle rather than against the right edge, so the thrust goes where the player looks on any
+  screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
+  (`art/spear/spear-frames.txt` says how).
+- `src/player.lisp`: first-person controller and box collision. In water to the waist
+  (`*swim-waist*`) the player swims, Quake-style (`swim`): W and S along the view, A and D
+  level, Space up and C or Ctrl down, at `*swim-speed*` (`*swim-run-speed*` with Shift)
+  against `*water-drag*`, sinking at `*swim-sink*` when swimming nowhere below the surface and
+  floating with the eye `*float-eye*` over it. Pushing forward into a ledge at the surface no
+  more than `*climb-out-height*` over the water climbs out (`climb-out`). `breath`
+  (`*breath-time*`, 20 s) runs down while the eye is under water and comes back at
+  `*breath-refill*`; with none left the player drowns, `*drown-damage*` a second
+  (`update-breath`, through `burn-due`).
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
-  torches light through its walls. Its corridor ends in the `shrine` block. For now every
-  monster on it is an imp: the hall's six stand where the acolyte, knight, harpy,
-  necromancer and ogre did, and the shrine's acolyte is one too (`*spawn-override*`,
-  blocks.lisp, bound around its `attach-block`). The notes below on where those monsters
-  stand describe the level before that. The debug `ice-rink`
-  block (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
-  knight on the ice; no tags, so never generated) is retired for now: it hung off the shrine's
-  west doorway, `attach-block` by its `connector_east` facing `:east` with `drop-portal` on
-  its connectors; `(kit-goto "ice-rink")` in the gallery still reaches it. A doorway
+  torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
+  (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
+  `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
+  pool's others plugged. For now every monster on it is an imp: the hall's six stand where
+  the acolyte, knight, harpy, necromancer and ogre did, and the shrine's and pool's are imps
+  too (`*spawn-override*`, blocks.lisp, bound around their `attach-block`s). The notes below
+  on where those monsters stand describe the level before that. The debug `ice-rink` block
+  (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
+  knight on the ice; no tags, so never generated) is retired for now, the pool in its place;
+  `(kit-goto "ice-rink")` in the gallery still reaches it. A doorway
   also needs floor under its wall's thickness: without it the nav grid has no cell there,
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
@@ -634,7 +685,12 @@ headroom ≥ its `sprite-height`, and moves to a neighbour when the floors diffe
 its `step-height`, so one grid serves every size. The grid is layered: each 0.5 m column
 keeps every floor with room above it, lowest first (a room and the room above it, or a
 hall and its roof), so a cell is `i j k`, and stairs join the layers because neighbouring
-floors are a step apart. A point is in the layer under it, the highest floor at most
+floors are a step apart. Deep water's surface is a floor too, a step below the ledge round
+it, and each cell's `nav-water` says whether it is such a surface (1) or a floor under deep
+water (2): walkers' paths keep out of both, a flyer's (`:ignore`) go over the surface, and
+`*nav-hazards*` `:swim` (the player's reachability) goes through both and dives from a
+surface to the bottom under it (`nav-dives`). `show-nav` tints surface cells teal. A point
+is in the layer under it, the highest floor at most
 `*nav-layer-above*` above its feet (`nav-layer`, `nav-floor-at x y z`), so anything that
 asks about a place passes its height too. A straight walk (`nav-line-clear-p`) must also end
 on the floor its target is on, not the one above or below. The geometry questions
@@ -1090,6 +1146,20 @@ tools/make_shield.py art/sword-shield/shield-frames.txt data/sprites/sword/shiel
 The picture's bottom edge cuts the shield, so no frame may lift it on screen (the frames file
 says how far is safe), and the shield can't turn: the bash is a push straight out.
 
+The spear (`art/spear/`) is one generated picture per pose, the whole 1536 × 1024 canvas
+being the screen, both gauntlets on the shaft, their forearms running off the bottom edge so
+the one sprite can stand against the bottom-right corner: `art/prompts/spear-common.txt` plus
+`spear-<pose>.txt` (idle, drawback, thrust, extend, recover), with the sword's idle frame
+(`art/sword-shield/ref-sword-idle.png`) as the reference, the other poses adding
+`spear-follow.txt` and the chosen idle picture as the second. `tools/make_shield.py
+--corner right` places them against the bottom-right corner, as the sword sits, from
+`art/spear/spear-frames.txt` (4 idle entries, then the 8 of the thrust):
+
+```bash
+tools/gen_image.py art/spear/extend.png --prompt "$(cat art/prompts/spear-{common,extend,follow}.txt)" --ref art/sword-shield/ref-sword-idle.png --ref art/spear/idle-2.png --size 1536x1024 -n 2
+tools/make_shield.py --corner right art/spear/spear-frames.txt data/sprites/spear/spear
+```
+
 Generators can't keep a motion sequence across a grid of first-person poses, and they draw
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
 attach the first as the design reference, and describe each pose in screen positions.
@@ -1317,7 +1387,11 @@ Blender export that keeps the conventions works the same. Conventions:
   banks), `connector_high_north` a `high` (7 × 4.5 m, two cells: the high blocks'),
   `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated levels"),
   anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
-  fourth value is its lava width, a stream's its whole width: `flooded-kind-p`), and each kind joins only itself. A doorway two cells
+  fourth value is its lava width, a stream's its whole width: `flooded-kind-p`),
+  `connector_underwater_north` an `underwater` (3 × 3 m, full of water: a flooded passage's
+  and a cistern's), `connector_canal_north` a `canal` (a river's with deep water: 7 × 3.5 m,
+  its middle 3 m open down to the water filling the storey below, which runs on through the
+  wall under it, so its plug reaches down there too), and each kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
@@ -1427,7 +1501,10 @@ storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR 
 `lava [DEPTH SURFACE]` (that cell's floor slab sinks to DEPTH below the floor, 0.4 by
 default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `pit
 [DEPTH]` (the same sunken slab, 0.4 by default and less than the slab's 0.5, with no
-lava: a dry dip, under a step so it is walked through), `torch Y`
+lava: a dry dip, under a step so it is walked through), `water [Y]` (deep water from the
+cell's floor up to Y, `top` for the storey's top, by default `*water-surface*` (0.3 m) under
+the next storey's floor; never above the slab over the cell or a doorway's lintel; on the
+border only under a canal doorway's open channel), `torch Y`
 and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer and ogre 1
 each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
@@ -1467,6 +1544,12 @@ connectors `cave-bend` and `cave-fork`; and the lava rivers (below): wide `river
 river runs through, bridged), narrow `stream` and `stream-bend` (lava wall to wall, no bank: the only way along is
 wading, and it burns), `river-narrows` (wide to narrow: the banks run out and its last cell
 is all lava), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror;
+the water blocks: `pool` (a ledge 2 m wide round deep water filling the storey below, 4
+doorways on the ledge), `cistern` (a pool with an underwater doorway at the bottom of its
+west wall: the end of a flooded run), the flooded passages `flooded-passage`, `flooded-bend`
+and `flooded-tee` (full of water to the roof, swum on one breath, no torches), and the canal:
+`canal`, `canal-bend` (mirrored), `canal-ford` (a bridge, doorways onto both banks) and the
+end `canal-end` (the banks joined round the channel's head);
 and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 m vault, a
 2.5 m terrace and a 5 m walkway with a doorway out at the top), `high-hall` (six pillars the
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
@@ -1499,7 +1582,8 @@ a doorway or bank that leads to no other doorway, a river end that doesn't join 
 a monster that can't reach the first doorway, a high block the ogre can't walk between all
 its doorways at `*high-body*` (radius 1.0, 2.7 m, step 0.45: its leaps are shortcuts, never
 its only way). A block with a stream doorway is checked wading (it can't be crossed dry),
-the rest dry, so a wide river's banks still walk dry. Leave passages at least 1.5 m wide: the nav
+one with an underwater doorway swimming (`*nav-hazards*` `:swim`), the rest dry, so a wide
+river's or canal's banks still walk dry; a check starts at a doorway on dry floor. Leave passages at least 1.5 m wide: the nav
 grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 1 m gap
 beside a column had none.
 
@@ -1566,13 +1650,19 @@ so no stair ends in a plug.
 
 Networks: a network is the blocks joined through doorways ordinary blocks don't have; each
 family is an entry in `*networks*` (its doorway kinds, piece and end tags, and the variables
-for its length and how many a level may have). There are two: rivers, below, and high
+for its length and how many a level may have). There are four: rivers, below; high
 quarters, galleries and high rooms joined through `high` doorways (`high`, ends `high-end`:
-the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level. Both
-grow the same way, with `network` in place of `river` throughout.
+the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level; flooded
+runs, passages joined through `underwater` doorways (`flooded`, ends `cistern`), a cistern at
+each end, `*flooded-length*` (2 to 4 blocks, the first cistern included: short, swum on one
+breath), `*max-flooded-networks*` (1); and canals (`canal`, ends `canal-end`),
+`*canal-length*` (3 to 6), `*max-canals*` (1). All grow the same way, with `network` in place
+of `river` throughout. A cistern has one underwater doorway, so a run ends at it; one reached
+through its ledge starts a run.
 `*level-networks*` holds the last level's (`network-family`, `-pieces`, `-target`, `-ends`),
-the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`. On
-seeds 1 to 20, 9 levels had a high quarter, of 1 to 6 blocks; 4 of them had an arm end in a
+the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`, a
+flooded run's as `=` and a canal's as `-`. On seeds 1 to 30, 19 levels had a canal and 4 a
+flooded run of 4 or 5 blocks. On seeds 1 to 20, 9 levels had a high quarter, of 1 to 6 blocks; 4 of them had an arm end in a
 plug, since the vault, 4 × 4 cells and two storeys, is the only end and often doesn't fit.
 
 Rivers: a river is the blocks joined through `river` and `stream` doorways. The first river
@@ -1607,24 +1697,26 @@ generated in 5 to 10 s before it, under one after.
 Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
 player must be able to walk from the spawn point to every placed block's doorways (both
 banks of a river's: `doorway-probes`; a stream's middle, in the lava), on the
-nav grid with the player's size and step, wading where it must (`:wade`) (`nav-reached`, which is both ways, since steps
+nav grid with the player's size and step, wading and swimming where it must (`:swim`) (`nav-reached`, which is both ways, since steps
 go up as well as down), and every creature must be able to walk to the spawn point at its
 own size and step from a cell its body fits where it lives (`stranded-creatures`, wading
-too, as a chase does when there's no dry way). Each
+too, as a chase does when there's no dry way, and through deep water: no creature swims,
+but one beyond a flooded run or across a canal waits there for the player, who does). Each
 doorway or creature that fails logs a warning.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
-Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands (or the mouse
-wheel to cycle them), left click to
-attack (swing, or cast the bolt), right button held to raise the shield (sword only; a left
+Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
+down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
+hands and 3 for the spear (or the mouse wheel to cycle them), left click to
+attack (swing, thrust, or cast the bolt), right button held to raise the shield (sword only; a left
 click while it's up bashes), M for the automap (see `src/map-view.lisp`), F5 to quicksave
 and F9 to quickload (generated levels only), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
-0.23 s in; stand within 2 m of the imp, facing it); `(setf (block-raise *player*) 1.0)` under hit-stop
+0.23 s in; stand within 2 m of the imp, facing it), and with `:3` thrusts the spear (0.24 s in, within 3.5 m); `(setf (block-raise *player*) 1.0)` under hit-stop
 shows the raised shield, and with it raised `(player-attack *player*)` bashes (`block-held`
 is what the right button sets; without it the shield comes down again once the world runs); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the

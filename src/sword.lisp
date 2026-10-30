@@ -1,8 +1,12 @@
 (in-package #:hexmaw)
 
 ;;; The sword, and switching between weapons. The player holds one weapon at a time
-;;; (*WEAPONS*): the casting hands or the sword. Switching lowers the current one off
-;;; the bottom of the screen and raises the next, Hexen-style.
+;;; (*WEAPONS*): the sword, the casting hands or the spear (spear.lisp). Switching
+;;; lowers the current one off the bottom of the screen and raises the next, Hexen-style.
+;;;
+;;; The sword's slash and the spear's thrust are both swings: SWING-TIME runs whichever
+;;; is in hand, and the generics below (SWING-FRAME-TIMES, SWING-REACH and the rest)
+;;; give each its timing and blow, by the weapon's keyword.
 ;;;
 ;;; The sword is one HUD sprite against the bottom-right corner. Its strip
 ;;; (data/sprites/sword, from "Sword Sheet.png") holds a 4-frame idle loop (a glint
@@ -23,11 +27,12 @@
 (defparameter *sword-idle-frames* 4 "Strip frames the idle loop steps through, from the first.")
 (defparameter *sword-swing-first* 4 "Strip index of the slash's first frame.")
 
-(defparameter *weapons* '(:1 :sword :2 :hands) "Key to press for each weapon.")
+(defparameter *weapons* '(:1 :sword :2 :hands :3 :spear) "Key to press for each weapon.")
 (defparameter *weapon-switch-time* 0.15 "Seconds to lower a weapon, and again to raise the next.")
 
 (defparameter *swing-frame-times* '(0.05 0.07 0.07 0.04 0.06 0.07 0.08 0.08)
-  "Seconds each frame of the slash shows. The swing is over after the last.")(defparameter *swing-hit-frame* 4 "Slash frame the blow lands on, counted from 0: the blade at full sweep.")
+  "Seconds each frame of the slash shows. The swing is over after the last.")
+(defparameter *swing-hit-frame* 4 "Slash frame the blow lands on, counted from 0: the blade at full sweep.")
 (defparameter *sword-reach* 2.0 "Metres from the player to the nearest edge of a creature's body.")
 (defparameter *sword-arc* 0.8 "Radians either side of the view the blade sweeps through.")
 (defparameter *sword-damage* '(10 16))
@@ -70,6 +75,28 @@ cut, so this must be more than the sway, or the cut-off end shows.")
   "HUD depth of the sword and shield: behind the bars, the weapon slots and the pain
 flash, which they reach into.")
 
+(defgeneric swing-frame-times (weapon)
+  (:documentation "Seconds each frame of WEAPON's swing shows. The swing is over after the last."))
+(defgeneric swing-hit-frame (weapon)
+  (:documentation "Swing frame WEAPON's blow lands on, counted from 0."))
+(defgeneric swing-reach (weapon)
+  (:documentation "Metres from the player to the nearest edge of a body WEAPON reaches."))
+(defgeneric swing-arc (weapon)
+  (:documentation "Radians either side of the view WEAPON's blow reaches."))
+(defgeneric swing-damage (weapon))
+(defgeneric swing-knockback (weapon)
+  (:documentation "Speed in m/s WEAPON's blow slides a creature away."))
+(defgeneric swing-pain-bonus (weapon)
+  (:documentation "Percent WEAPON's blow adds to the creature's PAIN-CHANCE."))
+
+(defmethod swing-frame-times ((weapon (eql :sword))) *swing-frame-times*)
+(defmethod swing-hit-frame ((weapon (eql :sword))) *swing-hit-frame*)
+(defmethod swing-reach ((weapon (eql :sword))) *sword-reach*)
+(defmethod swing-arc ((weapon (eql :sword))) *sword-arc*)
+(defmethod swing-damage ((weapon (eql :sword))) *sword-damage*)
+(defmethod swing-knockback ((weapon (eql :sword))) *sword-knockback*)
+(defmethod swing-pain-bonus ((weapon (eql :sword))) *sword-pain-bonus*)
+
 ;;; Weapon state lives on the player: WEAPON is the one on screen, WANTED-WEAPON the
 ;;; one asked for, WEAPON-LOWER how far it is lowered (0 up, 1 off screen).
 
@@ -101,13 +128,14 @@ flash, which they reach into.")
     (* k k)))
 
 (defun player-attack (player)
-  "Attack with the weapon in hand: cast the bolt, swing the sword, or, with the shield
-raised, bash with it. Nothing while the shield is on its way up or down."
+  "Attack with the weapon in hand: cast the bolt, swing the sword, thrust the spear, or,
+with the shield raised, bash with it. Nothing while the shield is on its way up or down."
   (when (weapon-ready-p player)
     (ecase (weapon player)
       (:hands (player-cast player 'bolt))
       (:sword (cond ((<= 1.0 (block-raise player)) (player-bash player))
-                    ((= 0.0 (block-raise player)) (player-swing player)))))))
+                    ((= 0.0 (block-raise player)) (player-swing player))))
+      (:spear (player-swing player)))))
 
 (defun player-swing (player)
   (unless (swing-time player)
@@ -127,12 +155,12 @@ is over."
         sum duration into end
         when (< time end) return frame))
 
-(defun swing-frame (time)
-  "Frame of the slash at TIME seconds into it, or NIL once it is over."
-  (frame-at time *swing-frame-times*))
+(defun swing-frame (time weapon)
+  "Frame of WEAPON's swing at TIME seconds into it, or NIL once it is over."
+  (frame-at time (swing-frame-times weapon)))
 
-(defun swing-hit-time ()
-  (reduce #'+ (subseq *swing-frame-times* 0 *swing-hit-frame*)))
+(defun swing-hit-time (weapon)
+  (reduce #'+ (subseq (swing-frame-times weapon) 0 (swing-hit-frame weapon))))
 
 (defun bash-hit-time ()
   (reduce #'+ (subseq *bash-frame-times* 0 *bash-hit-frame*)))
@@ -176,10 +204,13 @@ either side of where the player faces, level with the player, and not behind a w
     best))
 
 (defun swing-hit (player)
-  (let ((target (swing-target player)))
+  (let* ((weapon (weapon player))
+         (target (swing-target player (swing-reach weapon) (swing-arc weapon))))
     (when target
-      (hurt target (roll *sword-damage*) :from (feet player) :pain-bonus *sword-pain-bonus*)
-      (push-creature target (v- (location target) (feet player)) (float *sword-knockback* 0f0)))))
+      (hurt target (roll (swing-damage weapon)) :from (feet player)
+                                                :pain-bonus (swing-pain-bonus weapon))
+      (push-creature target (v- (location target) (feet player))
+                     (float (swing-knockback weapon) 0f0)))))
 
 (defun bash-hit (player)
   "Bash the creature in front of PLAYER. Against a shield that covers it, the bash glances
@@ -203,10 +234,10 @@ winding up an attack and not already poised from a bash."
   "Run the swing and the weapon switch. Called from the player's tick while not frozen."
   (when (swing-time player)
     (incf (swing-time player) dt)
-    (when (and (swing-pending player) (<= (swing-hit-time) (swing-time player)))
+    (when (and (swing-pending player) (<= (swing-hit-time (weapon player)) (swing-time player)))
       (setf (swing-pending player) NIL)
       (swing-hit player))
-    (unless (swing-frame (swing-time player))
+    (unless (swing-frame (swing-time player) (weapon player))
       (setf (swing-time player) NIL)))
   (when (bash-time player)
     (incf (bash-time player) dt)
@@ -237,7 +268,8 @@ winding up an attack and not already poised from a bash."
           (T
            (setf (weapon player) (wanted-weapon player))))))
 
-;;; The sword on screen.
+;;; The sword on screen. The spear's sprite (spear.lisp) is a subclass: these generics
+;;; say which weapon a sprite draws and how its strip is laid out.
 
 (define-shader-entity sword (hud-element fx-sprite)
   ((vertex-array :initform (// 'hexmaw 'hud-quad))
@@ -245,11 +277,27 @@ winding up an attack and not already poised from a bash."
    (bob-phase :initform 0.0 :accessor bob-phase)
    (bob-amount :initform 0.0 :accessor bob-amount)))
 
+(defgeneric held-weapon (sprite)
+  (:documentation "The weapon (a keyword of *WEAPONS*) SPRITE is drawn for."))
+(defgeneric idle-frames (sprite)
+  (:documentation "Strip frames SPRITE's idle loop steps through, from the first."))
+(defgeneric swing-first (sprite)
+  (:documentation "Strip index of the first frame of SPRITE's swing."))
+(defgeneric weapon-aim (sprite)
+  (:documentation "Art pixels left from the strip's screen corner (the bottom-right one,
+*SWORD-OVERHANG* in from the strip's edge) to where SPRITE's weapon points, which LAYOUT-SWORD
+puts on the screen's middle; or NIL to keep the strip against the bottom-right corner."))
+
+(defmethod held-weapon ((sword sword)) :sword)
+(defmethod idle-frames ((sword sword)) *sword-idle-frames*)
+(defmethod swing-first ((sword sword)) *sword-swing-first*)
+(defmethod weapon-aim ((sword sword)) NIL)
+
 (defun add-sword (container)
   (enter (make-instance 'sword) container))
 
 (defmethod render :around ((sword sword) (program shader-program))
-  (when (and *player* (eq (weapon *player*) :sword))
+  (when (and *player* (eq (weapon *player*) (held-weapon sword)))
     (call-next-method)))
 
 (defun sword-scale ()
@@ -260,19 +308,24 @@ sword strip's cell height, so the two always share one art pixel size."
     (values (max 1 (round (* sy *sword-stretch*))) sy)))
 
 (defun layout-sword (sword)
-  "Put the strip's right edge past the screen's, sunk below the bottom edge, lowered
-while switching, and offset by the sway. As with the hands, the sway only ever dips."
+  "Put the strip's right edge past the screen's (or its aim on the screen's middle, for a
+weapon with a WEAPON-AIM), sunk below the bottom edge, lowered while switching, and offset
+by the sway. As with the hands, the sway only ever dips."
   (multiple-value-bind (sx sy) (sword-scale)
     (let* ((atlas (animation-atlas (sprite-animation sword)))
            (context (context +main+))
            (w (* sx (getf atlas :cell-width)))
            (h (* sy (getf atlas :cell-height)))
+           (aim (weapon-aim sword))
+           (corner (if aim
+                       (+ (round (width context) 2) (* aim sx))
+                       (width context)))
            (bob (* *sword-bob* (bob-amount sword)))
            (phase (bob-phase sword)))
       (setf (vx (scaling sword)) (float w 0f0)
             (vy (scaling sword)) (float h 0f0))
       (place sword
-             (+ (- (width context) w) (* *sword-overhang* sx) (round (* bob sx (cos phase))))
+             (+ (- corner w) (* *sword-overhang* sx) (round (* bob sx (cos phase))))
              (- (+ (* *sword-drop* sy)
                    (round (* bob sy (abs (sin phase))))
                    (round (* h (weapon-drop *player*)))))
@@ -287,11 +340,11 @@ while switching, and offset by the sway. As with the hands, the sway only ever d
     (let* ((animation (sprite-animation sword))
            (atlas (animation-atlas animation))
            (time (swing-time *player*))
-           (swing (and time (swing-frame time))))
+           (swing (and time (swing-frame time (held-weapon sword)))))
       (strip-uv (frame-uv sword) atlas
                 (if swing
-                    (+ *sword-swing-first* swing)
-                    (mod (floor (* (age sword) (animation-fps animation))) *sword-idle-frames*))
+                    (+ (swing-first sword) swing)
+                    (mod (floor (* (age sword) (animation-fps animation))) (idle-frames sword)))
                 (getf atlas :frames)))
     (layout-sword sword)))
 
@@ -359,7 +412,7 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (define-fx-animation weapon-icons "sprites/icons/weapons")
 
-(defparameter *weapon-icons* '(:sword 0 :hands 1) "Frame of each weapon's icon in the strip.")
+(defparameter *weapon-icons* '(:sword 0 :hands 1 :spear 2) "Frame of each weapon's icon in the strip.")
 (defparameter *weapon-icon-scale* 2 "Screen pixels per icon art pixel. Whole numbers only.")
 (defparameter *weapon-slot-padding* 3 "Pixels between a slot's edge and its icon.")
 (defparameter *weapon-slot-gap* 6 "Pixels between slots, and between the slots and the bars.")

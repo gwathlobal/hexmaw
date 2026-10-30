@@ -30,6 +30,7 @@
                (:file "hud")
                (:file "hands")
                (:file "sword")
+               (:file "spear")
                (:file "menu")
                (:file "map-view")
                (:file "level")

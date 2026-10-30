@@ -311,6 +311,9 @@ special variable VARIABLE to T or NIL as it is clicked."))
   (setf (health player) *player-max-health*
         (pain player) 0.0
         (mana player) *max-mana*
+        (breath player) *breath-time*
+        (drown-timer player) 0.0
+        (climbing player) NIL
         (cast-timer player) 0.0
         ;; No cast in progress, or its bolt would leave at the start of the next game.
         (cast-time player) NIL
