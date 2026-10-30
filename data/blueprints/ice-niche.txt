@@ -1,0 +1,20 @@
+; A frozen niche, the smallest ice room, with a monster on its ice: what fits behind an ice
+; gate when nothing bigger does, so a gate doesn't open onto a plug.
+; Its plan is drawn by tools/cave_plans.py.
+cells 1 1
+tags room
+weight 0.25
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice
+  _ floor ice
+  k floor ice, spawn any north
+
+plan 0
+#++++++#
+#......#
+#__kk__#
+#\\__//#
+########

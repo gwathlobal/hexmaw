@@ -1,0 +1,40 @@
+; An octagonal hall in the ice: an acolyte on a dais of ice (a blow knocks it off), the
+; dais octagonal on a step of ice, a frozen pond before it and an ice column either side.
+; Its plan is drawn by tools/cave_plans.py.
+cells 3 3
+tags room
+weight 1
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice
+  % box 0 0.8 ice                                   ; the dais
+  ( diagonal / ice 0 0.8
+  ) diagonal \ ice 0 0.8
+  : box 0 0.4 ice                                   ; the step round it
+  [ diagonal / ice 0 0.4
+  ] diagonal \ ice 0 0.4
+  I box 0 0.8 ice, spawn acolyte south
+  _ pit 0.2, floor ice                              ; the frozen pond
+  { diagonal / floor -0.2 0, pit 0.2, floor ice     ; its shore
+  } diagonal \ floor -0.2 0, pit 0.2, floor ice
+  1 diagonal / se                                   ; the columns, four quarters each
+  2 diagonal \ sw
+  3 diagonal \ ne
+  4 diagonal / nw
+
+plan 0
+########################
+#####//((%%%%%%))\\#####
+###//::%%%%II%%%%::\\###
+#//..]]))%%%%%%(([[..\\#
+T...1122........1122...T
++...3344.{{__}}.3344...+
++......{{______}}......+
++......__________......+
+T......}}______{{......T
+#\\......}}__{{......//#
+###\\..............//###
+#####\\..........//#####
+#########++++++#########

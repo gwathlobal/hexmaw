@@ -1,7 +1,7 @@
 ; A natural passage running at 45 degrees from the north-west doorway to the south-east
 ; one, low in the middle.
 cells 2 2
-tags corridor
+tags corridor cave
 ceiling 3
 mirror yes
 material rock 0.36 0.32 0.3

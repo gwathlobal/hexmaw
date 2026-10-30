@@ -1,0 +1,7 @@
+THE SURFACE: the natural WALL of an ICE CAVE inside a glacier, as in the frozen caverns of Hexen or Daggerfall.
+- No courses, no blocks, no mortar, no straight lines: one continuous face of thick old glacial ice, broken into irregular angular facets and ledges of many sizes, with jagged fractures running in every direction.
+- Deep blue-grey and steel-blue ice, darker in its depths, with paler milky facets, thin white frost along the edges of the fractures, and faint vertical streaks and frozen layers.
+- Here and there dark grey rock and grit locked inside the ice, seen dimly through it.
+- SECOND REFERENCE: the game's ice floor. Match its colours, so the walls and floor belong to the same cave, but the wall is rougher and more faceted than the smooth floor.
+- Medium-dark overall, not white or glaring: torch-lit, it must not shine.
+- Evenly spread over the whole image, with no big feature at the centre, so it tiles.

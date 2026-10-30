@@ -15,6 +15,11 @@
 ;;; before any other, with river pieces until the river has its length and ends from then
 ;;; on, so each arm ends in an end block (whose other doorways go on into the dungeon), in
 ;;; a join with another river doorway, or, if nothing fits, in a plug.
+;;;
+;;; Ice: the ice caves' doorways are all of kind ice, so they join only each other and the
+;;; ice gates, blocks half rock and half ice with one ordinary doorway and one ice. A gate's
+;;; rock side joins only a cave without lava (GATE-ALLOWED-P), so the ice is a frozen wing
+;;; of the caves.
 
 (defparameter *level-seed* NIL "The generator's seed, or NIL for a new one every build.")
 (defvar *last-level-seed* NIL "The seed of the last generated level, to build it again.")
@@ -88,6 +93,35 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
        (eq (connector-direction a) (opposite-direction (connector-direction b)))
        (string-equal (connector-kind a) (connector-kind b))))
 
+(defun gate-allowed-p (a b kind)
+  "True if blocks A and B may join through a doorway of KIND: an ice gate's ordinary,
+rock side joins only a block tagged cave, and not one tagged lava: ice beside lava makes
+no sense."
+  (flet ((gate-p (n) (member :ice-gate (block-tags n)))
+         (cave-p (n) (let ((tags (block-tags n))) (and (member :cave tags) (not (member :lava tags))))))
+    (or (string-not-equal kind "door")
+        (and (or (not (gate-p a)) (cave-p b))
+             (or (not (gate-p b)) (cave-p a))))))
+
+(defun joined-p (a b)
+  "True if placed doorways A and B were joined: face to face, one portal left between them.
+Sealing a doorway takes its portal away, joining takes away one of the two."
+  (and (facing-p a b)
+       (or (find (connector-portal a) *portals*) (find (connector-portal b) *portals*))))
+
+(defun check-ice-joins ()
+  "Warn about every pair of joined doorways that GATE-ALLOWED-P forbids: an ice gate's
+rock side opening onto anything but a cave. (An ice doorway's kind keeps it to ice.)
+Returns the pairs."
+  (let ((bad ()))
+    (loop for (a . rest) on *level-doorways*
+          do (dolist (b rest)
+               (when (and (joined-p a b)
+                          (not (gate-allowed-p (connector-block a) (connector-block b) (connector-kind a))))
+                 (push (list a b) bad)
+                 (v:warn :hexmaw "Ice gate joined to something not a cave: ~a and ~a." a b))))
+    bad))
+
 (defclass open-door ()
   ((connector :initarg :connector :reader door-connector)
    (run :initarg :run :initform 0 :reader door-run
@@ -136,7 +170,10 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
                    (when (member :river-end (block-tags name)) (push :end (river-ends river))))
                  (dolist (c connectors)
                    (push c doors)
-                   (let ((other (find-if (lambda (d) (facing-p c (door-connector d))) frontier))
+                   (let ((other (find-if (lambda (d) (let ((o (door-connector d)))
+                                                       (and (facing-p c o)
+                                                            (gate-allowed-p name (connector-block o) (connector-kind c)))))
+                                         frontier))
                          (river (and (river-kind-p (connector-kind c)) river)))
                      ;; A doorway that meets another shares its portal.
                      (cond ((and joined (facing-p c joined)) (drop-portal c))
@@ -172,12 +209,27 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
                  (if (< (river-pieces river) (river-target river))
                      (append pieces ends)
                      ends)))
+             (allowed (door names)
+               ;; Only the blocks that may join DOOR's block through it: an ice gate's rock
+               ;; side, and the rock side of a gate brought to it, join only caves; and a
+               ;; gate's ice side leads into the ice, not straight to another gate.
+               (let* ((c (door-connector door))
+                      (from (connector-block c)))
+                 (remove-if-not (lambda (n) (and (gate-allowed-p from n (connector-kind c))
+                                                 (not (and (member :ice-gate (block-tags from))
+                                                           (member :ice-gate (block-tags n))))))
+                                names)))
              (try (door)
                (if (door-river door)
                    (attach door (river-choices door))
                    (let* ((from-room (= 0 (door-run door)))
-                          (corridor (or from-room (< (generator-roll 1.0) (expt *corridor-run* (door-run door))))))
-                     (attach door (weighted-order (if corridor (tagged :corridor :stair) (tagged :room)))))))
+                          (corridor (or from-room (< (generator-roll 1.0) (expt *corridor-run* (door-run door)))))
+                          (first (weighted-order (if corridor (tagged :corridor :stair) (tagged :room))))
+                          ;; Few blocks have ice doorways, so one that fits no corridor tries
+                          ;; the rooms too, and the other way round, before it is plugged.
+                          (then (when (string-equal (connector-kind (door-connector door)) "ice")
+                                  (weighted-order (if corridor (tagged :room) (tagged :corridor :stair))))))
+                     (attach door (allowed door (append first then))))))
              (next-door ()
                ;; A river's doorways come first, so it is finished early.
                (let ((rivers (remove-if-not #'door-river frontier)))
@@ -209,6 +261,12 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
         (when (and (member d frontier)
                    (member :stair (block-tags (connector-block (door-connector d)))))
           (try d)))
+      ;; Nor does an ice gate: each still open gets a room, ice on its ice side, a cave on
+      ;; its rock side.
+      (dolist (d frontier)
+        (when (and (member d frontier)
+                   (member :ice-gate (block-tags (connector-block (door-connector d)))))
+          (attach d (allowed d (weighted-order (tagged :room))))))
       (dolist (d frontier) (shut d))
       (dolist (c shut) (seal-connector container c))
       ;; Every doorway left open should meet another.

@@ -499,8 +499,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
   torches light through its walls. Its corridor ends in the `shrine` block, with the debug
-  `ice-rink` block (an ice field, a raised ice step, a stone strip, a lava pool, an imp and a
-  knight on the ice; no tags, so never generated) through the shrine's west doorway. A doorway
+  `ice-rink` block (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an
+  imp and a knight on the ice; no tags, so never generated) through the shrine's west doorway. A doorway
   also needs floor under its wall's thickness: without it the nav grid has no cell there,
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
@@ -692,7 +692,7 @@ pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and w
 across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
 sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
 `:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`, `:stair`, `:stone`,
-`:beam`, `:sarcophagus`, `:rock`, `:cave-floor`), tinted by
+`:beam`, `:sarcophagus`, `:rock`, `:cave-floor`, `:ice`, `:ice-rock`, `:snow`), tinted by
 `:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
 
 A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
@@ -732,6 +732,15 @@ too, stone under it) is the common prompt plus `art/prompts/texture-ice.txt` (ic
 showing through) plus a look: `texture-ice-dark.txt`, the one used, `-frosted` or `-glacier`.
 `ice-1` and `ice-2` are an earlier ice-over-flagstones version, dropped.
 `tools/make_texture.py art/textures/ice-dark-2.png data/textures/ice --metres 4`.
+The ice caves' walls are `ice-rock` (faceted glacier ice with dark rock locked in it,
+`texture-ice-rock.txt`) and their floor `snow` (trodden snow and hoarfrost with rock showing
+through, `texture-snow.txt`, snow on its sides too); both took the floor ice, `ice-dark-2.png`,
+as a second reference for the palette:
+
+```bash
+tools/make_texture.py art/textures/ice-rock-3.png data/textures/ice-rock --metres 4
+tools/make_texture.py art/textures/snow-1.png data/textures/snow --metres 4
+```
 
 The caves' `rock` is fractured bedrock with no courses, for their walls and ceilings;
 `cave-floor` is bedrock, pebbles and packed earth, under rock sides.
@@ -1088,7 +1097,8 @@ Blender export that keeps the conventions works the same. Conventions:
   Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m),
   `connector_river_north` a `river` (7 × 3.5 m, two cells, 3 m of lava down its middle
   between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, 1 m of lava between
-  1 m banks), anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
+  1 m banks), `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated
+  levels"), anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
   fourth value is its lava width), and each kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
@@ -1209,7 +1219,9 @@ is one monster at its centre, so `ii` centres one on a 1 m spot. Characters with
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
 under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
-numbered `_2` and on when a side has several, lower storey first, and its plug. A doorway
+numbered `_2` and on when a side has several, lower storey first, and its plug; its lintel
+and plug are the material of the border wall nearest it (`border-wall`), so an ice gate's ice
+doorway is shut with ice-rock and its rock one with rock. A doorway
 is the border cells of one kind side by side, whatever their characters, so a river's is
 lava cells (`= door river, lava`) between bank cells (`R door river`); its middle lava
 width must be lava and the rest bank, so any river doorway meets any other (`- door stream,
@@ -1223,8 +1235,7 @@ doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2
 rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
 bridge and banks to every doorway), `ice-hall` (a sheet of ice ringed by a stone rim, pillars on
-the ice), `ice-bridge` (the forge frozen: ice up to the lava and over the bridge, stone banks)
-and `balcony` (two storeys, a ledge all round over an open floor, and a stair
+the ice) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
 up to it); caves `cave` (wavy 45° walls, an octagonal pillar, an octagonal shelf and
 hanging rock, a lava pool against the rock and a dry pit, both with 45° shores), `lava-lake`
 (a causeway with 45° edges across lava, a bridge east) and
@@ -1235,6 +1246,25 @@ connectors `cave-bend` and `cave-fork`; and the lava rivers (below): wide `river
 `river-ford` (bridged, doorways on both banks), `river-bend` and `river-cavern` (a room the
 river runs through, bridged), narrow `stream` and `stream-bend`, `river-narrows` (wide to
 narrow), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror.
+The stone caves (`cave`, `grotto`, `cavern`, `cave-passage`, `cave-bend`, `cave-fork`,
+`lava-lake`, `lava-chasm`, `magma-pool`) are tagged `cave`, and the last three `lava` too. The ice caves have walls of
+`ice-rock` and a floor of `snow` (both grip), frozen ponds of slippery ice sunk 0.2 m
+(`pit 0.2, floor ice`, 45° shores of snow) and icicles (`box 3 top ice-rock` in octagons,
+or diamonds down to 2.2 m in the 3 m corridors), and all their doorways are `ice` (`+ door ice`): `ice-grotto` (a pond
+with a diamond column), `ice-lake` (nearly all rink, icicles over it), `ice-cavern` (4 × 3:
+pillars, one in a pond, a slippery ice shelf, icicles), `frost-shrine` (octagonal: an acolyte on an octagonal dais of ice, a pond, two columns), `ice-niche` (1 × 1, a monster on ice; what fits behind a gate when nothing bigger
+does), and the corridors `ice-passage` (45°), `ice-bend` and `ice-chute` (three cells of
+ice, winding 45° at a time). The ice gates, `ice-gate` and `ice-gate-bend` (tagged `corridor ice-gate`), are half
+rock cave and half ice cave, with a `door` on the rock side and an `ice` doorway on the
+other: rock gives way to ice along a 45° line across the passage, walls and floor alike,
+under a drift of snow 0.1 m high with 45° edges (`frost_line`), since a change along a row
+or column reads as a slab laid across a cave. Nothing in a cave is a rectangle: the chute
+winds, the niche and the shrine are chamfered, hanging ice is octagonal or a diamond
+(`hang_diamond`, in the 3 m corridors), and ponds and shelves have 45° edges.
+`tools/cave_plans.py` draws every ice block (`POND`, `pond_rock`, `hang_over`,
+`hang_diamond`, `frost_line`). `ice-hall` is an ordinary dungeon room with an ice
+floor, outside all this. Ice never meets lava: `ice-bridge` (the forge frozen, ice up to its
+lava channel) has no tags, so the generator leaves it out, until water can fill its channel.
 Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip. `(check-kit)` checks it, for
 every block or a list of names: it builds each alone (`*level*` `:block`, `*check-block*`)
@@ -1308,6 +1338,18 @@ the last level's (`river-pieces`, `river-target`, `river-ends`), the log line sa
 ended, and `(level-map)` draws river blocks as `~`. A river's two banks meet only at its
 ends and crossings (fords, the cavern's bridge), so ends join both banks. On 20 seeds every
 level had one river of 7 to 11 blocks, and the player walked seed 11's 92 m along a bank.
+
+Ice: the ice caves are a frozen wing of the caves. Their doorways are all of kind `ice`, so
+they join only each other and the ice gates, and a gate's rock side joins only a block tagged
+`cave` and not `lava` (`gate-allowed-p`: in `try`, and when two doorways meet face to face),
+so the way into the ice is always a rock cave, a gate, then ice. An ice doorway that fits no corridor tries the rooms too
+(few blocks have one), the first piece through a gate isn't another gate, and a gate doorway
+still open at the room quota gets a room, ice or cave. `check-ice-joins` warns about any join
+against the rule after every generated level. Over seeds 1 to 100, 28 levels had an ice gate;
+of their 38 gates, 34 led into the ice and 4 ended in a plug. The generator asks every block's tags and weight
+thousands of times a level, so `build-level` binds `*block-memo*`, which keeps each
+definition `find-block` gives (half a millisecond each, since it checks the files): a level
+generated in 5 to 10 s before it, under one after.
 
 Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
 player must be able to walk from the spawn point to every placed block's doorways (both

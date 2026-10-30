@@ -1,0 +1,27 @@
+; Three cells of ice that wind a little, 45 degrees at a time, snow at each doorway to stop
+; on. What comes down it can't stop either. Its plan is drawn by tools/cave_plans.py.
+cells 1 3
+ceiling 3
+tags corridor
+weight 1
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice
+  _ floor ice
+
+plan 0
+#++++++#
+#......#
+#______#
+#\\____#
+###____#
+###____#
+#//____#
+#____//#
+#____###
+#____###
+#____\\#
+#......#
+#++++++#

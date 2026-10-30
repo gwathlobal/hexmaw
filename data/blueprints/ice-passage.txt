@@ -1,0 +1,28 @@
+; A frozen passage at 45 degrees, ice from doorway to doorway: a slide with a corner,
+; a diamond of ice hanging low over it. Its plan is drawn by tools/cave_plans.py.
+cells 2 2
+ceiling 3
+tags corridor
+weight 0.5
+mirror yes
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice
+  _ floor ice
+  H diagonal / ice-rock 2.2 top se, floor ice        ; a diamond of ice hanging low: its four quarters
+  J diagonal \ ice-rock 2.2 top sw, floor ice
+  K diagonal \ ice-rock 2.2 top ne, floor ice
+  L diagonal / ice-rock 2.2 top nw, floor ice
+
+plan 0
+#++++++#########
+#______\\#######
+#\\______\\#####
+###\\__HHJJ\\###
+#####\\KKLL__\\#
+#######\\______#
+#########______#
+#########______#
+#########++++++#

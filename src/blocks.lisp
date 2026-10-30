@@ -204,16 +204,26 @@
 (defun block-path (name)
   (data-path (format NIL "blocks/~(~a~).glb" name)))
 
+(defvar *block-memo* NIL
+  "While a level is built (BUILD-LEVEL), a table of the definitions FIND-BLOCK has given, by
+name. The generator asks for every block's tags and weight thousands of times a level, and
+each FIND-BLOCK looks at the files: half a millisecond.")
+
 (defun find-block (name)
   "The definition of block NAME (data/blocks/<name>.glb), re-read when the file changes.
 A block with a blueprint is built from it first if the blueprint is newer."
-  (hexmaw.blueprint:ensure-block name)
-  (let* ((path (block-path name))
-         (date (file-write-date path))
-         (cached (gethash (namestring path) *blocks*)))
-    (if (and cached (eql date (car cached)))
-        (cdr cached)
-        (cdr (setf (gethash (namestring path) *blocks*) (cons date (read-block path)))))))
+  (let ((key (and *block-memo* (string-downcase (string name)))))
+    (or (and key (gethash key *block-memo*))
+        (let ((def (progn
+                     (hexmaw.blueprint:ensure-block name)
+                     (let* ((path (block-path name))
+                            (date (file-write-date path))
+                            (cached (gethash (namestring path) *blocks*)))
+                       (if (and cached (eql date (car cached)))
+                           (cdr cached)
+                           (cdr (setf (gethash (namestring path) *blocks*) (cons date (read-block path)))))))))
+          (when key (setf (gethash key *block-memo*) def))
+          def))))
 
 ;;; Where a block goes, before placing it.
 

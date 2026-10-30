@@ -1,13 +1,14 @@
 ; Debug only (no tags, so the generator never places it): an ice rink off the test
 ; level's shrine, for sliding. An open ice field, a raised ice step, a stone strip across
-; it, a lava pool at the far end, two pillars, and an imp and a knight on the ice.
+; it, a dry pit at the far end to slide into (a step down; water, once there is water),
+; two pillars, and an imp and a knight on the ice.
 cells 3 3
 material pillar 0.62 0.36 0.30
 legend
   _ floor ice
   ^ box 0 0.4 ice
   o box 0 top pillar
-  ~ lava
+  ~ pit
   i floor ice, spawn imp east
   k floor ice, spawn knight east
 

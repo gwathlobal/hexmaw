@@ -53,6 +53,10 @@
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 (define-asset (hexmaw ice) image #p"textures/ice.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw ice-rock) image #p"textures/ice-rock.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw snow) image #p"textures/snow.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 
 ;; A surface is the textures of a box's sides, its top and its underside, as floors and
 ;; ceilings are flats in Doom. A block's material picks the surface of its name, so
@@ -73,7 +77,11 @@
     (:rock rock rock rock)
     (:cave-floor rock cave-floor rock)
     ;; Ice: slippery (*FOOTINGS*); a raised block of it is ice all round.
-    (:ice ice ice ceiling-stone)))
+    (:ice ice ice ceiling-stone)
+    ;; Ice caves: walls of glacier ice, and a floor of packed snow that grips (its drifts and
+    ;; the banks of frozen ponds are snow on their sides too).
+    (:ice-rock ice-rock ice-rock ice-rock)
+    (:snow snow snow ice-rock)))
 
 ;; A footing is how a surface holds what stands on it. A solid drawn with a surface named
 ;; here carries its footing (MAKE-SOLID), and whatever stands on it moves as Hexen's ice

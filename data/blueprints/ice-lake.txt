@@ -1,0 +1,39 @@
+; A cave round a frozen lake: nearly all of it a sunken rink of ice, icicles hanging low
+; over it, a shore of snow joining the doorways, and a monster out on the ice.
+; Its plan is drawn by tools/cave_plans.py.
+cells 3 3
+tags room
+weight 0.5
+mirror yes
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice                                        ; ice caves join only ice caves and gates
+  _ pit 0.2, floor ice                              ; the frozen pond, a short step down
+  [ diagonal / floor -0.2 0, pit 0.2, floor ice     ; its shore: snow on one half, ice on the other
+  ] diagonal \ floor -0.2 0, pit 0.2, floor ice
+  < diagonal /, pit 0.2, floor ice                  ; 45-degree ice-rock standing in the pond
+  > diagonal \, pit 0.2, floor ice
+  v box 3 top ice-rock                              ; icicles, hanging from 4 m to 3 m
+  A diagonal / ice-rock 3 top
+  B diagonal \ ice-rock 3 top
+  x box 3 top ice-rock, pit 0.2, floor ice          ; the same over the pond
+  P diagonal / ice-rock 3 top, pit 0.2, floor ice
+  Q diagonal \ ice-rock 3 top, pit 0.2, floor ice
+  k pit 0.2, floor ice, spawn any south             ; a monster on the ice
+
+plan 0
+########T++++++#########
+#####//..........\\#####
+###//..[[______]]..\\###
+###..[[__________]]..###
+#//..__PPxxQQ______..\\#
++....__xxxxxxPPxxQQ....+
++....__QQxxPPxxxxxx....+
++....________QQxxPP....+
+#\\..]]____kk____[[..//#
+###....]]______[[....###
+###\\..............//###
+#####\\..........//#####
+#########++++++T########

@@ -1,7 +1,7 @@
 ; A round lava pool with an island, reached by a causeway from the north.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 3 3
-tags room
+tags room cave lava
 weight 1
 material rock 0.36 0.32 0.3
 material cave-floor 0.4 0.35 0.3

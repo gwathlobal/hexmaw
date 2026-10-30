@@ -1,0 +1,24 @@
+; A frozen bend, ice all through: whatever comes round it fast meets the far wall.
+; Its plan is drawn by tools/cave_plans.py.
+cells 2 2
+ceiling 3
+tags corridor
+weight 0.5
+mirror yes
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice
+  _ floor ice
+
+plan 0
+#++++++#########
+#______\\#######
+#________\\#####
+#\\________\\###
+###\\________\\#
+#####\\________+
+#######________+
+#######________+
+################

@@ -1,7 +1,7 @@
 ; A cave passage turning a quarter, at 45 degrees.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 2 2
-tags corridor
+tags corridor cave
 weight 2
 mirror yes
 material rock 0.36 0.32 0.3
