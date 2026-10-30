@@ -281,7 +281,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 15, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
+  knight 15, ogre 17, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`

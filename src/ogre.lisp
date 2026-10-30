@@ -106,6 +106,8 @@
    (gibs :initform '((:flesh 0 0 1 1 2 3 4 5 5 6 6 7 7)))
    (gib-scale :initform 1.8)
    (gib-overkill :initform 0.12)
+   ;; Its bulk shrugs off most blows, nearly as the knight's plate does.
+   (pain-chance :initform 17)
    (max-health :initform 120)
    ;; Which attack ATTACK-STEP runs: the slam, or a leap PLAN-LEAP laid out.
    (attack-kind :initform :slam :accessor attack-kind)
