@@ -1,4 +1,5 @@
-; A wide lava river from the south narrowing to a narrow one out north, by its east cell.
+; A wide lava river from the south narrowing to a narrow one out north, by its east cell:
+; the banks run out and the last cell is lava wall to wall.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 2 3
 tags corridor river
@@ -12,22 +13,21 @@ remap floor cave-floor
 legend
   ~ lava
   ( diagonal / floor -0.4 0, lava    ; a shore: floor on one half, lava on the other
-  ) diagonal \ floor -0.4 0, lava
+  < diagonal /, lava                 ; 45-degree rock standing in lava
   R door river                       ; a wide river's doorway: bank
-  S door stream                      ; a narrow river's doorway: bank
   = door river, lava                 ; and lava
-  - door stream, lava                ; and lava
+  - door stream, lava                ; a narrow river's doorway: all lava
 
 plan 0
-#########SS--SS#
-#######//..~~..#
-#####//....~~..#
-###//....((~~..#
-#//....((~~((..#
-#....((~~~~....#
-#....~~~~~~....#
-#....~~~~~~....#
-#....~~~~~~....#
+#########------#
+#########~~~~~~#
+#########~~~~~~#
+#########~~~~~~#
+#########~~~~~~#
+#######<<~~~~((#
+#####<<~~~~((..#
+###//~~~~~~....#
+#//..~~~~~~....#
 #....~~~~~~....#
 #....~~~~~~....#
 #....~~~~~~....#

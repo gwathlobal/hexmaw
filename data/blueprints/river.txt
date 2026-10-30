@@ -12,9 +12,7 @@ remap floor cave-floor
 legend
   ~ lava
   R door river                       ; a wide river's doorway: bank
-  S door stream                      ; a narrow river's doorway: bank
   = door river, lava                 ; and lava
-  - door stream, lava                ; and lava
 
 plan 0
 #RRRR======RRRR#

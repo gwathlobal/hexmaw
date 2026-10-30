@@ -80,23 +80,30 @@ rectangle (X0 Z0 X1 Z1), in as few boxes as it takes."
 
 ;;; Reachability: every doorway of every placed block must be walkable to from the
 ;;; spawn point, and so back (steps go both ways; drops don't count). BUILD-LEVEL checks
-;;; after the nav grid is built and warns about each one that isn't.
+;;; after the nav grid is built and warns about each one that isn't. A stream is lava wall
+;;; to wall, so the way may lead through lava: the level's checks wade.
 
 (defun doorway-inside (connector)
   "A point 1 m inside CONNECTOR's block from its doorway, just above its floor: in front
 of the plug, if it is plugged."
   (first (doorway-probes connector)))
 
+(defun flooded-kind-p (kind)
+  "True if a doorway of KIND is lava wall to wall, no banks: a stream's."
+  (let ((spec (assoc kind hexmaw.blueprint:*connector-kinds* :test #'string-equal)))
+    (and (fourth spec) (<= (second spec) (fourth spec)))))
+
 (defun doorway-probes (connector)
   "Where to stand 1 m inside CONNECTOR's doorway, just above its floor: its middle, or for
-a river's (lava down the middle) the middle of each bank."
+a river's (lava down the middle) the middle of each bank. A stream's has no banks: its
+middle, in the lava."
   (let ((p (connector-location connector))
         (spec (assoc (connector-kind connector) hexmaw.blueprint:*connector-kinds* :test #'string-equal)))
     (multiple-value-bind (dx dz)
         (ecase (connector-direction connector)
           (:north (values 0 -1)) (:south (values 0 1)) (:west (values -1 0)) (:east (values 1 0)))
       (let ((x (- (vx p) dx)) (y (+ (vy p) 0.1)) (z (- (vz p) dz)))
-        (if (fourth spec)
+        (if (and (fourth spec) (not (flooded-kind-p (first spec))))
             ;; Along the doorway, halfway across each bank.
             (let ((off (/ (+ (second spec) (fourth spec)) 4)))
               (list (vec (+ x (* off (abs dz))) y (+ z (* off (abs dx))))
@@ -104,8 +111,9 @@ a river's (lava down the middle) the middle of each bank."
             (list (vec x y z)))))))
 
 (defun unreachable-doorways (&key (from *spawn-point*) (doorways *level-doorways*))
-  "The DOORWAYS a player can't walk to from FROM, on the nav grid."
-  (let ((r *player-radius*) (h *player-height*) (step *step-height*))
+  "The DOORWAYS a player can't walk to from FROM, on the nav grid, wading through lava if
+need be: it burns, but it is a way."
+  (let ((r *player-radius*) (h *player-height*) (step *step-height*) (*nav-hazards* :wade))
     (multiple-value-bind (si sj sk) (and *nav-grid* (nav-nearest-fitting from r h))
       (if (null si)
           doorways
@@ -123,8 +131,9 @@ a river's (lava down the middle) the middle of each bank."
 (defun stranded-creatures (&key (from *spawn-point*))
   "The creatures that can't walk to FROM from where they live, each on the nav grid at
 its own size and step. A creature whose own cell is too tight for it can't plan a walk
-at all, so that counts too. Walks go both ways, so one search from FROM per size does."
-  (let ((searches (make-hash-table :test 'equal)) (stranded ()))
+at all, so that counts too. Walks go both ways, so one search from FROM per size does. A
+chase wades when there is no dry way (CHASE-PATH), so these walks may too."
+  (let ((searches (make-hash-table :test 'equal)) (stranded ()) (*nav-hazards* :wade))
     (when *nav-grid*
       (loop for creature across *creatures*
             for r = (float (body-radius creature) 0f0)
@@ -163,6 +172,8 @@ that can't walk to the player. Returns both."
 ;;; - every probe reaches another doorway's: no bank or corner leads nowhere;
 ;;; - a river end (tag RIVER-END) joins all of them: a river's two banks meet only at its
 ;;;   ends and crossings, so with an end at each end both banks of every piece stay walkable;
+;;; - a block with a stream's doorway (lava wall to wall) is checked wading, the rest dry, so
+;;;   a wide river's banks must still walk dry to its doorways;
 ;;; - every monster reaches the first doorway;
 ;;; - in a high block (tag HIGH), every doorway reaches every other at *HIGH-BODY*'s size,
 ;;;   walking: the ogre's leaps are shortcuts there, never its only way.
@@ -181,6 +192,9 @@ without its leaps.")
 (defun block-problems (name)
   "What is wrong with block NAME, built alone as *LEVEL* :BLOCK, as a list of strings."
   (let* ((r *player-radius*) (h *player-height*) (step *step-height*)
+         (*nav-hazards* (if (some (lambda (c) (flooded-kind-p (connector-kind c))) *level-doorways*)
+                            :wade
+                            :avoid))
          (probes (loop for c in *level-doorways*
                        append (loop for p in (doorway-probes c)
                                     collect (list c p (multiple-value-list

@@ -15,16 +15,15 @@ legend
   ) diagonal \ floor -0.4 0, lava
   < diagonal /, lava                 ; 45-degree rock standing in lava
   > diagonal \, lava
-  S door stream                      ; a narrow river's doorway: bank
-  - door stream, lava                ; and lava
+  - door stream, lava                ; a narrow river's doorway: all lava
 
 plan 0
 #nnnnnn#########
 #..........\\###
 #......((~~~~>>#
 #......~~~~~~~~#
-#......))~~~~((#
-w........))~~..#
-w..........~~..#
-w..............#
-#########SS--SS#
+#......))~~~~~~#
+w.......#~~~~~~#
+w.......#~~~~~~#
+w.......#~~~~~~#
+#########------#

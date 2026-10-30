@@ -10,13 +10,14 @@
 ;;; in, or nothing more fits, every doorway still open is plugged.
 ;;;
 ;;; Networks: blocks joined through their own kind of doorway, which ordinary blocks don't
-;;; have (*NETWORKS*): rivers, through river and stream doorways (lava down the middle),
-;;; and high quarters, through high doorways (two storeys of room, for the ogre's leaps).
-;;; The first block of one comes in like any corridor or room, through an ordinary
-;;; doorway, and starts a network with a target length in blocks. Its open network
-;;; doorways are tried before any other, with pieces until the network has its length and
-;;; ends from then on, so each arm ends in an end block (whose other doorways go on into the
-;;; dungeon), in a join with another of its doorways, or, if nothing fits, in a plug.
+;;; have (*NETWORKS*): rivers, through river doorways (lava down the middle, between banks)
+;;; and stream doorways (lava wall to wall, waded), and high quarters, through high doorways
+;;; (two storeys of room, for the ogre's leaps). The first block of one comes in like any
+;;; corridor or room, through an ordinary doorway, and starts a network with a target length
+;;; in blocks. Its open network doorways are tried before any other, with pieces until the
+;;; network has its length and ends from then on, so each arm ends in an end block (whose
+;;; other doorways go on into the dungeon), in a join with another of its doorways, or, if
+;;; nothing fits, in a plug.
 
 (defparameter *level-seed* NIL "The generator's seed, or NIL for a new one every build.")
 (defvar *last-level-seed* NIL "The seed of the last generated level, to build it again.")
