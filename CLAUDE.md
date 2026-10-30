@@ -36,6 +36,9 @@ the worktree its own port in `.eval-port` (gitignored): `echo 7191 > .eval-port`
 (`ss -ltnp` shows the taken ones). `run.sh`, `tools/hd` and so the reload hook all read it,
 and `HEXMAW_EVAL_PORT` still overrides it.
 `tools/hd '(namestring (root))'` says which checkout a game runs from.
+When you start the game from a worktree, put this conversation's name in its window title
+once it is up, so the user can tell the windows apart:
+`tools/hd '(game (setf (title *context*) "hexmaw — <conversation name>"))'`.
 
 ## Standalone build
 
