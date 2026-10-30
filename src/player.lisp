@@ -25,6 +25,9 @@
 (defparameter *cast-release* 0.2
   "Seconds from the click until the spell leaves the hands: the cast animation's release frame.")
 (defparameter *player-knockback* 3.0 "Speed in m/s a blow shoves the player away from it.")
+(defparameter *block-arc* 1.0 "Radians either side of the view the raised shield covers.")
+(defparameter *block-damage-scale* 0.25 "Fraction of a blocked blow's damage that gets through.")
+(defparameter *block-shove-scale* 0.4 "Fraction of a blocked blow's shove that gets through.")
 (defparameter *pain-time* 0.35 "Seconds the screen flashes red after the player is hurt.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
@@ -57,7 +60,15 @@
    (swing-time :initform NIL :accessor swing-time
                :documentation "Seconds since the sword swing began, or NIL when not swinging.")
    (swing-pending :initform NIL :accessor swing-pending
-                  :documentation "True until the swing's blow has landed.")))
+                  :documentation "True until the swing's blow has landed.")
+   (block-held :initform NIL :accessor block-held
+               :documentation "True while the block button (the right one) is down.")
+   (block-raise :initform 0.0 :accessor block-raise
+                :documentation "How far the shield is raised to block: 0 down, 1 up.")
+   (bash-time :initform NIL :accessor bash-time
+              :documentation "Seconds since the shield bash began, or NIL when not bashing.")
+   (bash-pending :initform NIL :accessor bash-pending
+                 :documentation "True until the bash's blow has landed.")))
 
 (defun capture-mouse (player)
   (lock-cursor (context +main+))
@@ -99,7 +110,13 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
     (cond ((not (mouse-look player))
            (capture-mouse player))
           ((eq button :left)
-           (player-attack player)))))
+           (player-attack player))
+          ((eq button :right)
+           (setf (block-held player) T)))))
+
+(define-handler (player mouse-release) (button)
+  (when (eq button :right)
+    (setf (block-held player) NIL)))
 
 (define-handler (player key-press) (key)
   (case key
@@ -283,23 +300,42 @@ On a step the eye keeps its height and eases to the new one."
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
     (place-camera player)))
 
+(defun shield-blocks-p (player from)
+  "True if PLAYER's shield is fully raised (sword.lisp) and a blow from point FROM comes
+from within *BLOCK-ARC* of where the player faces."
+  (and (eq (weapon player) :sword)
+       (<= 1.0 (block-raise player))
+       (let* ((feet (feet player))
+              (dx (- (vx from) (vx feet)))
+              (dz (- (vz from) (vz feet)))
+              (len (sqrt (+ (* dx dx) (* dz dz))))
+              (yaw (vy (rotation player))))
+         (and (< 1f-4 len)
+              (< (acos (max -1.0 (min 1.0 (/ (- (* dx (sin yaw)) (* dz (cos yaw))) len))))
+                 *block-arc*)))))
+
 (defun hurt-player (player amount from &key (shove T))
   "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
-from FROM and hit-stop. Without SHOVE (a burn) only the flash. At zero health the run
-starts over."
+from FROM and hit-stop. Without SHOVE (a burn) only the flash. A blow the raised
+shield meets (SHIELD-BLOCKS-P) does *BLOCK-DAMAGE-SCALE* of its damage, at least 1,
+and shoves *BLOCK-SHOVE-SCALE* as far. At zero health the run starts over."
   (when (< 0 (health player))
-    (decf (health player) amount)
-    (setf (pain player) *pain-time*)
-    (when shove
-      (let* ((feet (feet player))
-             (vel (velocity player))
-             (dx (- (vx feet) (vx from)))
-             (dz (- (vz feet) (vz from)))
-             (len (sqrt (+ (* dx dx) (* dz dz)))))
-        (when (< 1f-4 len)
-          (incf (vx vel) (* *player-knockback* (/ dx len)))
-          (incf (vz vel) (* *player-knockback* (/ dz len)))))
-      (hit-stop))
+    (let ((blocked (and shove (shield-blocks-p player from))))
+      (when blocked
+        (setf amount (max 1 (round (* amount *block-damage-scale*)))))
+      (decf (health player) amount)
+      (setf (pain player) *pain-time*)
+      (when shove
+        (let* ((feet (feet player))
+               (vel (velocity player))
+               (dx (- (vx feet) (vx from)))
+               (dz (- (vz feet) (vz from)))
+               (len (sqrt (+ (* dx dx) (* dz dz))))
+               (speed (* *player-knockback* (if blocked *block-shove-scale* 1.0))))
+          (when (< 1f-4 len)
+            (incf (vx vel) (* speed (/ dx len)))
+            (incf (vz vel) (* speed (/ dz len)))))
+        (hit-stop)))
     (when (<= (health player) 0)
       ;; No death screen yet. Not now: this runs inside a creature's tick, and
       ;; RESET-RUN despawns entities.
@@ -320,7 +356,8 @@ starts over."
 (defmethod apply-effect ((kind (eql :knockback)) effect (target player) (source spell-projectile))
   (let* ((flight (projectile-velocity source))
          (len (sqrt (+ (expt (vx flight) 2) (expt (vz flight) 2))))
-         (speed (float (roll (effect-magnitude effect)) 0f0))
+         (speed (* (float (roll (effect-magnitude effect)) 0f0)
+                   (if (shield-blocks-p target (v- (location source) flight)) *block-shove-scale* 1.0)))
          (vel (velocity target)))
     (when (< 1f-4 len)
       (incf (vx vel) (* speed (/ (vx flight) len)))

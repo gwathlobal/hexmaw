@@ -1,0 +1,35 @@
+{
+  "prompt": "Pixel-art first-person weapon view for a Doom/Hexen-style dungeon game: the player's LEFT armoured hand holding a heater shield, seen from the player's eyes, from behind. One single frame, not a sprite sheet. Combine the attached images into one.\n\nREFERENCE IMAGES, in the order attached:\n1. THE HAND AND STRAPS (keep exactly): the left gauntlet gripping a vertical leather handle strap, with two short brass-plated, riveted leather strap mounts above and below the fist, the brown leather cuff with brass studs, and the steel vambrace running off the bottom-left edge. Copy this hand, its grip, its straps and its forearm exactly.\n2. THE SHIELD'S RIM AND BACK (keep exactly): this is the shield to draw, and its RIM is what matters. The rim is a wide band of POLISHED GREY STEEL, NOT brass: grey steel all the way round, with only a THIN line of gold-brass edging along its outer edge, and round BRASS RIVETS set into the grey steel band at even spacing. The edge turned toward the middle of the screen shows the shield's thickness as a thick bright steel edge. Inside the rim, the shield's back is plain dark brown leather with a dark bevel along the rim. IGNORE this image's straps and hand: they are replaced by reference 1's.\n3. SIZE AND PLACEMENT ONLY: an earlier attempt. Copy its framing: how big the shield is, where it sits in the image, the angle, and where the hand sits on it. But its BRASS rim is WRONG: draw reference 2's GREY STEEL rim instead.\n\nTHE PICTURE (1536 x 1024)\n- The shield as large and placed as in reference 3, with reference 2's grey steel rim, thin brass edging, brass rivets and dark leather back.\n- Reference 1's hand and straps on its back, where reference 3 has them.\n- Nothing else: no sword, no right hand. The rest of the image is empty.\n\nSTRICT RULES\n- The rim is GREY STEEL. A wide gold or brass rim is wrong.\n- Background: flat pure magenta (#FF00FF) everywhere around the shield and hand: no floor, no gradient, no vignette, no glow, no shadow.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta, at the same pixel size, outline weight and shading as the references. No semi-transparent pixels and no pink glow.\n- No text, labels, borders or effects.\n",
+  "prompt_file": "art/prompts/sword-shield-merge-rim.txt",
+  "refs": [
+    "art/sword-shield/ref-hand-a1.png",
+    "art/sword-shield/ref-shield-a2.png",
+    "art/sword-shield/merge-1.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 3,
+  "created": 1793324987,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art first-person weapon view for a Doom/Hexen-style dungeon game: the player's LEFT armoured hand holding a heater shield, seen from the player's eyes, from behind. One single frame, not a sprite sheet. Combine the attached images into one.\n\nREFERENCE IMAGES, in the order attached:\n1. THE HAND AND STRAPS (keep exactly): the left gauntlet gripping a vertical leather handle strap, with two short brass-plated, riveted leather strap mounts above and below the fist, the brown leather cuff with brass studs, and the steel vambrace running off the bottom-left edge. Copy this hand, its grip, its straps and its forearm exactly.\n2. THE SHIELD'S RIM AND BACK (keep exactly): this is the shield to draw, and its RIM is what matters. The rim is a wide band of POLISHED GREY STEEL, NOT brass: grey steel all the way round, with only a THIN line of gold-brass edging along its outer edge, and round BRASS RIVETS set into the grey steel band at even spacing. The edge turned toward the middle of the screen shows the shield's thickness as a thick bright steel edge. Inside the rim, the shield's back is plain dark brown leather with a dark bevel along the rim. IGNORE this image's straps and hand: they are replaced by reference 1's.\n3. SIZE AND PLACEMENT ONLY: an earlier attempt. Copy its framing: how big the shield is, where it sits in the image, the angle, and where the hand sits on it. But its BRASS rim is WRONG: draw reference 2's GREY STEEL rim instead.\n\nTHE PICTURE (1536 x 1024)\n- The shield as large and placed as in reference 3, with reference 2's grey steel rim, thin brass edging, brass rivets and dark leather back.\n- Reference 1's hand and straps on its back, where reference 3 has them.\n- Nothing else: no sword, no right hand. The rest of the image is empty.\n\nSTRICT RULES\n- The rim is GREY STEEL. A wide gold or brass rim is wrong.\n- Background: flat pure magenta (#FF00FF) everywhere around the shield and hand: no floor, no gradient, no vignette, no glow, no shadow.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta, at the same pixel size, outline weight and shading as the references. No semi-transparent pixels and no pink glow.\n- No text, labels, borders or effects.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a18a7d-bb47-7373-b32c-6065095af4fb",
+    "01a18a7e-5fcc-7aa2-92fd-ceaa32b63f61",
+    "01a18a7f-10aa-7eb2-9942-09018195c35f"
+  ],
+  "sizes": [
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ]
+  ]
+}
