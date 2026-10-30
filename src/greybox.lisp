@@ -574,13 +574,19 @@ footing (*FOOTINGS*) gives the solid that footing."
   (let ((box (make-solid x0 y0 z0 x1 y1 z1 0 (surface-footing surface)))
         (textures (and surface (or (surface-textures surface) (error "No surface called ~s." surface)))))
     (when solid (vector-push-extend box *solids*))
-    (enter (make-instance 'greybox
-                          :color (vec4 (vx color) (vy color) (vz color) 1)
-                          :face-textures textures
-                          :location (vec (/ (+ (aref box 0) (aref box 3)) 2)
-                                         (/ (+ (aref box 1) (aref box 4)) 2)
-                                         (/ (+ (aref box 2) (aref box 5)) 2))
-                          :scaling (vec (- (aref box 3) (aref box 0))
-                                        (- (aref box 4) (aref box 1))
-                                        (- (aref box 5) (aref box 2))))
-           container)))
+    (let ((location (vec (/ (+ (aref box 0) (aref box 3)) 2)
+                         (/ (+ (aref box 1) (aref box 4)) 2)
+                         (/ (+ (aref box 2) (aref box 5)) 2)))
+          (scaling (vec (- (aref box 3) (aref box 0))
+                        (- (aref box 4) (aref box 1))
+                        (- (aref box 5) (aref box 2)))))
+      ;; Its twin on the automap (automap.lisp).
+      (add-map-piece container (// 'trial 'unit-cube) location (quat) scaling
+                     (vec (aref box 0) (aref box 1) (aref box 2)) (vec (aref box 3) (aref box 4) (aref box 5))
+                     :surface surface :color color)
+      (enter (make-instance 'greybox
+                            :color (vec4 (vx color) (vy color) (vz color) 1)
+                            :face-textures textures
+                            :location location
+                            :scaling scaling)
+             container))))

@@ -231,7 +231,9 @@ special variable VARIABLE to T or NIL as it is clicked."))
 (defmethod panel-splash ((panel main-menu)) "title")
 (defmethod panel-top ((panel main-menu)) *title-menu-top*)
 (defmethod panel-buttons ((panel main-menu))
-  '(("Start game" start-game) ("Load game" open-load-menu) ("Debug level" start-debug-level)
+  `(("Start game" start-game) ("Load game" open-load-menu)
+    ;; The test level is for development only.
+    ,@(when *debug-version* '(("Debug level" start-debug-level)))
     ("Settings" open-settings) ("Exit game" exit-game)))
 
 (defclass loading-screen (menu-panel) ()
@@ -257,7 +259,10 @@ special variable VARIABLE to T or NIL as it is clicked."))
 ;; Over the main menu it keeps the main menu's picture, rather than showing the level.
 (defmethod panel-splash ((panel settings-menu)) (when (eq *game-state* :title) "title"))
 (defmethod panel-top ((panel settings-menu)) (if (eq *game-state* :title) *title-menu-top* T))
-(defmethod panel-buttons ((panel settings-menu)) '(("Show FPS" :toggle *show-fps*) ("Back" close-settings)))
+(defmethod panel-buttons ((panel settings-menu))
+  `(("Show FPS" :toggle *show-fps*)
+    ,@(when *debug-version* '(("Debug minimap" :toggle *map-debug*)))
+    ("Back" close-settings)))
 
 (defvar *slot-menu* NIL
   "While the save or load panel covers the main or pause menu, which: :SAVE or :LOAD.")
@@ -399,6 +404,8 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (when *player* (reset-player *player*))
   (setf *hit-stop* 0.0)
   (clear-blood)
+  ;; A new run explores the level afresh.
+  (clear-map-reveals)
   ;; What came into the level mid-game (raised skeletons) goes; the rest live again.
   (let ((j 0))
     (loop for creature across *creatures*
@@ -445,6 +452,7 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
     (:escape
      (cond (*settings-open* (close-settings))
            (*slot-menu* (close-slot-menu))
+           ((eq *game-state* :map) (close-map))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
     (:f5 (queue-menu-action 'quicksave))

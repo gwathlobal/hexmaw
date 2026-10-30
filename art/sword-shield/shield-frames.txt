@@ -1,0 +1,19 @@
+; The shield's frames for tools/make_shield.py: SOURCE SCALE SX SY X Y, source pixel
+; (SX, SY) on screen art pixel (X, Y) from the bottom-left corner. Every frame is
+; merge-rim-1 with its forearm lengthened (merge-rim-1-arm.png, tools/extend_arm.py),
+; placed by the middle of the fist, (900, 700) there. The picture's bottom edge cuts the
+; shield, so it must stay below the screen: Y at most 323 * SCALE - 6. The shield's
+; top-left corner is (610, 540), so X = 290 * SCALE puts it on the screen's left edge.
+; Idle: lowered until only the top rim shows, three of its rivets; the fourth, by the
+; left edge, is below the screen.
+merge-rim-1-arm.png 0.30 900 700 90 -58.5
+; Raising the block, then held: the corner on the left edge.
+merge-rim-1-arm.png 0.31 900 700 90 -35
+merge-rim-1-arm.png 0.32 900 700 93 -12
+merge-rim-1-arm.png 0.33 900 700 96 10
+; The bash, from the block: pulled back toward the eye, thrust out toward the middle,
+; held at the impact, coming back.
+merge-rim-1-arm.png 0.36 900 700 104 0
+merge-rim-1-arm.png 0.26 900 700 130 30
+merge-rim-1-arm.png 0.25 900 700 136 34
+merge-rim-1-arm.png 0.29 900 700 112 20

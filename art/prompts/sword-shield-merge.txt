@@ -1,0 +1,15 @@
+Pixel-art first-person weapon view for a Doom/Hexen-style dungeon game: the player's LEFT armoured hand holding a shield, seen from the player's eyes, from behind. One single frame, not a sprite sheet. Edit the attached images into one.
+
+REFERENCE IMAGES, in the order attached:
+1. The LEFT HAND and its STRAPS to keep: the left gauntlet gripping the shield's vertical leather handle strap, with the two short brass-riveted leather strap mounts above and below the fist, the brown-and-brass cuff and the steel vambrace running off the bottom-left edge. Copy this hand, its grip, the straps and the forearm exactly: the same pose, the same pixels, the same size.
+2. The SHIELD to keep: a heater shield seen from behind and a little to its side, its dark leather back, its steel rim with brass edging and brass rivets, the bright steel edge turned toward the middle of the screen. Use this shield's design, colours, rim and rivets, but NOT its straps: paint its back plain, then put reference 1's straps and hand on it.
+
+THE PICTURE (1536 x 1024)
+- The shield from reference 2, drawn about 1.4 times LARGER than in reference 2, so it is a proper heater shield, not a small buckler: it reaches from the left edge of the image to about a third of the way across, its top edge at about the middle of the image's height, its lower part and point cut off by the bottom edge. Same angle as in reference 2.
+- On its back, reference 1's hand and straps, at reference 1's size, placed where the hand naturally sits on a shield this size: a little below the middle of the shield's back, the forearm running off the bottom edge near the left corner.
+- Nothing else: no sword, no right hand. The rest of the image is empty.
+
+STRICT RULES
+- Background: flat pure magenta (#FF00FF) everywhere around the shield and hand: no floor, no gradient, no vignette, no glow, no shadow.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta, at the same pixel size, outline weight and shading as the references. No semi-transparent pixels and no pink glow.
+- No text, labels, borders or effects.

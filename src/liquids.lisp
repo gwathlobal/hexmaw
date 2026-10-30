@@ -11,11 +11,13 @@
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 
 (defparameter *liquid-kinds*
-  '((:lava :damage 12.0 :speed 0.8 :texture lava-flow
+  '((:lava :damage 12.0 :speed 0.8 :jump 0.7 :texture lava-flow
      :glow (2.4 1.0 0.3) :glow-radius 7.0 :glow-spacing 4.0 :glow-flicker 0.08))
   "Per kind: :DAMAGE health per second to what stands in it, :SPEED the factor on walking
-speed, :TEXTURE its surface, and :GLOW the colour of the lamps over it (NIL for none),
-:GLOW-RADIUS their reach, one per :GLOW-SPACING metres of the pool's length.")
+speed (kept through a jump from it until landing outside), :JUMP the factor on a jump's
+speed from it (height goes with its square), :TEXTURE its surface, and :GLOW the colour of
+the lamps over it (NIL for none), :GLOW-RADIUS their reach, one per :GLOW-SPACING metres of
+the pool's length.")
 (defparameter *lava-tick* 0.4 "Seconds between the burns of something standing in lava.")
 (defparameter *glow-height* 0.8 "Metres above a liquid's surface that its lamps hang.")
 
@@ -44,15 +46,16 @@ speed, :TEXTURE its surface, and :GLOW the colour of the lamps over it (NIL for 
     (if liquid (liquid-property (liquid-kind liquid) :damage) 0.0)))
 
 (defun burn-due (timer dt damage)
-  "Advance a burn TIMER, in seconds, by DT while standing in something that does DAMAGE per
-second. Returns the timer's new value and the damage due now, a whole number, or 0. Out of
-it (DAMAGE 0) the timer starts over, so a burn comes *LAVA-TICK* after stepping in."
-  (if (<= damage 0)
-      (values 0.0 0)
-      (let ((timer (+ timer dt)))
-        (if (<= *lava-tick* timer)
-            (values (- timer *lava-tick*) (max 1 (round (* damage *lava-tick*))))
-            (values timer 0)))))
+  "Run a burn TIMER, the seconds until the next burn may land, down by DT while standing in
+something that does DAMAGE per second (0 out of it). Returns the timer's new value and the
+damage due now, a whole number, or 0. A burn lands the moment one is allowed, so stepping
+in burns at once and staying in burns every *LAVA-TICK*; out of it the timer only runs
+down, so hopping out and back in doesn't burn sooner."
+  (let ((timer (- timer dt)))
+    (cond ((<= damage 0) (values (max 0.0 timer) 0))
+          ((<= timer 0) (values (+ (max timer (- *lava-tick*)) *lava-tick*)
+                                (max 1 (round (* damage *lava-tick*)))))
+          (T (values timer 0)))))
 
 (define-shader-entity liquid-surface (lit-entity vertex-entity transformed-entity listener)
   ((vertex-array :initform (// 'hexmaw 'centered-quad))
@@ -104,6 +107,11 @@ CONTAINER: the volume, its surface and, if it glows, the lamps over it."
          (top (aref s 4))
          (liquid (make-instance 'liquid :kind kind :bounds s)))
     (vector-push-extend liquid *liquids*)
+    ;; On the automap, a thin slab at the surface.
+    (add-map-piece container (// 'trial 'unit-cube)
+                   (vec (/ (+ (aref s 0) (aref s 3)) 2) (- top 0.02) (/ (+ (aref s 2) (aref s 5)) 2))
+                   (quat) (vec w 0.04 d)
+                   (vec (aref s 0) (- top 0.04) (aref s 2)) (vec (aref s 3) top (aref s 5)) :surface kind)
     (enter (make-instance 'liquid-surface
                           :surface-texture (// 'hexmaw (liquid-property kind :texture))
                           :location (vec (/ (+ (aref s 0) (aref s 3)) 2) top (/ (+ (aref s 2) (aref s 5)) 2))

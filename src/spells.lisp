@@ -31,6 +31,8 @@
    (light-radius :initarg :light-radius :initform *bolt-light-radius* :reader light-radius)
    (homing :initarg :homing :initform NIL :reader spell-homing
            :documentation "Radians a second a creature's projectile turns after the player; NIL flies straight.")
+   (pain-bonus :initarg :pain-bonus :initform 0 :reader spell-pain-bonus
+               :documentation "Percent its damage adds to a creature's PAIN-CHANCE.")
    (lifetime :initarg :lifetime :initform NIL :reader spell-lifetime
              :documentation "Seconds a projectile that hit nothing flies; NIL for *PROJECTILE-LIFETIME*.")
    (windup :initarg :windup :initform 2.5 :reader spell-windup
@@ -74,11 +76,6 @@
 (defun spell-cost (spell)
   (ceiling (reduce #'+ (spell-effects spell) :key #'effect-cost)))
 
-(defvar *roll-random* (make-random-state T)
-  "Rolls damage and knockback. RANDOM serves blood, wandering and the like, which draw a
-different number of times a frame as the frame rate varies; kept apart, and saved with a
-game (save.lisp), the rolls after a load come out as they did after the save.")
-
 (defun roll (magnitude)
   (destructuring-bind (lo hi) magnitude
     (+ lo (random (1+ (- hi lo)) *roll-random*))))
@@ -102,7 +99,8 @@ horizontal part counts."))
 
 (defmethod apply-effect ((kind (eql :damage)) effect (target creature) source)
   ;; Blood sprays away from where it struck from.
-  (hurt target (roll (effect-magnitude effect)) :from (effect-origin source)))
+  (hurt target (roll (effect-magnitude effect)) :from (effect-origin source)
+                :pain-bonus (spell-pain-bonus (spell source))))
 
 (defmethod apply-effect ((kind (eql :knockback)) effect (target creature) source)
   (push-creature target (effect-direction source target) (float (roll (effect-magnitude effect)) 0f0)))
@@ -587,7 +585,7 @@ Mana is the caster's business."
 (define-fx-animation bolt-flight "sprites/bolt/flight" :fps 12 :loop T :size 0.4)
 (define-fx-animation bolt-burst "sprites/bolt/burst" :fps 14 :size 0.9)
 
-(define-spell bolt (:delivery :projectile :projectile-speed 20.0
+(define-spell bolt (:delivery :projectile :projectile-speed 20.0 :pain-bonus 10
                     :projectile-animation 'bolt-flight :impact-animation 'bolt-burst)
   (:damage :magnitude '(6 10))
   (:knockback :magnitude '(4 4)))

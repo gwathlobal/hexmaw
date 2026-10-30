@@ -30,12 +30,14 @@
 (defparameter *storey-height* 5.0 "Storey K's floor is K times this many metres up.")
 (defparameter *border* 0.5 "How thick the border walls and the floor and ceiling slabs are.")
 (defparameter *max-riser* 0.45 "The most a stair step rises: the player's *STEP-HEIGHT*.")
-(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 1.0)
-                                  ("ice" 3.0 3.0))
+(defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 3.0)
+                                   ("high" 7.0 4.5) ("ice" 3.0 3.0))
   "Each kind of doorway: its name, width and height in metres, and for a river the width of
-lava down its middle, between two banks. Each kind joins only itself: an ice cave's ice
-doorways join only ice caves and the ice gates that lead into them. One wider than a cell
-spans two and is centred on the boundary between them.")
+lava down its middle, between two banks; a stream's lava fills it wall to wall, no banks.
+Each kind joins only itself. One wider than a cell spans two and is centred on the boundary
+between them. A high doorway joins the high blocks, two storeys tall; at 4.5 m its lintel
+still lies in its own storey. An ice cave's ice doorways join only ice caves and the ice
+gates that lead into them.")
 (defparameter *default-ceiling* 4.0)
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3
@@ -696,8 +698,8 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                     (or (near off 0) (near off *cell-size*)))))
                     (fail line column "This doorway isn't centred on a cell's edge~:[~; (a ~a doorway spans two cells: centre it on the boundary between them)~]."
                           (< *cell-size* (second spec)) kind))
-                  ;; A river's lava runs down its middle, LAVA wide, the rest is bank, so
-                  ;; every doorway of a kind meets every other.
+                  ;; A river's lava runs down its middle, LAVA wide, the rest is bank (none
+                  ;; when it is the doorway's width), so every doorway of a kind meets every other.
                   (when (fourth spec)
                     (loop for i from (if ns (second start) (first start)) to (if ns (second end) (first end))
                           for rc = (if ns (list (first start) i) (list i (second start)))
@@ -707,8 +709,8 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                           for lava = (action :lava (char-actions blueprint (char (aref rows (first rc)) (second rc))))
                           do (unless (eq (not lava) (not (< (abs (- mid centre)) (/ (fourth spec) 2))))
                                (fail (+ (line plan) (first rc)) (1+ (second rc))
-                                     "A ~a doorway has ~a m of lava down its middle and bank on each side; this cell should be ~:[bank~;lava~]."
-                                     kind (fourth spec) (not lava)))))
+                                     "~:[A ~a doorway has ~a m of lava down its middle and bank on each side~;A ~a doorway is all lava~*~]; this cell should be ~:[bank~;lava~]."
+                                     (<= (second spec) (fourth spec)) kind (fourth spec) (not lava)))))
                   (push (list :storey k :side side :kind kind :along centre
                               :wall (border-wall blueprint rows (first start) (second start))
                               :position (ecase side
