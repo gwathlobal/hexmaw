@@ -322,6 +322,27 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   the test level, `add-lava` digs a pit in the hall's south-west (x −9 to −6, z 3 to 7),
   its floor slab left with a hole there; the hall's room reaches down to the slab's
   underside so the glow lights the pit's rim.
+- `src/footing.lisp`: moving on a slippery footing, Hexen's ice. A footing (`*footings*`,
+  greybox.lisp, beside `*surfaces*`) belongs to a surface: whatever is drawn with surface
+  `:ice` (a blueprint's `ice` material, `add-box :surface :ice`) is slippery, a box, floor slab
+  or wedge alike. The solid carries it as an 8th value (`make-solid`'s FOOTING, after a cut of
+  0 for a box; `solid-footing`), and `floor-footing x y z radius` asks what the floor at Y under
+  a point is (the point decides, as in Hexen, unless the body stands on a ledge's edge with
+  nothing under its centre). The nav grid keeps each cell's footing (`nav-footing-at`, the
+  floor within `*footing-reach*` under a point), and `show-nav` tints ice cells blue. On ice
+  `footing-drag` takes `:friction` (0.97) of the speed away per second, as an exponential, and
+  `footing-push` pushes toward `:top-speed` (1.7) times the speed it would walk at: Hexen's
+  `FRICTION_LOW` and halved thrust. So the player takes about 1 s to reach a run, slides about as
+  many metres as m/s when they let go, and tops out near 12 m/s; in the air nothing slows them
+  (air control steers but never brakes below the current speed, on any floor), so a run-up on
+  ice jumps further. Creatures skid too: their `momentum` (a blow's knockback, and on ice their
+  walk) slides them in `slide`, with the footing's drag on ice and `*knockback-friction*`
+  elsewhere, and on ice `walk-path` hands over to `skid-path`, which only turns and pushes: a
+  point is reached within `*skid-arrive*` or once passed (`*skid-pass*`), and it is stuck when it
+  stays under a quarter of its walk speed. A melee creature slides on through its wind-up, so
+  its blow can miss. Stepping onto ice mid-walk carries the walk's speed over
+  (`update-footing`); hovering flyers have no footing. `tools/hd status` shows the player's
+  footing and speed and each creature's footing. Nothing in pathing knows about ice yet.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites.
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
@@ -477,7 +498,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or
-  torches light through its walls. Its corridor ends in the `shrine` block. A doorway
+  torches light through its walls. Its corridor ends in the `shrine` block, with the debug
+  `ice-rink` block (an ice field, a raised ice step, a stone strip, a lava pool, an imp and a
+  knight on the ice; no tags, so never generated) through the shrine's west doorway. A doorway
   also needs floor under its wall's thickness: without it the nav grid has no cell there,
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
@@ -703,6 +726,10 @@ tools/make_texture.py art/textures/sarcophagus-lid-1.png data/textures/sarcophag
 tools/make_texture.py art/textures/rock-1.png data/textures/rock --metres 4
 tools/make_texture.py art/textures/cave-floor-2.png data/textures/cave-floor --metres 4
 ```
+
+The `ice` surface (`data/textures/ice.png`, ice over flagstones; its sides too, stone under it)
+came from `art/prompts/texture-ice.txt` as the others did:
+`tools/make_texture.py art/textures/ice-1.png data/textures/ice --metres 4`.
 
 The caves' `rock` is fractured bedrock with no courses, for their walls and ceilings;
 `cave-floor` is bedrock, pebbles and packed earth, under rock sides.
@@ -1162,7 +1189,8 @@ a diagonal neighbour doesn't count), or SIDE (`ne`, `nw`, `se`, `sw`) for what t
 neighbours can't decide, such as a 2 × 2 m diamond column of four pairs with no core.
 Combined with `lava`, a full-height diagonal stands in the pit and the lava fills its open
 half (the caves' `<` and `>`). A pool's lava box runs under the floor half too, hidden
-under it; standing there doesn't burn, since liquid checks look just above the feet. Legend actions: `wall [material]`, `floor`,
+under it; standing there doesn't burn, since liquid checks look just above the feet. Legend actions: `wall [material]`, `floor [material]` (the cell's floor slab in that
+material, `floor ice` for ice; `.` is plain `floor`),
 `open`, `box Y0 Y1 [material]` (solid from Y0 to Y1 above the storey's floor; `top` is the
 storey's top), `deco Y0 Y1 [material]` (no collision), `door KIND`, `stairs DIR Y0 Y1
 [material]` (the region of that character climbs toward DIR, in risers of at most 0.45 m),
@@ -1192,7 +1220,9 @@ niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never l
 doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
 rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy or necromancer), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
-bridge and banks to every doorway) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
+bridge and banks to every doorway), `ice-hall` (a sheet of ice ringed by a stone rim, pillars on
+the ice), `ice-bridge` (the forge frozen: ice up to the lava and over the bridge, stone banks)
+and `balcony` (two storeys, a ledge all round over an open floor, and a stair
 up to it); caves `cave` (wavy 45° walls, an octagonal pillar, an octagonal shelf and
 hanging rock, a lava pool against the rock and a dry pit, both with 45° shores), `lava-lake`
 (a causeway with 45° edges across lava, a bridge east) and

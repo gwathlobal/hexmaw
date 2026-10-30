@@ -40,7 +40,7 @@
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
-    idle-timer path stuck walk-distance knockback stagger flash brace burn-timer dead bleeding
+    idle-timer path stuck walk-distance momentum stagger flash brace burn-timer dead bleeding
     drip-timer gibbed rising stirring))
 
 (defmethod saved-slots append ((flyer flyer))

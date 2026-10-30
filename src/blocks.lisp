@@ -364,7 +364,8 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
                (min (vmin a b)) (max (vmax a b))
                (cut (or (getf piece :cut) 0)))
           (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)
-                                          (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf)))))
+                                          (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf))))
+                                          (surface-footing (getf piece :material)))
                               *solids*))))))
 
 (defun turn-cut (cut rotation)

@@ -51,6 +51,8 @@
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 (define-asset (hexmaw cave-floor) image #p"textures/cave-floor.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
+(define-asset (hexmaw ice) image #p"textures/ice.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 
 ;; A surface is the textures of a box's sides, its top and its underside, as floors and
 ;; ceilings are flats in Doom. A block's material picks the surface of its name, so
@@ -69,7 +71,27 @@
     (:sarcophagus sarcophagus-side sarcophagus-lid sarcophagus-side)
     ;; Caves: natural rock, and a floor of rubble and packed earth.
     (:rock rock rock rock)
-    (:cave-floor rock cave-floor rock)))
+    (:cave-floor rock cave-floor rock)
+    ;; Ice: slippery (*FOOTINGS*); a raised block of it is ice all round.
+    (:ice ice ice ceiling-stone)))
+
+;; A footing is how a surface holds what stands on it. A solid drawn with a surface named
+;; here carries its footing (MAKE-SOLID), and whatever stands on it moves as Hexen's ice
+;; (footing.lisp): its speed decays by :FRICTION per second, its push reaches :TOP-SPEED
+;; times its usual speed, and below :STOP-SPEED it stops once nothing pushes it.
+(defparameter *footings*
+  '((:ice :friction 0.97 :top-speed 1.7 :stop-speed 0.1))
+  "Per surface name, its footing: Hexen's ice is 0.973 of the speed kept per 1/35 s tic
+against 0.906 on other floors, with half the push, so 0.97 per second and 1.7 times as fast.")
+
+(defun footing-property (footing key)
+  (getf (rest (or (assoc footing *footings*) (error "No footing ~s." footing))) key))
+
+(defun surface-footing (name)
+  "The footing code of surface NAME (a keyword or a material's name) for MAKE-SOLID:
+its place in *FOOTINGS* from 1, or 0 for an ordinary floor."
+  (let ((n (and name (position name *footings* :key #'first :test #'string-equal))))
+    (if n (1+ n) 0)))
 
 (defun surface-textures (name)
   "The textures of surface NAME (a keyword, or a material's name) as a list (SIDE TOP
@@ -345,12 +367,21 @@ void main(){
   "The cut that takes away the corner on the EAST (else west) and SOUTH (else north) side."
   (+ 1 (if east 0 1) (if south (if east 3 1) 0)))
 
-(defun make-solid (x0 y0 z0 x1 y1 z1 &optional (cut 0))
-  (let ((box (make-array (if (= 0 cut) 6 7) :element-type 'single-float)))
+(defun make-solid (x0 y0 z0 x1 y1 z1 &optional (cut 0) (footing 0))
+  "A solid: its corners, then for a wedge its CUT, then for one with a FOOTING (a code from
+SURFACE-FOOTING) that, after a cut of 0 if it is a box."
+  (let ((box (make-array (cond ((/= 0 footing) 8) ((/= 0 cut) 7) (T 6)) :element-type 'single-float)))
     (setf (aref box 0) (float (min x0 x1) 0f0) (aref box 1) (float (min y0 y1) 0f0) (aref box 2) (float (min z0 z1) 0f0)
           (aref box 3) (float (max x0 x1) 0f0) (aref box 4) (float (max y0 y1) 0f0) (aref box 5) (float (max z0 z1) 0f0))
-    (unless (= 0 cut) (setf (aref box 6) (float cut 0f0)))
+    (when (< 6 (length box)) (setf (aref box 6) (float cut 0f0)))
+    (when (< 7 (length box)) (setf (aref box 7) (float footing 0f0)))
     box))
+
+(defun solid-footing (s)
+  "The footing (a key of *FOOTINGS*) of what stands on solid S, or NIL for an ordinary floor."
+  (declare (type (simple-array single-float (*)) s))
+  (when (< 7 (length s))
+    (first (nth (1- (truncate (aref s 7))) *footings*))))
 
 (declaim (inline solid-cut))
 (defun solid-cut (s)
@@ -513,11 +544,26 @@ its centre line on X and Z and HEIGHT tall, or NIL. Touching faces don't count."
         (return-from solid-overlapping s)))
     NIL))
 
+(defun floor-footing (x y z &optional (radius 0.0))
+  "The footing of the floor whose top is at Y under the point X Z, as SOLID-FOOTING, or NIL.
+As in Hexen, the point decides; but a body RADIUS out from it standing on a ledge's edge,
+with nothing at Y under its centre, stands on that ledge's."
+  (let ((x (float x 0f0)) (y (float y 0f0)) (z (float z 0f0)) (r (float radius 0f0))
+        (edge NIL))
+    (do-solids-near (s (- x r) (- z r) (+ x r) (+ z r))
+      (when (< (abs (- (aref s 4) y)) 0.02)
+        (cond ((solid-covers-p s x z)
+               (return-from floor-footing (solid-footing s)))
+              ((and (not edge) (< 0 r) (%box-overlaps-p s x (- y 0.05) z r 0.1))
+               (setf edge s)))))
+    (and edge (solid-footing edge))))
+
 (defun add-box (container x0 y0 z0 x1 y1 z1
                 &key surface (color (if surface (vec 1 1 1) (vec 0.6 0.6 0.6))) (solid T))
   "Add a box spanning the two corners, in metres, to CONTAINER. SURFACE (a name in
-*SURFACES*) textures it, tinted by COLOR; without one it is flat COLOR."
-  (let ((box (make-solid x0 y0 z0 x1 y1 z1))
+*SURFACES*) textures it, tinted by COLOR; without one it is flat COLOR. A surface with a
+footing (*FOOTINGS*) gives the solid that footing."
+  (let ((box (make-solid x0 y0 z0 x1 y1 z1 0 (surface-footing surface)))
         (textures (and surface (or (surface-textures surface) (error "No surface called ~s." surface)))))
     (when solid (vector-push-extend box *solids*))
     (enter (make-instance 'greybox

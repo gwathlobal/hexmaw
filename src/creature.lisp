@@ -1,7 +1,7 @@
 (in-package #:hexmaw)
 
 ;;; Creatures: billboard monsters that can be hurt. A hit flashes the sprite,
-;;; plays its flinch (stagger; without a hurt animation, a squash), slides it back along the blow (knockback)
+;;; plays its flinch (stagger; without a hurt animation, a squash), slides it back along the blow (momentum)
 ;;; and freezes the action for a moment (hit-stop). At zero health it plays its
 ;;; death animation and stays down as a corpse (or, without one, collapses into the
 ;;; floor). On the test level it then revives at its spawn point, so there is always
@@ -12,7 +12,11 @@
 (defparameter *flash-color* (vec4 1.0 0.95 0.8 0.85) "RGB and peak strength of the hit flash.")
 (defparameter *stagger-time* 0.35)
 (defparameter *stagger-squash* 0.12 "How much a flinch squashes the sprite, as a fraction of its height.")
-(defparameter *knockback-friction* 14.0 "Deceleration of knockback, in m/s².")
+(defparameter *knockback-friction* 14.0 "Deceleration of knockback, in m/s², on floors other than ice.")
+(defparameter *skid-arrive* 0.5 "Metres from a path's point within which a creature skidding on ice has reached it.")
+(defparameter *skid-pass* 1.5
+  "Metres from a path's point within which a skidding creature whose momentum leads away from
+it has gone past it, and makes for the next.")
 (defparameter *death-time* 0.5 "Seconds a creature without a death animation takes to collapse.")
 (defparameter *revive-time* 3.0 "Seconds a corpse lies still before it comes back; NIL to stay dead.")
 (defparameter *wander-pause* '(1.0 3.0) "Least and most seconds a wandering creature stands before moving on.")
@@ -132,7 +136,10 @@ billboard's view order. NIL to glide in the standing pose.")
    (hurt-animation :initarg :hurt-animation :initform NIL :accessor hurt-animation
                    :documentation "Frame animation of the flinch, one sequence per view like
 WALK-ANIMATION, spread over *STAGGER-TIME*; NIL to squash the standing pose instead.")
-   (knockback :initform (vec 0 0 0) :reader knockback)
+   (momentum :initform (vec 0 0 0) :reader momentum
+             :documentation "Velocity it slides with: a blow's knockback, and on ice its walk too.")
+   (footing :initform NIL :accessor footing
+            :documentation "The footing (*FOOTINGS*) it stands on this tick, or NIL.")
    (stagger :initform 0.0 :accessor stagger)
    (flash :initform 0.0 :accessor flash)
    (burn-timer :initform 0.0 :accessor burn-timer
@@ -356,22 +363,46 @@ and a moment's brace, unless it's in the middle of an attack."
 by its KNOCKBACK-SCALE."
   (let ((len (/ (sqrt (+ (expt (vx direction) 2) (expt (vz direction) 2)))
                 (float (knockback-scale creature) 0f0)))
-        (kb (knockback creature)))
+        (kb (momentum creature)))
     (when (< 1f-4 len)
       (setf (vx kb) (* speed (/ (vx direction) len))
             (vz kb) (* speed (/ (vz direction) len))))))
 
 (defun slide (creature dt)
-  "Apply knockback for DT seconds, stopping at solids and bodies, then slow it by friction."
-  (let ((kb (knockback creature)))
-    (multiple-value-bind (x-blocked z-blocked) (move-creature creature (* (vx kb) dt) (* (vz kb) dt) 0.05)
+  "Move by its momentum for DT seconds, stopping at solids and bodies, then slow it by
+friction: on ice by the footing's, and while it walks there it climbs steps as it walks."
+  (let ((kb (momentum creature))
+        (footing (footing creature))
+        (walking (eq (brain creature) :walking)))
+    (multiple-value-bind (x-blocked z-blocked)
+        (move-creature creature (* (vx kb) dt) (* (vz kb) dt)
+                       (if (and footing walking) (move-lift creature) 0.05))
       (when x-blocked (setf (vx kb) 0.0))
       (when z-blocked (setf (vz kb) 0.0)))
-    (let* ((speed (sqrt (+ (expt (vx kb) 2) (expt (vz kb) 2))))
-           (slower (max 0.0 (- speed (* *knockback-friction* dt)))))
-      (if (< speed 1f-4)
-          (setf (vx kb) 0.0 (vz kb) 0.0)
-          (setf (vx kb) (* (vx kb) (/ slower speed)) (vz kb) (* (vz kb) (/ slower speed)))))))
+    (if footing
+        (footing-drag kb footing dt (not walking))
+        (let* ((speed (sqrt (+ (expt (vx kb) 2) (expt (vz kb) 2))))
+               (slower (max 0.0 (- speed (* *knockback-friction* dt)))))
+          (if (< speed 1f-4)
+              (setf (vx kb) 0.0 (vz kb) 0.0)
+              (setf (vx kb) (* (vx kb) (/ slower speed)) (vz kb) (* (vz kb) (/ slower speed))))))))
+
+(defun walking-speed (creature)
+  (if (hunting-p creature) (or (chase-speed creature) (walk-speed creature)) (walk-speed creature)))
+
+(defun update-footing (creature)
+  "Find the footing CREATURE stands on. Stepping onto ice mid-walk, it carries its walk's
+speed onto it as momentum, so it doesn't stall at the edge."
+  (let ((footing (and *nav-grid* (let ((loc (location creature)))
+                                   (nav-footing-at (vx loc) (vy loc) (vz loc))))))
+    (when (and footing (not (footing creature)) (not (dead creature)) (eq (brain creature) :walking))
+      (let ((m (momentum creature))
+            (speed (walking-speed creature))
+            (yaw (facing creature)))
+        (when (< (+ (expt (vx m) 2) (expt (vz m) 2)) (* speed speed))
+          (setf (vx m) (float (* speed (sin yaw)) 0f0)
+                (vz m) (float (* speed (- (cos yaw))) 0f0)))))
+    (setf (footing creature) footing)))
 
 (defun attacker-p (creature)
   (or (attack-damage creature) (attack-spell creature)))
@@ -413,15 +444,44 @@ under them. The nav grid only knows floors."
         (vec (vx loc) floor (vz loc))
         loc)))
 
+(defun skid-path (creature dt)
+  "Walk DT seconds toward the next point of the path on ice: face it and push the momentum
+toward it (SLIDE does the moving), so it is slow to get going and overshoots. A point is
+reached near it or once gone past it. Going too slowly for *STUCK-TIME*, it gives up."
+  (let* ((loc (location creature))
+         (target (first (path creature)))
+         (m (momentum creature))
+         (dx (- (vx target) (vx loc)))
+         (dz (- (vz target) (vz loc)))
+         (distance (sqrt (+ (* dx dx) (* dz dz))))
+         (speed (walking-speed creature)))
+    (when (< 1f-4 distance)
+      (turn-to creature (atan dx (- dz)) dt)
+      (footing-push m (/ dx distance) (/ dz distance) speed (footing creature) dt))
+    ;; The legs scrabble at the walk's pace, whatever the ice makes of it.
+    (incf (walk-distance creature) (* speed dt))
+    (setf (stuck creature) (if (< (+ (expt (vx m) 2) (expt (vz m) 2)) (expt (* 0.25 speed) 2))
+                               (+ (stuck creature) dt)
+                               0.0))
+    (cond ((or (< distance *skid-arrive*)
+               (and (< distance *skid-pass*) (< (+ (* dx (vx m)) (* dz (vz m))) 0)))
+           (unless (setf (path creature) (rest (path creature)))
+             (stop-walking creature)))
+          ((< *stuck-time* (stuck creature))
+           (stop-walking creature *stuck-pause*)))))
+
 (defun walk-path (creature dt)
   "Walk DT seconds toward the next point of the path, facing the way it goes. Blocked
-by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path."
+by a body it slides along it; blocked for *STUCK-TIME*, it gives up the path. On ice it
+skids instead (SKID-PATH)."
+  (when (footing creature)
+    (return-from walk-path (skid-path creature dt)))
   (let* ((loc (location creature))
          (target (first (path creature)))
          (dx (- (vx target) (vx loc)))
          (dz (- (vz target) (vz loc)))
          (distance (sqrt (+ (* dx dx) (* dz dz))))
-         (speed (if (hunting-p creature) (or (chase-speed creature) (walk-speed creature)) (walk-speed creature)))
+         (speed (walking-speed creature))
          (step (min distance (* speed dt)))
          (x0 (vx loc))
          (z0 (vz loc)))
@@ -717,7 +777,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
         (flash creature) 0.0
         (texture creature) (body-texture creature))
   (v<- (location creature) (home creature))
-  (let ((kb (knockback creature)))
+  (let ((kb (momentum creature)))
     (setf (vx kb) 0.0 (vz kb) 0.0)))
 
 (defun creature-walking-p (creature)
@@ -899,6 +959,7 @@ after the flinch, block and attack.")
             (stagger creature) (max 0.0 (- (stagger creature) dt))
             (brace creature) (max 0.0 (- (brace creature) dt))
             (stirring creature) (max 0.0 (- (stirring creature) dt)))
+      (update-footing creature)
       (slide creature dt)
       (drip-blood creature dt)
       (unless (dead creature)

@@ -1,0 +1,25 @@
+; A frozen nave: a sheet of ice fills the middle, ringed by a 1 m stone rim that joins
+; every doorway, with four pillars standing in the ice. A blow sends a monster skating.
+cells 3 3
+tags room
+weight 1
+material pillar 0.62 0.36 0.30
+legend
+  _ floor ice
+  o box 0 top pillar
+  i floor ice, spawn imp|knight south
+
+plan 0
+#########nnnnnn#########
+#......................#
+T..__________________..T
+#..____oo______oo____..#
+#..__________________..#
+w..__________________..e
+w..________ii________..e
+w..__________________..e
+#..__________________..#
+#..____oo______oo____..#
+T..__________________..T
+#......................#
+#########ssssss#########

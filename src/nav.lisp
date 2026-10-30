@@ -51,7 +51,9 @@ A column's floors come first, lowest first.")
    (headroom :initarg :headroom :reader nav-headroom)
    (clearance :initarg :clearance :reader nav-clearance)
    (hazard :initarg :hazard :reader nav-hazard
-           :documentation "A bit per cell I J K, set where its floor is under lava (liquids.lisp).")))
+           :documentation "A bit per cell I J K, set where its floor is under lava (liquids.lisp).")
+   (footing :initarg :footing :reader nav-footing
+            :documentation "Per cell I J K, its floor's footing code (SURFACE-FOOTING), 0 for none.")))
 
 (defvar *nav-hazards* :avoid
   "How the nav questions treat cells under lava. :AVOID, the default, keeps out of them.
@@ -160,7 +162,8 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
                                                             :initial-element most-negative-single-float))
               (headroom (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
               (clearance (make-array (list width depth layers) :element-type 'single-float :initial-element 0f0))
-              (hazard (make-array (list width depth layers) :element-type 'bit :initial-element 0)))
+              (hazard (make-array (list width depth layers) :element-type 'bit :initial-element 0))
+              (footing (make-array (list width depth layers) :element-type '(unsigned-byte 8) :initial-element 0)))
           (do-nav-tiles (i j width depth cell x0 z0)
             (let ((x (centre-x i)) (z (centre-z j)))
               (loop for y in (aref columns i j)
@@ -170,11 +173,12 @@ bound to the solids near the tile, so each question looks at a few boxes, not al
                          (setf (aref floors i j k) y
                                (aref headroom i j k) (float room 0f0)
                                (aref clearance i j k) (measure-clearance x y z room)
-                               (aref hazard i j k) (if (< 0 (hazard-at x (+ y 0.05) z)) 1 0))))))
+                               (aref hazard i j k) (if (< 0 (hazard-at x (+ y 0.05) z)) 1 0)
+                               (aref footing i j k) (surface-footing (floor-footing x y z)))))))
           (setf *nav-grid* (make-instance 'nav-grid :x0 x0 :z0 z0 :cell cell :width width :depth depth
                                                     :layers layers :floors floors
                                                     :headroom headroom :clearance clearance
-                                                    :hazard hazard)))))))
+                                                    :hazard hazard :footing footing)))))))
 
 ;;; Cells.
 
@@ -241,6 +245,19 @@ Path searches ask this for every neighbour, so it reads the arrays directly."
     (when i
       (let ((k (nav-layer i j y grid)))
         (when k (nav-floor i j k grid))))))
+
+(defparameter *footing-reach* 0.1
+  "Metres above its floor that a body's feet may be and still stand on its footing.")
+
+(defun nav-footing-at (x y z &optional (grid *nav-grid*))
+  "The footing (a key of *FOOTINGS*) of the floor under the world point X Y Z, if the point
+stands on it, within *FOOTING-REACH*; else NIL."
+  (multiple-value-bind (i j) (nav-cell x z grid)
+    (when i
+      (let ((k (nav-layer i j y grid)))
+        (when (and k (< (- y (nav-floor i j k grid)) *footing-reach*))
+          (let ((code (aref (nav-footing grid) i j k)))
+            (when (< 0 code) (first (nth (1- code) *footings*)))))))))
 
 (defun nav-room-around (x y z reach step &optional (grid *nav-grid*))
   "The floor of the layer under X Y Z, and the lowest ceiling over it and every column
@@ -463,8 +480,8 @@ the body fits) can't be reached."
   (setf *nav-tiles* ()))
 
 (defun show-nav (&key (within 8.0) (radius 0.35) (height 1.5) (grid *nav-grid*))
-  "Lay a thin green tile on every cell within WITHIN metres of the player where a body
-RADIUS wide and HEIGHT tall fits, on every floor. Run in GAME. HIDE-NAV, or a scene
+  "Lay a thin green tile (blue on ice) on every cell within WITHIN metres of the player
+where a body RADIUS wide and HEIGHT tall fits, on every floor. Run in GAME. HIDE-NAV, or a scene
 reset, removes them."
   (hide-nav)
   (let ((feet (feet *player*))
@@ -478,6 +495,7 @@ reset, removes them."
               (when (< (vsqrdistance p feet) (* within within))
                 (push (add-box scene (- (vx p) half) (vy p) (- (vz p) half)
                                (+ (vx p) half) (+ (vy p) 0.03) (+ (vz p) half)
-                               :color (vec 0.2 0.8 0.3) :solid NIL)
+                               :color (if (< 0 (aref (nav-footing grid) i j k)) (vec 0.3 0.6 1.0) (vec 0.2 0.8 0.3))
+                               :solid NIL)
                       *nav-tiles*)))))))
     (length *nav-tiles*)))

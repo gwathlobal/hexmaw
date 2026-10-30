@@ -78,19 +78,20 @@
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a hp ~d mana ~d weapon ~(~a~); ~
+        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a~@[ on ~(~a~)~] speed ~,2f hp ~d mana ~d weapon ~(~a~); ~
                      creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
                 (case *game-state*
                   (:title "main menu up, world frozen (start with (game (start-game)))")
                   (:paused "paused, world frozen (resume with (game (resume-game)))")
                   (:loading "building a level, world frozen")
                   (T "playing"))
-                (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*)
+                (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*) (footing *player*)
+                (let ((v (velocity *player*))) (sqrt (+ (expt (vx v) 2) (expt (vz v) 2))))
                 (health *player*) (floor (mana *player*)) (weapon *player*)
                 (map 'list (lambda (c)
-                             (format NIL "~(~a~) ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)"
+                             (format NIL "~(~a~) ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)~@[ on ~(~a~)~]"
                                      (type-of c) (dead c) (health c) (max-health c) (brain c)
-                                     (vx (location c)) (vz (location c))))
+                                     (vx (location c)) (vz (location c)) (footing c)))
                      *creatures*)
                 active (length *runtime-errors*)))
       "not running"))

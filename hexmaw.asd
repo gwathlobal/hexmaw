@@ -13,6 +13,7 @@
                (:file "greybox")
                (:file "rooms")
                (:file "nav")
+               (:file "footing")
                (:file "sprite")
                (:file "creature")
                (:file "flyer")

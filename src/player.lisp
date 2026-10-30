@@ -37,6 +37,8 @@
    (feet :initform (vcopy *spawn-point*) :accessor feet)
    (velocity :initform (vec 0 0 0) :accessor velocity)
    (grounded :initform NIL :accessor grounded)
+   (footing :initform NIL :accessor footing
+            :documentation "The footing (*FOOTINGS*) of the floor it stood on last tick, or NIL.")
    (eye :initform *eye-height* :accessor eye)
    (mouse-look :initform NIL :accessor mouse-look)
    (health :initform *player-max-health* :accessor health)
@@ -246,15 +248,25 @@ On a step the eye keeps its height and eases to the new one."
                    (if liquid (liquid-property (liquid-kind liquid) :speed) 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
-    ;; Accelerate horizontal velocity toward the wished velocity.
-    (let* ((dvx (- (* wx speed) (vx vel)))
-           (dvz (- (* wz speed) (vz vel)))
-           (dlen (sqrt (+ (* dvx dvx) (* dvz dvz))))
-           (max-dv (* *ground-acceleration* (if (grounded player) 1.0 *air-control*) dt)))
-      (when (< max-dv dlen)
-        (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
-      (incf (vx vel) dvx)
-      (incf (vz vel) dvz))
+    (setf (footing player) (and (grounded player)
+                                (let ((feet (feet player))) (floor-footing (vx feet) (vy feet) (vz feet) *player-radius*))))
+    (if (footing player)
+        ;; On ice the wish only pushes the momentum (footing.lisp).
+        (progn (footing-drag vel (footing player) dt (= 0 wlen))
+               (footing-push vel wx wz speed (footing player) dt))
+        ;; Accelerate horizontal velocity toward the wished velocity. In the air that steers
+        ;; but never brakes: a launch faster than a run (off ice) keeps its speed.
+        (let* ((speed (if (grounded player)
+                          speed
+                          (max speed (sqrt (+ (expt (vx vel) 2) (expt (vz vel) 2))))))
+               (dvx (- (* wx speed) (vx vel)))
+               (dvz (- (* wz speed) (vz vel)))
+               (dlen (sqrt (+ (* dvx dvx) (* dvz dvz))))
+               (max-dv (* *ground-acceleration* (if (grounded player) 1.0 *air-control*) dt)))
+          (when (< max-dv dlen)
+            (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
+          (incf (vx vel) dvx)
+          (incf (vz vel) dvz)))
     (when (and (grounded player) (retained :space) (not crouching))
       (setf (vy vel) (float *jump-speed* 0f0)))
     (decf (vy vel) (* *gravity* dt))
