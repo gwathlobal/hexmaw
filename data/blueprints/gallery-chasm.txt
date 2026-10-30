@@ -1,0 +1,39 @@
+; A high gallery cut by 4 m of lava. The player crosses on a 1.5 m ledge along the east
+; wall; the ogre leaps it.
+cells 2 3
+storeys 2
+tags corridor high
+weight 1
+legend
+  H door high
+  ~ lava
+
+plan 0
+#HHHHHHHHHHHHHH#
+#..............#
+T..............T
+#..............#
+#..............#
+#~~~~~~~~~~~...#
+#~~~~~~~~~~~...#
+#~~~~~~~~~~~...#
+#~~~~~~~~~~~...#
+#..............#
+T..............T
+#..............#
+#HHHHHHHHHHHHHH#
+
+plan 1
+################
+#              #
+#              #
+#              #
+#              #
+#              #
+T              T
+#              #
+#              #
+#              #
+#              #
+#              #
+################

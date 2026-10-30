@@ -1,0 +1,73 @@
+; A high room that climbs a storey: in at the floor from the south, out at 5 m to the
+; north, over a 2.5 m terrace between. 14 m to the vault. The ogre bounds up; the
+; player climbs west, then east, on stairs with 1 m treads the ogre can walk too.
+cells 4 4
+storeys 3
+tags room high
+weight 1
+material stone 0.55 0.52 0.48
+legend
+  H door high
+  b box 0 top stone                 ; under the upper floor
+  t box 0 2.5 stone                 ; the terrace
+  d stairs north 0 2.5
+  u stairs north 2.5 5
+  L spawn ogre south
+  a spawn imp|acolyte south
+
+plan 0
+################################
+#bbbbbbbbbbbbbbbbbbbbbbbuuuuuub#
+#bbbbbbbbbbbbbbbbbbbbbbbuuuuuub#
+#bbbbbbbbbbbbbbbbbbbbbbbuuuuuub#
+#bbbbbbbbbbbbbbbbbbbbbbbuuuuuub#
+#tttttttttttttttttttttttuuuuuut#
+#tttttttttttttttttttttttuuuuuut#
+#tttttttttttttttttttttttttttttt#
+#.dddddd.......................#
+#.dddddd.......................#
+#.dddddd.......................T
+#.dddddd.......................#
+#.dddddd.......................#
+#.dddddd.......................e
+#..............LL..............e
+T..............................e
+####T####HHHHHHHHHHHHHH####T####
+
+plan 1
+####T####HHHHHHHHHHHHHH####T####
+w.......................      .#
+w..............aa.......      .T
+w.......................      .#
+#.......................      .#
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+T                              T
+#                              #
+#                              #
+#                              #
+#                              #
+####T######################T####
+
+plan 2
+################################
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+#                              #
+################################

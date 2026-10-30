@@ -1,0 +1,30 @@
+; A high gallery turning a corner, its inside corner cut back at 45 degrees.
+cells 2 2
+storeys 2
+tags corridor high
+weight 2
+legend
+  H door high
+  X diagonal / wall 0 top, open     ; the cut corner over storey 1, with no slab under it
+
+plan 0
+################
+#####//........H
+###//..........H
+#//............H
+#..............H
+T..............H
+#..............H
+#..............H
+#HHHHHHHHHHHHHH#
+
+plan 1
+################
+#####XX        #
+###XX          T
+#XX            #
+#              #
+#              #
+T              #
+#              #
+################

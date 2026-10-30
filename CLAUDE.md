@@ -518,6 +518,20 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
+  The left hand holds a shield, a sprite of its own (`shield`, a subclass of `sword`) against
+  the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
+  off on screens whose whole-number scale shows fewer art pixels across. It drops and sways
+  with the sword. Both draw at `*weapon-depth*`, behind the bars, the weapon slots and the
+  pain flash. Holding the right button raises the shield over `*block-raise-time*`
+  (`block-raise`, 0 to 1; not during a swing, and it comes down before a weapon switch);
+  fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
+  asked by `hurt-player`, so it covers creatures' spells too) does `*block-damage-scale*` of
+  its damage and shoves `*block-shove-scale*` as far. A left click with it raised bashes
+  (`player-bash`, `*bash-frame-times*`): on `*bash-hit-frame*` the nearest creature within
+  `*bash-reach*` and `*bash-arc*` takes `*bash-damage*`, is pushed `*bash-knockback*` and
+  rolls for pain with `*bash-pain-bonus*`
+  (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
+  frame: idle, `*shield-raise-frames*` rising, the block held, then the bash's.
 - `src/player.lisp`: first-person controller and box collision.
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
@@ -904,6 +918,26 @@ below their pixel grid: `--filter box` averages instead of picking one source pi
 slice `art/sword-pixel/sheet.png` with `--exact --margin 0`; `--exact` keys only pure magenta
 and keeps the render's outlines and bluish steel.
 
+The shield started as generated pictures of both hands from behind
+(`art/prompts/sword-shield-common.txt` plus `sword-shield-idle-<a..d>.txt`, the sword's idle
+frame as the reference, `art/sword-shield/idle-*.png`). Only the a-1 grip on the straps was
+right; `sword-shield-merge-rim.txt` put that hand and its straps (`ref-hand-a1.png`, cut from
+it) on a-2's steel-rimmed shield (`ref-shield-a2.png`) drawn bigger, `merge-1.png` giving the
+size, into `art/sword-shield/merge-rim-1.png`. Every frame is that one picture moved and
+scaled, so the grip is the same in all of them: `tools/extend_arm.py` lengthens its forearm
+past the picture's edges along the rays from the arm's vanishing point (so a raised shield
+shows no cut-off arm), and `tools/make_shield.py` places, darkens and palettes the frames
+listed in `art/sword-shield/shield-frames.txt` (scale and where the fist goes on screen,
+counted from the bottom-left corner) into the strip:
+
+```bash
+tools/extend_arm.py art/sword-shield/merge-rim-1.png art/sword-shield/merge-rim-1-arm.png --vanish 234,720 --edge 0,866 --edge 200,1010 --pad 600,500
+tools/make_shield.py art/sword-shield/shield-frames.txt data/sprites/sword/shield
+```
+
+The picture's bottom edge cuts the shield, so no frame may lift it on screen (the frames file
+says how far is safe), and the shield can't turn: the bash is a push straight out.
+
 Generators can't keep a motion sequence across a grid of first-person poses, and they draw
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
 attach the first as the design reference, and describe each pose in screen positions.
@@ -1104,7 +1138,8 @@ Blender export that keeps the conventions works the same. Conventions:
   Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m),
   `connector_river_north` a `river` (7 × 3.5 m, two cells, 3 m of lava down its middle
   between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, all lava, no
-  banks), anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
+  banks), `connector_high_north` a `high` (7 × 4.5 m, two cells: the high blocks'),
+  anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
   fourth value is its lava width, a stream's its whole width: `flooded-kind-p`), and each kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
@@ -1248,16 +1283,32 @@ connectors `cave-bend` and `cave-fork`; and the lava rivers (below): wide `river
 `river-ford` (bridged, doorways on both banks), `river-bend` and `river-cavern` (a room the
 river runs through, bridged), narrow `stream` and `stream-bend` (lava wall to wall, no bank: the only way along is
 wading, and it burns), `river-narrows` (wide to narrow: the banks run out and its last cell
-is all lava), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror.
+is all lava), and the ends `lava-spring`, `lava-sink` and `stream-spring`; most with a mirror;
+and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 m vault, a
+2.5 m terrace and a 5 m walkway with a doorway out at the top), `high-hall` (six pillars the
+full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
+and galleries `gallery`, `gallery-corner`, `gallery-steps` (climbs a storey) and
+`gallery-chasm` (4 m of lava, a 1.5 m ledge for the player), all 7 m wide.
 Every piece must let the player walk between all its doorways (drops don't
 count), or the generator builds places that are a one-way trip. `(check-kit)` checks it, for
 every block or a list of names: it builds each alone (`*level*` `:block`, `*check-block*`)
 and reports what's wrong (`block-problems`): ordinary doorways that don't reach each other,
 a doorway or bank that leads to no other doorway, a river end that doesn't join both banks,
-a monster that can't reach the first doorway. A block with a stream doorway is checked
-wading (it can't be crossed dry), the rest dry, so a wide river's banks still walk dry. Leave passages at least 1.5 m wide: the nav
+a monster that can't reach the first doorway, a high block the ogre can't walk between all
+its doorways at `*high-body*` (radius 1.0, 2.7 m, step 0.45: its leaps are shortcuts, never
+its only way). A block with a stream doorway is checked wading (it can't be crossed dry),
+the rest dry, so a wide river's banks still walk dry. Leave passages at least 1.5 m wide: the nav
 grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 1 m gap
 beside a column had none.
+
+High blocks are at least two storeys (`storeys 2`, plan 1 open but for its walls, 9 m
+inside), so whatever a high doorway opens onto has the height; at 4.5 m its lintel stays in
+storey 0. Their tiers rise 2.5 m, the ogre's highest leap. A pillar the full height is `box 0
+top pillar` in plan 0 and `wall pillar` in plan 1 (a wall there has no slab under it, so no
+floor-coloured band at 5 m). A stair the ogre can walk is 3 m wide with 1 m treads (6 rows
+for 2.5 m), and 2 m of floor before its foot: nav clearance is a box over 0.45 m above the
+floor, so for a 1 m radius a tread two steps up within 1 m is a wall, and floor beside a
+flight sees its upper treads as one, so a big body only gets on a flight head-on.
 
 Caves are blueprints like the rest: rock is wall characters inside the rectangle (every
 `#` is rock under `remap wall rock`), 45° rock is `/` and `\` pairs, or `<` and `>` where it
@@ -1309,6 +1360,17 @@ warning. Two doorways that meet share one portal (`drop-portal` removes the othe
 the shader takes only 32. A stair still open when the rooms are in gets one more piece,
 so no stair ends in a plug.
 
+Networks: a network is the blocks joined through doorways ordinary blocks don't have; each
+family is an entry in `*networks*` (its doorway kinds, piece and end tags, and the variables
+for its length and how many a level may have). There are two: rivers, below, and high
+quarters, galleries and high rooms joined through `high` doorways (`high`, ends `high-end`:
+the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level. Both
+grow the same way, with `network` in place of `river` throughout.
+`*level-networks*` holds the last level's (`network-family`, `-pieces`, `-target`, `-ends`),
+the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`. On
+seeds 1 to 20, 9 levels had a high quarter, of 1 to 6 blocks; 4 of them had an arm end in a
+plug, since the vault, 4 × 4 cells and two storeys, is the only end and often doesn't fit.
+
 Rivers: a river is the blocks joined through `river` and `stream` doorways. The first river
 block comes in like any corridor or room, through an ordinary doorway (river pieces are
 tagged `river` as well as `corridor` or `room`, ends `river-end` and `room`), and starts a
@@ -1318,13 +1380,13 @@ its length, then only ends (one river doorway and ordinary doorways onward), an 
 tried ahead of a plug when no piece fits, and at the room quota every open arm gets its end.
 So an arm ends in an end block, in a join with another river doorway, or, if nothing fits,
 in a plug, and the dungeon carries on from the ends and the pieces' side doorways. After
-`*max-rivers*` (1) rivers, river blocks leave the ordinary choices. `*level-rivers*` holds
-the last level's (`river-pieces`, `river-target`, `river-ends`), the log line says how each
-ended, and `(level-map)` draws river blocks as `~`. A river's two banks meet only at its
+`*max-rivers*` (1) rivers, river blocks leave the ordinary choices. `(level-map)` draws
+river blocks as `~`. A river's two banks meet only at its
 ends and crossings (fords, the cavern's bridge), so ends join both banks; a stream has
 no banks, so a river that narrows is waded from there on, and the dungeon past it is
-reached through lava. On 20 seeds every
-level had one river of 7 to 11 blocks, and the player walked seed 11's 92 m along a bank.
+reached through lava. On 20 seeds, before
+the high quarter, every level had one river of 7 to 11 blocks, and the player walked seed
+11's 92 m along a bank; with it, seed 12's river is one block, ending in a plug.
 
 Every level is checked once built (`check-reachable`, after `build-nav-grid`): the
 player must be able to walk from the spawn point to every placed block's doorways (both
@@ -1339,13 +1401,16 @@ Controls: click the window to capture the mouse, Esc to pause (release the mouse
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch, 1 for the sword and 2 for the casting hands (or the mouse
 wheel to cycle them), left click to
-attack (swing, or cast the bolt), M for the automap (see `src/map-view.lisp`), F5 to
-quicksave and F9 to quickload (generated levels only), F12 for a screenshot.
+attack (swing, or cast the bolt), right button held to raise the shield (sword only; a left
+click while it's up bashes), M for the automap (see `src/map-view.lisp`), F5 to quicksave
+and F9 to quickload (generated levels only), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
-0.23 s in; stand within 2 m of the imp, facing it); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
+0.23 s in; stand within 2 m of the imp, facing it); `(setf (block-raise *player*) 1.0)` under hit-stop
+shows the raised shield, and with it raised `(player-attack *player*)` bashes (`block-held`
+is what the right button sets; without it the shield comes down again once the world runs); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);
