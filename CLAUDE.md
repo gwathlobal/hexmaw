@@ -241,7 +241,13 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   death, and revival after `*revive-time*`, on the test level only (`*level*`, defined here); wandering, hunting and attacking the player, and the walk and attack
   animations), `*creatures*` for hit tests, bodies (collision between actors), and the `imp`. A creature's
   `death-animation` plays once on death, front view from every angle, and its last frame
-  stays as the corpse until revival; without one it collapses into the floor. The `acolyte`
+  stays as the corpse until revival; without one it collapses into the floor. Every hit
+  flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
+  its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
+  knight 15, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
+  bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
+  `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
+  `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
   is the ranged one (`attack-spell`), with a cast, flinch and death but no walk: it glides
   in the standing pose, its robe hiding its feet. Its death burns, so it has a `death-glow`:
   a lamp that rises and fades with the fire on `death-glow-times`, then leaves `*lamps*`.
@@ -580,7 +586,7 @@ and rises `dive-rise` for `dive-windup` (0.7 s, the warning), then flies a strai
 left, `dive-overshoot` beyond, skimming the floor. The talons strike once, `attack-damage`, if
 the player comes within `attack-reach`; a sidestep makes it miss. It then stands
 `attack-pause`, climbing back at `climb-speed`, low enough for a swing. A hit during the dive
-itself downs it (`downed`): it falls, lies on the floor for `*downed-time*` and climbs back
+itself always downs it, whatever the pain roll (`always-pained-p`; `downed`): it falls, lies on the floor for `*downed-time*` and climbs back
 before it hunts again. Dead, it falls under `*flyer-gravity*`.
 
 It flaps (`flap-animation`, four frames per view) one beat per bob, the bottom of the stroke
@@ -606,8 +612,8 @@ The `necromancer` (necromancer.lisp) hunts from range as the acolyte does, backi
 - **Raise** (cooldown 7 s): the nearest corpse within `*raise-range*` it can see that is
   `raisable-p` (dead past its `death-duration`, not gibbed, with `gibs`; so not the acolyte,
   which burns). It turns to the corpse and channels for 2 s (the cast's held frame), the
-  corpse twitching (`stirring`) under a growing green lamp; a hit breaks the channel, and it
-  tries again later. Released, it tears the corpse apart (`tear-apart`, the gibs as a blow
+  corpse twitching (`stirring`) under a growing green lamp; a hit that pains it breaks the
+  channel, and it tries again later. Released, it tears the corpse apart (`tear-apart`, the gibs as a blow
   would) and stands a `skeleton-warrior` up out of it (`spawn-raised-skeleton`): `summoned`,
   `rising` for its death strip played backwards (`show-rising`, no thinking meanwhile), then
   alert. There's no cap on how many: kill them fast or go for the necromancer. A skeleton cut
