@@ -455,6 +455,20 @@ at SPEED, out of liquid KIND if any."
       (when (and walking (not (grounded player)))
         (snap-to-ground player)))))
 
+(defun shove-player (player from speed &optional lift)
+  "Push PLAYER away from point FROM at SPEED m/s, and with LIFT, up at that many m/s."
+  (let* ((feet (feet player))
+         (vel (velocity player))
+         (speed (float speed 0f0))
+         (dx (- (vx feet) (vx from)))
+         (dz (- (vz feet) (vz from)))
+         (len (sqrt (+ (* dx dx) (* dz dz)))))
+    (when (< 1f-4 len)
+      (incf (vx vel) (* speed (/ dx len)))
+      (incf (vz vel) (* speed (/ dz len))))
+    (when lift
+      (setf (vy vel) (max (vy vel) (float lift 0f0))))))
+
 (defun shield-blocks-p (player from)
   "True if PLAYER's shield is fully raised (sword.lisp) and a blow from point FROM comes
 from within *BLOCK-ARC* of where the player faces."
@@ -469,11 +483,13 @@ from within *BLOCK-ARC* of where the player faces."
               (< (acos (max -1.0 (min 1.0 (/ (- (* dx (sin yaw)) (* dz (cos yaw))) len))))
                  *block-arc*)))))
 
-(defun hurt-player (player amount from &key (shove T))
+(defun hurt-player (player amount from &key (shove T) lift)
   "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
-from FROM and hit-stop. Without SHOVE (a burn) only the flash. A blow the raised
-shield meets (SHIELD-BLOCKS-P) does *BLOCK-DAMAGE-SCALE* of its damage, at least 1,
-and shoves *BLOCK-SHOVE-SCALE* as far. At zero health the run starts over."
+from FROM and hit-stop. SHOVE is T for *PLAYER-KNOCKBACK*, a speed in m/s, or NIL (a
+burn: only the flash). LIFT, in m/s, also throws the player up off their feet, where a
+shove carries much further than on the ground. A blow the raised shield meets
+(SHIELD-BLOCKS-P) does *BLOCK-DAMAGE-SCALE* of its damage, at least 1, and shoves and
+lifts *BLOCK-SHOVE-SCALE* as far. At zero health the run starts over."
   (when (< 0 (health player))
     (let ((blocked (and shove (shield-blocks-p player from))))
       (when blocked
@@ -481,15 +497,8 @@ and shoves *BLOCK-SHOVE-SCALE* as far. At zero health the run starts over."
       (decf (health player) amount)
       (setf (pain player) *pain-time*)
       (when shove
-        (let* ((feet (feet player))
-               (vel (velocity player))
-               (dx (- (vx feet) (vx from)))
-               (dz (- (vz feet) (vz from)))
-               (len (sqrt (+ (* dx dx) (* dz dz))))
-               (speed (* *player-knockback* (if blocked *block-shove-scale* 1.0))))
-          (when (< 1f-4 len)
-            (incf (vx vel) (* speed (/ dx len)))
-            (incf (vz vel) (* speed (/ dz len)))))
+        (let ((k (if blocked *block-shove-scale* 1.0)))
+          (shove-player player from (* k (if (eq shove T) *player-knockback* shove)) (and lift (* k lift))))
         (hit-stop)))
     (when (<= (health player) 0)
       ;; No death screen yet. Not now: this runs inside a creature's tick, and

@@ -18,7 +18,7 @@ legend
   2 diagonal \ sw, pit 0.2, floor ice
   3 diagonal \ ne, pit 0.2, floor ice
   4 diagonal / nw, pit 0.2, floor ice
-  i spawn any south
+  i spawn any-ogre south
 
 plan 0
 #########++++++#

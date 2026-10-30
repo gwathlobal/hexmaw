@@ -51,6 +51,10 @@
 (defmethod saved-slots append ((necromancer necromancer))
   '(ability cooldowns raise-target))
 
+(defmethod saved-slots append ((ogre ogre))
+  '(attack-kind leap-from leap-to leap-apex leap-duration leap-time airborne falling fall-speed
+    recover leap-cooldown))
+
 (defmethod saved-slots append ((sprite fx-sprite))
   '(animation location age))
 

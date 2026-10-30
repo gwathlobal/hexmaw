@@ -35,6 +35,8 @@
   (preload-spells scene)
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
+  ;; And the dust an ogre kicks up.
+  (preload (make-instance 'upright-fx :animation (find-fx-animation 'ogre-dust)) scene)
   (enter (make-instance 'menu-controller) scene)
   ;; The automap screen (map-view.lisp), after the player: its camera mustn't become the scene's.
   (add-map-view scene)

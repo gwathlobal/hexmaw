@@ -634,12 +634,17 @@ skids instead (SKID-PATH)."
         (feet (feet *player*)))
     (turn-to creature (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet))) dt)))
 
+(defgeneric sight-rise (creature)
+  (:documentation "Metres above or below it that CREATURE notices the player: the rooms
+it can do something about. The ogre, which leaps down, looks further.")
+  (:method ((creature creature)) 3.0))
+
 (defun sees-player-p (creature)
   (let* ((loc (location creature))
          (feet (feet *player*))
          (distance (sqrt (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2)))))
     (and (< 0 (health *player*))
-         (< (abs (- (vy feet) (vy loc))) 3.0)
+         (< (abs (- (vy feet) (vy loc))) (sight-rise creature))
          (or (< distance *hearing-range*)
              (and (< distance *sight-range*)
                   (< (player-angle creature) #.(float (/ pi 2) 0f0))))
@@ -731,9 +736,16 @@ range and in sight, else close in."))
 a caster, or a flyer that dives from out of reach.")
   (:method ((creature creature)) (attack-spell creature)))
 
+(defgeneric special-attack (creature)
+  (:documentation "Start an attack of CREATURE's own if it has one ready and it fits, as
+the ogre's leap: true if it started one. HUNT asks it first, so a chasing creature asks
+every *CHASE-REPLAN*.")
+  (:method ((creature creature)) NIL))
+
 (defun hunt (creature)
   "Attack the player if within reach, or set off along a fresh path toward them."
-  (cond ((ranged-p creature) (hunt-from-range creature))
+  (cond ((special-attack creature))
+        ((ranged-p creature) (hunt-from-range creature))
         ((player-within-p creature (* *attack-start-reach* (attack-reach creature)))
          (start-attack creature))
         (T (chase creature))))
