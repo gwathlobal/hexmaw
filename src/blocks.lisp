@@ -406,8 +406,8 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
 the point, the player's start.")
 
 (defvar *spawn-override* NIL
-  "When non-NIL, the monster every block spawn places instead of its own (the debug
-level binds it).")
+  "When non-NIL, the monster every block spawn places instead of its own, to try a block
+with one kind only.")
 
 (defvar *block-random* (make-random-state T)
   "Picks among a spawn's choices. The generator binds it to its own, seeded, state.")
