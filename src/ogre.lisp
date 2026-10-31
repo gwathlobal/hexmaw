@@ -70,7 +70,7 @@
 ;; Crouch, in the air with the maul raised, landed with it driven down: three frames per
 ;; view, shown by the leap's state, not a clock. The airborne frame stands on its cell's
 ;; ground line; the arc lifts the ogre itself.
-(define-fx-animation ogre-leap "sprites/ogre/leap" :size (* *ogre-height* 212/173))
+(define-fx-animation ogre-leap "sprites/ogre/leap" :size (* *ogre-height* 207/173))
 ;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*.
 (define-fx-animation ogre-hurt "sprites/ogre/hurt" :size (* *ogre-height* 180/173))
 ;; It falls face down beside its maul, the corpse. Front view only.

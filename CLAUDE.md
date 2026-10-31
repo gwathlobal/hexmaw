@@ -628,10 +628,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. For now every monster on it is an imp: the hall's six stand where
-  the acolyte, knight, harpy, necromancer and ogre did, and the shrine's and pool's are imps
-  too (`*spawn-override*`, blocks.lisp, bound around their `attach-block`s). The notes below
-  on where those monsters stand describe the level before that. The debug `ice-rink` block
+  pool's others plugged. Its hall has one of each monster; to try a block with one kind only,
+  bind `*spawn-override*` (blocks.lisp) around its `attach-block`. The debug `ice-rink` block
   (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
   knight on the ice; no tags, so never generated) is retired for now, the pool in its place;
   `(kit-goto "ice-rink")` in the gallery still reaches it. A doorway
@@ -1309,16 +1307,25 @@ air with the maul raised, landed with it driven down) and flinch are made the ne
 way with `tools/gen_monster_views.sh ogre <anim> ...`; the walk front, `walk-front.png`, is
 `walk-front-c-1.png` with `walk-front-c-2.png`'s third cell. The death (`ogre-death.txt`)
 falls face down beside the maul, and the dust (`ogre-dust.txt`) is a burst of grit standing
-on the floor. In the side, back-quarter and back leap sheets the crouch's maul reached across
-the cyan line into the airborne cell, and the airborne frame carried it: the stray pieces
-were painted magenta in `art/ogre/leap-{side,back-quarter,back}.png`, so look at a sheet's
-cells for a neighbour's pieces before stacking.
+on the floor.
+
+Generated frames don't keep to their cells: its maul crossed the cyan lines in many sheets,
+cut off in its own frame and showing as a stray piece in the next. `tools/respace_cells.py`
+fixes that, rewriting a sheet with wider cells and every piece back in its frame, each frame
+keeping its centre, so run it on a new sheet before slicing, and compare the frames with what
+was drawn. The ogre's walk, slam, leap and flinch sheets have been through it. Two pieces were
+drawn by hand on top: the flinch's front and side jolt frames had the maul's head cut flat
+against the line by the generator, with nothing across it to bring back, so its left end is
+rebuilt from its own right end; and the leap's side and back got the crouch's maul back from a
+half-size copy, its full-size pieces having been painted out in an earlier fix. The leap's
+back-quarter, whose landing had its toes to the viewer, was drawn again with
+`ogre-leap-back-quarter-feet.txt` added to the prompt (`leap-back-quarter-b-2.png` is the
+other try).
 
 ```bash
 python3 tools/slice_turnaround.py art/ogre/turnaround-2.png data/sprites/ogre/turnaround --height 173 --filter box
 V="front front-quarter side back-quarter back"
-for a in walk slam leap hurt; do python3 tools/stack_views.py art/ogre/$a-sheet.png $(for v in $V; do echo art/ogre/$a-$v.png; done) --height 1384 --frame 1 --blank 1; done
-for a in walk:20 slam:20 leap:15 hurt:10; do python3 tools/slice_frames.py art/ogre/${a%:*}-sheet.png data/sprites/ogre --pixel 8 --anchor bottom --filter box $a; done
+for a in walk:20 slam:20 leap:15 hurt:10; do python3 tools/slice_views.py data/sprites/ogre $a $(for v in $V; do echo art/ogre/${a%:*}-$v.png; done) --height 1384 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
 python3 tools/slice_frames.py art/ogre/death.png data/sprites/ogre --pixel 2.6 --anchor bottom --filter box death:8
 python3 tools/slice_frames.py art/ogre/dust.png data/sprites/ogre --pixel 4.3 --anchor bottom --filter box dust:6
 ```

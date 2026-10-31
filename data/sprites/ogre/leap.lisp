@@ -1,4 +1,4 @@
-;;; Written by tools/slice_frames.py from leap-sheet.png; do not edit.
+;;; Written by tools/slice_views.py from leap-front.png, leap-front-quarter.png, leap-side.png, leap-back-quarter.png, leap-back.png; do not edit.
 (:image "leap.png"
- :cell-width 122 :cell-height 212 :gap 2
+ :cell-width 158 :cell-height 207 :gap 2
  :frames 15)

@@ -1,0 +1,4 @@
+
+THE FEET IN THIS VIEW: we look at the ogre from behind and to one side, so in every frame, the LANDED frame most of all, the feet point away from the viewer, toward image-left and into the picture, exactly as in reference 2. We see the HEELS and the backs of the ankles, and the toes are hidden or barely show at the far end of each foot. Never draw toes pointing toward the viewer: the legs and feet turn the same way as the back.
+
+Keep every frame well inside its own cell: the maul in the crouch and landed frames stays on its own side of the cyan lines, so draw the ogre a little smaller if it has to.
