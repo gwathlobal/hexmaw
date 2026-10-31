@@ -114,7 +114,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a~@[ on ~(~a~)~]~:[~; swimming~]~@[ climbing~*~] speed ~,2f hp ~d mana ~d~@[ breath ~,1f~] weapon ~(~a~); ~
+        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a~@[ on ~(~a~)~]~:[~; swimming~]~@[ climbing~*~] speed ~,2f hp ~d mana ~d stamina ~,1f~:[~; winded~]~@[ breath ~,1f~] weapon ~(~a~); ~
                      creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
                 (case *game-state*
                   (:title "main menu up, world frozen (start with (game (start-game)))")
@@ -125,7 +125,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*) (footing *player*)
                 (swimming *player*) (climbing *player*)
                 (let ((v (velocity *player*))) (sqrt (+ (expt (vx v) 2) (expt (vz v) 2))))
-                (health *player*) (floor (mana *player*))
+                (health *player*) (floor (mana *player*)) (stamina *player*) (winded *player*)
                 (and (< (breath *player*) *breath-time*) (breath *player*)) (weapon *player*)
                 (map 'list (lambda (c)
                              (format NIL "~(~a~) ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)~@[ on ~(~a~)~]"

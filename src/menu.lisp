@@ -306,12 +306,14 @@ special variable VARIABLE to T or NIL as it is clicked."))
 ;;; Transitions.
 
 (defun reset-player (player)
-  "PLAYER back at the spawn point, looking north, with full health and mana."
+  "PLAYER back at the spawn point, looking north, with full health, mana and stamina."
   (respawn player)
   (setf (health player) *player-max-health*
         (pain player) 0.0
         (restore-flash player) 0.0
         (mana player) *max-mana*
+        (stamina player) *max-stamina*
+        (winded player) NIL
         (breath player) *breath-time*
         (drown-timer player) 0.0
         (climbing player) NIL

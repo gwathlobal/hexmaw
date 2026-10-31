@@ -36,7 +36,7 @@
 
 (defmethod saved-slots append ((player player))
   '(feet rotation velocity grounded eye health pain restore-flash restored burn-timer wading swimming climbing breath drown-timer
-    mana cast-timer cast-time
+    mana stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     block-raise bash-time bash-pending guard-broken))
 
