@@ -521,7 +521,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   ```
 
   To look at one: `tools/hd '(game (cast-spell (find-spell (quote grave-spikes)) (v+ (feet *player*) (vec 0 0 -4)) (vec 0 0 1) (scene +main+)))'`.
-- `src/hud.lisp`: HP and mana bars in the lower-left corner, an AIR bar over them while
+- `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
   breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
   entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
@@ -590,9 +590,12 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (`block-raise`, 0 to 1; not during a swing, and it comes down before a weapon switch);
   fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
   asked by `hurt-player`, so it covers creatures' spells too) does `*block-damage-scale*` of
-  its damage and shoves `*block-shove-scale*` as far; a blow with `:guard-break` (the knight's,
+  its damage and shoves `*block-shove-scale*` as far, for `*block-stamina-scale*` stamina a point
+  of the blow's damage; a blow with `:guard-break` (the knight's,
   the ogre's slam) also knocks it aside (`break-guard`: down at once, and `guard-broken`
-  keeps it down), and `:unblockable` ones (the ogre's shockwave) ignore it. Raised, it slows
+  keeps it down), a blow with more cost than the stamina left goes through in full and knocks
+  it aside for at least `*stamina-guard-break*`,
+  and `:unblockable` ones (the ogre's shockwave) ignore it. Raised, it slows
   the player to `*block-speed-scale*` of a walk, no running. A left click with it raised bashes
   (`player-bash`, `*bash-frame-times*`): on `*bash-hit-frame*` the nearest creature within
   `*bash-reach*` and `*bash-arc*` takes `*bash-damage*` and is pushed `*bash-knockback*`.
@@ -613,7 +616,12 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   middle rather than against the right edge, so the thrust goes where the player looks on any
   screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
   (`art/spear/spear-frames.txt` says how).
-- `src/player.lisp`: first-person controller and box collision. In water to the waist
+- `src/player.lisp`: first-person controller and box collision. Mana doesn't regenerate:
+  only a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
+  `*stamina-regen*` except while running, which costs `*run-stamina*` a second, on foot or
+  swimming with Shift (`update-stamina`); running it empty leaves the player `winded`, walking,
+  until it is back to `*winded-recover*`. A jump costs `*jump-stamina*` and needs it, and a blow
+  on the raised shield costs stamina too (`hurt-player`, see `src/sword.lisp`). In water to the waist
   (`*swim-waist*`) the player swims, Quake-style (`swim`): W and S along the view, A and D
   level, Space up and C or Ctrl down, at `*swim-speed*` (`*swim-run-speed*` with Shift)
   against `*water-drag*`, sinking at `*swim-sink*` when swimming nowhere below the surface and
@@ -1732,7 +1740,7 @@ is what the right button sets; without it the shield comes down again once the w
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);
-`tools/hd status` shows mana and each creature's health. The knight stands by the west
+`tools/hd status` shows mana, stamina and each creature's health. The knight stands by the west
 pillars; a bolt at its front comes back at the player, one at its back hurts it, and
 `(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
 The harpy hovers over the hall's south-east, by the east doorway: `(setf (alert harpy) 6.0)`
