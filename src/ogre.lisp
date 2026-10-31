@@ -274,7 +274,7 @@ true if there is a landing cell and an arc OGRE's body fits."
                    (clear-path-p loc (feet *player*) 1.0))))
     (when hit
       (hurt-player *player* (roll (attack-damage ogre)) loc :shove *slam-shove* :lift *slam-lift*
-                   :guard-break (guard-break ogre)))
+                   :guard-break (guard-break ogre) :by ogre))
     (quake ogre impact *slam-quake-radius* NIL *slam-quake-shove*
            (unless hit *slam-quake-shove*) *slam-quake-lift*)
     (kick-dust impact 0.0 1 (container ogre))))
@@ -319,7 +319,7 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
                                         (expt (- (vz (feet *player*)) (vz centre)) 2)))
                                (+ (body-radius ogre) *player-radius* *direct-hit-margin*))))
                 (hurt-player *player* (max 1 (round (* f (if direct *quake-direct-hit* 1.0) (roll damage))))
-                             from :shove (* f player-shove) :lift (* f player-lift) :unblockable T))
+                             from :shove (* f player-shove) :lift (* f player-lift) :unblockable T :by ogre))
               (shove-player *player* from (* f player-shove) (* f player-lift))))))))
 
 (defun kick-dust (centre radius count container)

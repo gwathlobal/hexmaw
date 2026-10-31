@@ -38,7 +38,7 @@
   '(feet rotation velocity grounded eye health pain burn-timer wading swimming climbing breath drown-timer
     mana cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
-    block-raise bash-time bash-pending guard-broken))
+    block-raise bash-time bash-pending guard-broken run-time damage-taken))
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending

@@ -532,21 +532,30 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   on every screen, counting frames in its render and updating every `*fps-interval*`.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
-  (`:title`, `:playing`, `:paused`, `:map`, defined in creature.lisp) decides which is up;
+  (`:title`, `:playing`, `:paused`, `:map`, `:dead`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
   `*loading-frames*` ticks, then rebuild the scene; `*new-run*` tells `setup-scene` to put
   the new player at the spawn point, fresh, and start play), `pause-game`, `resume-game`, `show-title`,
-  `exit-to-title` (the pause menu's exit: back to the main menu, with the level put back
-  in place by `reset-run`, no scene rebuild)
+  `exit-to-title` (the pause menu's and death screen's exit: back to the main menu, with the
+  level put back in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
+  Zero health on a generated level sets `:dead` (`player-dies`, player.lisp; every other level
+  still queues `reset-run`): the world freezes, the pain flash holds, and `fall-dead` drops the
+  eye to `*death-eye-height*`, rolls the view (`*death-roll*`, the player's `project-view`) and
+  sinks the weapons. After `*death-panel-delay*` the `death-screen` comes up with the mouse
+  released: `death-stats` (killed by, time survived, monsters slain, areas explored, damage
+  taken, the seed) and a button back to the main menu. Esc does nothing there, F5 is refused and
+  F9 still quickloads. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
+  `:drowning`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
   loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
   button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
   variable; an action may also be a closure. Hovering a row gives it the keyboard focus, so
   one row is lit at a time. `panel-width` is the column's width (`*menu-width*`; the slot
-  panels' is wider, for their labels).
+  panels' is wider, for their labels). `panel-lines` adds `(label value)` rows of text
+  between the title and the buttons (`menu-stat`, `*menu-stat-height*`; the death screen's stats).
   Settings (`open-settings`, on both menus) covers the menu it came from while
   `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Show
   FPS (`*show-fps*`, in memory only, kept across reloads) and, in a debug version
@@ -558,7 +567,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   a save the pause menu's title says where it went (`*save-note*`). F5 quicksaves and F9
   quickloads (`quicksave`, `quickload`, from the menu controller). See `src/save.lisp`.
   `panel-splash` names a picture in `data/splash/` to cover the screen with (the main
-  menu's `title`, the loading screen's `loading`, and Settings' over the main menu; see
+  menu's `title`, the loading screen's `loading`, the death screen's `death`, and Settings' over the main menu; see
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
   of the screen (T, the default, centres it; the main menu's `*title-menu-top*` keeps it
   off the dagger in its splash).
@@ -767,7 +776,7 @@ casts, turning to follow the player until `attack-hit-frame`, when the spell lea
 where the player stands then (no leading, so a sidestep dodges it), from `cast-offset` to the
 right of its centre line, where the casting hand is. Closer than `keep-away` it backs off
 `*retreat-step*` metres along a straight walk the nav grid allows (`retreat`), and casts
-point-blank when cornered; out of range or sight it closes in as a melee creature does. At zero health the player's run starts over (`reset-run`); there's no death screen yet.
+point-blank when cornered; out of range or sight it closes in as a melee creature does. At zero health the player dies on a generated level (the death screen, see `src/menu.lisp`), and elsewhere the run starts over (`reset-run`).
 
 ### Flyers
 
@@ -996,12 +1005,13 @@ not by `tools/hd reset`.
 
 ## Splash screens
 
-The main menu and the loading screen draw a picture over the whole window
+The main menu, the loading screen and the death screen draw a picture over the whole window
 (`splash-backdrop` in menu.lisp), cropped to cover it, with nearest filtering and a dark
 veil (`*splash-dim*`, 0.6) so it stays in the background. Each is a generated 1536 × 1024 picture: `art/prompts/splash-common.txt`
-(16:9 crop, no text, a calm dark centre for the menu) plus `splash-title.txt` or
-`splash-loading.txt`. The title references the four monsters' turnarounds, the loading
-screen the imp's turnaround, the stone wall and the torch:
+(16:9 crop, no text, a calm dark centre for the menu) plus `splash-title.txt`,
+`splash-loading.txt` or `splash-death.txt`. The title references the four monsters' turnarounds, the loading
+screen the imp's turnaround, the stone wall and the torch, and the death screen those three
+and the shield and sword (`art/sword-shield/ref-shield-a2.png`, `ref-sword-idle.png`):
 
 ```bash
 P=art/prompts; tools/gen_image.py art/splash/title.png --prompt "$(cat $P/splash-common.txt $P/splash-title.txt)" --ref "Pixel Demon Character Turnaround.png" --ref art/acolyte/turnaround-2.png --ref art/knight/runic-turnaround-3.png --ref art/harpy/turnaround-2.png --size 1536x1024 -n 2
@@ -1732,7 +1742,8 @@ is what the right button sets; without it the shield comes down again once the w
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);
-`tools/hd status` shows mana and each creature's health. The knight stands by the west
+`tools/hd status` shows mana and each creature's health. On a generated level,
+`(game (hurt-player *player* 1000 (feet *player*) :by (aref *creatures* 0)))` kills the player, and the death screen follows. The knight stands by the west
 pillars; a bolt at its front comes back at the player, one at its back hurts it, and
 `(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
 The harpy hovers over the hall's south-east, by the east doorway: `(setf (alert harpy) 6.0)`

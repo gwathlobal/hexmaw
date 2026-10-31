@@ -48,6 +48,11 @@ dive in, a shove), as an exponential.")
 (defparameter *drown-damage* 10.0 "Health per second lost under water with no breath left.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
+(defparameter *death-eye-height* 0.25 "Metres above the feet the eye comes to rest at when the player falls dead.")
+(defparameter *death-fall-gravity* 7.0 "Metres per second squared the dead player's eye falls at.")
+(defparameter *death-roll* 0.45 "Radians the view has rolled by when the fall is over.")
+(defparameter *death-roll-time* 0.7 "Seconds the view takes to roll over.")
+(defparameter *death-panel-delay* 1.2 "Seconds from death to the death screen (menu.lisp).")
 
 (defclass player (fps-camera)
   ((name :initform :player)
@@ -98,7 +103,26 @@ dive in, a shove), as an exponential.")
                  :documentation "True until the bash's blow has landed.")
    (guard-broken :initform 0.0 :accessor guard-broken
                  :documentation "Seconds left before the shield can be raised again, after a
-blow knocked it aside (BREAK-GUARD).")))
+blow knocked it aside (BREAK-GUARD).")
+   (run-time :initform 0.0 :accessor run-time
+             :documentation "Seconds of this run in play: not paused, not on the map, not in hit-stop.")
+   (damage-taken :initform 0 :accessor damage-taken
+                 :documentation "Health this run has cost, for the death screen.")
+   (killed-by :initform NIL :accessor killed-by
+              :documentation "What killed the player: a creature's type, :LAVA or :DROWNING.")
+   (death-time :initform 0.0 :accessor death-time
+               :documentation "Seconds since the player died (*GAME-STATE* :DEAD).")))
+
+;; Trial's camera has no roll; the player's view rolls as it falls dead (FALL-DEAD).
+(defmethod project-view ((camera player))
+  (let ((rot (rotation camera))
+        (loc (location camera)))
+    (reset-matrix (view-matrix))
+    (unless (= 0.0 (vz rot))
+      (rotate +vz+ (vz rot) (view-matrix)))
+    (rotate +vx+ (vx rot) (view-matrix))
+    (rotate +vy+ (vy rot) (view-matrix))
+    (translate-by (- (vx loc)) (- (vy loc)) (- (vz loc)) (view-matrix))))
 
 (defun capture-mouse (player)
   (lock-cursor (context +main+))
@@ -363,13 +387,33 @@ with none left."
         (burn-due (drown-timer player) dt (if (and under (<= (breath player) 0)) *drown-damage* 0.0))
       (setf (drown-timer player) timer)
       (when (< 0 damage)
-        (hurt-player player damage feet :shove NIL)))))
+        (hurt-player player damage feet :shove NIL :by :drowning)))))
+
+(defun fall-dead (player dt)
+  "The moment after death, with the world frozen: the view drops to the floor and rolls
+over, the weapons sink off screen, and a body in mid-air comes down. The death screen
+follows *DEATH-PANEL-DELAY* after it began, when the mouse goes back to the menu."
+  (let* ((time (incf (death-time player) dt))
+         (roll (min 1.0 (/ time *death-roll-time*)))
+         (vel (velocity player)))
+    (setf (eye player) (max *death-eye-height* (- (eye player) (* *death-fall-gravity* time dt)))
+          ;; Eased both ways: it topples, then settles.
+          (vz (rotation player)) (float (* *death-roll* roll roll (- 3.0 (* 2.0 roll))) 0f0)
+          (weapon-lower player) (min 1.0 (+ (weapon-lower player) (* 2.0 dt))))
+    (unless (or (grounded player) (swimming player))
+      (decf (vy vel) (* *gravity* dt))
+      (move-axis player 1 (* (vy vel) dt)))
+    (when (and (mouse-look player) (<= *death-panel-delay* time))
+      (release-mouse player))))
 
 (define-handler (player tick) (dt)
   (when (frozen-p)
+    (when (eq *game-state* :dead)
+      (fall-dead player dt))
     ;; Still place the camera, so a game that starts frozen (the main menu) shows the level.
     (place-camera player)
     (return))
+  (incf (run-time player) dt)
   (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
         (cast-timer player) (max 0.0 (- (cast-timer player) dt))
         (pain player) (max 0.0 (- (pain player) dt))
@@ -419,7 +463,7 @@ with none left."
           (burn-due (burn-timer player) dt (hazard-at (vx feet) (+ (vy feet) 0.05) (vz feet)))
         (setf (burn-timer player) timer)
         (when (< 0 damage)
-          (hurt-player player damage feet :shove NIL))))
+          (hurt-player player damage feet :shove NIL :by :lava))))
     (update-breath player dt)
     ;; Ease the eye toward standing or crouching height, then place the camera.
     (let ((target (if (and crouching (not (swimming player))) *crouch-eye-height* *eye-height*)))
@@ -506,20 +550,34 @@ again for SECONDS."
         (bash-time player) NIL
         (bash-pending player) NIL))
 
-(defun hurt-player (player amount from &key (shove T) lift guard-break unblockable)
+(defun player-dies (player by)
+  "PLAYER's health ran out, to BY. On a generated level the run is over: the world freezes,
+PLAYER falls (FALL-DEAD) and the death screen comes up. Elsewhere the run starts over."
+  (cond ((not (eq *level* :generated))
+         ;; Not now: this runs inside a creature's tick, and RESET-RUN despawns entities.
+         (queue-menu-action 'reset-run))
+        ((not (eq *game-state* :dead))
+         (setf *game-state* :dead
+               (killed-by player) (if (typep by 'creature) (type-of by) by)
+               (death-time player) 0.0
+               (vy (velocity player)) (min 0f0 (vy (velocity player)))))))
+
+(defun hurt-player (player amount from &key (shove T) lift guard-break unblockable by)
   "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
 from FROM and hit-stop. SHOVE is T for *PLAYER-KNOCKBACK*, a speed in m/s, or NIL (a
 burn: only the flash). LIFT, in m/s, also throws the player up off their feet, where a
 shove carries much further than on the ground. A blow the raised shield meets
 (SHIELD-BLOCKS-P; never an UNBLOCKABLE one) does *BLOCK-DAMAGE-SCALE* of its damage, at
 least 1, and shoves and lifts *BLOCK-SHOVE-SCALE* as far; with GUARD-BREAK it also knocks
-the shield aside for that many seconds (BREAK-GUARD). At zero health the run starts over."
+the shield aside for that many seconds (BREAK-GUARD). BY is what did it, a creature, :LAVA
+or :DROWNING, for the death screen. At zero health the player dies (PLAYER-DIES)."
   (when (< 0 (health player))
     (let ((blocked (and shove (not unblockable) (shield-blocks-p player from))))
       (when blocked
         (setf amount (max 1 (round (* amount *block-damage-scale*))))
         (when guard-break
           (break-guard player guard-break)))
+      (incf (damage-taken player) (min amount (health player)))
       (decf (health player) amount)
       (setf (pain player) *pain-time*)
       (when shove
@@ -527,9 +585,7 @@ the shield aside for that many seconds (BREAK-GUARD). At zero health the run sta
           (shove-player player from (* k (if (eq shove T) *player-knockback* shove)) (and lift (* k lift))))
         (hit-stop)))
     (when (<= (health player) 0)
-      ;; No death screen yet. Not now: this runs inside a creature's tick, and
-      ;; RESET-RUN despawns entities.
-      (queue-menu-action 'reset-run))))
+      (player-dies player by))))
 
 (defun player-at-p (player point margin)
   "True if POINT lies in PLAYER's body, grown by MARGIN metres."
@@ -541,7 +597,8 @@ the shield aside for that many seconds (BREAK-GUARD). At zero health the run sta
 
 ;; A creature's spell, hitting the player: the shove follows the projectile's flight.
 (defmethod apply-effect ((kind (eql :damage)) effect (target player) (source spell-projectile))
-  (hurt-player target (roll (effect-magnitude effect)) (v- (location source) (projectile-velocity source))))
+  (hurt-player target (roll (effect-magnitude effect)) (v- (location source) (projectile-velocity source))
+               :by (caster source)))
 
 (defmethod apply-effect ((kind (eql :knockback)) effect (target player) (source spell-projectile))
   (let* ((flight (projectile-velocity source))
