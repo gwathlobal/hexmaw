@@ -1,0 +1,24 @@
+; A robing room reached only by narrow doorways, so no ogre gets in. They sit in opposite
+; cells, so the way through crosses the room between two stone benches, 0.5 m high.
+cells 2 2
+ceiling 3
+tags room
+weight 1
+mirror yes
+material stone 0.55 0.52 0.48
+legend
+  n door narrow
+  s door narrow
+  % box 0 0.5 stone
+  i spawn imp|acolyte south
+
+plan 0
+##nnnn##########
+#..........%%%%#
+#..........%%%%#
+#..............#
+T......ii......#
+#..............#
+#%%%%..........#
+#%%%%..........#
+##########ssss##

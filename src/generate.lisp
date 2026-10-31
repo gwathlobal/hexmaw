@@ -6,8 +6,9 @@
 ;;; and stairs, corridors run on or open into rooms), and tries each of that block's
 ;;; doorways of the same kind against it, turned to face it, until one fits in free
 ;;; cells. A new doorway that meets an open one face to face joins it, which makes
-;;; loops; one that runs into another block's wall is plugged. When enough rooms are
-;;; in, or nothing more fits, every doorway still open is plugged.
+;;; loops; one that runs into another block's wall is plugged. Growth stops when the rooms
+;;; in and the corridors still open add up to the rooms wanted. Then each open corridor gets
+;;; a room, or a plug only if no room fits, and every doorway still open is plugged.
 ;;;
 ;;; Networks: blocks joined through their own kind of doorway, which ordinary blocks don't
 ;;; have (*NETWORKS*): rivers, through river doorways (lava down the middle, between banks)
@@ -29,7 +30,7 @@
 
 (defparameter *level-seed* NIL "The generator's seed, or NIL for a new one every build.")
 (defvar *last-level-seed* NIL "The seed of the last generated level, to build it again.")
-(defparameter *generator-rooms* 8 "How many rooms a generated level has, the start included.")
+(defparameter *generator-rooms* 16 "How many rooms a generated level aims for, the start included.")
 (defparameter *generator-attempts* 300 "How many frontier doorways the generator tries before it stops.")
 (defparameter *corridor-run* 0.55
   "From a corridor, the chance of another corridor piece, to the power of the run so far.")
@@ -234,10 +235,14 @@ Returns the pairs."
                          (place name at turns (door-run door) :joined c :network (door-network door))
                          (return-from attach T)))))))
              (ends (door)
-               ;; The end blocks that fit DOOR, heavier first.
-               (let ((family (network-family (door-network door))))
-                 (weighted-order (remove-if-not (lambda (n) (network-end-p n family))
-                                                (with-doorway (connector-kind (door-connector door)))))))
+               ;; The blocks that may end DOOR's arm: its end blocks, heavier first, then any
+               ;; other room with its doorway, for when no end block fits.
+               (let ((family (network-family (door-network door)))
+                     (fitting (with-doorway (connector-kind (door-connector door)))))
+                 (append (weighted-order (remove-if-not (lambda (n) (network-end-p n family)) fitting))
+                         (weighted-order (remove-if-not (lambda (n) (and (member :room (block-tags n))
+                                                                         (not (network-end-p n family))))
+                                                        fitting)))))
              (network-choices (door)
                ;; Pieces until the network has its length, ends from then on; before it, an
                ;; end is still tried when no piece fits, ahead of a plug.
@@ -263,11 +268,25 @@ Returns the pairs."
                    (let* ((from-room (= 0 (door-run door)))
                           (corridor (or from-room (< (generator-roll 1.0) (expt *corridor-run* (door-run door)))))
                           (first (weighted-order (if corridor (tagged :corridor :stair) (tagged :room))))
-                          ;; Few blocks have ice doorways, so one that fits no corridor tries
-                          ;; the rooms too, and the other way round, before it is plugged.
-                          (then (when (string-equal (connector-kind (door-connector door)) "ice")
+                          ;; A corridor tries both before it ends in a plug. So does an ice
+                          ;; doorway, since few blocks have one.
+                          (then (when (or (not from-room)
+                                          (string-equal (connector-kind (door-connector door)) "ice"))
                                   (weighted-order (if corridor (tagged :room) (tagged :corridor :stair))))))
                      (attach door (allowed door (append first then))))))
+             (corridor-door-p (door)
+               ;; True if DOOR leads on from a corridor or stair, so a plug there is a stub.
+               (not (member :room (block-tags (connector-block (door-connector door))))))
+             (finish (door)
+               ;; End DOOR's corridor in a room. Few rooms take a narrow doorway, and a stair has
+               ;; to arrive somewhere, so when none fits those take one more corridor piece,
+               ;; which is finished in turn. Nothing here starts a network: its arms would be
+               ;; plugged.
+               (let ((c (door-connector door)))
+                 (or (attach door (allowed door (weighted-order (remove-if #'block-network (tagged :room)))))
+                     (when (or (string-equal (connector-kind c) "narrow")
+                               (member :stair (block-tags (connector-block c))))
+                       (attach door (allowed door (weighted-order (remove-if #'block-network (tagged :corridor)))))))))
              (next-door ()
                ;; A network's doorways come first, so it is finished early.
                (let ((open (remove-if-not #'door-network frontier)))
@@ -283,27 +302,37 @@ Returns the pairs."
         (setf *spawn-clearance* (cons (vcopy at) *start-clearance*))
         (v<- *spawn-point* at)
         (when *player* (v<- (feet *player*) at)))
-      (loop repeat *generator-attempts*
-            while (and frontier (< placed-rooms rooms))
-            do (let ((door (next-door)))
-                 (unless (try door)
-                   (setf frontier (remove door frontier))
-                   (shut door))))
-      ;; The room quota doesn't cut a network short: each open arm still gets its end.
-      (dolist (d frontier)
-        (when (and (member d frontier) (door-network d))
-          (attach d (ends d))))
-      ;; A stair that ends in a plug leads nowhere: give each still open one more piece.
-      (dolist (d frontier)
-        (when (and (member d frontier)
-                   (member :stair (block-tags (connector-block (door-connector d)))))
-          (try d)))
-      ;; Nor does an ice gate: each still open gets a room, ice on its ice side, a cave on
-      ;; its rock side.
-      (dolist (d frontier)
-        (when (and (member d frontier)
-                   (member :ice-gate (block-tags (connector-block (door-connector d)))))
-          (attach d (allowed d (weighted-order (tagged :room))))))
+      ;; Grow, then finish what is open. A corridor that no room fits leaves the level short
+      ;; of its rooms, so growth goes on from the rooms' doorways until it has them.
+      (let ((attempts *generator-attempts*) (tried ()))
+        (loop
+          ;; Each corridor still open will end in a room, so it counts as one already.
+          (loop while (and frontier (< 0 attempts)
+                           (< (+ placed-rooms (count-if #'corridor-door-p frontier)) rooms))
+                do (decf attempts)
+                   (let ((door (next-door)))
+                     (unless (try door)
+                       (setf frontier (remove door frontier))
+                       (shut door))))
+          ;; The room quota doesn't cut a network short: each open arm still gets its end.
+          (dolist (d frontier)
+            (when (and (member d frontier) (door-network d) (not (member d tried)))
+              (push d tried)
+              (attach d (ends d))))
+          ;; No corridor ends in a plug while a room fits, an ice gate's included: ice on its
+          ;; ice side, a cave on its rock side.
+          (loop for d = (find-if (lambda (d) (and (corridor-door-p d) (not (door-network d)) (not (member d tried))))
+                                 frontier)
+                while d
+                do (push d tried)
+                   (finish d))
+          ;; Whatever corridor or arm no room took is plugged now.
+          (dolist (d frontier)
+            (when (corridor-door-p d)
+              (setf frontier (remove d frontier))
+              (shut d)))
+          (unless (and frontier (< 0 attempts) (< placed-rooms rooms))
+            (return))))
       (dolist (d frontier) (shut d))
       (dolist (c shut) (seal-connector container c))
       ;; Every doorway left open should meet another.

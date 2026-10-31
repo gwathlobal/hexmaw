@@ -1,0 +1,27 @@
+; A front room with full doorways, then a stone screen with two gaps 2 m wide, too tight for
+; an ogre, then a shallow sanctum: a sarcophagus against the screen and a narrow doorway out
+; the back. What joins narrow passages to the rest of the dungeon without a narrowing.
+cells 3 3
+tags room
+weight 2
+material sarcophagus 0.40 0.40 0.42
+legend
+  n door narrow
+  % box 0 0.8 sarcophagus
+  a spawn acolyte|necromancer south
+  k spawn imp|knight north
+
+plan 0
+#####T####nnnn####T#####
+#......................#
+#...aa.................#
+#........%%%%%%........#
+####....########....####
+w......................e
+w......................e
+w......................e
+#..........kk..........#
+T......................T
+#......................#
+#......................#
+#########ssssss#########

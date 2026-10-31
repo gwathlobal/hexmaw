@@ -875,8 +875,8 @@ from `any`, the `hall`'s choice and the high quarter's own spawns; the `cavern`,
 doorways (`check-kit` with `*spawn-pool*` set to only ogres checks every block for it).
 Each block fits it, but the way to the start may not (a `stair`, a cave passage, a `narrow`
 doorway, the far bank of a river): one stranded there guards its part of the level, and
-`check-reachable` warns. On seeds 1 to 20 and 38, 16 levels had ogres, 39 in all, and 3
-were stranded.
+`check-reachable` warns. Over 150 seeds, 69 of 262 ogres were stranded, and no other
+creature.
 `*ogre-dust*` names the effect animation puffed round a landing and the slam's impact
 (`ogre-dust`, preloaded by `setup-scene`; NIL for none).
 
@@ -1462,7 +1462,8 @@ T......................T
 
 A column is 0.5 m wide; a row is 1 m deep, except the first and last, the 0.5 m walls. So
 a plan is 8 columns and 4 rows per cell, plus one row: a doorway is 6 columns on a north
-or south wall and 3 rows on an east or west one. Nothing inside a block can be thinner
+or south wall and 3 rows on an east or west one. A narrow doorway is 4 columns, on a north or
+south wall only: 2 rows can't be centred on a cell's edge. Nothing inside a block can be thinner
 than 1 m north to south. Other header lines: `storeys N` (one `plan K` each, K from 0),
 `ceiling H` (inside height of the top storey, default 4; corridors use 3), `material NAME
 R G B` (defaults `floor`, `wall`, `ceiling`, `stair`; a material named after a surface in
@@ -1526,10 +1527,13 @@ lava wall to wall, `- door stream, lava`). Wide, it is 14 columns on a north or 
 and 7 rows on an east or west one, centred on a cell boundary.
 
 The kit: corridors `corridor`, `corridor-long`, `corner`, `tee`, `cross`, `dead-end` (a
-niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left),
+niche 2 m wide: a 1 m one was too tight for a creature's nav cell, so it never left; no tags,
+so the generator leaves it out),
 `arch` (beams and torches, the way into a room), `narrow` and `narrowing` (to a narrow
 doorway); stairs `stair` (one storey, 1 × 2 cells) and `tower` (a switchback, 2 × 2);
-rooms `cell`, `chamber`, `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy, necromancer or ogre), `crypt`
+rooms `cell`, `chamber`, `vestry` (2 × 2, narrow doorways only, in opposite cells, between two
+stone benches), `reliquary` (a front room with full doorways, a stone screen with two 2 m gaps,
+a sanctum behind it with a narrow doorway out: an ogre stops at the screen), `shrine` (dais), `hall` (pillars, a knight, acolyte, harpy, necromancer or ogre), `crypt`
 (sarcophagi), `forge` (a lava channel across it, 3 m: a running jump clears it, with a
 bridge and banks to every doorway), `ice-hall` (a sheet of ice ringed by a stone rim, pillars on
 the ice) and `balcony` (two storeys, a ledge all round over an open floor, and a stair
@@ -1638,15 +1642,21 @@ from a room it adds a corridor or stair, from a corridor another corridor (less 
 longer the run, `*corridor-run*`) or a room, by weight, trying each of the block's
 doorways of the same kind turned to face it until one fits in free grid cells
 (`*generator-storeys*` bounds how high and low). A doorway that meets an open one joins
-it, which makes loops; one that runs into another block's wall is plugged, as is every
-doorway still open at the end. It stops at `*generator-rooms*` rooms. `*level-seed*` fixes
+it, which makes loops; one that runs into another block's wall is plugged. `*generator-rooms*`
+(16) is how many rooms it aims for: growth stops when the rooms in and the corridors still open
+add up to it, since each open corridor then gets a room (`finish`; no network room, whose arms
+would be plugged), and a plug only if no room fits. So a corridor ends in a room wherever one
+fits, but it can't be taken back: 2.1 of a level's 35 blocks still lead nowhere. Few rooms have
+a `narrow` doorway and a stair has to arrive somewhere, so those take one more corridor piece
+when no room fits there, finished in turn. If that leaves the level short, growth goes on from
+the rooms' doorways. Every doorway still open at the end is plugged. A level has 16 rooms on
+172 of 200 seeds and 17 or 18 on the rest, 4 of them a network's. `*level-seed*` fixes
 the seed (NIL picks one); `*last-level-seed*` is the last level's, and
 `(level-map)` prints its cells a storey at a time. The generator draws from its own random
 state, since monsters use `random` as they spawn. `*generator-blocks*` limits the blocks it
 uses (NIL: every block with tags). A doorway left opening onto nothing is a bug and logs a
 warning. Two doorways that meet share one portal (`drop-portal` removes the other), since
-the shader takes only 32. A stair still open when the rooms are in gets one more piece,
-so no stair ends in a plug.
+the shader takes only 32.
 
 Networks: a network is the blocks joined through doorways ordinary blocks don't have; each
 family is an entry in `*networks*` (its doorway kinds, piece and end tags, and the variables
@@ -1661,9 +1671,10 @@ of `river` throughout. A cistern has one underwater doorway, so a run ends at it
 through its ledge starts a run.
 `*level-networks*` holds the last level's (`network-family`, `-pieces`, `-target`, `-ends`),
 the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`, a
-flooded run's as `=` and a canal's as `-`. On seeds 1 to 30, 19 levels had a canal and 4 a
-flooded run of 4 or 5 blocks. On seeds 1 to 20, 9 levels had a high quarter, of 1 to 6 blocks; 4 of them had an arm end in a
-plug, since the vault, 4 × 4 cells and two storeys, is the only end and often doesn't fit.
+flooded run's as `=` and a canal's as `-`. Over 200 seeds, 60% of levels had a canal (4 blocks on
+average), 11% a flooded run (3) and 24% a high quarter (4), and a level had 0.8 network arms
+end in a plug. The vault, 4 × 4 cells and two storeys, is the high quarter's only end and often
+doesn't fit.
 
 Rivers: a river is the blocks joined through `river` and `stream` doorways. The first river
 block comes in like any corridor or room, through an ordinary doorway (river pieces are
@@ -1672,15 +1683,14 @@ river with a target length of `*river-length*` blocks (5 to 9) shared by its arm
 river doorways are tried before any other (`next-door`): with pieces until the river has
 its length, then only ends (one river doorway and ordinary doorways onward), an end still
 tried ahead of a plug when no piece fits, and at the room quota every open arm gets its end.
-So an arm ends in an end block, in a join with another river doorway, or, if nothing fits,
-in a plug, and the dungeon carries on from the ends and the pieces' side doorways. After
+So an arm ends in an end block, in a join with another river doorway, in another room with
+its doorway if no end fits, or, if nothing fits, in a plug, and the dungeon carries on from the ends and the pieces' side doorways. After
 `*max-rivers*` (1) rivers, river blocks leave the ordinary choices. `(level-map)` draws
 river blocks as `~`. A river's two banks meet only at its
 ends and crossings (fords, the cavern's bridge), so ends join both banks; a stream has
 no banks, so a river that narrows is waded from there on, and the dungeon past it is
-reached through lava. On 20 seeds, before
-the high quarter, every level had one river of 7 to 11 blocks, and the player walked seed
-11's 92 m along a bank; with it, seed 12's river is one block, ending in a plug.
+reached through lava. Over 200 seeds, 99% of levels had a river,
+of 9 blocks on average.
 
 Ice: the ice caves are a frozen wing of the caves. Their doorways are all of kind `ice`, so
 they join only each other and the ice gates, and a gate's rock side joins only a block tagged
@@ -1688,8 +1698,8 @@ they join only each other and the ice gates, and a gate's rock side joins only a
 so the way into the ice is always a rock cave, a gate, then ice. An ice doorway that fits no corridor tries the rooms too
 (few blocks have one), the first piece through a gate isn't another gate, and a gate doorway
 still open at the room quota gets a room, ice or cave. `check-ice-joins` warns about any join
-against the rule after every generated level. Over seeds 1 to 100, 17 levels had an ice gate,
-and all 25 of their gates led into the ice. The generator asks every block's tags and weight
+against the rule after every generated level. Over seeds 1 to 100, 20 levels had an ice gate,
+and 29 of their 30 gates led into the ice. The generator asks every block's tags and weight
 thousands of times a level, so `build-level` binds `*block-memo*`, which keeps each
 definition `find-block` gives (half a millisecond each, since it checks the files): a level
 generated in 5 to 10 s before it, under one after.
