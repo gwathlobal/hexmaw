@@ -491,16 +491,21 @@ at SPEED, out of liquid KIND if any."
         (snap-to-ground player)))))
 
 (defun shove-player (player from speed &optional lift)
-  "Push PLAYER away from point FROM at SPEED m/s, and with LIFT, up at that many m/s."
+  "Push PLAYER away from point FROM at SPEED m/s, and with LIFT, up at that many m/s. From
+right under them (a grave circle on someone who stood still), back from where they face."
   (let* ((feet (feet player))
          (vel (velocity player))
          (speed (float speed 0f0))
          (dx (- (vx feet) (vx from)))
          (dz (- (vz feet) (vz from)))
          (len (sqrt (+ (* dx dx) (* dz dz)))))
-    (when (< 1f-4 len)
-      (incf (vx vel) (* speed (/ dx len)))
-      (incf (vz vel) (* speed (/ dz len))))
+    (cond ((< 1f-4 len)
+           (incf (vx vel) (* speed (/ dx len)))
+           (incf (vz vel) (* speed (/ dz len))))
+          (T
+           (let ((yaw (vy (rotation player))))
+             (decf (vx vel) (* speed (sin yaw)))
+             (incf (vz vel) (* speed (cos yaw))))))
     (when lift
       (setf (vy vel) (max (vy vel) (float lift 0f0))))))
 
@@ -575,19 +580,17 @@ health the run starts over."
          (< (abs (- (vz point) (vz feet))) r)
          (< (- (vy feet) margin) (vy point) (+ (vy feet) *player-height* margin)))))
 
-;; A creature's spell, hitting the player: the shove follows the projectile's flight.
-(defmethod apply-effect ((kind (eql :damage)) effect (target player) (source spell-projectile))
-  (hurt-player target (roll (effect-magnitude effect)) (v- (location source) (projectile-velocity source))))
+;; A creature's spell, hitting the player: the shove goes the way its source pushes.
+(defmethod apply-effect ((kind (eql :damage)) effect (target player) source)
+  (hurt-player target (roll (effect-magnitude effect)) (effect-origin source)
+               :unblockable (effect-unblockable-p source)))
 
-(defmethod apply-effect ((kind (eql :knockback)) effect (target player) (source spell-projectile))
-  (let* ((flight (projectile-velocity source))
-         (len (sqrt (+ (expt (vx flight) 2) (expt (vz flight) 2))))
-         (speed (* (float (roll (effect-magnitude effect)) 0f0)
-                   (if (shield-blocks-p target (v- (location source) flight)) *block-shove-scale* 1.0)))
-         (vel (velocity target)))
-    (when (< 1f-4 len)
-      (incf (vx vel) (* speed (/ (vx flight) len)))
-      (incf (vz vel) (* speed (/ (vz flight) len))))))
+(defmethod apply-effect ((kind (eql :knockback)) effect (target player) source)
+  (let ((blocked (and (not (effect-unblockable-p source))
+                      (shield-blocks-p target (effect-origin source)))))
+    (shove-player target (v- (feet target) (effect-direction source target))
+                  (* (float (roll (effect-magnitude effect)) 0f0)
+                     (if blocked *block-shove-scale* 1.0)))))
 
 (defun respawn (player)
   (let ((feet (feet player)))
