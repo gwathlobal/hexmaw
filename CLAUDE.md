@@ -488,7 +488,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `grave-skull` and `grave-spikes`. A new effect kind is a method on `apply-effect`, for a
   `creature` target and (in player.lisp, loaded later) a `player` one; where the effect came
   from and which way it pushes are `effect-origin` and `effect-direction` of its source (the
-  projectile, or the circle). A projectile hits any live creature or the player except its
+  projectile, or the circle), and `effect-unblockable-p` whether the player's shield counts
+  (the circle's comes up from the floor). A projectile hits any live creature or the player except its
   `caster` and those the caster `spares-p` (a necromancer, its undead). A spell's `homing`
   (radians a second) turns a creature's projectile after the player's chest (`steer`), so a
   late sidestep still dodges a slow one; a shield that turns it aside ends it. `lifetime`
@@ -625,7 +626,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   the ogre's slam) also knocks it aside (`break-guard`: down at once, and `guard-broken`
   keeps it down), a blow with more cost than the stamina left goes through in full and knocks
   it aside for at least `*stamina-guard-break*`,
-  and `:unblockable` ones (the ogre's shockwave) ignore it. Raised, it slows
+  and `:unblockable` ones (the ogre's shockwave, the grave circle) ignore it. Raised, it slows
   the player to `*block-speed-scale*` of a walk, no running. A left click with it raised bashes
   (`player-bash`, `*bash-frame-times*`): on `*bash-hit-frame*` the nearest creature within
   `*bash-reach*` and `*bash-arc*` takes `*bash-damage*` and is pushed `*bash-knockback*`.
@@ -860,8 +861,9 @@ The `necromancer` (necromancer.lisp) hunts from range as the acolyte does, backi
   `gib-overkill` makes likely) is gone, so the supply is finite.
 - **Grave circle** (cooldown 14 s): the player within `*nova-range*` and in sight. A short
   cast, then `grave-spikes` is drawn on the floor under the player as they stand at release
-  (spells.lisp). It strikes 2.5 s later whatever happens to the necromancer, so it makes the
-  player move, and it hurts the necromancer's own living allies.
+  (spells.lisp). It strikes 2.5 s later whatever happens to the necromancer, for 14 to 22 and a
+  shove away from its centre (back from where they face, if they never moved), and no shield
+  stops it, so it makes the player move; and it hurts the necromancer's own living allies.
 - **Grave skull**, otherwise: homing, 6 m/s, turning 1 rad/s.
 
 Its cooldowns run in its tick (`cooldowns`, by name), from when an ability takes effect. Its
