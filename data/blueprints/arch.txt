@@ -6,10 +6,11 @@ weight 2
 material beam 0.35 0.25 0.18
 legend
   = floor, deco 2.7 3 beam
+  $ pickup floor
 
 plan 0
 #nnnnnn#
 #======#
-T......T
+T..$$..T
 #======#
 #ssssss#

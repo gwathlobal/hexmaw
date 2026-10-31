@@ -7,6 +7,7 @@ legend
   ~ water
   B door canal
   C door canal, open
+  $ pickup floor
 
 plan 0
 #####~~~~~~#####
@@ -26,6 +27,6 @@ w..............e
 w..............e
 #....      ....#
 T....      ....T
-#....      ....#
+#.$$.      ....#
 #....      ....#
 #BBBBCCCCCCBBBB#

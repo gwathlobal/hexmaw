@@ -203,6 +203,11 @@ pool stands this far out of the water, within a step.")
             ((string-equal op "spawn")
              (list :spawn (string-downcase (arg 0))
                    (if (second args) (parse-direction (second args) line) :south)))
+            ((string-equal op "pickup")
+             (let ((tier (or (first args) "floor")))
+               (unless (member tier '("floor" "reward") :test #'string-equal)
+                 (fail line NIL "A pickup spot is floor or reward, not ~s." tier))
+               (list :pickup (string-downcase tier))))
             (T (fail line NIL "Unknown action ~s." op))))))
 
 (defun parse-legend-line (blueprint string line)
@@ -619,7 +624,7 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                          (nth-value 1 (col-span blueprint c1)) y1
                                          (nth-value 1 (row-span blueprint r1))))))
                        spans)
-              ;; Stairs, spawns and torches, one per region or cell.
+              ;; Stairs, spawns, pickup spots and torches, one per region or cell.
               (let ((done (make-hash-table :test 'equal)))
                 (dotimes (r nr)
                   (dotimes (c nc)
@@ -627,8 +632,9 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                            (actions (char-actions blueprint char))
                            (stairs (action :stairs actions))
                            (spawn (action :spawn actions))
+                           (pickup (action :pickup actions))
                            (torch (action :torch actions)))
-                      (when (and (or stairs spawn) (not (gethash (list r c) done)))
+                      (when (and (or stairs spawn pickup) (not (gethash (list r c) done)))
                         (let ((cells (region rows r c)))
                           (dolist (cell cells) (setf (gethash cell done) T))
                           (multiple-value-bind (r0 c0 r1 c1) (region-bounds cells)
@@ -656,6 +662,15 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                   (push (list (format NIL "spawn_~a" (second spawn))
                                               (list (/ (+ x0 x1) 2) y (/ (+ z0 z1) 2))
                                               (facing-rotation (third spawn)))
+                                        empties)))
+                              (when pickup
+                                ;; On top of any box in the cell, or down in its pit.
+                                (let* ((pit (action :pit actions))
+                                       (y (reduce #'max (remove :box actions :key #'first :test-not #'eq)
+                                                  :key (lambda (a) (height (third a)))
+                                                  :initial-value (if pit (- base (second pit)) base))))
+                                  (push (list (format NIL "pickup_~a_~d" (second pickup) (incf (gethash "pickup" counts 0)))
+                                              (list (/ (+ x0 x1) 2) y (/ (+ z0 z1) 2)) NIL)
                                         empties)))))))
                       (when torch
                         (multiple-value-bind (x z) (cell-centre r c)
@@ -962,12 +977,12 @@ north-west, 3 south-west, 4 south-east): its normal and corners, counter-clockwi
     (let ((path (block-output-path (name blueprint))))
       (when write (write-glb path blueprint boxes empties extras))
       (flet ((named (prefix) (loop for e in empties when (eql 0 (search prefix (first e))) collect (first e))))
-        (format NIL "~a: ~:[~*free grid~;~{~d×~d~} cells~], ~d storey~:p, ~d boxes, ~d doorway~:p (~{~a~^ ~}), ~d spawn~:p, ~d torch~:*~[es~;~:;es~]~@[ -> ~a~]"
+        (format NIL "~a: ~:[~*free grid~;~{~d×~d~} cells~], ~d storey~:p, ~d boxes, ~d doorway~:p (~{~a~^ ~}), ~d spawn~:p, ~d pickup spot~:p, ~d torch~:*~[es~;~:;es~]~@[ -> ~a~]"
                 (name blueprint) (cells blueprint) (cells blueprint) (storeys blueprint)
                 (count-if-not (lambda (b) (eql 0 (search "plug_" (first b)))) boxes)
                 (length (named "connector_"))
                 (mapcar (lambda (n) (subseq n (length "connector_"))) (named "connector_"))
-                (length (named "spawn_")) (length (named "torch_"))
+                (length (named "spawn_")) (length (named "pickup_")) (length (named "torch_"))
                 (and write (enough-namestring path (root))))))))
 
 (defun build-blueprint (name &key (write T))

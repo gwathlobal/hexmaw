@@ -31,6 +31,7 @@
 (defparameter *block-speed-scale* 0.6
   "Fraction of the walking speed the player keeps with the shield fully raised; no running.")
 (defparameter *pain-time* 0.35 "Seconds the screen flashes red after the player is hurt.")
+(defparameter *restore-flash-time* 0.25 "Seconds the screen flashes after a pickup restores something.")
 (defparameter *swim-speed* 3.0)
 (defparameter *swim-run-speed* 4.5)
 (defparameter *swim-acceleration* 10.0 "Metres per second squared toward the swim wished for.")
@@ -63,6 +64,10 @@ dive in, a shove), as an exponential.")
    (mouse-look :initform NIL :accessor mouse-look)
    (health :initform *player-max-health* :accessor health)
    (pain :initform 0.0 :accessor pain :documentation "Seconds of the pain flash left.")
+   (restore-flash :initform 0.0 :accessor restore-flash
+                  :documentation "Seconds of the flash left after a pickup restored something.")
+   (restored :initform NIL :accessor restored
+             :documentation "What the last pickup restored, :HEALTH or :MANA: the flash's colour.")
    (burn-timer :initform 0.0 :accessor burn-timer
                :documentation "Seconds until the next burn can land (liquids.lisp).")
    (wading :initform NIL :accessor wading
@@ -373,6 +378,7 @@ with none left."
   (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
         (cast-timer player) (max 0.0 (- (cast-timer player) dt))
         (pain player) (max 0.0 (- (pain player) dt))
+        (restore-flash player) (max 0.0 (- (restore-flash player) dt))
         (guard-broken player) (max 0.0 (- (guard-broken player) dt)))
   (when (cast-time player)
     (incf (cast-time player) dt)

@@ -10,6 +10,7 @@ legend
   + box 0 5 stair
   ^ stairs north 0 2.5
   v stairs south 2.5 5
+  $ pickup floor
 
 plan 0
 ################
@@ -30,5 +31,5 @@ plan 1
 #              #
 #              #
 #              #
-#.......       #
+#..$$...       #
 #ssssss#########

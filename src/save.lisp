@@ -35,7 +35,7 @@
   (:method-combination append :most-specific-last))
 
 (defmethod saved-slots append ((player player))
-  '(feet rotation velocity grounded eye health pain burn-timer wading swimming climbing breath drown-timer
+  '(feet rotation velocity grounded eye health pain restore-flash restored burn-timer wading swimming climbing breath drown-timer
     mana cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     block-raise bash-time bash-pending guard-broken))
@@ -148,11 +148,11 @@ A vector is written in place, since some slots have only a reader."
                          ((> x y) (return NIL)))))))
 
 (defun level-effects ()
-  "The effects in flight: projectiles, circles, impacts and bursts; not the HUD or torches."
+  "The effects in flight: projectiles, circles, impacts and bursts; not the HUD, torches or pickups."
   (let ((effects ()))
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch)))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))
@@ -193,7 +193,9 @@ A vector is written in place, since some slots have only a reader."
         :effects (mapcar #'effect-record (level-effects))
         :blood (when *blood-pool* (blood-record *blood-pool*))
         ;; The blocks the automap shows, by placement order (map-view.lisp).
-        :map (revealed-block-indices)))
+        :map (revealed-block-indices)
+        ;; The seed places the pickups again; a save older than them has none taken.
+        :pickups (taken-pickup-indices)))
 
 ;;; Files.
 
@@ -339,6 +341,7 @@ A vector is written in place, since some slots have only a reader."
   (when (and *blood-pool* (getf save :blood))
     (restore-blood *blood-pool* (getf save :blood)))
   (reveal-block-indices (getf save :map))
+  (take-pickups-at (getf save :pickups))
   (let ((globals (getf save :globals)))
     (setf *hit-stop* (getf globals :hit-stop)
           *light-clock* (getf globals :light-clock))

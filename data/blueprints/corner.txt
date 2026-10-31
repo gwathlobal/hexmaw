@@ -4,9 +4,12 @@ ceiling 3
 tags corridor
 weight 3
 
+legend
+  $ pickup floor
+
 plan 0
 #nnnnnn#
 #......e
 #......e
-#......e
+#$$....e
 ########

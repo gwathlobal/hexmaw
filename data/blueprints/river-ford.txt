@@ -13,11 +13,12 @@ legend
   ~ lava
   R door river                       ; a wide river's doorway: bank
   = door river, lava                 ; and lava
+  $ pickup floor
 
 plan 0
 #nnnnnn#########
 #......\\#######
-#........\\#####
+#.$$.....\\#####
 #..........\\###
 #............\\#
 R..............R
