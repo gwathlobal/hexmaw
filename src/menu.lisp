@@ -393,11 +393,14 @@ title and its buttons.")
 ;;; Transitions.
 
 (defun reset-player (player)
-  "PLAYER back at the spawn point, looking north, with full health and mana."
+  "PLAYER back at the spawn point, looking north, with full health, mana and stamina."
   (respawn player)
   (setf (health player) *player-max-health*
         (pain player) 0.0
+        (restore-flash player) 0.0
         (mana player) *max-mana*
+        (stamina player) *max-stamina*
+        (winded player) NIL
         (breath player) *breath-time*
         (drown-timer player) 0.0
         (climbing player) NIL
@@ -501,6 +504,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (clear-blood)
   ;; A new run explores the level afresh.
   (clear-map-reveals)
+  (restore-pickups)
   ;; What came into the level mid-game (raised skeletons) goes; the rest live again.
   (let ((j 0))
     (loop for creature across *creatures*
@@ -514,7 +518,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))
         ;; Projectiles and impacts; effect sprites drawn on the HUD stay.
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch))))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup))))
           (push entity leftovers)))
       (mapc #'despawn leftovers))))
 

@@ -61,6 +61,8 @@ upstairs."
         (fill-pointer *portals*) 0
         (fill-pointer *liquids*) 0
         (fill-pointer *map-blocks*) 0
+        (fill-pointer *pickup-spots*) 0
+        (fill-pointer *pickups*) 0
         *level-doorways* ())
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0)
   (let ((*block-memo* (make-hash-table :test 'equal)))
@@ -78,7 +80,8 @@ upstairs."
     (build-nav-grid)
     (check-reachable)
     (when (eq *level* :generated)
-      (check-ice-joins))))
+      (check-ice-joins))
+    (place-pickups container)))
 
 (defun build-test-level (container)
   (let ((h 4.0) (w 0.5))
@@ -125,6 +128,10 @@ upstairs."
     ;; An ogre in the east of the hall, by the annex doorway, which it just fits through;
     ;; the annex's stair shaft and the platform's steps test where it can follow.
     (spawn-creature (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
+    ;; One of each kind of pickup, behind the spawn point.
+    (loop for kind in '(:vial :flask :shard :crystal)
+          for x from -3 by 2
+          do (add-pickup container kind x 0 8.5))
     (build-annex container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))

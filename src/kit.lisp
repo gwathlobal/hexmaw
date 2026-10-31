@@ -179,6 +179,7 @@ that can't walk to the player. Returns both."
 ;;;   underwater doorway swimming, the rest dry, so a wide river's banks must still walk dry
 ;;;   to its doorways;
 ;;; - every monster reaches the first doorway;
+;;; - every pickup spot can be got to: a floor spot walking, a reward spot with a jump, swim or wade;
 ;;; - in a high block (tag HIGH), every doorway reaches every other at *HIGH-BODY*'s size,
 ;;;   walking: the ogre's leaps are shortcuts there, never its only way.
 
@@ -230,7 +231,18 @@ without its leaps.")
             (loop for a in (if all-joined probes ordinary)
                   do (loop for b in (if all-joined probes ordinary)
                            when (and (not (eq (first a) (first b))) (not (joined a b)))
-                             do (push (format NIL "~a doesn't reach ~a" (label a) (label b)) problems))))))
+                             do (push (format NIL "~a doesn't reach ~a" (label a) (label b)) problems)))))
+        ;; A floor spot must be walked to as the doorways are, from any of them. A reward spot may
+        ;; take a jump, a swim or a wade.
+        (let ((wet (let ((*nav-hazards* :swim))
+                     (loop for probe in probes
+                           collect (destructuring-bind (i j k) (third probe)
+                                     (and i (nav-reached i j k r h step)))))))
+          (loop for spot across *pickup-spots*
+                do (unless (some (lambda (seen) (and seen (spot-reached-p spot seen)))
+                                 (if (eq :reward (getf spot :tier)) wet reach))
+                     (push (format NIL "the ~(~a~) pickup spot at ~a can't be reached" (getf spot :tier) (getf spot :position))
+                           problems)))))
       (dolist (c (stranded-creatures))
         (push (format NIL "~a at ~a can't reach ~a" (type-of c) (home c) (connector-name (first *level-doorways*)))
               problems))

@@ -20,7 +20,15 @@
 (defparameter *mouse-sensitivity* 0.0025)
 (defparameter *player-max-health* 100)
 (defparameter *max-mana* 50.0)
-(defparameter *mana-regen* 8.0 "Mana per second.")
+(defparameter *max-stamina* 100.0)
+(defparameter *stamina-regen* 8.0 "Stamina per second while not running.")
+(defparameter *run-stamina* 15.0 "Stamina per second a run costs.")
+(defparameter *jump-stamina* 15.0 "Stamina a jump costs; with less, no jump.")
+(defparameter *block-stamina-scale* 2.0
+  "Stamina a blow on the raised shield costs, per point of its damage before the shield.")
+(defparameter *winded-recover* 25.0 "Stamina a player who ran it empty needs before running again.")
+(defparameter *stamina-guard-break* 1.0
+  "Seconds a blow the shield hasn't the stamina for knocks it aside (BREAK-GUARD).")
 (defparameter *cast-cooldown* 0.35 "Seconds between casts.")
 (defparameter *cast-release* 0.2
   "Seconds from the click until the spell leaves the hands: the cast animation's release frame.")
@@ -31,6 +39,7 @@
 (defparameter *block-speed-scale* 0.6
   "Fraction of the walking speed the player keeps with the shield fully raised; no running.")
 (defparameter *pain-time* 0.35 "Seconds the screen flashes red after the player is hurt.")
+(defparameter *restore-flash-time* 0.25 "Seconds the screen flashes after a pickup restores something.")
 (defparameter *swim-speed* 3.0)
 (defparameter *swim-run-speed* 4.5)
 (defparameter *swim-acceleration* 10.0 "Metres per second squared toward the swim wished for.")
@@ -68,6 +77,10 @@ dive in, a shove), as an exponential.")
    (mouse-look :initform NIL :accessor mouse-look)
    (health :initform *player-max-health* :accessor health)
    (pain :initform 0.0 :accessor pain :documentation "Seconds of the pain flash left.")
+   (restore-flash :initform 0.0 :accessor restore-flash
+                  :documentation "Seconds of the flash left after a pickup restored something.")
+   (restored :initform NIL :accessor restored
+             :documentation "What the last pickup restored, :HEALTH or :MANA: the flash's colour.")
    (burn-timer :initform 0.0 :accessor burn-timer
                :documentation "Seconds until the next burn can land (liquids.lisp).")
    (wading :initform NIL :accessor wading
@@ -79,6 +92,9 @@ dive in, a shove), as an exponential.")
    (drown-timer :initform 0.0 :accessor drown-timer
                 :documentation "Seconds until the next drowning damage can land (BURN-DUE).")
    (mana :initform *max-mana* :accessor mana)
+   (stamina :initform *max-stamina* :accessor stamina)
+   (winded :initform NIL :accessor winded
+           :documentation "True from running out of stamina until *WINDED-RECOVER*: no running.")
    (cast-timer :initform 0.0 :accessor cast-timer)
    (cast-time :initform NIL :accessor cast-time
               :documentation "Seconds since the last cast began, or NIL before the first.")
@@ -406,6 +422,17 @@ follows *DEATH-PANEL-DELAY* after it began, when the mouse goes back to the menu
     (when (and (mouse-look player) (<= *death-panel-delay* time))
       (release-mouse player))))
 
+(defun update-stamina (player running dt)
+  "Spend PLAYER's stamina while RUNNING, regain it otherwise. Running it empty leaves the
+player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a walk."
+  (if running
+      (when (<= (decf (stamina player) (* *run-stamina* dt)) 0.0)
+        (setf (stamina player) 0.0
+              (winded player) T))
+      (setf (stamina player) (min *max-stamina* (+ (stamina player) (* *stamina-regen* dt)))))
+  (when (and (winded player) (<= *winded-recover* (stamina player)))
+    (setf (winded player) NIL)))
+
 (define-handler (player tick) (dt)
   (when (frozen-p)
     (when (eq *game-state* :dead)
@@ -414,9 +441,9 @@ follows *DEATH-PANEL-DELAY* after it began, when the mouse goes back to the menu
     (place-camera player)
     (return))
   (incf (run-time player) dt)
-  (setf (mana player) (min *max-mana* (+ (mana player) (* *mana-regen* dt)))
-        (cast-timer player) (max 0.0 (- (cast-timer player) dt))
+  (setf (cast-timer player) (max 0.0 (- (cast-timer player) dt))
         (pain player) (max 0.0 (- (pain player) dt))
+        (restore-flash player) (max 0.0 (- (restore-flash player) dt))
         (guard-broken player) (max 0.0 (- (guard-broken player) dt)))
   (when (cast-time player)
     (incf (cast-time player) dt)
@@ -437,9 +464,11 @@ follows *DEATH-PANEL-DELAY* after it began, when the mouse goes back to the menu
                    (setf (wading player) (and liquid (liquid-kind liquid)))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
+         (running (and (retained :left-shift) (< 0.0 wlen) (not crouching) (= 0.0 raise)
+                       (not (winded player))))
          ;; The raised shield slows the player to a walk and below.
          (speed (* (cond (crouching *crouch-speed*)
-                         ((and (retained :left-shift) (= 0.0 raise)) *run-speed*)
+                         (running *run-speed*)
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
                    (if kind (liquid-property kind :speed) 1.0))))
@@ -453,8 +482,9 @@ follows *DEATH-PANEL-DELAY* after it began, when the mouse goes back to the menu
              (setf (footing player) NIL)
              (swim player water dt ix iz
                    (- (if (retained :space) 1.0 0.0) (if crouching 1.0 0.0))
-                   (retained :left-shift) yaw))
+                   running yaw))
             (T (walk player dt wx wz wlen speed kind crouching))))
+    (update-stamina player running dt)
     (when (< (vy (feet player)) *kill-height*)
       (respawn player))
     ;; Standing in lava burns; under water with no breath left, drowning.
@@ -493,7 +523,9 @@ at SPEED, out of liquid KIND if any."
             (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
           (incf (vx vel) dvx)
           (incf (vz vel) dvz)))
-    (when (and (grounded player) (retained :space) (not crouching))
+    (when (and (grounded player) (retained :space) (not crouching)
+               (<= *jump-stamina* (stamina player)))
+      (decf (stamina player) *jump-stamina*)
       (setf (vy vel) (float (* *jump-speed* (if kind (liquid-property kind :jump) 1.0)) 0f0)))
     (decf (vy vel) (* *gravity* dt))
     ;; Steps only while walking: not mid-air, and not on the frame a jump starts.
@@ -567,16 +599,26 @@ PLAYER falls (FALL-DEAD) and the death screen comes up. Elsewhere the run starts
 from FROM and hit-stop. SHOVE is T for *PLAYER-KNOCKBACK*, a speed in m/s, or NIL (a
 burn: only the flash). LIFT, in m/s, also throws the player up off their feet, where a
 shove carries much further than on the ground. A blow the raised shield meets
-(SHIELD-BLOCKS-P; never an UNBLOCKABLE one) does *BLOCK-DAMAGE-SCALE* of its damage, at
-least 1, and shoves and lifts *BLOCK-SHOVE-SCALE* as far; with GUARD-BREAK it also knocks
-the shield aside for that many seconds (BREAK-GUARD). BY is what did it, a creature, :LAVA
-or :DROWNING, for the death screen. At zero health the player dies (PLAYER-DIES)."
+(SHIELD-BLOCKS-P; never an UNBLOCKABLE one) costs *BLOCK-STAMINA-SCALE* stamina a point of
+damage, does *BLOCK-DAMAGE-SCALE* of its damage, at least 1, and shoves and lifts
+*BLOCK-SHOVE-SCALE* as far; with GUARD-BREAK it also knocks the shield aside for that many
+seconds (BREAK-GUARD). With too little stamina the blow goes through in full, takes what
+stamina is left and knocks the shield aside for at least *STAMINA-GUARD-BREAK*. BY is what
+did it, a creature, :LAVA or :DROWNING, for the death screen. At zero health the player
+dies (PLAYER-DIES)."
   (when (< 0 (health player))
     (let ((blocked (and shove (not unblockable) (shield-blocks-p player from))))
       (when blocked
-        (setf amount (max 1 (round (* amount *block-damage-scale*))))
-        (when guard-break
-          (break-guard player guard-break)))
+        (let ((cost (* amount *block-stamina-scale*)))
+          (cond ((<= cost (stamina player))
+                 (decf (stamina player) cost)
+                 (setf amount (max 1 (round (* amount *block-damage-scale*))))
+                 (when guard-break
+                   (break-guard player guard-break)))
+                (T
+                 (setf (stamina player) 0.0
+                       blocked NIL)
+                 (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
       (incf (damage-taken player) (min amount (health player)))
       (decf (health player) amount)
       (setf (pain player) *pain-time*)

@@ -18,6 +18,9 @@ legend
   P wall pillar                     ; the pillar over storey 1, with no slab under it
   L spawn ogre south
   a spawn imp|acolyte south
+  $ pickup floor
+  & pickup reward
+  R box 0 2.5 stone, pickup reward
 
 plan 0
 ################################
@@ -26,7 +29,7 @@ plan 0
 #bbbbbbbbbbbbbbbbbbbbbuuuuuubbb#
 #bbbbbbbbbbbbbbbbbbbbbuuuuuubbb#
 #tttttttttttttttttttttuuuuuuttt#
-#tttttttttttttttttttttuuuuuuttt#
+#tttRRttttttttttttttttuuuuuuttt#
 #tttttttttttttttttttttttttttttt#
 #............dddddd............#
 w............dddddd............e
@@ -35,14 +38,14 @@ w............dddddd............e
 #............dddddd............#
 T............dddddd............T
 #.....oo.......LL.......oo.....#
-#..............................#
+#..$$......................$$..#
 ####T####HHHHHHHHHHHHHH####T####
 
 plan 1
 ####T####nnnnnn############T####
 #.....................      ...#
 T...aa................      ...T
-#.....................      ...#
+#.................&&..      ...#
 #.....................      ...#
 #                              #
 #                              #

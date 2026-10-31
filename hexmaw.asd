@@ -27,6 +27,7 @@
                (:file "gore")
                (:file "spells")
                (:file "player")
+               (:file "pickups")
                (:file "hud")
                (:file "hands")
                (:file "sword")

@@ -8,6 +8,7 @@ legend
   ~ water
   B door canal                       ; a canal's doorway: bank
   C door canal, open                 ; and the open channel
+  $ pickup floor
 
 plan 0
 #####~~~~~~#####
@@ -25,7 +26,7 @@ plan 1
 #....      ....#
 T....      ....T
 #....      ....#
-#....      ....#
+#.$$.      ....#
 #....      ....#
 T....      ....T
 #....      ....#

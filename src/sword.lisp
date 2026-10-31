@@ -405,8 +405,8 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
       (strip-uv (frame-uv shield) atlas (shield-frame *player*) (getf atlas :frames)))
     (layout-shield shield)))
 
-;;; The weapon slots: one square per weapon in *WEAPONS*, in a row above the health
-;;; and mana bars, each with the weapon's icon and its key number in the top-left
+;;; The weapon slots: one square per weapon in *WEAPONS*, in a row above the bars,
+;;; each with the weapon's icon and its key number in the top-left
 ;;; corner. The weapon asked for is framed in gold and lit; the others are dimmed.
 ;;; Icons come from data/sprites/icons/weapons (tools/draw_weapon_icons.py).
 

@@ -18,6 +18,7 @@ A blueprint's header and legend are written by hand; this replaces the rows afte
 - doorways: put strings on the border. A wide river doorway is `RRRR======RRRR` on a north or
   south face and `RR===RR` on an east or west one; a stream's, all lava, `------` and `---`;
   an ice cave's `++++++` and `+++`.
+- pickup spots: put `$$` (floor) or `&&` (reward) where the blueprint's legend says what they are.
 
 Ice caves: their floor is snow, and a frozen pond (`_`) is sunk 0.2 m into it, a REGION with
 POND's shore pairs. POND_ROCK turns rock pairs beside it into `<` and `>`, standing in it,
@@ -215,6 +216,7 @@ def cave():
     region(g, 5, L=[17, 15, 15, 17], R=[19, 21, 21, 19], fill='v', pairs=HANG)
     octagon_pillar(g, 8, 11)
     put(g, 6, 12, 'ii'); g[0][8] = 'T'; g[12][15] = 'T'
+    put(g, 3, 15, '&&'); put(g, 10, 7, '$$'); put(g, 9, 17, '$$')
     lava_rock(g)
     return g
 
@@ -228,6 +230,7 @@ def lava_lake():
     fill(g, [6], range(15, 23), '.')
     region(g, 5, L=[21, 19, 19, 21], R=[23, 23, 23, 23], fill='.', pairs=POOL)
     put(g, 4, 9, 'vv'); put(g, 6, 16, 'ii')
+    put(g, 1, 11, '$$'); put(g, 8, 12, '&&')
     g[0][8] = 'T'; g[12][15] = 'T'; g[5][0] = 'T'
     lava_rock(g)
     return g
@@ -247,6 +250,7 @@ def grotto():
     outline(g, L=[5, 3, 1, 1, 1, 1, 1, 1], R=[15, 15, 15, 15, 15, 15, 13, 11])
     diamond(g, 3, 6)
     put(g, 6, 9, 'ii')
+    put(g, 3, 12, '$$'); put(g, 6, 3, '$$')
     return g
 
 
@@ -259,6 +263,7 @@ def cavern():
     region(g, 2, L=[17, 15, 15, 17], R=[21, 23, 23, 21], fill=',', pairs=SHELF)
     region(g, 7, L=[9, 7, 7, 9], R=[11, 13, 13, 11], fill='v', pairs=HANG)
     put(g, 6, 15, 'ii'); put(g, 9, 13, 'jj')
+    put(g, 3, 18, '&&'); put(g, 4, 3, '$$'); put(g, 8, 26, '$$')
     return g
 
 
@@ -286,6 +291,7 @@ def lava_chasm():
     region(g, 5, L=[1, 1, 1, 1], R=[23, 23, 23, 23], fill='~', pairs=POOL)
     region(g, 5, L=[9, 11, 13, 15], R=[13, 15, 17, 19], fill='.', pairs=POOL)
     put(g, 9, 17, 'ii')
+    put(g, 2, 3, '$$'); put(g, 8, 4, '&&')
     lava_rock(g)
     return g
 
@@ -298,6 +304,7 @@ def magma_pool():
     region(g, 5, L=[11, 9, 9, 11], R=[13, 15, 15, 13], fill='.', pairs=POOL)
     fill(g, [1, 2, 3, 4], [11, 12], '.')
     put(g, 6, 11, 'ii')
+    put(g, 7, 11, '&&'); put(g, 4, 2, '$$'); put(g, 4, 20, '$$')
     lava_rock(g)
     return g
 
@@ -307,6 +314,7 @@ def river():
     put(g, 0, 1, WIDE_NS); put(g, 8, 1, WIDE_NS); down(g, 0, 5, 'www')
     outline(g, L=[1] * 8, R=[15, 15, 15, 13, 13, 15, 15, 15])
     fill(g, range(1, 8), range(5, 11), '~')
+    put(g, 2, 2, '$$')
     return g
 
 
@@ -316,6 +324,7 @@ def river_ford():
     outline(g, L=[1] * 12, R=[7, 9, 11, 13, 15, 15, 15, 15, 15, 15, 15, 15])
     fill(g, (7, 8, 9), range(1, 15), '~')
     fill(g, (7, 8, 9), range(6, 10), '.')
+    put(g, 2, 2, '$$')
     return g
 
 
@@ -414,6 +423,7 @@ def ice_grotto():
     region(g, 2, L=[8, 6, 4, 4, 6], R=[10, 12, 14, 14, 12], fill='_', pairs=POND)
     diamond(g, 3, 8)
     put(g, 6, 9, 'ii')
+    put(g, 4, 5, '&&'); put(g, 6, 3, '$$')
     return g
 
 
@@ -425,6 +435,7 @@ def ice_lake():
     hang_over(g, 4, L=[9, 7, 7, 9], R=[11, 13, 13, 11])
     hang_over(g, 5, L=[15, 13, 13, 15], R=[17, 19, 19, 17])
     put(g, 8, 11, 'kk'); g[0][8] = 'T'; g[12][15] = 'T'
+    put(g, 7, 8, '&&'); put(g, 9, 4, '$$'); put(g, 9, 18, '$$')
     return g
 
 
@@ -438,6 +449,7 @@ def ice_cavern():
     region(g, 2, L=[17, 15, 15, 17], R=[21, 23, 23, 21], fill=',', pairs=SHELF)
     region(g, 7, L=[7, 5, 5, 7], R=[9, 11, 11, 9], fill='v', pairs=HANG)
     put(g, 4, 12, 'ii'); put(g, 3, 19, 'jj'); g[0][20] = 'T'; g[12][11] = 'T'
+    put(g, 3, 16, '&&'); put(g, 4, 2, '$$'); put(g, 8, 26, '$$')
     pond_rock(g)
     return g
 
@@ -502,6 +514,7 @@ def frost_shrine():
     region(g, 1, L=[7, 5, 5, 7], R=[17, 19, 19, 17], fill=':', pairs={'/': '[', '\\': ']'})
     region(g, 1, L=[9, 7, 7, 9], R=[15, 17, 17, 15], fill='%', pairs={'/': '(', '\\': ')'})
     put(g, 2, 11, 'II')
+    put(g, 2, 8, '&&'); put(g, 2, 14, '&&'); put(g, 10, 7, '$$'); put(g, 10, 15, '$$')
     region(g, 5, L=[11, 9, 7, 7, 9, 11], R=[13, 15, 17, 17, 15, 13], fill='_', pairs={'/': '{', '\\': '}'})
     diamond(g, 4, 4); diamond(g, 4, 16)
     g[4][0] = g[8][0] = g[4][23] = g[8][23] = 'T'
