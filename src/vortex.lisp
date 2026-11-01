@@ -46,6 +46,9 @@
 (defparameter *whirl-squeeze* 3.0 "Metres per second an orbit narrows while walls keep something off it.")
 (defparameter *whirl-miss* 0.4 "Metres off its orbit that count as kept off it.")
 (defparameter *whirl-stuck-limit* 0.5 "Seconds kept off its orbit before something is thrown out.")
+(defparameter *whirl-step* 0.25
+  "Most metres an orbit moves something in a tick: more than the widest orbit at full spin
+needs, and too little to land beyond a wall, since a move is only tested where it ends.")
 (defparameter *whirl-tumble* 11.0 "Radians per second a held creature's facing spins, so its views cycle.")
 (defparameter *whirl-drift* 0.25 "Share of the spin that turns a held player's view.")
 
@@ -522,6 +525,15 @@ fast it is spinning."
           (whirl-radius actor) radius)
     (values (+ (vx c) (* radius (cos angle))) y (+ (vz c) (* radius (sin angle))) spin)))
 
+(defun orbit-step (x z from-x from-z)
+  "The move this tick from FROM-X FROM-Z toward the orbit's point X Z, at most *WHIRL-STEP*.
+Walls can keep something a whole orbit's width off that point, or the point beyond them."
+  (let* ((dx (- x from-x))
+         (dz (- z from-z))
+         (d (sqrt (+ (* dx dx) (* dz dz))))
+         (k (if (< *whirl-step* d) (/ *whirl-step* d) 1.0)))
+    (values (float (* k dx) 0f0) (float (* k dz) 0f0))))
+
 (defun note-orbit-miss (actor x z dt)
   "See how far walls kept ACTOR from its orbit's point X Z: its orbit narrows to fit, and
 it counts toward being thrown out."
@@ -581,7 +593,8 @@ SCALE of the full speed."
   (multiple-value-bind (x y z) (orbit-point creature vortex dt)
     (let ((loc (location creature))
           (*ignore-bodies* T))
-      (move-creature creature (float (- x (vx loc)) 0f0) (float (- z (vz loc)) 0f0) 0.05)
+      (multiple-value-bind (dx dz) (orbit-step x z (vx loc) (vz loc))
+        (move-creature creature dx dz 0.05))
       (when (fits-at-p (vx loc) y (vz loc) (body-radius creature) (sprite-height creature))
         (setf (vy loc) (float y 0f0)))
       (note-orbit-miss creature x z dt)))
@@ -719,7 +732,8 @@ them; bodies don't, and a share of the spin turns their view."
         (let ((feet (feet player))
               (vel (velocity player))
               (rot (rotation player)))
-          (move-flat player (float (- x (vx feet)) 0f0) (float (- z (vz feet)) 0f0))
+          (multiple-value-bind (dx dz) (orbit-step x z (vx feet) (vz feet))
+            (move-flat player dx dz))
           (move-axis player 1 (float (- y (vy feet)) 0f0))
           (note-orbit-miss player x z dt)
           (setf (vx vel) 0f0 (vy vel) 0f0 (vz vel) 0f0

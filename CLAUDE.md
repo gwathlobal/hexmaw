@@ -538,7 +538,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*whirl-lift*` or under the ceiling (one `nav-room-around` per vortex per tick, `ceiling-above`
   being far too slow), its body no longer solid (`body-solid-p`), losing the spell's `:magnitude`
   a second through `burn` and `burn-due`, which don't hit-stop. Walls narrow an orbit
-  (`note-orbit-miss`), and `*whirl-stuck-limit*` off it ends the hold. A creature shows its
+  (`note-orbit-miss`), and `*whirl-stuck-limit*` off it ends the hold. An orbit moves an actor at
+  most `*whirl-step*` a tick (`orbit-step`): a move is only tested where it ends, so a jump to an
+  orbit point beyond a wall would land there. A creature shows its
   flinch frame with its `facing` spinning, so its views cycle. **Throw** (`throw-actor`): along
   the orbit and a little out, at `*fling-speed*` and `*fling-lift*`, both scaled down by
   `knockback-scale`, when its hold ends or the vortex dies away; `spat-timer` keeps it from being
