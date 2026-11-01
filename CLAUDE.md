@@ -1550,7 +1550,7 @@ Blender export that keeps the conventions works the same. Conventions:
   Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m),
   `connector_river_north` a `river` (7 × 3.5 m, two cells, 3 m of lava down its middle
   between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, all lava, no
-  banks), `connector_high_north` a `high` (7 × 4.5 m, two cells: the high blocks'),
+  banks), `connector_high_north` a `high` (7 × 9 m, two cells: the high blocks', floor to ceiling),
   `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated levels"),
   anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
   fourth value is its lava width, a stream's its whole width: `flooded-kind-p`),
@@ -1643,7 +1643,9 @@ cave-floor` the floor slab; not `lava`) and `grid free` (skips the grid checks).
 
 Built-in characters: `#` wall (from the storey's floor to the next storey's, or to the
 ceiling; on storey 0 down through the floor slab), `.` floor, space open (no floor slab: a drop to the storey below), `n e s w` a
-door-kind doorway, which must be on that side's border, `T` a torch at 2.4 m (on a
+door-kind doorway, which must be on that side's border, `^` a doorway from the plan below going
+on up through this storey (only a `high` doorway is taller than a storey, and the check asks for
+`^` over it: no wall or slab here, just a lintel if it stops short of the storey's top), `T` a torch at 2.4 m (on a
 border wall it goes just inside the room), and `/` and `\` a 45° wall: always a pair, `//`
 or `\\`, a 1 m square cut along the diagonal the character draws, rock on the side whose
 neighbours (the cells above and beside the pair) are more wall, floor on the other, and
@@ -1767,8 +1769,10 @@ grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 
 beside a column had none.
 
 High blocks are at least two storeys (`storeys 2`, plan 1 open but for its walls, 9 m
-inside), so whatever a high doorway opens onto has the height; at 4.5 m its lintel stays in
-storey 0. Their tiers rise 2.5 m, the ogre's highest leap. A pillar the full height is `box 0
+inside), so whatever a high doorway opens onto has the height. The doorway is 9 m too, so two
+joined blocks open floor to ceiling with no wall across the join; it is drawn `H` in its own plan
+and `^` in the plan above. Its plug is 9 m as well. The `terrace` and `gallery-steps` are taller
+than that (14 m), so their lower doorway has a lintel from 9 m, in `^`'s plan. Their tiers rise 2.5 m, the ogre's highest leap. A pillar the full height is `box 0
 top pillar` in plan 0 and `wall pillar` in plan 1 (a wall there has no slab under it, so no
 floor-coloured band at 5 m). A stair the ogre can walk is 3 m wide with 1 m treads (6 rows
 for 2.5 m), and 2 m of floor before its foot, under a ceiling its head clears a tread up
