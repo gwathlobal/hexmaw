@@ -57,6 +57,7 @@ upstairs."
   (setf (fill-pointer *solids*) 0
         (fill-pointer *creatures*) 0
         (fill-pointer *lamps*) 0
+        (fill-pointer *vortices*) 0
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
         (fill-pointer *liquids*) 0
@@ -125,6 +126,8 @@ upstairs."
     (spawn-creature (make-instance 'harpy :location (vec 6 0 7) :facing (- (/ pi 2))) container)
     ;; A necromancer at the back of the hall, behind the imp, facing the spawn point.
     (spawn-creature (make-instance 'necromancer :location (vec -2 0 -8) :facing pi) container)
+    ;; A gale wraith beside it, floating up from the floor.
+    (spawn-creature (make-instance 'gale-wraith :location (vec 3 0 -8) :facing pi) container)
     ;; An ogre in the east of the hall, by the annex doorway, which it just fits through;
     ;; the annex's stair shaft and the platform's steps test where it can follow.
     (spawn-creature (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)

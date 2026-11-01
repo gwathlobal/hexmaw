@@ -1,0 +1,21 @@
+Pixel-art sprite sheet: the pain (flinch) animation of the GALE WRAITH, a dead storm-caller that summons tornadoes, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The wraith's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a thin, tall, floating figure with NO LEGS AND NO FEET, below the waist only long strips of rag tapering to points; a deep ragged hood with no face inside, only two small glowing pale violet eyes; a body of torn strips of cloth in storm grey, slate blue and dusty violet, swept out to one side as if in a wind; long thin arms in grey bandages trailing loose ends, with bare, ash grey, bony hands. Also the shading style.
+2. The wraith floating, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+It has two arms, no more, and never holds anything. Never draw legs or feet. The hood and eyes look the same in every frame.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right, each cell as wide as reference 2: cell 1 the floating copy, cells 2 to 3 the 2 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the wraith floating, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The lowest rag tips stay on the same ground line in every cell, at the same height as in reference 2.
+- The whole figure, including every streaming rag, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, blood or impact effects. Only the wraith.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE FLINCH: a sharp, readable reaction to a blow, in the spirit of a Doom pain frame. It plays for a third of a second when it is struck by a sword or a fire bolt, and it breaks the wraith's spell. It must read clearly as hurt, not as a cast.
+- Cell 2, JOLT: the instant of the hit. The hood snaps back, the eyes flare wide, the whole thin body bent backward like a blown sheet; both arms flung out and low, fingers rigid; the rags whipped straight back.
+- Cell 3, STAGGER: a moment later. It folds forward and sags lower than floating, arms drawn in across its chest, the hood bowed, the eyes dimmed, the rags hanging limp straight down.

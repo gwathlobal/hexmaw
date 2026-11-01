@@ -57,6 +57,11 @@ def is_magenta(r, g, b):
     return min(r, b) > g + 40
 
 
+def is_pure_magenta(r, g, b):
+    """The background and nothing else, for --violet: red and blue alike and far above green."""
+    return is_cyan(r, g, b) or (min(r, b) > 60 and g < 0.5 * min(r, b) and abs(r - b) < 0.35 * max(r, b))
+
+
 def is_spill(r, g, b):
     """Bright pink: the outer halo of a glow painted into the background. Fire keeps
     blue far below green, pale highlights keep red near green, and dark outlines
@@ -136,6 +141,9 @@ def add_slice_arguments(ap):
     ap.add_argument("--exact", action="store_true",
                     help="the sheet is a render on pure magenta (255, 0, 255): key only that, with no "
                          "rim cut or despill, which would eat a render's outlines and bluish steel")
+    ap.add_argument("--violet", action="store_true",
+                    help="the art itself has violet in it: key only what is magenta, as slice_turnaround.py does, "
+                         "with no rim cut or despill, which take blue above green for a blend with the background")
     ap.add_argument("--cold", action="store_true",
                     help="the art itself has blue or pale cyan in it (crystals, ice): key only magenta and its "
                          "blends, with no rim cut or despill, which would eat the blue")
@@ -165,13 +173,15 @@ def slice_sheet(sheet, source, args):
             if args.cold:
                 # The separators stay: --margin keeps them out of every crop.
                 keyed = is_magenta(r, g, b)
+            elif args.violet:
+                keyed = is_pure_magenta(r, g, b)
             elif args.exact:
                 keyed = (r, g, b) == (255, 0, 255) or is_cyan(r, g, b)
             else:
                 keyed = is_background(r, g, b)
             if keyed:
                 px[x, y] = (0, 0, 0, 0)
-    if not args.exact and not args.cold:
+    if not args.exact and not args.cold and not args.violet:
         cut_rims(src)
         for y in range(h):
             for x in range(w):

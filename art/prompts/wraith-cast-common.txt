@@ -1,0 +1,23 @@
+Pixel-art sprite sheet: a 4-frame SPELL-CASTING animation of the GALE WRAITH, a dead storm-caller that summons tornadoes, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The wraith's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a thin, tall, floating figure with NO LEGS AND NO FEET, below the waist only long strips of rag tapering to points; a deep ragged hood with no face inside, only two small glowing pale violet eyes; a body of torn strips of cloth in storm grey, slate blue and dusty violet, swept out to one side as if in a wind; long thin arms in grey bandages trailing loose ends, with bare, ash grey, bony hands. Also the shading style.
+2. The wraith floating, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+It has two arms, no more, and never holds anything. Never draw legs or feet. The hood and eyes look the same in every frame. Any magic is pale violet light drawn as solid pixels on or right next to its hands, never a soft halo on the magenta.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right, each cell as wide as reference 2: cell 1 the floating copy, cells 2 to 5 the 4 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the wraith floating, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The lowest rag tips stay on the same ground line in every cell, at the same height as in reference 2.
+- The whole figure, including every streaming rag, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust or wind lines. Only the wraith.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE CAST: the wraith calls up the wind. The same animation summons its tornado and throws a gust, so it is a big, readable pose with both arms.
+- Frame 2 (cell 2), GATHER: it draws both hands in low in front of its chest, fingers curling, the rags beginning to lift; a small knot of pale violet light between the hands.
+- Frame 3 (cell 3), RAISED: this pose is held for over a second, the warning. Both arms thrown high and wide above the hood, fingers spread, pale violet light on both hands, the eyes blazing, every rag streaming upward and outward.
+- Frame 4 (cell 4), RELEASE: it sweeps both arms down and forward, hands open toward the viewer's side of the room, leaning forward from the hood, the rags snapping forward; the light gone from its hands.
+- Frame 5 (cell 5), RECOVER: back near the floating pose of reference 2.

@@ -34,6 +34,9 @@
   (:documentation "The slots of OBJECT that change in play, which a save keeps.")
   (:method-combination append :most-specific-last))
 
+(defmethod saved-slots append ((actor whirlable))
+  '(whirl-angle whirl-radius whirl-lift whirl-time whirl-hold whirl-stuck flung spat-timer))
+
 (defmethod saved-slots append ((player player))
   '(feet rotation velocity grounded eye health pain restore-flash restored burn-timer wading swimming climbing breath drown-timer
     mana inventory quickslot stamina winded cast-timer cast-time
@@ -42,15 +45,21 @@
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
-    idle-timer path stuck walk-distance momentum stagger flash brace burn-timer dead bleeding
+    idle-timer path stuck walk-distance momentum flight stagger flash brace burn-timer dead bleeding
     drip-timer gibbed rising stirring bash-poise flanking flank-timer
     sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer))
 
 (defmethod saved-slots append ((flyer flyer))
   '(dive-direction dive-left downed landed launching landed-dead fall-speed bob-phase))
 
+(defmethod saved-slots append ((user ability-user))
+  '(ability cooldowns))
+
 (defmethod saved-slots append ((necromancer necromancer))
-  '(ability cooldowns raise-target))
+  '(raise-target))
+
+(defmethod saved-slots append ((wraith gale-wraith))
+  '(tempest-point))
 
 (defmethod saved-slots append ((ogre ogre))
   '(attack-kind leap-from leap-to leap-apex leap-duration leap-time airborne falling fall-speed
@@ -64,6 +73,13 @@
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
+
+;; CAUGHT isn't a slot: what it holds is noted on them, and it links them up again.
+(defmethod saved-slots append ((vortex spell-vortex))
+  '(spell caster centre heading route replan ceiling puff-timer caught))
+
+(defmethod saved-slots append ((sign gale-sign))
+  '(caster centre))
 
 (defun animation-name (animation)
   (loop for name being the hash-keys of *fx-animations* using (hash-value value)

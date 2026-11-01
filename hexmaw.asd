@@ -27,6 +27,8 @@
                (:file "gore")
                (:file "spells")
                (:file "player")
+               (:file "vortex")
+               (:file "wraith")
                (:file "pickups")
                (:file "hud")
                (:file "hands")

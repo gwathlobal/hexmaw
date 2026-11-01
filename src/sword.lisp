@@ -27,7 +27,7 @@
 (defparameter *sword-idle-frames* 4 "Strip frames the idle loop steps through, from the first.")
 (defparameter *sword-swing-first* 4 "Strip index of the slash's first frame.")
 
-(defparameter *weapons* '(:1 :sword :2 :hands :3 :spear) "Key to press for each weapon.")
+(defparameter *weapons* '(:1 :sword :2 :hands :3 :spear :4 :tempest) "Key to press for each weapon.")
 (defparameter *weapon-switch-time* 0.15 "Seconds to lower a weapon, and again to raise the next.")
 
 (defparameter *swing-frame-times* '(0.05 0.07 0.07 0.04 0.06 0.07 0.08 0.08)
@@ -128,11 +128,13 @@ flash, which they reach into.")
     (* k k)))
 
 (defun player-attack (player)
-  "Attack with the weapon in hand: cast the bolt, swing the sword, thrust the spear, or,
-with the shield raised, bash with it. Nothing while the shield is on its way up or down."
+  "Attack with the weapon in hand: cast the bolt or the tornado, swing the sword, thrust the
+spear, or, with the shield raised, bash with it. Nothing while the shield is on its way up
+or down."
   (when (weapon-ready-p player)
     (ecase (weapon player)
       (:hands (player-cast player 'bolt))
+      (:tempest (player-cast player 'tempest))
       (:sword (cond ((<= 1.0 (block-raise player)) (player-bash player))
                     ((= 0.0 (block-raise player)) (player-swing player))))
       (:spear (player-swing player)))))
@@ -412,7 +414,7 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (define-fx-animation weapon-icons "sprites/icons/weapons")
 
-(defparameter *weapon-icons* '(:sword 0 :hands 1 :spear 2) "Frame of each weapon's icon in the strip.")
+(defparameter *weapon-icons* '(:sword 0 :hands 1 :spear 2 :tempest 3) "Frame of each weapon's icon in the strip.")
 (defparameter *weapon-icon-scale* 2 "Screen pixels per icon art pixel. Whole numbers only.")
 (defparameter *weapon-slot-padding* 3 "Pixels between a slot's edge and its icon.")
 (defparameter *weapon-slot-gap* 6 "Pixels between slots, and between the slots and the bars.")
