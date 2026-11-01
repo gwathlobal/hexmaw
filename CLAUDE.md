@@ -43,7 +43,7 @@ once it is up, so the user can tell the windows apart:
 ## Standalone build
 
 ```bash
-tools/build-dist
+./build.sh
 ```
 
 Builds the game into `dist/` (gitignored), about 200 MB: `hexmaw`, the executable,
