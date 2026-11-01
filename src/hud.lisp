@@ -152,8 +152,12 @@ void main(){
     (with-depth-mask NIL
       (call-next-method))))
 
+(defgeneric flash-color (flash))
+
+(defmethod flash-color ((flash pain-flash)) *pain-color*)
+
 (defmethod render :before ((flash pain-flash) (program shader-program))
-  (let ((c *pain-color*))
+  (let ((c (flash-color flash)))
     (setf (uniform program "pain_color") (vec4 (vx c) (vy c) (vz c) (* (vw c) (strength flash))))))
 
 (define-class-shader (pain-flash :fragment-shader)
@@ -163,6 +167,16 @@ out vec4 color;
 void main(){
   color = pain_color;
 }")
+
+;;; A pickup restoring something flashes the view the same way, in that resource's colour.
+
+(defparameter *health-flash-color* (vec4 0.75 0.7 0.15 0.25) "RGB and peak opacity of a health pickup's flash.")
+(defparameter *mana-flash-color* (vec4 0.15 0.35 1.0 0.25) "RGB and peak opacity of a mana pickup's flash.")
+
+(define-shader-entity restore-flash (pain-flash) ())
+
+(defmethod flash-color ((flash restore-flash))
+  (if (and *player* (eq :mana (restored *player*))) *mana-flash-color* *health-flash-color*))
 
 ;;; Under water: the whole view, the hands with it, turned blue. The colour multiplies what
 ;;; is drawn, so the darks stay dark. Drawn after the water's see-through surface (LATE-RANK),
@@ -274,6 +288,7 @@ void main(){
    (breath-label :initform (make-hud-text "AIR" 'breath-text) :reader breath-label)
    (breath-bar :initform (make-instance 'breath-bar :fill-color *breath-bar-color*) :reader breath-bar)
    (pain-flash :initform (make-instance 'pain-flash) :reader pain-flash)
+   (restore-flash :initform (make-instance 'restore-flash) :reader restore-flash)
    (underwater-tint :initform (make-instance 'underwater-tint) :reader underwater-tint)
    (whirl-streaks :initform (make-instance 'whirl-streaks) :reader whirl-streaks)
    (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
@@ -283,7 +298,7 @@ void main(){
 
 (defun hud-elements (hud)
   ;; The flash first, so the bars draw over it.
-  (list (pain-flash hud) (underwater-tint hud) (whirl-streaks hud)
+  (list (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)
         (health-label hud) (health-bar hud) (health-text hud)
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
@@ -325,7 +340,7 @@ numbers; breath has none."
   (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* +glyph-height+))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
-  (dolist (cover (list (pain-flash hud) (underwater-tint hud) (whirl-streaks hud)))
+  (dolist (cover (list (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)))
     (place cover 0 0 -0.5)
     (setf (vx (scaling cover)) (float (width *context*) 0f0)
           (vy (scaling cover)) (float (height *context*) 0f0))))
@@ -336,6 +351,7 @@ numbers; breath has none."
           (mp (floor (mana *player*)))
           (sp (floor (stamina *player*))))
       (setf (strength (pain-flash hud)) (/ (pain *player*) *pain-time*)
+            (strength (restore-flash hud)) (/ (restore-flash *player*) *restore-flash-time*)
             (fill-fraction (health-bar hud)) (/ (float hp) *player-max-health*)
             (fill-fraction (mana-bar hud)) (/ (mana *player*) *max-mana*)
             (fill-fraction (stamina-bar hud)) (/ (stamina *player*) *max-stamina*)

@@ -140,11 +140,11 @@
     (cdr (first (sort faces #'< :key #'car)))))
 
 (defun read-block (path)
-  "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :LIQUIDS
-(each :KIND and :BOUNDS), :BOUNDS
+  "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :PICKUPS
+(each :TIER and :POSITION), :LIQUIDS (each :KIND and :BOUNDS), :BOUNDS
 (min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist of :NAME
 :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
-  (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (liquids ()) (tags ()) (weight 1.0)
+  (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (pickups ()) (liquids ()) (tags ()) (weight 1.0)
         (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
         (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (org.shirakumo.fraf.gltf:with-gltf (gltf path)
@@ -184,7 +184,11 @@
                                   :yaw (rotation-yaw (trotation transform)))
                             spawns))
                      ((prefixp "torch_" name)
-                      (push (vcopy (tlocation transform)) torches))))
+                      (push (vcopy (tlocation transform)) torches))
+                     ((prefixp "pickup_" name)
+                      (push (list :tier (if (prefixp "pickup_reward" name) :reward :floor)
+                                  :position (vcopy (tlocation transform)))
+                            pickups))))
       (let* ((scenes (org.shirakumo.fraf.gltf:scenes gltf))
              (extras (and (plusp (length scenes)) (org.shirakumo.fraf.gltf:extras (aref scenes 0)))))
         (when (hash-table-p extras)
@@ -202,7 +206,8 @@
           unless (find rest connectors :key (lambda (c) (getf c :rest)) :test #'string-equal)
           do (v:warn :hexmaw "~a: plug_~a has no connector_~:*~a." (file-namestring path) rest))
     (list :pieces (nreverse pieces) :connectors (nreverse connectors) :spawns (nreverse spawns)
-          :torches (nreverse torches) :liquids (nreverse liquids) :bounds (list low high) :tags tags :weight weight)))
+          :torches (nreverse torches) :pickups (nreverse pickups) :liquids (nreverse liquids)
+          :bounds (list low high) :tags tags :weight weight)))
 
 (defvar *blocks* (make-hash-table :test 'equal)
   "Read blocks by file name: (file-date . definition).")
@@ -413,6 +418,10 @@ with one kind only.")
 (defvar *block-random* (make-random-state T)
   "Picks among a spawn's choices. The generator binds it to its own, seeded, state.")
 
+(defvar *pickup-spots* (make-array 0 :adjustable T :fill-pointer T)
+  "Where the placed blocks allow a pickup (PLACE-PICKUPS, pickups.lisp), each a plist of :TIER,
+:POSITION and :BLOCK, its MAP-BLOCK. BUILD-LEVEL empties it.")
+
 (defun spawn-choice (kind)
   "The monster a spawn of KIND places: KIND itself, one of \"a|b|c\" (alike), for
 \"any\" one of *SPAWN-POOL* by weight, or for \"any-a|b\" one of the pool but those (a
@@ -458,6 +467,9 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
         (dolist (p (getf def :torches))
           (let ((w (world p)))
             (add-torch container (vx w) (vy w) (vz w))))
+        (dolist (spot (getf def :pickups))
+          (vector-push-extend (list :tier (getf spot :tier) :position (world (getf spot :position)) :block map-block)
+                              *pickup-spots*))
         (dolist (spawn (and spawns (getf def :spawns)))
           ;; The choice is made even for a spawn left out, so a seed builds the same level.
           (let* ((kind (let ((choice (spawn-choice (getf spawn :kind))))

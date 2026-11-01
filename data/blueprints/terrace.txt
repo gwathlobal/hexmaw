@@ -14,6 +14,9 @@ legend
   u stairs north 2.5 5
   L spawn ogre south
   a spawn imp|acolyte south
+  $ pickup floor
+  & pickup reward
+  R box 0 2.5 stone, pickup reward
 
 plan 0
 ################################
@@ -22,10 +25,10 @@ plan 0
 #bbbbbbbbbbbbbbbbbbbbbbbuuuuuub#
 #bbbbbbbbbbbbbbbbbbbbbbbuuuuuub#
 #tttttttttttttttttttttttuuuuuut#
-#tttttttttttttttttttttttuuuuuut#
+#tttttttttRRttttttttttttuuuuuut#
 #tttttttttttttttttttttttttttttt#
 #.dddddd.......................#
-#.dddddd.......................#
+#.dddddd..................$$...#
 #.dddddd.......................T
 #.dddddd.......................#
 #.dddddd.......................#
@@ -38,7 +41,7 @@ plan 1
 ####T####HHHHHHHHHHHHHH####T####
 w.......................      .#
 w..............aa.......      .T
-w.......................      .#
+w.........&&............      .#
 #.......................      .#
 #                              #
 #                              #

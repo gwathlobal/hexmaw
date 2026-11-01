@@ -736,7 +736,7 @@ them hurts, as a shield can't help, and landing ends the flight."
            (hit-z (if (= 0 (vz vel)) vz0 0f0))
            (hit (sqrt (+ (* hit-x hit-x) (* hit-z hit-z)))))
       (when (< *slam-speed* hit)
-        (hurt-player player (slam-damage hit) (feet player) :shove NIL)
+        (hurt-player player (slam-damage hit) (feet player) :shove NIL :by :tornado)
         (hit-stop))
       (when (or (grounded player) (swimming player))
         (setf (flung player) NIL)))))

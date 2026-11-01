@@ -90,8 +90,9 @@ they did after the save.")
 
 (defvar *game-state* :title
   "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING,
-:PAUSED or :MAP (the automap, map-view.lisp). Menus (menu.lisp) change it; anything but
-:PLAYING freezes the world.")
+:PAUSED, :MAP (the automap, map-view.lisp) or :DEAD (the player fell on a generated level,
+PLAYER-DIES, then the death screen). Menus (menu.lisp) change it; anything but :PLAYING
+freezes the world.")
 
 (defvar *level* :test
   "Which level BUILD-LEVEL (level.lisp) builds: :TEST, the greybox test level where the
@@ -1169,7 +1170,7 @@ strike the player if still in reach and in front of it.")
                 (< (player-angle creature) (attack-arc creature))
                 (clear-path-p (location creature) (feet *player*) 1.0))
            (hurt-player *player* (roll (attack-damage creature)) (location creature)
-                        :guard-break (guard-break creature))))))
+                        :guard-break (guard-break creature) :by creature)))))
 
 (defgeneric face-attack-target (creature dt)
   (:documentation "Turn CREATURE through an attack's wind-up toward what it attacks.")

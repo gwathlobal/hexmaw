@@ -239,7 +239,7 @@ length, against a wall or a body, or on the strike."
                             (max (* step (vy dir)) (- (+ floor *dive-floor-margin*) (vy loc)))
                             (* step (vy dir))))
       (cond ((player-within-p flyer (attack-reach flyer))
-             (hurt-player *player* (roll (attack-damage flyer)) loc)
+             (hurt-player *player* (roll (attack-damage flyer)) loc :by flyer)
              (end-dive flyer))
             ((or x-blocked z-blocked (<= (dive-left flyer) 0))
              (end-dive flyer))))))

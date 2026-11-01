@@ -29,6 +29,7 @@
                (:file "player")
                (:file "vortex")
                (:file "wraith")
+               (:file "pickups")
                (:file "hud")
                (:file "hands")
                (:file "sword")

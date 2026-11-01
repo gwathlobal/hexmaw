@@ -172,6 +172,38 @@ lower middle of its splash clear.")
 (defmethod presentations::compute-sizing-strategy ((renderer presentations:default-look-and-feel) (toggle menu-toggle))
   presentations::*fit-to-all-shapes*)
 
+(defparameter *menu-stat-height* 30 "Height of a stat row (MENU-STAT), in UI units.")
+
+(defclass menu-stat (alloy:label)
+  ((value :initarg :value :reader stat-value))
+  (:documentation "A row of text that can't be clicked: the label at the left, its value at the right."))
+
+(presentations:define-realization (presentations:default-look-and-feel menu-stat)
+  ((:label simple:text)
+   (alloy:margins)
+   alloy:text
+   :pattern *menu-text-color*
+   :size (alloy:un 20)
+   :halign :start :valign :middle)
+  ((:value simple:text)
+   (alloy:margins)
+   (stat-value alloy:renderable)
+   :pattern *menu-text-color*
+   :size (alloy:un 20)
+   :halign :end :valign :middle))
+
+(presentations:define-update (presentations:default-look-and-feel menu-stat)
+  (:label
+   :text alloy:text
+   :pattern *menu-text-color*)
+  (:value
+   :text (stat-value alloy:renderable)
+   :pattern *menu-text-color*))
+
+;; A label sizes itself to its text; a stat fills its row.
+(defmethod presentations::compute-sizing-strategy ((renderer presentations:default-look-and-feel) (stat menu-stat))
+  presentations::*fit-to-all-shapes*)
+
 (defclass menu-panel (trial-alloy:panel) ()
   (:documentation "A full-screen menu: a title over a column of buttons."))
 
@@ -189,14 +221,24 @@ lower middle of its splash clear.")
   (:documentation "A list of rows, each (LABEL ACTION), a button: ACTION is a function name,
 called on the next tick after a click; or (LABEL :TOGGLE VARIABLE), a checkbox that sets the
 special variable VARIABLE to T or NIL as it is clicked."))
+(defgeneric panel-lines (panel)
+  (:documentation "A list of (LABEL VALUE) strings, rows of text (MENU-STAT) between PANEL's
+title and its buttons.")
+  (:method ((panel menu-panel)) ()))
 
 (defmethod initialize-instance :after ((panel menu-panel) &key)
   (let* ((buttons (panel-buttons panel))
-         (rows (1+ (length buttons)))
+         (lines (panel-lines panel))
+         (rows (+ 1 (length buttons) (if lines 1 0)))
+         (lines-height (* (length lines) *menu-stat-height*))
          (splash (panel-splash panel))
          (backdrop (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
                                   :col-sizes `(T ,(panel-width panel) T)
-                                  :row-sizes `(,(panel-top panel) ,(+ (* rows *menu-row-height*) (* (1- rows) *menu-row-gap*)) T)
+                                  :row-sizes `(,(panel-top panel)
+                                               ,(+ (* (- rows (if lines 1 0)) *menu-row-height*)
+                                                   lines-height
+                                                   (* (1- rows) *menu-row-gap*))
+                                               T)
                                   (when splash (list :splash splash))))
          (column (make-instance 'alloy:vertical-linear-layout
                                 :min-size (alloy:size (panel-width panel) *menu-row-height*)
@@ -205,6 +247,15 @@ special variable VARIABLE to T or NIL as it is clicked."))
     (alloy:enter column backdrop :row 1 :col 1)
     (let ((title (panel-title panel)))
       (alloy:enter (alloy:represent title 'menu-title) column))
+    (when lines
+      ;; A column of its own, since the panel's rows are the height of a button.
+      (let ((stats (make-instance 'alloy:vertical-linear-layout
+                                  :min-size (alloy:size (panel-width panel) *menu-stat-height*)
+                                  :cell-margins (alloy:margins 0 0))))
+        (alloy:enter stats column)
+        (loop for (label value) in lines
+              do (let ((label label))
+                   (alloy:enter (alloy:represent label 'menu-stat :value value) stats)))))
     (loop for (label action variable) in buttons
           ;; REPRESENT binds to the variable itself, so each button needs its own.
           do (let ((label label)
@@ -250,6 +301,40 @@ special variable VARIABLE to T or NIL as it is clicked."))
     ;; Only a generated level can be saved.
     ,@(when (eq *level* :generated) '(("Save game" open-save-menu)))
     ("Load game" open-load-menu) ("Settings" open-settings) ("Exit to main menu" exit-to-title)))
+
+(defun cause-of-death (killed-by)
+  "What the death screen says killed the player, from PLAYER's KILLED-BY."
+  (case killed-by
+    (:lava "lava")
+    (:drowning "drowning")
+    ((NIL) "something")
+    (T (let ((name (substitute #\Space #\- (string-downcase killed-by))))
+         (format NIL "~:[a~;an~] ~a" (find (char name 0) "aeiou") name)))))
+
+(defun play-time-text (seconds)
+  (multiple-value-bind (minutes s) (floor (floor seconds) 60)
+    (multiple-value-bind (hours m) (floor minutes 60)
+      (if (< 0 hours)
+          (format NIL "~d:~2,'0d:~2,'0d" hours m s)
+          (format NIL "~d:~2,'0d" m s)))))
+
+(defun death-stats ()
+  "The run as the death screen tells it, as PANEL-LINES rows."
+  (let ((summary (run-summary)))
+    (list (list "Killed by" (cause-of-death (killed-by *player*)))
+          (list "Time survived" (play-time-text (run-time *player*)))
+          (list "Monsters slain" (format NIL "~d of ~d" (getf summary :slain) (getf summary :monsters)))
+          (list "Areas explored" (format NIL "~d of ~d" (length (revealed-block-indices)) (length *map-blocks*)))
+          (list "Damage taken" (format NIL "~d" (round (damage-taken *player*))))
+          (list "Level seed" (format NIL "~d" *last-level-seed*)))))
+
+(defclass death-screen (menu-panel) ()
+  (:documentation "Up after the player dies on a generated level (:DEAD): how the run went, and the way out."))
+(defmethod panel-title ((panel death-screen)) "YOU DIED")
+(defmethod panel-splash ((panel death-screen)) "death")
+(defmethod panel-width ((panel death-screen)) 440)
+(defmethod panel-lines ((panel death-screen)) (death-stats))
+(defmethod panel-buttons ((panel death-screen)) '(("Return to main menu" exit-to-title)))
 
 (defvar *settings-open* NIL
   "True while the settings panel covers the main or pause menu, which Back returns to.")
@@ -298,6 +383,8 @@ special variable VARIABLE to T or NIL as it is clicked."))
                   ((eq *slot-menu* :load) 'load-menu)
                   (T 'main-menu)))
     (:loading 'loading-screen)
+    ;; After the fall (FALL-DEAD).
+    (:dead (when (<= *death-panel-delay* (death-time *player*)) 'death-screen))
     (:paused (cond (*settings-open* 'settings-menu)
                    ((eq *slot-menu* :save) 'save-menu)
                    ((eq *slot-menu* :load) 'load-menu)
@@ -310,6 +397,7 @@ special variable VARIABLE to T or NIL as it is clicked."))
   (respawn player)
   (setf (health player) *player-max-health*
         (pain player) 0.0
+        (restore-flash player) 0.0
         (mana player) *max-mana*
         (stamina player) *max-stamina*
         (winded player) NIL
@@ -320,7 +408,12 @@ special variable VARIABLE to T or NIL as it is clicked."))
         ;; No cast in progress, or its bolt would leave at the start of the next game.
         (cast-time player) NIL
         (pending-spell player) NIL
-        (eye player) *eye-height*)
+        (eye player) *eye-height*
+        (weapon-lower player) 0.0
+        (run-time player) 0.0
+        (damage-taken player) 0
+        (killed-by player) NIL
+        (death-time player) 0.0)
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
   (place-camera player))
 
@@ -399,7 +492,7 @@ then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE start
     (save-game :quick)))
 
 (defun quickload ()
-  (when (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
+  (when (and (member *game-state* '(:title :playing :paused :dead)) (slot-used-p :quick))
     (load-game :quick)))
 
 (defun reset-run ()
@@ -411,6 +504,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (clear-blood)
   ;; A new run explores the level afresh.
   (clear-map-reveals)
+  (restore-pickups)
   ;; What came into the level mid-game (raised skeletons) goes; the rest live again.
   (let ((j 0))
     (loop for creature across *creatures*
@@ -424,7 +518,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))
         ;; Projectiles and impacts; effect sprites drawn on the HUD stay.
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch))))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup))))
           (push entity leftovers)))
       (mapc #'despawn leftovers))))
 

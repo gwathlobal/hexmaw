@@ -121,6 +121,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                   (:paused "paused, world frozen (resume with (game (resume-game)))")
                   (:loading "building a level, world frozen")
                   (:map "map open, world frozen (close with (game (close-map)))")
+                  (:dead "player dead, world frozen (leave with (game (exit-to-title)))")
                   (T "playing"))
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*) (footing *player*)
                 (swimming *player*) (climbing *player*)

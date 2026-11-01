@@ -53,6 +53,11 @@ def is_background(r, g, b):
 
 
 def is_magenta(r, g, b):
+    """Magenta at any brightness: red and blue both well above green. Blue alone isn't."""
+    return min(r, b) > g + 40
+
+
+def is_pure_magenta(r, g, b):
     """The background and nothing else, for --violet: red and blue alike and far above green."""
     return is_cyan(r, g, b) or (min(r, b) > 60 and g < 0.5 * min(r, b) and abs(r - b) < 0.35 * max(r, b))
 
@@ -139,6 +144,9 @@ def add_slice_arguments(ap):
     ap.add_argument("--violet", action="store_true",
                     help="the art itself has violet in it: key only what is magenta, as slice_turnaround.py does, "
                          "with no rim cut or despill, which take blue above green for a blend with the background")
+    ap.add_argument("--cold", action="store_true",
+                    help="the art itself has blue or pale cyan in it (crystals, ice): key only magenta and its "
+                         "blends, with no rim cut or despill, which would eat the blue")
     ap.add_argument("--filter", choices=("nearest", "box"), default="nearest",
                     help="downscale by picking one source pixel per art pixel, or by averaging them")
     ap.add_argument("--colors", type=int, help="reduce each animation to a palette of this many colours")
@@ -162,15 +170,18 @@ def slice_sheet(sheet, source, args):
     for y in range(h):
         for x in range(w):
             r, g, b, _ = px[x, y]
-            if args.exact:
-                background = (r, g, b) == (255, 0, 255) or is_cyan(r, g, b)
+            if args.cold:
+                # The separators stay: --margin keeps them out of every crop.
+                keyed = is_magenta(r, g, b)
             elif args.violet:
-                background = is_magenta(r, g, b)
+                keyed = is_pure_magenta(r, g, b)
+            elif args.exact:
+                keyed = (r, g, b) == (255, 0, 255) or is_cyan(r, g, b)
             else:
-                background = is_background(r, g, b)
-            if background:
+                keyed = is_background(r, g, b)
+            if keyed:
                 px[x, y] = (0, 0, 0, 0)
-    if not args.exact and not args.violet:
+    if not args.exact and not args.cold and not args.violet:
         cut_rims(src)
         for y in range(h):
             for x in range(w):

@@ -97,6 +97,11 @@ it (a SPELL-PROJECTILE for projectile spells, a SPELL-CIRCLE for circles)."))
   (:documentation "The way an effect delivered by SOURCE pushes TARGET, a vector whose
 horizontal part counts."))
 
+(defgeneric effect-unblockable-p (source)
+  (:documentation "True if the player's raised shield does nothing against an effect
+delivered by SOURCE.")
+  (:method (source) NIL))
+
 (defmethod apply-effect ((kind (eql :damage)) effect (target creature) source)
   ;; Blood sprays away from where it struck from.
   (hurt target (roll (effect-magnitude effect)) :from (effect-origin source)
@@ -453,6 +458,9 @@ void main(){
 
 (defmethod effect-direction ((source spell-circle) target)
   (v- (if (typep target 'creature) (location target) (feet target)) (centre source)))
+
+;; It comes up from the floor, under any shield.
+(defmethod effect-unblockable-p ((source spell-circle)) T)
 
 (defun circle-strength (circle)
   "How bright CIRCLE's light is: rising through the wind-up, a flash as it strikes,

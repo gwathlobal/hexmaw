@@ -22,6 +22,8 @@ legend
   P diagonal / ice-rock 3 top, pit 0.2, floor ice
   Q diagonal \ ice-rock 3 top, pit 0.2, floor ice
   k pit 0.2, floor ice, spawn any south             ; a monster on the ice
+  $ pickup floor
+  & pit 0.2, floor ice, pickup reward
 
 plan 0
 ########T++++++#########
@@ -31,9 +33,9 @@ plan 0
 #//..__PPxxQQ______..\\#
 +....__xxxxxxPPxxQQ....+
 +....__QQxxPPxxxxxx....+
-+....________QQxxPP....+
++....___&&___QQxxPP....+
 #\\..]]____kk____[[..//#
-###....]]______[[....###
+###.$$.]]______[[.$$.###
 ###\\..............//###
 #####\\..........//#####
 #########++++++T########

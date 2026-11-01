@@ -338,7 +338,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   changes in play, so a load is the moment of the save, nothing in flight lost: the player,
   every creature by its index in `*creatures*` (raised skeletons recreated), every effect in
   the scene (projectiles, circles, impacts, with their glows), the blood pool's arrays,
-  `*hit-stop*` and the random states. Damage and knockback roll from their own state
+  which pickups are taken, `*hit-stop*` and the random states. Damage and knockback roll from their own state
   (`*roll-random*`, spells.lisp), since blood and wandering draw from `random` a number of
   times a frame that varies with the frame rate: so a reload rolls the same as before it.
   An object saves the slots `saved-slots` names (an `append` generic; a name with no slot
@@ -489,7 +489,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `grave-skull` and `grave-spikes`. A new effect kind is a method on `apply-effect`, for a
   `creature` target and (in player.lisp, loaded later) a `player` one; where the effect came
   from and which way it pushes are `effect-origin` and `effect-direction` of its source (the
-  projectile, or the circle). A projectile hits any live creature or the player except its
+  projectile, or the circle), and `effect-unblockable-p` whether the player's shield counts
+  (the circle's comes up from the floor). A projectile hits any live creature or the player except its
   `caster` and those the caster `spares-p` (a necromancer, its undead). A spell's `homing`
   (radians a second) turns a creature's projectile after the player's chest (`steer`), so a
   late sidestep still dodges a slow one; a shield that turns it aside ends it. `lifetime`
@@ -567,6 +568,27 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*tempest-retry*`, a released one after `*tempest-cooldown*`, and only one of its tornadoes is up
   at a time. Otherwise it throws `gust`s: a `:gust` effect throws the player, toward its tornado
   if one is near, and with lift, since a shove on the floor dies at once. It has no walk.
+- `src/pickups.lisp`: pickups, which restore a resource at once when the player touches them.
+  `*pickup-kinds*` has the amounts: `:vial` +15 health, `:flask` +40, `:shard` +28 mana (2 bolts),
+  `:crystal` +50. At full one stays where it is; below full it is taken and any excess lost.
+  A `pickup` is an upright, fullbright, unfogged effect sprite with no lamp, bobbing
+  `*pickup-hover*` over its floor (`pickup-ground`), touched within `*pickup-reach*` across and
+  with the feet from `*pickup-below*` under that floor to `*pickup-above*` over it, so one on a
+  0.8 m sarcophagus takes a jump. Only the player touches them. Taken (`taken`), it stays in the
+  scene undrawn, so `reset-run` only clears the flag, and a save keeps the taken ones' places in
+  `*pickups*` (`:pickups`; none in an older save). It flashes the view (`restore-flash`, hud.lisp,
+  a `pain-flash` with its own `flash-color`). The blocks say where one may go (`pickup` in a
+  blueprint, `*pickup-spots*`), and `place-pickups`, last in `build-level`, fills a generated level
+  (`scatter-pickups`) until they restore `*health-per-monster*` (10) and `*mana-per-monster*` (15)
+  per monster, every `*pickup-large-every*`th (4th) of a resource large if a reward spot is free. It skips
+  the start block and spots the player can't reach (`spot-reached-p`: a floor spot's own cell, or
+  for a reward spot a floor up to `*jump-reach*` under it within 2 m), keeps to one a block until
+  blocks run out, and likes rooms `*pickup-room-weight*` times as much as corridors. It draws from
+  a random state of its own seeded with the level's, so seeds keep their layouts and old saves
+  stay valid. Over seeds 1 to 50: 15.8 monsters a level (12 to 23), 17 pickups (13 to 23) restoring
+  165 health and 253 mana. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup, such as an
+  inventory item, is a method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
+  stand on `(location (aref *pickups* 0))`.
 - `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
   breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
@@ -578,21 +600,30 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   on every screen, counting frames in its render and updating every `*fps-interval*`.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
-  (`:title`, `:playing`, `:paused`, `:map`, defined in creature.lisp) decides which is up;
+  (`:title`, `:playing`, `:paused`, `:map`, `:dead`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
   `*loading-frames*` ticks, then rebuild the scene; `*new-run*` tells `setup-scene` to put
   the new player at the spawn point, fresh, and start play), `pause-game`, `resume-game`, `show-title`,
-  `exit-to-title` (the pause menu's exit: back to the main menu, with the level put back
-  in place by `reset-run`, no scene rebuild)
+  `exit-to-title` (the pause menu's and death screen's exit: back to the main menu, with the
+  level put back in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
+  Zero health on a generated level sets `:dead` (`player-dies`, player.lisp; every other level
+  still queues `reset-run`): the world freezes, the pain flash holds, and `fall-dead` drops the
+  eye to `*death-eye-height*`, rolls the view (`*death-roll*`, the player's `project-view`) and
+  sinks the weapons. After `*death-panel-delay*` the `death-screen` comes up with the mouse
+  released: `death-stats` (killed by, time survived, monsters slain, areas explored, damage
+  taken, the seed) and a button back to the main menu. Esc does nothing there, F5 is refused and
+  F9 still quickloads. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
+  `:drowning`, `:tornado`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
   loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
   button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
   variable; an action may also be a closure. Hovering a row gives it the keyboard focus, so
   one row is lit at a time. `panel-width` is the column's width (`*menu-width*`; the slot
-  panels' is wider, for their labels).
+  panels' is wider, for their labels). `panel-lines` adds `(label value)` rows of text
+  between the title and the buttons (`menu-stat`, `*menu-stat-height*`; the death screen's stats).
   Settings (`open-settings`, on both menus) covers the menu it came from while
   `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Show
   FPS (`*show-fps*`, in memory only, kept across reloads) and, in a debug version
@@ -604,7 +635,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   a save the pause menu's title says where it went (`*save-note*`). F5 quicksaves and F9
   quickloads (`quicksave`, `quickload`, from the menu controller). See `src/save.lisp`.
   `panel-splash` names a picture in `data/splash/` to cover the screen with (the main
-  menu's `title`, the loading screen's `loading`, and Settings' over the main menu; see
+  menu's `title`, the loading screen's `loading`, the death screen's `death`, and Settings' over the main menu; see
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
   of the screen (T, the default, centres it; the main menu's `*title-menu-top*` keeps it
   off the dagger in its splash).
@@ -643,7 +674,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   the ogre's slam) also knocks it aside (`break-guard`: down at once, and `guard-broken`
   keeps it down), a blow with more cost than the stamina left goes through in full and knocks
   it aside for at least `*stamina-guard-break*`,
-  and `:unblockable` ones (the ogre's shockwave) ignore it. Raised, it slows
+  and `:unblockable` ones (the ogre's shockwave, the grave circle) ignore it. Raised, it slows
   the player to `*block-speed-scale*` of a walk, no running. A left click with it raised bashes
   (`player-bash`, `*bash-frame-times*`): on `*bash-hit-frame*` the nearest creature within
   `*bash-reach*` and `*bash-arc*` takes `*bash-damage*` and is pushed `*bash-knockback*`.
@@ -665,7 +696,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
   (`art/spear/spear-frames.txt` says how).
 - `src/player.lisp`: first-person controller and box collision. Mana doesn't regenerate:
-  only a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
+  only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
   `*stamina-regen*` except while running, which costs `*run-stamina*` a second, on foot or
   swimming with Shift (`update-stamina`); running it empty leaves the player `winded`, walking,
   until it is back to `*winded-recover*`. A jump costs `*jump-stamina*` and needs it, and a blow
@@ -684,7 +715,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. Its hall has one of each monster; to try a block with one kind only,
+  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup; to try a block with one kind only,
   bind `*spawn-override*` (blocks.lisp) around its `attach-block`. The debug `ice-rink` block
   (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
   knight on the ice; no tags, so never generated) is retired for now, the pool in its place;
@@ -823,7 +854,7 @@ casts, turning to follow the player until `attack-hit-frame`, when the spell lea
 where the player stands then (no leading, so a sidestep dodges it), from `cast-offset` to the
 right of its centre line, where the casting hand is. Closer than `keep-away` it backs off
 `*retreat-step*` metres along a straight walk the nav grid allows (`retreat`), and casts
-point-blank when cornered; out of range or sight it closes in as a melee creature does. At zero health the player's run starts over (`reset-run`); there's no death screen yet.
+point-blank when cornered; out of range or sight it closes in as a melee creature does. At zero health the player dies on a generated level (the death screen, see `src/menu.lisp`), and elsewhere the run starts over (`reset-run`).
 
 ### Flyers
 
@@ -878,8 +909,9 @@ The `necromancer` (necromancer.lisp) hunts from range as the acolyte does, backi
   `gib-overkill` makes likely) is gone, so the supply is finite.
 - **Grave circle** (cooldown 14 s): the player within `*nova-range*` and in sight. A short
   cast, then `grave-spikes` is drawn on the floor under the player as they stand at release
-  (spells.lisp). It strikes 2.5 s later whatever happens to the necromancer, so it makes the
-  player move, and it hurts the necromancer's own living allies.
+  (spells.lisp). It strikes 2.5 s later whatever happens to the necromancer, for 14 to 22 and a
+  shove away from its centre (back from where they face, if they never moved), and no shield
+  stops it, so it makes the player move; and it hurts the necromancer's own living allies.
 - **Grave skull**, otherwise: homing, 6 m/s, turning 1 rad/s.
 
 Its cooldowns run in its tick (`cooldowns`, by name), from when an ability takes effect. Its
@@ -1052,12 +1084,13 @@ not by `tools/hd reset`.
 
 ## Splash screens
 
-The main menu and the loading screen draw a picture over the whole window
+The main menu, the loading screen and the death screen draw a picture over the whole window
 (`splash-backdrop` in menu.lisp), cropped to cover it, with nearest filtering and a dark
 veil (`*splash-dim*`, 0.6) so it stays in the background. Each is a generated 1536 × 1024 picture: `art/prompts/splash-common.txt`
-(16:9 crop, no text, a calm dark centre for the menu) plus `splash-title.txt` or
-`splash-loading.txt`. The title references the four monsters' turnarounds, the loading
-screen the imp's turnaround, the stone wall and the torch:
+(16:9 crop, no text, a calm dark centre for the menu) plus `splash-title.txt`,
+`splash-loading.txt` or `splash-death.txt`. The title references the four monsters' turnarounds, the loading
+screen the imp's turnaround, the stone wall and the torch, and the death screen those three
+and the shield and sword (`art/sword-shield/ref-shield-a2.png`, `ref-sword-idle.png`):
 
 ```bash
 P=art/prompts; tools/gen_image.py art/splash/title.png --prompt "$(cat $P/splash-common.txt $P/splash-title.txt)" --ref "Pixel Demon Character Turnaround.png" --ref art/acolyte/turnaround-2.png --ref art/knight/runic-turnaround-3.png --ref art/harpy/turnaround-2.png --size 1536x1024 -n 2
@@ -1422,6 +1455,16 @@ python3 tools/slice_frames.py "Imp Death Sheet.webp" data/sprites/imp --pixel 3.
 Hook a strip up with `define-fx-animation` (fps, loop, height in metres) and name it in
 a spell's `:projectile-animation` / `:impact-animation`.
 
+The pickups are one generated sheet, `art/pickups/sheet-2.png` (`art/prompts/pickups.txt`, the
+imp's turnaround as the reference), a row per kind and a 4-frame glint across, at the monsters'
+64 px per metre. The usual keying takes blue for magenta spill and eats the crystals, so `--cold`
+keys only magenta and its blends:
+
+```bash
+tools/gen_image.py art/pickups/sheet.png --prompt-file art/prompts/pickups.txt --ref "Pixel Demon Character Turnaround.png" --size 1536x1024 -n 2
+python3 tools/slice_frames.py art/pickups/sheet-2.png data/sprites/pickups --pixel 6.5 --filter box --colors 32 --anchor bottom --cold vial:4 flask:4 shard:4 crystal:4
+```
+
 The wall torch is two generated images: `art/torch/unlit-2.png` (the unlit torch in its
 iron collar, front view, from `art/prompts/torch-unlit.txt`) and `art/torch/flame-2.png`
 (an 8-frame flame loop, 2 × 4, from `torch-flame.txt`). The flame references the imp's
@@ -1478,7 +1521,8 @@ Blender export that keeps the conventions works the same. Conventions:
   is walled off outside instead, into the next cell, with a warning.
 - Empties named `spawn_<monster>` (e.g. `spawn_imp`) place a monster facing the
   empty's −Z; empties named `torch_<anything>` a torch whose flame stands there
-  (`add-torch` stands it off the nearest wall).
+  (`add-torch` stands it off the nearest wall). Empties named `pickup_floor_<n>` and
+  `pickup_reward_<n>` are spots a pickup may stand on (`src/pickups.lisp`).
 - The scene's glTF extras may give `tags` (`room`, `corridor`, `stair`, `start`) and a
   `weight`, for the generator. Blender exports a scene's custom properties there.
 - A material named after a surface (`wall`, `floor`, `ceiling`, `dais`, ...; see "Level
@@ -1590,7 +1634,13 @@ tight for them, as the `cavern` and `balcony` are for the ogre), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
-is one monster at its centre, so `ii` centres one on a 1 m spot. Characters with the same
+is one monster at its centre, so `ii` centres one on a 1 m spot. `pickup floor` or `pickup
+reward` is a spot where a level may put a pickup, one per group like a spawn, on top of a `box` in
+the cell or down in its `pit` (`& box 0 0.8 sarcophagus, pickup reward`, `& water, pickup reward` on
+the bottom of a pool). The kit's use `$` and `&`. A floor spot holds a small pickup and must be walked to from a
+doorway; a reward spot holds a large one first and may take a jump (up to 1 m), a swim or a
+risk. `(check-kit)` reports one that can't be reached. No spots in flooded passages, streams or
+on `high-hall`'s perch, which the player can't jump to. Characters with the same
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
 under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
@@ -1662,7 +1712,7 @@ and reports what's wrong (`block-problems`): ordinary doorways that don't reach 
 a doorway or bank that leads to no other doorway, a river end that doesn't join both banks,
 a monster that can't reach the first doorway, a high block the ogre can't walk between all
 its doorways at `*high-body*` (radius 1.0, 2.7 m, step 0.45: its leaps are shortcuts, never
-its only way). A block with a stream doorway is checked wading (it can't be crossed dry),
+its only way), a pickup spot the player can't get to. A block with a stream doorway is checked wading (it can't be crossed dry),
 one with an underwater doorway swimming (`*nav-hazards*` `:swim`), the rest dry, so a wide
 river's or canal's banks still walk dry; a check starts at a doorway on dry floor. Leave passages at least 1.5 m wide: the nav
 grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 1 m gap
@@ -1704,7 +1754,8 @@ To walk the kit: `tools/hd '(progn (setf *level* :gallery) (reload-scene))'` lay
 block out in two rows, corridors and stairs in front, rooms behind, each with one doorway
 open toward the spawn and the rest plugged, on ground that stops at each block's walls
 (`add-ground`; under a block it would fill its lava pits), and `(game (kit-goto "chamber"))`
-stands the player outside one. Upper storeys are only reachable by moving the player there.
+stands the player outside one. Upper storeys are only reachable by moving the player there. Every pickup spot holds a pickup
+in the gallery, to look them over.
 
 ## Generated levels
 
@@ -1809,7 +1860,8 @@ is what the right button sets; without it the shield comes down again once the w
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);
-`tools/hd status` shows mana, stamina and each creature's health. The knight stands by the west
+`tools/hd status` shows mana, stamina and each creature's health. On a generated level,
+`(game (hurt-player *player* 1000 (feet *player*) :by (aref *creatures* 0)))` kills the player, and the death screen follows. The knight stands by the west
 pillars; a bolt at its front comes back at the player, one at its back hurts it, and
 `(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
 The harpy hovers over the hall's south-east, by the east doorway: `(setf (alert harpy) 6.0)`
