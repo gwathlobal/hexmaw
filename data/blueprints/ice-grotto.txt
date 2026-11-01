@@ -19,14 +19,15 @@ legend
   3 diagonal \ ne, pit 0.2, floor ice
   4 diagonal / nw, pit 0.2, floor ice
   i spawn any-ogre south
+  m spawn any-ogre south 30
   $ pickup floor
   & pit 0.2, floor ice, pickup reward
 
 plan 0
 #########++++++#
-###//..........#
+###//.......mm.#
 #//...[[__]]...#
-#...[[__1122]].#
+#.mm[[__1122]].#
 #..._&&_3344__.#
 +...]]______[[.#
 +..$$....ii..//#

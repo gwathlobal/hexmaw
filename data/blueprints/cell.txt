@@ -5,12 +5,13 @@ weight 2
 mirror yes
 legend
   i spawn imp|knight north
+  m spawn imp|knight north 30
   $ pickup floor
 
 plan 0
 ################
 #.$$...........e
-#..............e
+#..mm......mm..e
 #..............e
 T..............#
 #......ii......#

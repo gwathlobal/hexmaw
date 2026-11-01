@@ -215,7 +215,7 @@ def cave():
     region(g, 2, L=[15, 13, 13, 15], R=[17, 19, 19, 17], fill=',', pairs=SHELF)
     region(g, 5, L=[17, 15, 15, 17], R=[19, 21, 21, 19], fill='v', pairs=HANG)
     octagon_pillar(g, 8, 11)
-    put(g, 6, 12, 'ii'); g[0][8] = 'T'; g[12][15] = 'T'
+    put(g, 6, 12, 'ii'); put(g, 2, 9, 'mm'); put(g, 6, 21, 'mm'); g[0][8] = 'T'; g[12][15] = 'T'
     put(g, 3, 15, '&&'); put(g, 10, 7, '$$'); put(g, 9, 17, '$$')
     lava_rock(g)
     return g
@@ -229,7 +229,7 @@ def lava_lake():
            fill='.', pairs=POOL)
     fill(g, [6], range(15, 23), '.')
     region(g, 5, L=[21, 19, 19, 21], R=[23, 23, 23, 23], fill='.', pairs=POOL)
-    put(g, 4, 9, 'vv'); put(g, 6, 16, 'ii')
+    put(g, 4, 9, 'vv'); put(g, 6, 16, 'ii'); put(g, 3, 9, 'mm'); put(g, 10, 12, 'mm')
     put(g, 1, 11, '$$'); put(g, 8, 12, '&&')
     g[0][8] = 'T'; g[12][15] = 'T'; g[5][0] = 'T'
     lava_rock(g)
@@ -249,7 +249,7 @@ def grotto():
     put(g, 0, 9, 'nnnnnn'); down(g, 0, 5, 'www')
     outline(g, L=[5, 3, 1, 1, 1, 1, 1, 1], R=[15, 15, 15, 15, 15, 15, 13, 11])
     diamond(g, 3, 6)
-    put(g, 6, 9, 'ii')
+    put(g, 6, 9, 'ii'); put(g, 5, 2, 'mm'); put(g, 2, 12, 'mm')
     put(g, 3, 12, '$$'); put(g, 6, 3, '$$')
     return g
 
@@ -262,7 +262,7 @@ def cavern():
     octagon_pillar(g, 7, 19)
     region(g, 2, L=[17, 15, 15, 17], R=[21, 23, 23, 21], fill=',', pairs=SHELF)
     region(g, 7, L=[9, 7, 7, 9], R=[11, 13, 13, 11], fill='v', pairs=HANG)
-    put(g, 6, 15, 'ii'); put(g, 9, 13, 'jj')
+    put(g, 6, 15, 'ii'); put(g, 9, 13, 'jj'); put(g, 3, 24, 'mm'); put(g, 6, 4, 'MM')
     put(g, 3, 18, '&&'); put(g, 4, 3, '$$'); put(g, 8, 26, '$$')
     return g
 
@@ -290,7 +290,7 @@ def lava_chasm():
     outline(g, L=[1, 1, 1, 1, 1, 1, 1, 1, 3, 5, 7, 9], R=[17, 19, 21, 23, 23, 23, 23, 23, 23, 23, 23, 23])
     region(g, 5, L=[1, 1, 1, 1], R=[23, 23, 23, 23], fill='~', pairs=POOL)
     region(g, 5, L=[9, 11, 13, 15], R=[13, 15, 17, 19], fill='.', pairs=POOL)
-    put(g, 9, 17, 'ii')
+    put(g, 9, 17, 'ii'); put(g, 3, 13, 'mm'); put(g, 10, 9, 'mm')
     put(g, 2, 3, '$$'); put(g, 8, 4, '&&')
     lava_rock(g)
     return g
@@ -303,7 +303,7 @@ def magma_pool():
     region(g, 3, L=[9, 7, 5, 5, 5, 5, 7, 9], R=[15, 17, 19, 19, 19, 19, 17, 15], fill='~', pairs=POOL)
     region(g, 5, L=[11, 9, 9, 11], R=[13, 15, 15, 13], fill='.', pairs=POOL)
     fill(g, [1, 2, 3, 4], [11, 12], '.')
-    put(g, 6, 11, 'ii')
+    put(g, 6, 11, 'ii'); put(g, 6, 20, 'mm'); put(g, 10, 11, 'mm')
     put(g, 7, 11, '&&'); put(g, 4, 2, '$$'); put(g, 4, 20, '$$')
     lava_rock(g)
     return g
@@ -345,7 +345,7 @@ def river_cavern():
     region(g, 1, L=[13, 13, 13, 13, 11, 11, 11, 11, 13, 13, 13, 13, 13, 13, 13, 13],
            R=[19, 19, 19, 19, 17, 17, 17, 17, 19, 19, 19, 19, 19, 19, 19, 19], fill='~', pairs=POOL)
     fill(g, (11, 12), range(13, 19), '.')
-    put(g, 4, 5, 'ii'); put(g, 13, 20, 'jj')
+    put(g, 4, 5, 'ii'); put(g, 13, 20, 'jj'); put(g, 9, 7, 'mm'); put(g, 4, 20, 'MM')
     return g
 
 
@@ -388,7 +388,7 @@ def lava_spring():
     outline(g, L=[7, 5, 3, 1, 1, 1, 1, 1, 3, 5, 7, 9], R=[19, 21, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23])
     region(g, 3, L=[13, 11, 11, 11, 11, 13, 13, 13, 13, 13], R=[17, 19, 19, 19, 19, 19, 19, 19, 19, 19],
            fill='~', pairs=POOL)
-    put(g, 6, 5, 'ii')
+    put(g, 6, 5, 'ii'); put(g, 2, 12, 'mm'); put(g, 9, 20, 'mm')
     lava_rock(g)
     return g
 
@@ -422,7 +422,7 @@ def ice_grotto():
     outline(g, L=[5, 3, 1, 1, 1, 1, 1, 1], R=[15, 15, 15, 15, 15, 15, 13, 11])
     region(g, 2, L=[8, 6, 4, 4, 6], R=[10, 12, 14, 14, 12], fill='_', pairs=POND)
     diamond(g, 3, 8)
-    put(g, 6, 9, 'ii')
+    put(g, 6, 9, 'ii'); put(g, 1, 12, 'mm'); put(g, 3, 2, 'mm')
     put(g, 4, 5, '&&'); put(g, 6, 3, '$$')
     return g
 
@@ -434,7 +434,7 @@ def ice_lake():
     region(g, 2, L=[9, 7, 5, 5, 5, 5, 5, 7, 9], R=[15, 17, 19, 19, 19, 19, 19, 17, 15], fill='_', pairs=POND)
     hang_over(g, 4, L=[9, 7, 7, 9], R=[11, 13, 13, 11])
     hang_over(g, 5, L=[15, 13, 13, 15], R=[17, 19, 19, 17])
-    put(g, 8, 11, 'kk'); g[0][8] = 'T'; g[12][15] = 'T'
+    put(g, 8, 11, 'kk'); put(g, 3, 14, 'mm'); put(g, 5, 5, 'mm'); g[0][8] = 'T'; g[12][15] = 'T'
     put(g, 7, 8, '&&'); put(g, 9, 4, '$$'); put(g, 9, 18, '$$')
     return g
 
@@ -448,7 +448,7 @@ def ice_cavern():
     octagon_pillar(g, 6, 17)
     region(g, 2, L=[17, 15, 15, 17], R=[21, 23, 23, 21], fill=',', pairs=SHELF)
     region(g, 7, L=[7, 5, 5, 7], R=[9, 11, 11, 9], fill='v', pairs=HANG)
-    put(g, 4, 12, 'ii'); put(g, 3, 19, 'jj'); g[0][20] = 'T'; g[12][11] = 'T'
+    put(g, 4, 12, 'ii'); put(g, 3, 19, 'jj'); put(g, 10, 12, 'mm'); put(g, 5, 27, 'MM'); g[0][20] = 'T'; g[12][11] = 'T'
     put(g, 3, 16, '&&'); put(g, 4, 2, '$$'); put(g, 8, 26, '$$')
     pond_rock(g)
     return g
@@ -501,7 +501,7 @@ def ice_niche():
     put(g, 0, 1, '++++++')
     outline(g, L=[1, 1, 1, 3], R=[7, 7, 7, 5], fill='_')
     fill(g, [1], range(1, 7), '.')
-    put(g, 2, 3, 'kk')
+    put(g, 2, 3, 'kk'); put(g, 1, 1, 'mm'); put(g, 1, 5, 'mm')
     return g
 
 
@@ -513,7 +513,7 @@ def frost_shrine():
     outline(g, L=[7, 5, 3, 1, 1, 1, 1, 1, 1, 3, 5, 7], R=[17, 19, 21, 23, 23, 23, 23, 23, 23, 21, 19, 17])
     region(g, 1, L=[7, 5, 5, 7], R=[17, 19, 19, 17], fill=':', pairs={'/': '[', '\\': ']'})
     region(g, 1, L=[9, 7, 7, 9], R=[15, 17, 17, 15], fill='%', pairs={'/': '(', '\\': ')'})
-    put(g, 2, 11, 'II')
+    put(g, 2, 11, 'II'); put(g, 7, 3, 'mm'); put(g, 7, 19, 'mm')
     put(g, 2, 8, '&&'); put(g, 2, 14, '&&'); put(g, 10, 7, '$$'); put(g, 10, 15, '$$')
     region(g, 5, L=[11, 9, 7, 7, 9, 11], R=[13, 15, 17, 17, 15, 13], fill='_', pairs={'/': '{', '\\': '}'})
     diamond(g, 4, 4); diamond(g, 4, 16)
