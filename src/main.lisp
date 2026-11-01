@@ -24,6 +24,12 @@
       (setf *new-run* NIL
             *game-state* :playing)
       (reset-player new)
+      ;; Come down from the level above (DESCEND): what the player carries comes along.
+      (when *carried-state*
+        (restore-state new *carried-state*)
+        (setf *carried-state* NIL))
+      (when (eq *level* :generated)
+        (setf *level-banner-left* *level-banner-time*))
       (capture-mouse new)))
   (add-blood-pool scene)
   (add-hud scene)
@@ -108,6 +114,14 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
   (handler-bind ((error (lambda (e) (guard-runtime-error e :render))))
     (call-next-method)))
 
+(defun level-status ()
+  "Which level the player is on and where it is left by, for STATUS."
+  (if (eq *level* :generated)
+      (format NIL "level ~d of ~d, ~:[no exit~;~:*exit at ~{(~,2f ~,2f ~,2f)~^, ~}~]" *run-depth* (run-length)
+              (loop for (at) across *level-exits*
+                    append (list (vx at) (vy at) (vz at))))
+      (format NIL "level ~(~a~)" *level*)))
+
 (defun status ()
   "One-line summary of the running game, for agents and the REPL."
   (if (game-running-p)
@@ -115,7 +129,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running, ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a~@[ on ~(~a~)~]~:[~; swimming~]~@[ climbing~*~] speed ~,2f hp ~d mana ~d stamina ~,1f~:[~; winded~]~@[ breath ~,1f~] weapon ~(~a~) quickslot ~(~a~) bag ~(~a~); ~
+        (format NIL "running, ~a; ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a~@[ on ~(~a~)~]~:[~; swimming~]~@[ climbing~*~] speed ~,2f hp ~d mana ~d stamina ~,1f~:[~; winded~]~@[ breath ~,1f~] weapon ~(~a~) quickslot ~(~a~) bag ~(~a~); ~
                      creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
                 (case *game-state*
                   (:title "main menu up, world frozen (start with (game (start-game)))")
@@ -125,6 +139,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                   (:inventory "inventory open, world frozen (close with (game (close-inventory)))")
                   (:dead "player dead, world frozen (leave with (game (exit-to-title)))")
                   (T "playing"))
+                (level-status)
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*) (footing *player*)
                 (swimming *player*) (climbing *player*)
                 (let ((v (velocity *player*))) (sqrt (+ (expt (vx v) 2) (expt (vz v) 2))))

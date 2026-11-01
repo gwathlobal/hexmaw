@@ -53,7 +53,8 @@ upstairs."
     (add-torch container (- shaft 0.5) 4.5 6)
     (spawn-creature (make-instance 'imp :location (vec 14.5 upper 5) :facing (/ pi 2)) container)))
 
-(defun build-level (container)
+(defun clear-level ()
+  "Forget the level last built, ahead of the next."
   (setf (fill-pointer *solids*) 0
         (fill-pointer *creatures*) 0
         (fill-pointer *lamps*) 0
@@ -64,21 +65,48 @@ upstairs."
         (fill-pointer *map-blocks*) 0
         (fill-pointer *pickup-spots*) 0
         (fill-pointer *pickups*) 0
+        (fill-pointer *level-exits*) 0
         *level-doorways* ())
-  (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0)
+  (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0))
+
+(defun build-generated-level (container attempt)
+  "The level of the run at *RUN-DEPTH*, or the saved one being loaded."
+  (if *pending-load*
+      (generate-saved-level container *pending-load*)
+      (let ((settings (level-settings *run-depth*)))
+        (progv (mapcar #'car settings) (mapcar #'cdr settings)
+          (generate-level container :seed (level-seed (current-run-seed) *run-depth* attempt)
+                                    :exit (run-level-property *run-depth* :exit))))))
+
+(defun level-needs-rebuilding-p ()
+  "True if the level just built must have a way off it and the player can't get to one."
+  (and (eq *level* :generated)
+       (not *pending-load*)
+       (run-level-property *run-depth* :exit)
+       (not (level-exit-reached-p))))
+
+(defun build-level (container)
   (let ((*block-memo* (make-hash-table :test 'equal)))
-    (with-block-batches (container)
-      (ecase *level*
-        (:test (build-test-level container))
-        (:gallery (build-kit-gallery container))
-        (:block (build-check-block container))
-        (:generated (if *pending-load*
-                        (generate-saved-level container *pending-load*)
-                        (generate-level container)))))
-    (index-solids)
-    ;; Last, once every solid, room and portal is in.
-    (link-rooms)
-    (build-nav-grid)
+    (loop for attempt from 0
+          do (clear-level)
+             (with-block-batches (container)
+               (ecase *level*
+                 (:test (build-test-level container))
+                 (:gallery (build-kit-gallery container))
+                 (:block (build-check-block container))
+                 (:generated (build-generated-level container attempt))))
+             (index-solids)
+             ;; Last, once every solid, room and portal is in.
+             (link-rooms)
+             (build-nav-grid)
+          while (level-needs-rebuilding-p)
+          do (cond ((< (1+ attempt) *max-level-attempts*)
+                    (v:warn :hexmaw "Level ~d has no exit the player can reach; trying another seed." *last-level-seed*)
+                    ;; Nothing but this level is in the scene yet.
+                    (clear container))
+                   (T
+                    (v:warn :hexmaw "No level with an exit in ~d seeds; keeping level ~d." *max-level-attempts* *last-level-seed*)
+                    (return))))
     (check-reachable)
     (when (eq *level* :generated)
       (check-ice-joins))

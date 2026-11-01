@@ -31,14 +31,14 @@
 (defparameter *border* 0.5 "How thick the border walls and the floor and ceiling slabs are.")
 (defparameter *max-riser* 0.45 "The most a stair step rises: the player's *STEP-HEIGHT*.")
 (defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0) ("stream" 3.0 3.5 3.0)
-                                   ("high" 7.0 4.5) ("ice" 3.0 3.0) ("underwater" 3.0 3.0)
+                                   ("high" 7.0 9.0) ("ice" 3.0 3.0) ("underwater" 3.0 3.0)
                                    ("canal" 7.0 3.5 3.0))
   "Each kind of doorway: its name, width and height in metres, and for a river the width of
 lava down its middle, between two banks; a stream's lava fills it wall to wall, no banks.
 Each kind joins only itself. One wider than a cell spans two and is centred on the boundary
-between them. A high doorway joins the high blocks, two storeys tall; at 4.5 m its lintel
-still lies in its own storey. An ice cave's ice doorways join only ice caves and the ice
-gates that lead into them. An underwater doorway, full of water, joins a flooded passage
+between them. A high doorway joins the high blocks, two storeys tall: at 9 m it is as tall
+as they are inside, so it runs on up through the storey above (^ in that plan). An ice
+cave's ice doorways join only ice caves and the ice gates that lead into them. An underwater doorway, full of water, joins a flooded passage
 to the cisterns at either end of it. A canal's doorway is a river's with deep water in
 place of lava: open down its middle to the water filling the storey below, which runs on
 through the wall under it.")
@@ -212,6 +212,7 @@ pool stands this far out of the water, within a step.")
                (unless (member tier '("floor" "reward") :test #'string-equal)
                  (fail line NIL "A pickup spot is floor or reward, not ~s." tier))
                (list :pickup (string-downcase tier))))
+            ((string-equal op "exit") (list :exit))
             (T (fail line NIL "Unknown action ~s." op))))))
 
 (defun parse-legend-line (blueprint string line)
@@ -308,6 +309,7 @@ pool stands this far out of the water, within a step.")
           (#\. '((:floor "floor")))
           (#\Space '((:open)))
           ((#\n #\e #\s #\w) '((:door "door")))
+          (#\^ '((:over-door)))
           (#\T `((:torch ,*torch-height*)))
           (#\/ '((:diagonal "wall" #\/ NIL NIL NIL)))
           (#\\ '((:diagonal "wall" #\\ NIL NIL NIL)))))))
@@ -367,6 +369,15 @@ pool stands this far out of the water, within a step.")
       (+ (storey-base k) (ceiling-height blueprint))
       (storey-base (1+ k))))
 
+(defun door-top-under (blueprint k r c)
+  "How high above storey K's floor the doorway under cell R C reaches, going down through
+the ^ cells between; NIL if there is no doorway under it."
+  (loop for j from (1- k) downto 0
+        for actions = (char-actions blueprint (char (aref (rows (find j (plans blueprint) :key #'storey)) r) c))
+        for door = (action :door actions)
+        do (cond (door (return (- (+ (storey-base j) (third (connector-kind (second door)))) (storey-base k))))
+                 ((not (action :over-door actions)) (return NIL)))))
+
 ;;; Checks.
 
 (defun check-blueprint (blueprint)
@@ -416,10 +427,24 @@ pool stands this far out of the water, within a step.")
                                  (fail line (1+ c) "A torch can't stand in a corner."))
                                 ;; Under a canal's doorway its water runs on through the wall.
                                 ((and border (action :water actions) (under-canal-channel-p blueprint (storey plan) r c)))
-                                ((and border (not (or (wall-like-p actions) (action :door actions))))
+                                ((and border (not (or (wall-like-p actions) (action :door actions) (action :over-door actions))))
                                  (fail line (1+ c) "The border must be wall, torch or doorway, not ~s." (string char)))
                                 ((and (not border) (action :door actions))
-                                 (fail line (1+ c) "A doorway must be on the border.")))))))))
+                                 (fail line (1+ c) "A doorway must be on the border.")))
+                          ;; A doorway taller than its storey runs on up through the plans above.
+                          (when (action :over-door actions)
+                            (unless (< 1e-3 (or (door-top-under blueprint (storey plan) r c) 0))
+                              (fail line (1+ c) "^ goes on up a doorway, but none reaches this storey from below.")))
+                          (let ((door (action :door actions)))
+                            (when door
+                              (let ((top (+ (storey-base (storey plan)) (third (connector-kind (second door))))))
+                                (when (< (+ (storey-top blueprint (1- (storeys blueprint))) 1e-3) top)
+                                  (fail line (1+ c) "A ~a doorway reaches ~,1f m, over this block's ceiling." (second door) top))
+                                (dolist (above plans)
+                                  (when (and (< (storey plan) (storey above))
+                                             (< (+ (storey-base (storey above)) 1e-3) top)
+                                             (not (action :over-door (char-actions blueprint (char (aref (rows above) r) c)))))
+                                    (fail (+ (line above) r) (1+ c) "A ~a doorway reaches ~,1f m: draw ^ here, over it." (second door) top))))))))))))
 
 ;;; Geometry. A box is (name material solid x0 y0 z0 x1 y1 z1); an empty is
 ;;; (name (x y z) rotation), the rotation a quaternion (x y z w) or NIL.
@@ -507,7 +532,7 @@ lintel and plug are drawn in, so an ice doorway in ice-rock is shut with ice-roc
       (let* ((rows (rows plan))
              (actions (char-actions blueprint (char (aref rows r) c)))
              (border (or (= r 0) (= c 0) (= r (1- (length rows))) (= c (1- (length (aref rows 0)))))))
-        (not (or (action :open actions) (action :wall actions)
+        (not (or (action :open actions) (action :wall actions) (action :over-door actions)
                  (and border (action :torch actions))))))))
 
 (defun diagonal-extent (blueprint k actions)
@@ -540,7 +565,8 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
       (dolist (a actions)
         (case (first a)
           (:box (push (cons (height (second a)) (height (third a))) spans))
-          (:door (push (cons (third (connector-kind (second a))) top) spans)))))
+          (:door (push (cons (third (connector-kind (second a))) top) spans))
+          (:over-door (push (cons (door-top-under blueprint k r c) top) spans)))))
     ;; Covered if the spans, end to end, leave no gap from Y0 to Y1.
     (let ((reach y0))
       (dolist (span (sort spans #'< :key #'car))
@@ -617,7 +643,9 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                         (:box (span r c (height (second a)) (min cap (height (third a))) (fourth a) T))
                         (:deco (span r c (height (second a)) (height (third a)) (fourth a) NIL))
                         (:door (span r c (+ base (third (connector-kind (second a)))) cap
-                                     (border-wall blueprint rows r c) T))))
+                                     (border-wall blueprint rows r c) T))
+                        (:over-door (span r c (+ base (door-top-under blueprint k r c)) cap
+                                          (border-wall blueprint rows r c) T))))
                     (when (and border (action :torch actions) (not (action :wall actions)))
                       (span r c wall-bottom cap "wall" T)))))
               (maphash (lambda (key grid)
@@ -628,7 +656,7 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                          (nth-value 1 (col-span blueprint c1)) y1
                                          (nth-value 1 (row-span blueprint r1))))))
                        spans)
-              ;; Stairs, spawns, pickup spots and torches, one per region or cell.
+              ;; Stairs, spawns, pickup spots, exits and torches, one per region or cell.
               (let ((done (make-hash-table :test 'equal)))
                 (dotimes (r nr)
                   (dotimes (c nc)
@@ -637,8 +665,9 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                            (stairs (action :stairs actions))
                            (spawn (action :spawn actions))
                            (pickup (action :pickup actions))
+                           (exit (action :exit actions))
                            (torch (action :torch actions)))
-                      (when (and (or stairs spawn pickup) (not (gethash (list r c) done)))
+                      (when (and (or stairs spawn pickup exit) (not (gethash (list r c) done)))
                         (let ((cells (region rows r c)))
                           (dolist (cell cells) (setf (gethash cell done) T))
                           (multiple-value-bind (r0 c0 r1 c1) (region-bounds cells)
@@ -676,7 +705,11 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                                   :initial-value (if pit (- base (second pit)) base))))
                                   (push (list (format NIL "pickup_~a_~d" (second pickup) (incf (gethash "pickup" counts 0)))
                                               (list (/ (+ x0 x1) 2) y (/ (+ z0 z1) 2)) NIL)
-                                        empties)))))))
+                                        empties)))
+                              (when exit
+                                (push (list (format NIL "exit_~d" (incf (gethash "exit" counts 0)))
+                                            (list (/ (+ x0 x1) 2) base (/ (+ z0 z1) 2)) NIL)
+                                      empties))))))
                       (when torch
                         (multiple-value-bind (x z) (cell-centre r c)
                           (cond ((= r 0) (setf z (+ (nth-value 1 (row-span blueprint 0)) *torch-inset*)))

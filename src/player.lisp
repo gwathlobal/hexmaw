@@ -129,6 +129,8 @@ blow knocked it aside (BREAK-GUARD).")
              :documentation "Seconds of this run in play: not paused, not on the map, not in hit-stop.")
    (damage-taken :initform 0 :accessor damage-taken
                  :documentation "Health this run has cost, for the death screen.")
+   (level-records :initform () :accessor level-records
+                  :documentation "A LEVEL-RECORD for each level this run has left, the latest first.")
    (killed-by :initform NIL :accessor killed-by
               :documentation "What killed the player: a creature's type, :LAVA or :DROWNING.")
    (death-time :initform 0.0 :accessor death-time
@@ -449,6 +451,26 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
       (setf (stamina player) (min *max-stamina* (+ (stamina player) (* *stamina-regen* dt)))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
     (setf (winded player) NIL)))
+
+(defparameter *exit-reach* 1.6
+  "Metres across from an exit's point at which the player leaves: the whole of the descent's
+landing, 3 m wide, and not through its walls from the room next door.")
+(defparameter *exit-height* 0.25
+  "How far from an exit's floor the player's feet may be: under a riser, so it is the landing
+and not the last step of the stair.")
+
+(defun at-level-exit-p (player)
+  (let ((feet (feet player)))
+    (loop for exit across *level-exits*
+          for at = (car exit)
+          thereis (and (< (abs (- (vy feet) (vy at))) *exit-height*)
+                       (< (+ (expt (- (vx feet) (vx at)) 2) (expt (- (vz feet) (vz at)) 2))
+                          (* *exit-reach* *exit-reach*))))))
+
+(define-handler (player tick :after) ()
+  (when (and (not (frozen-p)) (< 0 (health player)) (not (whirl player)) (at-level-exit-p player))
+    ;; Not now: DESCEND's rebuild has to wait for the menu controller's tick.
+    (queue-menu-action 'descend)))
 
 (define-handler (player tick) (dt)
   (when (frozen-p)

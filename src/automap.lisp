@@ -82,7 +82,7 @@ block's bounds start under its floor slab and end on its ceiling slab."
 
 (defparameter *map-colors*
   '((:wall 0.46 0.41 0.36) (:pillar 0.46 0.41 0.36) (:stone 0.50 0.46 0.40) (:beam 0.48 0.36 0.24)
-    (:sarcophagus 0.52 0.48 0.42)
+    (:sarcophagus 0.52 0.48 0.42) (:descent-arch 0.46 0.41 0.36)
     (:floor 0.64 0.60 0.52) (:ceiling 0.64 0.60 0.52) (:dais 0.70 0.64 0.52) (:platform 0.62 0.50 0.34)
     (:stair 0.76 0.60 0.34)
     (:lava 1.00 0.42 0.08)

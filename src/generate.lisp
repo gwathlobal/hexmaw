@@ -28,9 +28,8 @@
 ;;; rock side joins only a cave without lava (GATE-ALLOWED-P), so the ice is a frozen wing
 ;;; of the caves.
 
-(defparameter *level-seed* NIL "The generator's seed, or NIL for a new one every build.")
-(defvar *last-level-seed* NIL "The seed of the last generated level, to build it again.")
-(defparameter *generator-rooms* 16 "How many rooms a generated level aims for, the start included.")
+(defparameter *generator-rooms* 16
+  "How many rooms GENERATE-LEVEL aims for, the start included. A run's levels say their own (*RUN-LEVELS*).")
 (defparameter *generator-attempts* 300 "How many frontier doorways the generator tries before it stops.")
 (defparameter *corridor-run* 0.55
   "From a corridor, the chance of another corridor piece, to the power of the run so far.")
@@ -157,20 +156,24 @@ Returns the pairs."
   ((connector :initarg :connector :reader door-connector)
    (run :initarg :run :initform 0 :reader door-run
         :documentation "How many corridor pieces lead to it since the last room.")
+   (depth :initarg :depth :initform 0 :reader door-depth
+          :documentation "How many blocks lie between it and the start.")
    (network :initarg :network :initform NIL :reader door-network
             :documentation "The NETWORK a network's doorway belongs to.")))
 
 (defvar *level-networks* () "The last generated level's networks: its rivers and high quarters.")
 
 (defun generate-level (container &key (seed (or *level-seed* (random most-positive-fixnum (make-random-state T))))
-                                      (rooms *generator-rooms*))
+                                      (rooms *generator-rooms*) exit)
+  "Grow a level from SEED, aiming for ROOMS rooms. EXIT names a block to put on the open
+doorway furthest from the start once it has grown. Returns the seed and whether EXIT went in."
   (setf *last-level-seed* seed)
   (let* ((*generator-random* (sb-ext:seed-random-state seed))
          (*block-random* *generator-random*)
          (*spawn-clearance* NIL)
          (kit (or *generator-blocks* (remove-if-not #'block-tags (kit-blocks))))
          (cells (setf *level-cells* (make-hash-table :test 'equal)))
-         (frontier ()) (shut ()) (doors ()) (placed-rooms 0) (networks ()))
+         (frontier ()) (shut ()) (doors ()) (placed-rooms 0) (networks ()) (exit-placed NIL))
     (labels ((full-p (family)
                ;; True once the level has as many networks of FAMILY as it may.
                (<= (symbol-value (sixth (assoc family *networks*))) (count family networks :key #'network-family)))
@@ -188,7 +191,7 @@ Returns the pairs."
              (shut (door)
                (push (door-connector door) shut)
                (when (door-network door) (push :plug (network-ends (door-network door)))))
-             (place (name at turns run &key (spawns T) joined network)
+             (place (name at turns run &key (spawns T) joined network (depth 0))
                (dolist (cell (block-cells name at turns)) (setf (gethash cell cells) name))
                (when (member :room (block-tags name)) (incf placed-rooms))
                (let ((run (if (member :room (block-tags name)) 0 (1+ run)))
@@ -214,7 +217,8 @@ Returns the pairs."
                      (cond ((and joined (facing-p c joined)) (drop-portal c))
                            (other (drop-portal c) (setf frontier (remove other frontier))
                                   (when network (push :join (network-ends network))))
-                           (T (push (make-instance 'open-door :connector c :run run :network network) frontier))))))
+                           (T (push (make-instance 'open-door :connector c :run run :depth (1+ depth) :network network)
+                                    frontier))))))
                ;; Doorways that now open into a block's wall get plugged.
                (dolist (d frontier)
                  (let ((c (door-connector d)))
@@ -232,7 +236,8 @@ Returns the pairs."
                                            (opposite-direction (connector-direction c)))
                        (when (free-p (block-cells name at turns))
                          (setf frontier (remove door frontier))
-                         (place name at turns (door-run door) :joined c :network (door-network door))
+                         (place name at turns (door-run door) :joined c :network (door-network door)
+                                                              :depth (door-depth door))
                          (return-from attach T)))))))
              (ends (door)
                ;; The blocks that may end DOOR's arm: its end blocks, heavier first, then any
@@ -333,6 +338,10 @@ Returns the pairs."
               (shut d)))
           (unless (and frontier (< 0 attempts) (< placed-rooms rooms))
             (return))))
+      ;; The way off the level, as far from the start as a doorway is still open.
+      (when exit
+        (setf exit-placed (loop for d in (stable-sort (copy-list frontier) #'> :key #'door-depth)
+                                thereis (attach d (allowed d (list exit))))))
       (dolist (d frontier) (shut d))
       (dolist (c shut) (seal-connector container c))
       ;; Every doorway left open should meet another.
@@ -344,7 +353,7 @@ Returns the pairs."
               seed placed-rooms (hash-table-count cells)
               (loop for n in *level-networks*
                     append (list (network-family n) (network-pieces n) (network-target n) (reverse (network-ends n)))))
-      seed)))
+      (values seed exit-placed))))
 
 (defun level-map (&optional (stream *standard-output*))
   "Print the generated level's cells, a storey at a time, north up: each cell is the first

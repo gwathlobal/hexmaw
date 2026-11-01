@@ -16,7 +16,7 @@ Opens the game window and an eval server on `127.0.0.1:7171` (`HEXMAW_EVAL_PORT`
 change it). `HEXMAW_SWANK_PORT=4005 ./run.sh` also starts Swank for an editor.
 The game opens in a 1280×720 window; `HEXMAW_FULLSCREEN=1 ./run.sh` starts it fullscreen.
 It starts on the main menu with the world frozen, the test level behind it. Start game
-generates a new level (`start-game`); Debug level plays the greybox test level, where the
+starts a run of generated levels (`start-game`; see "A run" below); Debug level plays the greybox test level, where the
 creatures in development live (`start-debug-level`). `HEXMAW_SKIP_MENU=1 ./run.sh` starts
 straight in play on the test level, or run `tools/hd '(game (start-game))'` after launching.
 The process exits when the window closes.
@@ -329,6 +329,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
 - `src/kit.lisp`: the kit (`kit-blocks`, every `.glb` in `data/blocks/`) and the gallery level
   that lays it out (`build-kit-gallery`, `kit-goto`).
 - `src/generate.lisp`: the level generator (`generate-level`); see "Generated levels" below.
+- `src/run.lisp`: a run's levels and what carries between them; see "A run" below.
 - `src/save.lisp`: saving and loading generated runs, one file per slot in `*save-directory*`
   (`$XDG_DATA_HOME/hexmaw/saves/`, usually `~/.local/share/hexmaw/saves/`:
   `slot-1.sav` .. `slot-3.sav`, `quick.sav`). A save doesn't store the level: it keeps the
@@ -590,8 +591,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   blocks run out, and likes rooms `*pickup-room-weight*` times as much as corridors. It draws from
   a random state of its own seeded with the level's, so a seed always places the same ones. A save
   names the taken ones by place, so changing how they're scattered makes an older save mark the wrong
-  ones taken. Over seeds 1 to 30: 33 monsters a level (24 to 42), 26 pickups (20 to 33), half of each
-  resource potions (5 to 8 of each), restoring 343 health and 509 mana. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
+  ones taken. Over seeds 1 to 30, on a run's first level: 33 monsters (24 to 42), 26 pickups (20 to 33), half of each
+  resource potions (5 to 8 of each), restoring 343 health and 509 mana. On its second, 40 monsters and 32 pickups;
+  on its third, 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
 - `src/inventory.lisp`: the inventory, the quickslot and the panel. `*item-kinds*` says what an item
@@ -628,7 +630,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
   `*loading-frames*` ticks, then rebuild the scene; `*new-run*` tells `setup-scene` to put
-  the new player at the spawn point, fresh, and start play), `pause-game`, `resume-game`, `show-title`,
+  the new player at the spawn point, fresh, and start play), `descend` (the next level of the run:
+  the same loading screen and rebuild, by `load-level`, see "A run"), `pause-game`, `resume-game`, `show-title`,
   `exit-to-title` (the pause menu's and death screen's exit: back to the main menu, with the
   level put back in place by `reset-run`, no scene rebuild)
   and `exit-game` (quits; main menu only).
@@ -986,8 +989,8 @@ from `any`, the `hall`'s choice and the high quarter's own spawns; the `cavern`,
 doorways (`check-kit` with `*spawn-pool*` set to only ogres checks every block for it).
 Each block fits it, but the way to the start may not (a `stair`, a cave passage, a `narrow`
 doorway, the far bank of a river): one stranded there guards its part of the level, and
-`check-reachable` warns. Over seeds 1 to 30, 33 of 94 ogres were stranded, and no other
-creature.
+`check-reachable` warns. Over seeds 1 to 30 at each of a run's three depths, 109 of 347 ogres
+were stranded, and no other creature.
 `*ogre-dust*` names the effect animation puffed round a landing and the slam's impact
 (`ogre-dust`, preloaded by `setup-scene`; NIL for none).
 
@@ -1033,7 +1036,7 @@ pixel size is the ground it covers (256 px, 4 m), its rows start at y = 0, and w
 across boxes and blocks without UVs. A **surface** (`*surfaces*`) is three textures: the
 sides, the top and the underside, as floors and ceilings are flats in Doom; `add-box` takes
 `:surface :wall` (or `:floor`, `:ceiling`, `:pillar`, `:platform`, `:dais`, `:stair`, `:stone`,
-`:beam`, `:sarcophagus`, `:rock`, `:cave-floor`, `:ice`, `:ice-rock`, `:snow`), tinted by
+`:beam`, `:sarcophagus`, `:rock`, `:cave-floor`, `:ice`, `:ice-rock`, `:snow`, `:descent-arch`), tinted by
 `:color` (white by default). A box without one is flat colour with the 1 m grid, as before.
 
 A texture is one `define-asset` image in greybox.lisp (nearest filtering, repeat wrapping)
@@ -1099,6 +1102,21 @@ band and stands it on the bottom of a 1 m texture (PNG rows run top down, from y
 y = 0). The 1 m repeat divides the 5 m storeys, so it fits a box standing on any storey's
 floor, and the 0.5 m panels meet a box's ends, which always lie on the 0.5 m grid. The lid
 is 4 × 4 coffers on 2 m, so 0.5 m too.
+
+A face can also be a **panel**, one picture on a wall: `descent-arch`, the way on at the bottom of
+the `descent` block (a blueprint's `wall descent-arch`), a stone arch with its stair falling away
+into black, as in the loading splash. It is generated alone on magenta
+(`art/prompts/descent-door.txt`, the splash and `wall-stone-1` as references), and `--panel` scales
+it to 2.8 m wide and stands it on `wall-stone` in a texture 4 × 5 m. So it only fits a wall one
+storey tall, standing on a floor, across a whole cell (it is centred where the cell's middle
+falls, x or z of 2 mod 4): 5 m is the storey, so it stays put on any storey, and the cell keeps it centred
+whichever way the block is turned. It is a picture: there is nothing behind it.
+
+```bash
+tools/gen_image.py art/descent/door.png --prompt-file art/prompts/descent-door.txt --ref art/splash/loading-2.png --ref art/textures/wall-stone-1.png --size 1024x1024 -n 3
+tools/make_texture.py art/descent/door-1.png data/textures/descent-arch --metres 4 --panel 2.8 --on data/textures/wall-stone.png --period 5 --colors 48
+```
+
 `beam` (`timber`) has its grain running along x: a beam turned to run along z shows the
 grain across its underside.
 
@@ -1533,7 +1551,7 @@ Blender export that keeps the conventions works the same. Conventions:
   Its kind is in its name: `connector_narrow_north` is `narrow` (2 × 2.5 m),
   `connector_river_north` a `river` (7 × 3.5 m, two cells, 3 m of lava down its middle
   between 2 m banks), `connector_stream_north` a `stream` (3 × 3.5 m, all lava, no
-  banks), `connector_high_north` a `high` (7 × 4.5 m, two cells: the high blocks'),
+  banks), `connector_high_north` a `high` (7 × 9 m, two cells: the high blocks', floor to ceiling),
   `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated levels"),
   anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
   fourth value is its lava width, a stream's its whole width: `flooded-kind-p`),
@@ -1627,7 +1645,9 @@ cave-floor` the floor slab; not `lava`) and `grid free` (skips the grid checks).
 
 Built-in characters: `#` wall (from the storey's floor to the next storey's, or to the
 ceiling; on storey 0 down through the floor slab), `.` floor, space open (no floor slab: a drop to the storey below), `n e s w` a
-door-kind doorway, which must be on that side's border, `T` a torch at 2.4 m (on a
+door-kind doorway, which must be on that side's border, `^` a doorway from the plan below going
+on up through this storey (only a `high` doorway is taller than a storey, and the check asks for
+`^` over it: no wall or slab here, just a lintel if it stops short of the storey's top), `T` a torch at 2.4 m (on a
 border wall it goes just inside the room), and `/` and `\` a 45° wall: always a pair, `//`
 or `\\`, a 1 m square cut along the diagonal the character draws, rock on the side whose
 neighbours (the cells above and beside the pair) are more wall, floor on the other, and
@@ -1673,7 +1693,9 @@ the cell or down in its `pit` (`& box 0 0.8 sarcophagus, pickup reward`, `& wate
 the bottom of a pool). The kit's use `$` and `&`. A floor spot holds a small pickup and must be walked to from a
 doorway; a reward spot holds a large one first and may take a jump (up to 1 m), a swim or a
 risk. `(check-kit)` reports one that can't be reached. No spots in flooded passages, streams or
-on `high-hall`'s perch, which the player can't jump to. Characters with the same
+on `high-hall`'s perch, which the player can't jump to. `exit` is where the player leaves the
+level (`*level-exits*`, one per group like a spawn, on the storey's floor), which `(check-kit)`
+reports if no doorway reaches it. Characters with the same
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
 under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
@@ -1752,8 +1774,10 @@ grid's 0.5 m cells need a cell centre 0.3 m clear of rock for the player, and a 
 beside a column had none.
 
 High blocks are at least two storeys (`storeys 2`, plan 1 open but for its walls, 9 m
-inside), so whatever a high doorway opens onto has the height; at 4.5 m its lintel stays in
-storey 0. Their tiers rise 2.5 m, the ogre's highest leap. A pillar the full height is `box 0
+inside), so whatever a high doorway opens onto has the height. The doorway is 9 m too, so two
+joined blocks open floor to ceiling with no wall across the join; it is drawn `H` in its own plan
+and `^` in the plan above. Its plug is 9 m as well. The `terrace` and `gallery-steps` are taller
+than that (14 m), so their lower doorway has a lintel from 9 m, in `^`'s plan. Their tiers rise 2.5 m, the ogre's highest leap. A pillar the full height is `box 0
 top pillar` in plan 0 and `wall pillar` in plan 1 (a wall there has no slab under it, so no
 floor-coloured band at 5 m). A stair the ogre can walk is 3 m wide with 1 m treads (6 rows
 for 2.5 m), and 2 m of floor before its foot, under a ceiling its head clears a tread up
@@ -1792,8 +1816,8 @@ in the gallery, to look them over.
 
 ## Generated levels
 
-The main menu's Start game builds one; `(setf *level* :generated)` and a reset do too
-(`generate-level`):
+The main menu's Start game builds the first of a run (see "A run" below);
+`(setf *level* :generated)` and a reset do too (`generate-level`):
 it starts in a block tagged `start` (the player and `*spawn-point*` at its centre, and no
 monster spawns within `*start-clearance*`, 16 m, of it: a neighbour's monster looking
 through the start room's doorway charged the player the moment the level began;
@@ -1812,7 +1836,7 @@ a `narrow` doorway and a stair has to arrive somewhere, so those take one more c
 when no room fits there, finished in turn. If that leaves the level short, growth goes on from
 the rooms' doorways. Every doorway still open at the end is plugged. A level has 16 rooms on
 172 of 200 seeds and 17 or 18 on the rest, 4 of them a network's. `*level-seed*` fixes
-the seed (NIL picks one); `*last-level-seed*` is the last level's, and
+the run's seed (NIL picks one, see "A run"); `*last-level-seed*` is the last level's, and
 `(level-map)` prints its cells a storey at a time. The generator draws from its own random
 state, since monsters use `random` as they spawn. `*generator-blocks*` limits the blocks it
 uses (NIL: every block with tags). A doorway left opening onto nothing is a bug and logs a
@@ -1874,6 +1898,49 @@ own size and step from a cell its body fits where it lives (`stranded-creatures`
 too, as a chase does when there's no dry way, and through deep water: no creature swims,
 but one beyond a flooded run or across a canal waits there for the player, who does). Each
 doorway or creature that fails logs a warning.
+
+## A run
+
+A run is the generated levels of `*run-levels*` (`src/run.lisp`) one after another: 16, 19 and 22
+rooms. Each entry says how many rooms the generator aims for (over `*generator-rooms*`,
+`level-settings`) and which block leaves the level (`:exit`). The last entry's is NIL, so level 3 has
+no way on: that is where a boss's block goes. Nothing else differs between levels yet, so the
+monster mix and the kit are the same on each. `*run-depth*` is the level the player is on, from 1,
+and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
+try at level 1 being the run seed itself, so `*level-seed*` still reproduces a level 1 and a whole
+run. A reset on a generated level rebuilds the same level, since the run keeps its seed; a new one
+needs `(setf *run-seed* NIL)` first.
+
+The way down is the `descent` block (1 × 2 cells, two storeys: a doorway at the top, a flight down,
+a landing in front of a painted arch, its stair going on into the dark; see "Level textures"). It is tagged only `descent`, so growth never picks it; `generate-level`
+puts its `:exit` on the deepest doorway still open when growth stops, by blocks from the start
+(`door-depth`, since there is no nav grid yet), just before the rest are plugged. Then `build-level`
+asks `level-exit-reached-p` (wading and swimming where they must). If the player can't get there it
+empties the scene (`clear`) and tries the next seed, up to `*max-level-attempts*`; a loaded level is
+never retried, its seed having passed.
+`level-settings` and the seed are what a save keeps, so a save needs only the level it's on.
+
+Standing on the landing (`at-level-exit-p`: within `*exit-reach*` across and `*exit-height*` of its
+floor, which leaves out the stair's last step and the room next door) runs `descend`. It adds a
+`level-record` to the player's `level-records` (monsters, slain, blocks, explored, seed), keeps
+`carried-state` (`*carried-slots*`: **a new slot that should survive the stairs needs adding there**,
+as well as to `saved-slots`), and rebuilds through `load-level`; `setup-scene` lays that state over
+the fresh player. It is one-way: the old level goes with its scene, along with anything in flight. No
+key or clearing is needed. `run-totals` adds the records to the level in play, for the death screen.
+On arriving, `level-banner` (hud.lisp) says "Level 2 of 3" for `*level-banner-time*` seconds of play,
+and the automap labels a revealed exit "Stairs down" (`exit-label`). `tools/hd status` gives the level
+and the exit's position. To go down at once: `(game (v<- (feet *player*) (car (aref *level-exits* 0))))`;
+to walk the stair, stand at the `descent` connector in `*level-doorways*` and hold W.
+
+Over seeds 1 to 200 at each size, every exit fit on the first seed and could be reached, and the
+rooms always reached their target (16.1, 19.1, 22.1 on average; 16 to 18 at the lowest size, 22 to 24
+at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run;
+pickups 13.2, 15.7, 18.3. A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
+levels 1 and 2 the walk to the exit is 136 m on average against 143 m for the level's longest walk,
+with a median at 99.6% of it and the lowest tenth under 81%: blocks from the start are a good stand-in.
+It can be close in a straight line (20 m away, but a 91 m walk). 6 of those 200 exits lie behind a
+flooded run, so the only way there is a swim. Frames (seed 12345, 12 spots, frozen, vsync off) cost
+5.9 ms on level 1, 6.4 on 2 and 6.1 on 3: the lamps sent decide the cost, not the level's size.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
