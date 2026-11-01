@@ -26,6 +26,48 @@
    (cooldown :initarg :cooldown :initform 0.0 :reader ability-cooldown
              :documentation "Seconds before it can be used again, from when it takes effect.")))
 
+(defclass ability-user ()
+  ((abilities :initform () :reader abilities)
+   (ability :initform NIL :accessor current-ability
+            :documentation "The ability it is using, or last used.")
+   (cooldowns :initform () :accessor cooldowns
+              :documentation "Seconds before each ability can be used again, by name."))
+  (:documentation "A creature with several attacks. List it before CREATURE or a subclass in
+the superclasses, so that its methods here come before the slot readers there."))
+
+(defmethod initialize-instance :after ((user ability-user) &key)
+  (setf (current-ability user) (first (abilities user))))
+
+(defun find-ability (user name)
+  (find name (abilities user) :key #'ability-name))
+
+;; Only the current animation's texture is staged with the scene; stage every ability's.
+(defmethod stage :after ((user ability-user) (area staging-area))
+  (dolist (ability (abilities user))
+    (when (ability-animation ability)
+      (stage (animation-texture (find-fx-animation (ability-animation ability))) area))))
+
+(defmethod attack-frame-times ((user ability-user)) (ability-frame-times (current-ability user)))
+(defmethod attack-hit-frame ((user ability-user)) (ability-hit-frame (current-ability user)))
+(defmethod attack-animation ((user ability-user)) (ability-animation (current-ability user)))
+(defmethod attack-pause ((user ability-user)) (ability-pause (current-ability user)))
+;; An ability with no spell (the necromancer's raise): the first's stands for it then, so
+;; it still counts as an attacker (ATTACKER-P) and goes on hunting.
+(defmethod attack-spell ((user ability-user))
+  (or (ability-spell (current-ability user)) (ability-spell (first (abilities user)))))
+(defmethod ranged-p ((user ability-user)) T)
+
+(defun ready-p (user name)
+  (<= (getf (cooldowns user) name) 0))
+
+(defun start-ability (user name)
+  (setf (current-ability user) (find-ability user name))
+  (start-attack user))
+
+(defun run-cooldowns (user dt)
+  (loop for (name left) on (cooldowns user) by #'cddr
+        do (setf (getf (cooldowns user) name) (max 0.0 (- left dt)))))
+
 ;;; The skeleton (SKELETON-WARRIOR: Trial already has a SKELETON, for skeletal animation).
 
 (defparameter *skeleton-height* 1.8 "Skeleton height in metres, skull to feet.")
@@ -125,7 +167,7 @@
         (make-instance 'ability :name :nova :spell 'grave-spikes :animation 'necromancer-cast
                                 :frame-times '(0.3 0.4 0.25 0.35) :hit-frame 2 :pause 1.0 :cooldown 14.0)))
 
-(define-shader-entity necromancer (creature)
+(define-shader-entity necromancer (ability-user creature)
   ((texture :initform (// 'hexmaw 'necromancer-turnaround))
    (atlas :initform (read-atlas "sprites/necromancer/turnaround.lisp"))
    (sprite-height :initform *necromancer-height*)
@@ -134,11 +176,8 @@
    (death-animation :initform 'necromancer-death)
    (gibs :initform '((:flesh 0 0 1 1 2 3 4 5 6 6 7 7)))
    (gib-scale :initform 1.15)
-   (abilities :initform (necromancer-abilities) :reader abilities)
-   (ability :initform NIL :accessor current-ability
-            :documentation "The ability it is using, or last used.")
-   (cooldowns :initform (list :raise 0.0 :nova 0.0) :accessor cooldowns
-              :documentation "Seconds before each ability can be used again, by name.")
+   (abilities :initform (necromancer-abilities))
+   (cooldowns :initform (list :raise 0.0 :nova 0.0))
    (raise-target :initform NIL :accessor raise-target :documentation "The corpse it is raising.")
    (raise-lamp :initform NIL :accessor raise-lamp)
    (attack-range :initform 12.0)
@@ -152,35 +191,13 @@
    (pain-chance :initform 70)
    (max-health :initform 35)))
 
-(defmethod initialize-instance :after ((necromancer necromancer) &key)
-  (setf (current-ability necromancer) (find-ability necromancer :skull)))
-
-(defun find-ability (necromancer name)
-  (find name (abilities necromancer) :key #'ability-name))
-
-;; Only the current animation's texture is staged with the scene; stage every ability's.
-(defmethod stage :after ((necromancer necromancer) (area staging-area))
-  (dolist (ability (abilities necromancer))
-    (when (ability-animation ability)
-      (stage (animation-texture (find-fx-animation (ability-animation ability))) area))))
-
-(defmethod attack-frame-times ((n necromancer)) (ability-frame-times (current-ability n)))
-(defmethod attack-hit-frame ((n necromancer)) (ability-hit-frame (current-ability n)))
-(defmethod attack-animation ((n necromancer)) (ability-animation (current-ability n)))
-(defmethod attack-pause ((n necromancer)) (ability-pause (current-ability n)))
-;; The raise has no spell; the skull's stands for it then, so it still counts as an
-;; attacker (ATTACKER-P) and goes on hunting.
-(defmethod attack-spell ((n necromancer))
-  (or (ability-spell (current-ability n)) (ability-spell (first (abilities n)))))
-(defmethod ranged-p ((n necromancer)) T)
 (defmethod spares-p ((n necromancer) target) (undead target))
-
-(defun ready-p (necromancer name)
-  (<= (getf (cooldowns necromancer) name) 0))
 
 (defun raisable-p (corpse)
   "True if CORPSE can be raised: dead and done falling, whole, and of flesh or bone."
   (and (dead corpse)
+       (not (whirl corpse))
+       (not (flung corpse))
        (not (gibbed corpse))
        (gibs corpse)
        (< (death-duration corpse) (dead corpse))))
@@ -198,10 +215,6 @@
                     (clear-path-p loc at 1.0))
             do (setf best c best-distance d))
     best))
-
-(defun start-ability (necromancer name)
-  (setf (current-ability necromancer) (find-ability necromancer name))
-  (start-attack necromancer))
 
 (defmethod hunt-from-range ((necromancer necromancer))
   "Back off from a player too close; raise a corpse if one is in reach; draw the grave
@@ -289,6 +302,5 @@ out when the channel ends or breaks."
 
 (define-handler (necromancer tick :after) (dt)
   (unless (frozen-p)
-    (loop for (name left) on (cooldowns necromancer) by #'cddr
-          do (setf (getf (cooldowns necromancer) name) (max 0.0 (- left dt))))
+    (run-cooldowns necromancer dt)
     (update-raise-glow necromancer)))

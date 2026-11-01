@@ -57,7 +57,7 @@ dive in, a shove), as an exponential.")
 (defparameter *spawn-point* (vec 0 0 5))
 (defparameter *kill-height* -20.0)
 
-(defclass player (fps-camera)
+(defclass player (fps-camera whirlable)
   ((name :initform :player)
    (fov :initform 75.0)
    (near-plane :initform 0.05f0)
@@ -180,7 +180,7 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
 (defmethod body-feet ((player player)) (feet player))
 (defmethod body-radius ((player player)) *player-radius*)
 (defmethod body-height ((player player)) *player-height*)
-(defmethod body-solid-p ((player player)) T)
+(defmethod body-solid-p ((player player)) (not (whirl player)))
 
 (defvar *walk-through-bodies* NIL
   "True while the player already overlaps a body (something revived on it), so it can walk out.")
@@ -256,6 +256,18 @@ On a step the eye keeps its height and eases to the new one."
             (setf (vx feet) px (vy feet) y0 (vz feet) pz
                   (vx vel) pvx (vy vel) vy0 (vz vel) pvz
                   (grounded player) NIL))))))
+
+(defun move-pulled (player dt can-step)
+  "Move PLAYER by its velocity for DT seconds, plus the drag of any vortex (vortex.lisp),
+which walking would otherwise cancel: the drag moves it but stays out of its velocity."
+  (let ((vel (velocity player))
+        (pull (pull player)))
+    (incf (vx vel) (vx pull))
+    (incf (vz vel) (vz pull))
+    (move-horizontal player (* (vx vel) dt) (* (vz vel) dt) can-step)
+    ;; MOVE-AXIS zeroes the component it was blocked on: nothing to take back.
+    (unless (= 0 (vx vel)) (decf (vx vel) (vx pull)))
+    (unless (= 0 (vz vel)) (decf (vz vel) (vz pull)))))
 
 (defun snap-to-ground (player)
   "Keep a walking player on the floor when it drops away by up to *STEP-HEIGHT*
@@ -333,7 +345,7 @@ up and down keys (1, 0 or -1)."
       (incf (vx vel) dx) (incf (vy vel) dy) (incf (vz vel) dz))
     (let ((vx0 (vx vel)) (vz0 (vz vel)))
       (setf (grounded player) NIL)
-      (move-horizontal player (* (vx vel) dt) (* (vz vel) dt) NIL)
+      (move-pulled player dt NIL)
       (move-axis player 1 (* (vy vel) dt))
       ;; The surface holds the eye: swimming up stops there.
       (let ((over (- (+ (vy feet) *eye-height*) float-y)))
@@ -415,7 +427,7 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
          (running (and (retained :left-shift) (< 0.0 wlen) (not crouching) (= 0.0 raise)
-                       (not (winded player))))
+                       (not (winded player)) (not (whirl player))))
          ;; The raised shield slows the player to a walk and below.
          (speed (* (cond (crouching *crouch-speed*)
                          (running *run-speed*)
@@ -424,23 +436,31 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
                    (if kind (liquid-property kind :speed) 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
-    (let ((water (swim-water player)))
+    (whirl-transitions player dt)
+    (let ((water (swim-water player))
+          (vx0 (vx (velocity player)))
+          (vz0 (vz (velocity player))))
       (setf (swimming player) (and water T))
-      (cond ((climbing player)
+      (cond ((whirl player)
+             (orbit-player player dt wx wz))
+            ((climbing player)
              (climb-out player dt yaw))
             (water
              (setf (footing player) NIL)
              (swim player water dt ix iz
                    (- (if (retained :space) 1.0 0.0) (if crouching 1.0 0.0))
                    running yaw))
-            (T (walk player dt wx wz wlen speed kind crouching))))
+            (T (walk player dt wx wz wlen speed kind crouching)))
+      (end-player-flight player vx0 vz0))
     (update-stamina player running dt)
     (when (< (vy (feet player)) *kill-height*)
       (respawn player))
-    ;; Standing in lava burns; under water with no breath left, drowning.
+    ;; Standing in lava burns, and so does the wind of a vortex holding the player; under
+    ;; water with no breath left, drowning.
     (let ((feet (feet player)))
       (multiple-value-bind (timer damage)
-          (burn-due (burn-timer player) dt (hazard-at (vx feet) (+ (vy feet) 0.05) (vz feet)))
+          (burn-due (burn-timer player) dt (+ (hazard-at (vx feet) (+ (vy feet) 0.05) (vz feet))
+                                              (whirl-damage player)))
         (setf (burn-timer player) timer)
         (when (< 0 damage)
           (hurt-player player damage feet :shove NIL))))
@@ -456,23 +476,26 @@ at SPEED, out of liquid KIND if any."
   (let ((vel (velocity player)))
     (setf (footing player) (and (grounded player)
                                 (let ((feet (feet player))) (floor-footing (vx feet) (vy feet) (vz feet) *player-radius*))))
-    (if (footing player)
-        ;; On ice the wish only pushes the momentum (footing.lisp).
-        (progn (footing-drag vel (footing player) dt (= 0 wlen))
-               (footing-push vel wx wz speed (footing player) dt))
-        ;; Accelerate horizontal velocity toward the wished velocity. In the air that steers
-        ;; but never brakes: a launch faster than a run (off ice) keeps its speed.
-        (let* ((speed (if (grounded player)
-                          speed
-                          (max speed (sqrt (+ (expt (vx vel) 2) (expt (vz vel) 2))))))
-               (dvx (- (* wx speed) (vx vel)))
-               (dvz (- (* wz speed) (vz vel)))
-               (dlen (sqrt (+ (* dvx dvx) (* dvz dvz))))
-               (max-dv (* *ground-acceleration* (if (grounded player) 1.0 *air-control*) dt)))
-          (when (< max-dv dlen)
-            (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
-          (incf (vx vel) dvx)
-          (incf (vz vel) dvz)))
+    (cond ((footing player)
+           ;; On ice the wish only pushes the momentum (footing.lisp).
+           (footing-drag vel (footing player) dt (= 0 wlen))
+           (footing-push vel wx wz speed (footing player) dt))
+          ;; Thrown by a vortex, no wish means no change: nothing slows the flight.
+          ((and (flung player) (= 0 wlen)))
+          (T
+           ;; Accelerate horizontal velocity toward the wished velocity. In the air that steers,
+           ;; and only an empty wish brakes: a launch faster than a run (off ice) keeps its speed.
+           (let* ((speed (if (grounded player)
+                             speed
+                             (max speed (sqrt (+ (expt (vx vel) 2) (expt (vz vel) 2))))))
+                  (dvx (- (* wx speed) (vx vel)))
+                  (dvz (- (* wz speed) (vz vel)))
+                  (dlen (sqrt (+ (* dvx dvx) (* dvz dvz))))
+                  (max-dv (* *ground-acceleration* (if (grounded player) 1.0 *air-control*) dt)))
+             (when (< max-dv dlen)
+               (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
+             (incf (vx vel) dvx)
+             (incf (vz vel) dvz))))
     (when (and (grounded player) (retained :space) (not crouching)
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
@@ -485,7 +508,7 @@ at SPEED, out of liquid KIND if any."
                                                      (float *player-radius* 0f0) (float *player-height* 0f0)
                                                      player))))
       (setf (grounded player) NIL)
-      (move-horizontal player (* (vx vel) dt) (* (vz vel) dt) walking)
+      (move-pulled player dt walking)
       (move-axis player 1 (* (vy vel) dt))
       (when (and walking (not (grounded player)))
         (snap-to-ground player)))))
@@ -590,6 +613,7 @@ health the run starts over."
       (incf (vz vel) (* speed (/ (vz flight) len))))))
 
 (defun respawn (player)
+  (clear-whirl player)
   (let ((feet (feet player)))
     (setf (vx feet) (vx *spawn-point*) (vy feet) (vy *spawn-point*) (vz feet) (vz *spawn-point*)))
   (setf (vx (velocity player)) 0f0 (vy (velocity player)) 0f0 (vz (velocity player)) 0f0))

@@ -163,6 +163,19 @@ while it climbs back to its hover, so it never dives from the floor."
           (launching flyer) *launch-time*)
     (stop-walking flyer (/ (hover-height flyer) (climb-speed flyer)))))
 
+(defmethod break-flight ((flyer flyer))
+  (setf (dive-left flyer) NIL
+        (downed flyer) 0.0
+        (landed flyer) NIL
+        (launching flyer) 0.0
+        (fall-speed flyer) 0.0))
+
+;; Thrown to the floor, it lies there as if downed in its dive.
+(defmethod land-thrown ((flyer flyer))
+  (setf (downed flyer) *downed-time*
+        (landed flyer) NIL)
+  (stop-walking flyer *downed-time*))
+
 (defmethod keep-height ((flyer flyer) dt)
   ;; A dive broken off by a hit (HURT stops it) downs the flyer.
   (when (and (dive-left flyer) (not (eq (brain flyer) :attacking)))

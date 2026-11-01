@@ -10,6 +10,8 @@
 ;;; up for the frames where they meet around the fireball. Walking sways them.
 
 (define-fx-animation fire-hands "sprites/hands/hands" :fps 6 :loop T)
+;; The same with the fire recoloured (tools/recolor_strip.py), for casting the tornado.
+(define-fx-animation storm-hands "sprites/hands/storm" :fps 6 :loop T)
 
 (defparameter *hands-height* 0.62
   "Vertical art scale: the strip's cell height times the scale is about this fraction
@@ -40,13 +42,18 @@ fire, so for now it borrows the cast's rest poses (its first and last two frames
   ((vertex-array :initform (// 'hexmaw 'hud-quad))
    (animation :initform (find-fx-animation 'fire-hands))
    (side :initarg :side :initform :left :reader side :documentation ":left or :right half.")
+   (hand-weapon :initarg :hand-weapon :initform :hands :reader hand-weapon
+                :documentation "The weapon (sword.lisp) these hands are on screen for.")
    (spread :initform 1.0 :accessor spread :documentation "0 together, 1 fully apart.")
    (bob-phase :initform 0.0 :accessor bob-phase)
    (bob-amount :initform 0.0 :accessor bob-amount)))
 
 (defun add-hands (container)
   (enter (make-instance 'hands :side :left) container)
-  (enter (make-instance 'hands :side :right) container))
+  (enter (make-instance 'hands :side :right) container)
+  (let ((storm (find-fx-animation 'storm-hands)))
+    (enter (make-instance 'hands :side :left :hand-weapon :tempest :animation storm) container)
+    (enter (make-instance 'hands :side :right :hand-weapon :tempest :animation storm) container)))
 
 (defun cast-position ()
   "How far the cast animation has run, in frames from its first, or NIL when none plays."
@@ -83,7 +90,7 @@ out when standing or airborne."
                                   #.(float (* 2 pi) 0f0)))))
 
 (defmethod render :around ((hands hands) (program shader-program))
-  (when (and *player* (eq (weapon *player*) :hands))
+  (when (and *player* (eq (weapon *player*) (hand-weapon hands)))
     (call-next-method)))
 
 (defun layout-hands (hands)

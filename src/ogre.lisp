@@ -379,6 +379,13 @@ the leap short: it drops from there."
         (setf (vy loc) (float (max floor (- (vy loc) (* (incf (fall-speed ogre) (* *leap-gravity* dt)) dt))) 0f0))
         (land-leap ogre))))
 
+(defmethod break-flight ((ogre ogre))
+  (setf (airborne ogre) NIL
+        (falling ogre) NIL
+        (fall-speed ogre) 0.0
+        (recover ogre) 0.0
+        (attack-kind ogre) :slam))
+
 (defmethod keep-height ((ogre ogre) dt)
   (setf (leap-cooldown ogre) (max 0.0 (- (leap-cooldown ogre) dt))
         (recover ogre) (max 0.0 (- (recover ogre) dt)))

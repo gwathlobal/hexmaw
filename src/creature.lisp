@@ -105,7 +105,38 @@ creatures in development live; :GALLERY, every level block laid out (kit.lisp); 
 (defun hit-stop (&optional (time *hit-stop-time*))
   (setf *hit-stop* (max *hit-stop* (float time 0f0))))
 
-(define-shader-entity creature (billboard)
+;;; Vortices (vortex.lisp) pull, whirl and throw the player and creatures alike, so what
+;;; that takes lives on both.
+
+(defvar *vortices* (make-array 4 :adjustable T :fill-pointer 0)
+  "The vortices in the scene, which every actor asks each tick. BUILD-LEVEL empties it.")
+(defvar *ignore-bodies* NIL "True while MOVE-CREATURE moves something other bodies don't stop.")
+
+(defclass whirlable ()
+  ((whirl :initform NIL :accessor whirl :documentation "The vortex holding it, or NIL.")
+   (whirl-angle :initform 0.0 :accessor whirl-angle :documentation "Where it is round the vortex, in radians.")
+   (whirl-radius :initform 0.0 :accessor whirl-radius :documentation "Metres out from the vortex's centre line.")
+   (whirl-lift :initform 0.0 :accessor whirl-lift :documentation "Metres over the floor it is carried up to.")
+   (whirl-time :initform 0.0 :accessor whirl-time :documentation "Seconds since it was caught.")
+   (whirl-hold :initform 0.0 :accessor whirl-hold :documentation "Seconds until it is thrown out.")
+   (whirl-stuck :initform 0.0 :accessor whirl-stuck :documentation "Seconds walls have kept it off its orbit.")
+   (flung :initform NIL :accessor flung :documentation "True from being thrown out until it lands.")
+   (spat-timer :initform 0.0 :accessor spat-timer :documentation "Seconds until a vortex can pull it again.")
+   (pull :initform (vec 0 0 0) :reader pull :documentation "How fast, in m/s, vortices drag it this tick.")
+   (pull-look :initform 0.0 :accessor pull-look :documentation "Seconds until it looks for a line to a vortex again.")
+   (pull-clear :initform NIL :accessor pull-clear :documentation "True if it had a line to a vortex when it last looked.")))
+
+(defun clear-whirl (actor)
+  "ACTOR is neither held nor thrown by a vortex, and can be pulled at once."
+  (setf (whirl actor) NIL
+        (flung actor) NIL
+        (whirl-stuck actor) 0.0
+        (spat-timer actor) 0.0
+        (pull-look actor) 0.0)
+  (let ((pull (pull actor)))
+    (setf (vx pull) 0f0 (vz pull) 0f0)))
+
+(define-shader-entity creature (billboard whirlable)
   ((max-health :initarg :max-health :initform 30 :accessor max-health)
    (health :accessor health)
    (body-radius :initarg :body-radius :initform 0.35 :accessor body-radius
@@ -208,6 +239,8 @@ billboard's view order. NIL to glide in the standing pose.")
 WALK-ANIMATION, spread over *STAGGER-TIME*; NIL to squash the standing pose instead.")
    (momentum :initform (vec 0 0 0) :reader momentum
              :documentation "Velocity it slides with: a blow's knockback, and on ice its walk too.")
+   (flight :initform (vec 0 0 0) :reader flight
+           :documentation "Velocity it flies with while FLUNG (vortex.lisp).")
    (footing :initform NIL :accessor footing
             :documentation "The footing (*FOOTINGS*) it stands on this tick, or NIL.")
    (stagger :initform 0.0 :accessor stagger)
@@ -311,7 +344,7 @@ POINT, grown by MARGIN metres, or NIL."
 
 (defmethod body-feet ((creature creature)) (location creature))
 (defmethod body-height ((creature creature)) (sprite-height creature))
-(defmethod body-solid-p ((creature creature)) (not (dead creature)))
+(defmethod body-solid-p ((creature creature)) (not (or (dead creature) (whirl creature))))
 
 (defvar *body-box* (make-array 6 :element-type 'single-float)
   "The box BODY-OVERLAPPING returns, reused by every call.")
@@ -348,7 +381,7 @@ whether the X move and whether the Z move were blocked."
          (r (float (body-radius creature) 0f0))
          (h (float (sprite-height creature) 0f0))
          ;; Already inside a body (revived under the player, say): let it walk out.
-         (bodies (not (creature-body-overlapping creature))))
+         (bodies (not (or *ignore-bodies* (creature-body-overlapping creature)))))
     (labels ((blocked ()
                (or (solid-overlapping (vx loc) (+ (vy loc) lift) (vz loc) r (- h lift))
                    (and bodies (creature-body-overlapping creature))))
@@ -564,6 +597,18 @@ A walker settles onto the floor; a flyer (flyer.lisp) hovers, dives and falls.")
     (unless (dead creature)
       (settle creature dt))))
 
+(defgeneric break-flight (creature)
+  (:documentation "A vortex caught CREATURE: forget any flight of its own (an ogre's leap, a
+flyer's dive), which KEEP-HEIGHT would otherwise carry on with once it lands.")
+  (:method ((creature creature)) NIL))
+
+(defgeneric land-thrown (creature)
+  (:documentation "A vortex threw CREATURE and it has just come to the floor: alive, it
+staggers; a flyer lies downed.")
+  (:method ((creature creature))
+    (setf (stagger creature) *stagger-time*)
+    (stop-walking creature *hurt-pause*)))
+
 (defun ground-point (creature)
   "Where CREATURE plans its moves from: its feet, or for one in the air, the floor
 under them. The nav grid only knows floors."
@@ -766,7 +811,8 @@ it can do something about. The ogre, which leaps down, looks further.")
     (atan (- (vx point) (vx feet)) (- (vz feet) (vz point)))))
 
 (defun melee-hunter-p (creature)
-  (and (not (dead creature)) (attack-damage creature) (not (ranged-p creature)) (hunting-p creature)))
+  (and (not (dead creature)) (not (whirl creature)) (not (flung creature))
+       (attack-damage creature) (not (ranged-p creature)) (hunting-p creature)))
 
 (defun angle-between (a b)
   "Radians between yaws A and B, the short way round."
@@ -831,9 +877,10 @@ CREATURE, and not one it already touches. A walking one has moved on by the next
                           ;; Not one it touches: it may walk out of that.
                           (<= (expt (+ r radius) 2) d2))
                  (push (list (vx feet) (vz feet) radius (- (vy feet) 1.0) (+ (vy feet) 1.0)) bodies)))))
-      (consider (feet *player*) *player-radius* *player-height*)
+      (unless (whirl *player*)
+        (consider (feet *player*) *player-radius* *player-height*))
       (loop for c across *creatures*
-            unless (or (eq c creature) (dead c) (eq (brain c) :walking))
+            unless (or (eq c creature) (dead c) (eq (brain c) :walking) (whirl c) (flung c))
               do (consider (location c) (body-radius c) (sprite-height c))))
     (make-nav-bodies bodies)))
 
@@ -1187,6 +1234,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
           (setf (vy loc) y))))))
 
 (defun revive (creature)
+  (clear-whirl creature)
   (setf (alert creature) 0.0
         (bleeding creature) 0f0
         (gibbed creature) NIL
@@ -1388,43 +1436,47 @@ after the flinch, block and attack.")
             (stirring creature) (max 0.0 (- (stirring creature) dt)))
       (when (and (slot-bans creature) (<= (slot-ban-timer creature) 0))
         (setf (slot-bans creature) ()))
-      (update-footing creature)
-      (slide creature dt)
-      (drip-blood creature dt)
-      (unless (dead creature)
-        ;; Lava burns, and deep water drowns, what is in it.
-        (let* ((loc (location creature))
-               (afloat (afloat-p creature))
-               (damage (if afloat
-                           *creature-drown-damage*
-                           (hazard-at (vx loc) (+ (vy loc) 0.05) (vz loc)))))
-          (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt damage)
-            (setf (burn-timer creature) timer)
-            (when (< 0 due)
-              (burn creature due)))
-          (when (and (< 0 damage) (not afloat) (not (dead creature)) (eq (brain creature) :idle))
-            (escape-liquid creature))
-          (unless (dead creature)
-            (cond ((< 0 (rising creature))
-                   (decf (rising creature) dt))
-                  ((< 0 (stagger creature)))
-                  (afloat
-                   (flounder creature dt))
-                  (T
-                   (let ((*nav-hazards* (nav-hazards creature)))
-                     (think creature dt)))))))
-      (keep-height creature dt)
-      (when (dead creature)
-        (incf (dead creature) dt)
-        (when (and *revive-time* (eq *level* :test) (not (summoned creature))
-                   (< (+ (death-duration creature) *revive-time*) (dead creature))
-                   ;; Wait for whoever stands on its spawn point to move.
-                   (let ((home (home creature)))
-                     (not (body-overlapping (vx home) (+ (vy home) 0.05) (vz home)
-                                            (float (body-radius creature) 0f0)
-                                            (- (float (sprite-height creature) 0f0) 0.05)
-                                            creature))))
-          (revive creature)))))
+      ;; Held or thrown by a vortex, it moves and thinks no other way.
+      (let ((held (whirl-step creature dt)))
+        (unless held
+          (update-footing creature)
+          (slide creature dt))
+        (drip-blood creature dt)
+        (unless (or held (dead creature))
+          ;; Lava burns, and deep water drowns, what is in it.
+          (let* ((loc (location creature))
+                 (afloat (afloat-p creature))
+                 (damage (if afloat
+                             *creature-drown-damage*
+                             (hazard-at (vx loc) (+ (vy loc) 0.05) (vz loc)))))
+            (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt damage)
+              (setf (burn-timer creature) timer)
+              (when (< 0 due)
+                (burn creature due)))
+            (when (and (< 0 damage) (not afloat) (not (dead creature)) (eq (brain creature) :idle))
+              (escape-liquid creature))
+            (unless (dead creature)
+              (cond ((< 0 (rising creature))
+                     (decf (rising creature) dt))
+                    ((< 0 (stagger creature)))
+                    (afloat
+                     (flounder creature dt))
+                    (T
+                     (let ((*nav-hazards* (nav-hazards creature)))
+                       (think creature dt)))))))
+        (unless held
+          (keep-height creature dt))
+        (when (dead creature)
+          (incf (dead creature) dt)
+          (when (and *revive-time* (eq *level* :test) (not (summoned creature))
+                     (< (+ (death-duration creature) *revive-time*) (dead creature))
+                     ;; Wait for whoever stands on its spawn point to move.
+                     (let ((home (home creature)))
+                       (not (body-overlapping (vx home) (+ (vy home) 0.05) (vz home)
+                                              (float (body-radius creature) 0f0)
+                                              (- (float (sprite-height creature) 0f0) 0.05)
+                                              creature))))
+            (revive creature))))))
   (update-creature-look creature)
   (update-death-glow creature))
 

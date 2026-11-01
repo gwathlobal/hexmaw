@@ -195,6 +195,69 @@ void main(){
   color = vec4(tint_color, 1.0);
 }")
 
+;;; In a vortex: chunky streaks of wind and dust rush across the view, thickest at its edges
+;;; so the middle stays clear to aim through, and go on, thinner, while the player is
+;;; thrown. From inside, the funnel alone is too close to read as anything (vortex.lisp).
+
+(defparameter *streak-cell* 5.0 "Screen pixels on a side of a streak's chunky cells.")
+(defparameter *streak-ease* 0.4 "Seconds in a vortex until the streaks are at full strength.")
+(defparameter *streak-thrown* 0.6 "Their strength while thrown.")
+
+(define-shader-entity whirl-streaks (hud-element vertex-entity transformed-entity listener)
+  ((vertex-array :initform (// 'hexmaw 'hud-quad))
+   (strength :initform 0.0 :accessor strength :documentation "0 to 1.")
+   (clock :initform 0.0 :accessor streak-clock)))
+
+(defmethod hud-shown-p ((streaks whirl-streaks))
+  (and (call-next-method) (< 0 (strength streaks)) (not (eq *game-state* :map))))
+
+(defmethod late-rank ((streaks whirl-streaks)) 1)
+
+(define-handler (whirl-streaks tick) (dt)
+  (when *player*
+    (unless (frozen-p)
+      (setf (streak-clock whirl-streaks) (mod (+ (streak-clock whirl-streaks) dt) 1000.0)))
+    (setf (strength whirl-streaks)
+          (cond ((whirl *player*) (min 1.0 (/ (whirl-time *player*) *streak-ease*)))
+                ((flung *player*) *streak-thrown*)
+                (T 0.0)))))
+
+(defmethod render :around ((streaks whirl-streaks) (program shader-program))
+  (with-depth-mask NIL
+    (gl:blend-func :one :one-minus-src-alpha)
+    (unwind-protect (call-next-method)
+      (gl:blend-func :src-alpha :one-minus-src-alpha))))
+
+(defmethod render :before ((streaks whirl-streaks) (program shader-program))
+  (setf (uniform program "strength") (float (strength streaks) 0f0)
+        (uniform program "time") (float (streak-clock streaks) 0f0)
+        (uniform program "cell_size") (float *streak-cell* 0f0)
+        (uniform program "screen") (vec2 (width *context*) (height *context*))))
+
+(define-class-shader (whirl-streaks :fragment-shader)
+  "uniform float strength;
+uniform float time;
+uniform float cell_size;
+uniform vec2 screen;
+out vec4 color;
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+void main(){
+  vec2 cell = floor(gl_FragCoord.xy / cell_size);
+  vec2 at = cell * cell_size / screen - 0.5;
+  // A row of the wind, slanting a little; each runs at its own speed, broken into lengths.
+  float row = cell.y + floor(cell.x * 0.12);
+  float speed = 60.0 + 110.0 * hash(vec2(row, 1.0));
+  float x = cell.x + time * speed + 500.0 * hash(vec2(row, 2.0));
+  float piece = floor(x / (18.0 + 30.0 * hash(vec2(row, 3.0))));
+  float on = step(0.82, hash(vec2(row, piece)));
+  float edge = smoothstep(0.18, 0.62, length(at * vec2(1.0, 1.3)));
+  float alpha = on * edge * strength * (0.35 + 0.5 * hash(vec2(row, 4.0)));
+  vec3 c = mix(vec3(0.35, 0.31, 0.42), vec3(0.72, 0.68, 0.82), hash(vec2(row, 5.0)));
+  color = vec4(c * alpha, alpha);
+}")
+
 ;;; The HUD: owns the elements, keeps them in place and in sync with the player.
 
 (defclass hud (entity listener)
@@ -212,6 +275,7 @@ void main(){
    (breath-bar :initform (make-instance 'breath-bar :fill-color *breath-bar-color*) :reader breath-bar)
    (pain-flash :initform (make-instance 'pain-flash) :reader pain-flash)
    (underwater-tint :initform (make-instance 'underwater-tint) :reader underwater-tint)
+   (whirl-streaks :initform (make-instance 'whirl-streaks) :reader whirl-streaks)
    (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
    (shown-health :initform NIL :accessor shown-health)
    (shown-mana :initform NIL :accessor shown-mana)
@@ -219,7 +283,7 @@ void main(){
 
 (defun hud-elements (hud)
   ;; The flash first, so the bars draw over it.
-  (list (pain-flash hud) (underwater-tint hud)
+  (list (pain-flash hud) (underwater-tint hud) (whirl-streaks hud)
         (health-label hud) (health-bar hud) (health-text hud)
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
@@ -261,7 +325,7 @@ numbers; breath has none."
   (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* +glyph-height+))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
-  (dolist (cover (list (pain-flash hud) (underwater-tint hud)))
+  (dolist (cover (list (pain-flash hud) (underwater-tint hud) (whirl-streaks hud)))
     (place cover 0 0 -0.5)
     (setf (vx (scaling cover)) (float (width *context*) 0f0)
           (vy (scaling cover)) (float (height *context*) 0f0))))

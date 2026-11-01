@@ -290,11 +290,19 @@ seconds, keeping its speed."
 ;;; and deepening toward the top. It is a ring of quads whose vertices are
 ;;; an angle round the ring and a height up it; the shader sways the upper part (the foot
 ;;; stays on the rim) and adds its light over what is behind it, writing no depth, so it
-;;; needs no sorting against other glows.
+;;; needs no sorting against other glows. COLORS gives it another caster's look, and
+;;; SPIN and TWIST make its streaks a wind's, running round it and leaning.
+
+(defparameter *grave-aurora-colors*
+  (list (vec 0.1 1.0 0.35) (vec 0.5 1.0 0.15) (vec 0.15 0.95 0.65) (vec 0.05 0.55 0.25) (vec 0.8 1.0 0.7))
+  "An aurora's colours: the three its foot wanders through round the ring, its top, its band.")
 
 (define-shader-entity aurora (renderable listener)
   ((centre :initarg :centre :reader centre)
    (radius :initarg :radius :reader aurora-radius)
+   (colors :initarg :colors :initform *grave-aurora-colors* :reader aurora-colors)
+   (spin :initarg :spin :initform 0.0 :reader aurora-spin :documentation "Turns a second its streaks run round the ring.")
+   (twist :initarg :twist :initform 0.0 :reader aurora-twist :documentation "Whole turns its streaks lean, foot to top.")
    (height :initform (first *aurora-height*) :accessor aurora-height)
    (strength :initform 0.0 :accessor aurora-strength :documentation "0 (none) to 1 (full).")
    (clock :initform (random 100.0) :accessor aurora-clock)))
@@ -334,7 +342,15 @@ GPU. PRELOAD-SPELLS stages it with the scene.")
           (uniform program "radius") (float (aurora-radius aurora) 0f0)
           (uniform program "height") (float (aurora-height aurora) 0f0)
           (uniform program "strength") (float (aurora-strength aurora) 0f0)
+          (uniform program "spin") (float (aurora-spin aurora) 0f0)
+          (uniform program "twist") (float (aurora-twist aurora) 0f0)
           (uniform program "time") (float (aurora-clock aurora) 0f0))
+    (destructuring-bind (foot-1 foot-2 foot-3 top band) (aurora-colors aurora)
+      (setf (uniform program "foot_1") foot-1
+            (uniform program "foot_2") foot-2
+            (uniform program "foot_3") foot-3
+            (uniform program "top_color") top
+            (uniform program "band_color") band))
     ;; Light added over what is behind it, seen from outside the ring and from inside.
     (gl:disable :cull-face)
     (gl:depth-mask NIL)
@@ -370,7 +386,14 @@ void main(){
 (define-class-shader (aurora :fragment-shader)
   "in vec2 v_ah;
 uniform float strength;
+uniform float spin;
+uniform float twist;
 uniform float time;
+uniform vec3 foot_1;
+uniform vec3 foot_2;
+uniform vec3 foot_3;
+uniform vec3 top_color;
+uniform vec3 band_color;
 out vec4 color;
 
 float hash(float n){ return fract(sin(n * 127.1) * 43758.5453); }
@@ -384,8 +407,8 @@ float ring_noise(float x, float period){
 }
 
 void main(){
-  float u = v_ah.x;
   float y = v_ah.y;
+  float u = v_ah.x + fract(spin * time) + twist * y;
   // Streaks: a broad set and a fine one, sharpened into separate rays, drifting.
   float broad = ring_noise(u * 70.0 + time * 0.8, 70.0);
   float fine = ring_noise(u * 190.0 - time * 1.9, 190.0);
@@ -396,13 +419,12 @@ void main(){
   // The glowing band along its foot.
   float band = exp(-y * 14.0) * (0.45 + 0.55 * broad);
   float light = (streak * rise + 0.7 * band) * strength;
-  // Its colour wanders round the ring through the necromancer's greens, emerald, acid
-  // and sea-green, and deepens toward the top.
+  // Its colour wanders round the ring through its three foot colours (the necromancer's
+  // greens: emerald, acid and sea-green) and deepens toward the top.
   float hue = ring_noise(u * 5.0 + time * 0.12, 5.0) * 2.0;
-  vec3 low = hue < 1.0 ? mix(vec3(0.1, 1.0, 0.35), vec3(0.5, 1.0, 0.15), hue)
-           : mix(vec3(0.5, 1.0, 0.15), vec3(0.15, 0.95, 0.65), hue - 1.0);
-  vec3 c = mix(low, vec3(0.05, 0.55, 0.25), smoothstep(0.25, 0.95, y / max(top, 0.3)));
-  c = mix(c, vec3(0.8, 1.0, 0.7), band * 0.6);
+  vec3 low = hue < 1.0 ? mix(foot_1, foot_2, hue) : mix(foot_2, foot_3, hue - 1.0);
+  vec3 c = mix(low, top_color, smoothstep(0.25, 0.95, y / max(top, 0.3)));
+  c = mix(c, band_color, band * 0.6);
   color = vec4(c * light * 1.3, 1.0);
 }")
 
@@ -506,13 +528,21 @@ then fading."
           (spawn-standing-fx (strike-animation (spell circle)) (+ (vx c) (* rr (cos a))) (vy c)
                              (+ (vz c) (* rr (sin a))) (container circle)))))))
 
+(defun sign-frame (age windup count)
+  "The frame of a strip of COUNT, frames drawing a sign in and then a pulsing loop of 4, to
+show AGE seconds into a wind-up of WINDUP."
+  (let ((draw-in (- count 4))
+        (progress (/ age (* *circle-draw-in* windup))))
+    (if (< progress 1)
+        (min (1- draw-in) (floor (* progress draw-in)))
+        (+ draw-in (mod (floor (* age *circle-pulse-fps*)) 4)))))
+
 ;; Its own tick, not FX-SPRITE's: the frame follows the wind-up, and it lies flat.
 (define-handler (spell-circle tick) (dt)
   (let* ((spell (spell spell-circle))
          (windup (spell-windup spell))
          (atlas (animation-atlas (sprite-animation spell-circle)))
-         (count (getf atlas :frames))
-         (draw-in (- count 4)))
+         (count (getf atlas :frames)))
     (when (and (null (circle-lamp spell-circle)) (null (struck spell-circle)) (container spell-circle))
       (light-circle spell-circle))
     (unless (frozen-p)
@@ -532,24 +562,24 @@ then fading."
                (strike-circle spell-circle)
                (burst-ring spell-circle (pop (rings-left spell-circle)))))))
     ;; The sign draws itself in, then pulses.
-    (let* ((progress (/ (age spell-circle) (* *circle-draw-in* windup)))
-           (frame (if (< progress 1)
-                      (min (1- draw-in) (floor (* progress draw-in)))
-                      (+ draw-in (mod (floor (* (age spell-circle) *circle-pulse-fps*)) 4)))))
-      (strip-uv (frame-uv spell-circle) atlas frame count))
+    (strip-uv (frame-uv spell-circle) atlas (sign-frame (age spell-circle) windup count) count)
     ;; The aurora rises and brightens, and so does the lamp.
     (let ((k (circle-strength spell-circle))
           (lamp (circle-lamp spell-circle))
           (aurora (circle-aurora spell-circle)))
       (when aurora
-        (destructuring-bind (low high) *aurora-height*
-          (setf (aurora-height aurora) (+ low (* (- high low) (min 1.0 (/ (age spell-circle) (* 0.8 windup)))))
-                (aurora-strength aurora) (min 1.0 (* 1.6 k)))))
+        (raise-aurora aurora (age spell-circle) windup k))
       (when lamp
         (let ((color (color lamp)))
           (setf (vx color) (* k (vx *circle-light-color*))
                 (vy color) (* k (vy *circle-light-color*))
                 (vz color) (* k (vz *circle-light-color*))))))))
+
+(defun raise-aurora (aurora age windup k)
+  "Bring AURORA up, AGE seconds into a wind-up of WINDUP, as bright as a lamp at K of its full."
+  (destructuring-bind (low high) *aurora-height*
+    (setf (aurora-height aurora) (+ low (* (- high low) (min 1.0 (/ age (* 0.8 windup)))))
+          (aurora-strength aurora) (min 1.0 (* 1.6 k)))))
 
 (defun place-circle (spell centre container caster)
   "Draw SPELL's circle on the floor round point CENTRE for CASTER."
@@ -565,14 +595,17 @@ creature; a :CIRCLE is drawn round ORIGIN, on the floor, and DIRECTION doesn't c
 Mana is the caster's business."
   (ecase (spell-delivery spell)
     (:projectile (launch-projectile spell origin direction container caster))
-    (:circle (place-circle spell origin container caster))))
+    (:circle (place-circle spell origin container caster))
+    (:vortex (place-vortex spell origin direction container caster))))
 
 ;;; The spells.
 
 (defun preload-spells (scene)
   "Load the sprites of every spell, which only appear mid-game."
   (loop for spell being the hash-values of *spells*
-        do (dolist (name (list (projectile-animation spell) (impact-animation spell)))
+        do (when (eq (spell-delivery spell) :vortex)
+             (preload-vortex spell scene))
+           (dolist (name (list (projectile-animation spell) (impact-animation spell)))
              (when name
                (preload (make-instance 'fx-sprite :animation (find-fx-animation name)) scene)))
            (when (strike-animation spell)

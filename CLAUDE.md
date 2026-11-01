@@ -312,7 +312,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `ranged-p` (hunt from range) and `attack-step` (the blow, or the dive).
 - `src/necromancer.lisp`: the `necromancer` and the skeletons it raises (`skeleton-warrior`:
   Trial already has a `skeleton`, for skeletal animation). See "The necromancer" under
-  "Creature movement" below. A creature with several attacks has `ability` objects (frame
+  "Creature movement" below. A creature with several attacks is an `ability-user`, listed before
+  `creature` or a subclass of it in its superclasses, with `ability` objects (frame
   times, hit frame, animation, spell, pause, cooldown); its attack readers
   (`attack-frame-times`, `attack-animation` and the rest) are methods answering for the
   current one, so `attack` runs any of them, and `release-attack` (what lands on the hit
@@ -413,9 +414,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `footing-drag` takes `:friction` (0.97) of the speed away per second, as an exponential, and
   `footing-push` pushes toward `:top-speed` (1.7) times the speed it would walk at: Hexen's
   `FRICTION_LOW` and halved thrust. So the player takes about 1 s to reach a run, slides about as
-  many metres as m/s when they let go, and tops out near 12 m/s; in the air nothing slows them
-  (air control steers but never brakes below the current speed, on any floor), so a run-up on
-  ice jumps further. Creatures skid too: their `momentum` (a blow's knockback, and on ice their
+  many metres as m/s when they let go, and tops out near 12 m/s; in the air, holding a direction
+  keeps their speed (air control steers but never brakes below it, on any floor; with no key held
+  it does brake, at 12 m/s², unless a vortex threw them), so a run-up on ice jumps further. Creatures skid too: their `momentum` (a blow's knockback, and on ice their
   walk) slides them in `slide`, with the footing's drag on ice and `*knockback-friction*`
   elsewhere, and on ice `walk-path` hands over to `skid-path`, which only turns and pushes: a
   point is reached within `*skid-arrive*` or once passed (`*skid-pass*`), and it is stuck when it
@@ -521,6 +522,51 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   ```
 
   To look at one: `tools/hd '(game (cast-spell (find-spell (quote grave-spikes)) (v+ (feet *player*) (vec 0 0 -4)) (vec 0 0 1) (scene +main+)))'`.
+- `src/vortex.lisp`: the tornado, the spell `tempest`, delivery `:vortex` (`spell-vortex`, an
+  `fx-sprite` that draws nothing itself, like `spell-circle` for saves and resets). It takes
+  everyone, its caster too. Each actor runs its part in its own tick (`whirl-step` from the
+  creature's, `whirl-transitions`, `orbit-player` and `end-player-flight` from the player's, so
+  the camera can't lag), on the slots of the `whirlable` mixin (creature.lisp, on both). **Pull:**
+  within `*vortex-pull-radius*`, on its storey (`vortex-reaches-p`, as `clear-path-p` looks across
+  at one height) with a clear line (looked for 10 times a second), an actor is dragged, as a
+  displacement rather than a velocity since a walk would cancel that (`move-pulled`, the `pull`
+  slot), up to `*vortex-pull-speed*` (5.5 m/s, so a walk loses near the middle and a run escapes).
+  **Catch:** within the spell's `:area` plus half its body's radius (`catch-actor`; `note-caught`,
+  and `break-flight` for an ogre's leap or a flyer's dive). **Whirl** for `*whirl-hold*`
+  (`orbit-point`): round the moving centre, spinning up over `*whirl-spin-up*`, carried up to
+  `*whirl-lift*` or under the ceiling (one `nav-room-around` per vortex per tick, `ceiling-above`
+  being far too slow), its body no longer solid (`body-solid-p`), losing the spell's `:magnitude`
+  a second through `burn` and `burn-due`, which don't hit-stop. Walls narrow an orbit
+  (`note-orbit-miss`), and `*whirl-stuck-limit*` off it ends the hold. A creature shows its
+  flinch frame with its `facing` spinning, so its views cycle. **Throw** (`throw-actor`): along
+  the orbit and a little out, at `*fling-speed*` and `*fling-lift*`, both scaled down by
+  `knockback-scale`, when its hold ends or the vortex dies away; `spat-timer` keeps it from being
+  pulled for `*spat-time*`. A creature flies on `flight` (`fly-thrown`), through other bodies,
+  and lands on `nav-floor-at` or where `fits-at-p` fails below, its speed going into `momentum` and
+  `land-thrown` staggering it (a flyer lies downed). The player flies on `velocity` through
+  `walk`, which keeps their speed while `flung` with no key held. A wall hit above `*slam-speed*`
+  hurts (`slam-damage`): `hurt` for a creature, with the blood going at the wall, and for the
+  player `hurt-player ... :shove NIL` plus `hit-stop`, which a shield can't help. **Struggle:** the
+  player's wish, as far as it points away from the centre, widens their orbit against
+  `*whirl-draw*`; past `*whirl-escape*` they drop out at `*struggle-fling*` of a throw. The
+  vortex paths on the nav grid under `*nav-hazards*` `:ignore`: a creature's after the player, the
+  player's after the nearest creature it sees (`vortex-target`), keeping its heading once its
+  quarry is inside. `vortex-aim-point` places the player's where their aim meets the floor, 3 to 8 m
+  off. It shows as a `funnel` (a shared mesh, `*funnel-vao*`, staged by `preload-vortex`; spiral
+  bands snapped to whole cells, premultiplied, no depth written, `late-rank` 0.5) with `ogre-dust`
+  puffs round its foot; from inside, `whirl-streaks` (hud.lisp) rush across the view. To look at
+  one: `tools/hd '(game (cast-spell (find-spell (quote tempest)) (vec 0 0.5 1) (vec 0 0 1) (scene +main+)))'`.
+- `src/wraith.lisp`: the `gale-wraith`, a `flyer` and an `ability-user` (necromancer.lisp) that
+  floats `*wraith-hover*` off the floor, in sword reach. Its tornado takes a `*tempest-cast-time*`
+  (1.5 s) cast: `begin-tempest` lays a `gale-sign` (`sign-frame`, a lamp, a thin funnel and, round
+  its rim, the necromancer's `aurora` in `*sign-aurora-colors*`, its streaks leaning and running
+  round it, `*sign-aurora-spin*` and `*sign-aurora-twist*`) on the
+  floor under the player, and `release-attack` raises the tornado there. The sign despawns itself once
+  `casting-tempest-p` is false, so a flinch (`hurt`'s `stop-walking`), a timed bash, its death or
+  being caught all end the cast at one stroke. A broken cast may be tried again after
+  `*tempest-retry*`, a released one after `*tempest-cooldown*`, and only one of its tornadoes is up
+  at a time. Otherwise it throws `gust`s: a `:gust` effect throws the player, toward its tornado
+  if one is near, and with lift, since a shove on the floor dies at once. It has no walk.
 - `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
   breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
@@ -568,7 +614,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
   to `*cast-release*`.
 - `src/sword.lisp`: the sword and weapon switching. The player holds one weapon (`*weapons*`:
-  1 the sword, 2 the casting hands, 3 the spear); switching lowers one off screen and raises the next.
+  1 the sword, 2 the casting hands, 3 the spear, 4 the tornado, cast by the same hands with their
+  fire recoloured: `hands`' `hand-weapon`, `data/sprites/hands/storm`, from
+  `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/storm`); switching lowers one off screen and raises the next.
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
   so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
   blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
@@ -1340,6 +1388,27 @@ python3 tools/slice_frames.py art/ogre/dust.png data/sprites/ogre --pixel 4.3 --
 
 Its `define-fx-animation` sizes are the strips' cell heights over the turnaround's 173 px.
 
+The gale wraith (a hood with no face, two pale violet eyes, long wind-swept strips of storm grey,
+slate and dusty violet rag with nothing behind them, bandaged arms, no legs) is
+`art/wraith/turnaround-1.png` (`art/prompts/wraith-turnaround.txt`, the imp's, acolyte's, knight's
+and necromancer's sheets as style references), sliced at `--height 115` for its 1.8 m, rag tips
+included. Its back-quarter faces right, so the turnaround takes `--mirror back-quarter`, and
+`art/wraith/stand-back-quarter.png`, cut from it, is mirrored so that view's sheets need none.
+It has a cast (gather, both arms raised with lightning on the hands, the frame the tornado's cast
+holds, release, recover) and a flinch, made with `tools/gen_monster_views.sh wraith <anim> ...`,
+and a front-only death (`wraith-death.txt`) that settles into an empty heap of rags. It has no walk.
+The sign under its tornado's cast is drawn: `tools/draw_gale_sign.py data/sprites/gale`.
+
+```bash
+python3 tools/slice_turnaround.py art/wraith/turnaround-1.png data/sprites/wraith/turnaround --height 115 --filter box --mirror back-quarter
+V="front front-quarter side back-quarter back"
+for a in cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/wraith $a $(for v in $V; do echo art/wraith/${a%:*}-$v.png; done) --height 920 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
+python3 tools/slice_frames.py art/wraith/death.png data/sprites/wraith --pixel 3.82 --anchor bottom --filter box --violet death:8
+```
+
+Its strips need `--violet`: without it the slicer takes blue above green for a blend with the
+magenta background, so it keys out the violet rags, eyes and lightning and greys what's left.
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -1515,7 +1584,7 @@ cell's floor up to Y, `top` for the storey's top, by default `*water-surface*` (
 the next storey's floor; never above the slab over the cell or a doorway's lintel; on the
 border only under a canal doorway's open channel), `torch Y`
 and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer and ogre 1
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre and gale wraith 1
 each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
@@ -1726,8 +1795,8 @@ Controls: click the window to capture the mouse, Esc to pause (release the mouse
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
 down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
-hands and 3 for the spear (or the mouse wheel to cycle them), left click to
-attack (swing, thrust, or cast the bolt), right button held to raise the shield (sword only; a left
+hands, 3 for the spear and 4 for the tornado (or the mouse wheel to cycle them), left click to
+attack (swing, thrust, or cast the bolt or the tornado), right button held to raise the shield (sword only; a left
 click while it's up bashes), M for the automap (see `src/map-view.lisp`), F5 to quicksave
 and F9 to quickload (generated levels only), F12 for a screenshot.
 
@@ -1748,5 +1817,11 @@ sets it hunting, and `(dive-left harpy)` is non-NIL while it dives (hurt it then
 The ogre stands in the hall's east: `(setf *leap-debug* t)` and `(setf (alert ogre) 30.0)` with
 the player 4 to 12 m from it, and the log says where it leaps and what the shockwave hits;
 `(airborne ogre)` is true in the air, and `*hit-stop*` 1000 then freezes it there.
+The gale wraith floats at the back of the hall, east of the necromancer: `(setf (alert wraith) 30.0)`
+with the player in its sight sets it casting, `(casting-tempest-p wraith)` is true until the
+release, and a `(setf (stagger wraith) 0.3)` with `(stop-walking wraith 0.2)` is the flinch that breaks
+it. `(select-weapon *player* :4)` then `(player-attack *player*)` casts the player's tornado, and
+`(whirl *player*)` is the vortex holding them. Right after several level builds in a row, time
+runs fast for a few seconds as Trial's fixed step catches up, so a vortex's age is no measure then.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (next weapon).

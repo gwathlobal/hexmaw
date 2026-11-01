@@ -5,7 +5,7 @@ writes, so the game reads it like any other animation strip:
   tools/draw_weapon_icons.py data/sprites/icons/weapons
 
 writes weapons.png (frames left to right, 2 px transparent gaps) and weapons.lisp.
-Frames, in order: the sword, the fireball (the casting hands), the spear. Each is SIZE
+Frames, in order: the sword, the fireball (the casting hands), the spear, the tornado. Each is SIZE
 art pixels square, drawn pixel by pixel in the palettes of the sword and bolt sprites, then
 outlined in near-black so it reads on any background. The top-left corner of each icon
 is left empty: the game draws the slot's key number there.
@@ -118,6 +118,21 @@ def spear():
     return px
 
 
+def tornado():
+    px = {}
+    pale = (214, 204, 240, 255)
+    mid = (146, 120, 204, 255)
+    dark = (84, 60, 140, 255)
+    # A funnel, wide at the top and leaning as it narrows, in bands that slant across it.
+    rows = ((6, 17), (5, 16), (5, 15), (5, 14), (6, 14), (6, 13), (7, 13), (7, 12), (8, 12),
+            (8, 11), (9, 11), (9, 10), (10, 11), (10, 10), (11, 11))
+    for i, (x0, x1) in enumerate(rows):
+        for x in range(x0, x1 + 1):
+            band = (i + (x - x0) // 4) % 3
+            px[(x, 3 + i)] = pale if band == 0 else mid if band == 1 else dark
+    return px
+
+
 def outlined(px):
     out = dict(px)
     for (x, y) in px:
@@ -130,7 +145,7 @@ def outlined(px):
 def main():
     out = Path(sys.argv[1])
     out.parent.mkdir(parents=True, exist_ok=True)
-    icons = [sword(), fireball(), spear()]
+    icons = [sword(), fireball(), spear(), tornado()]
     strip = Image.new("RGBA", (len(icons) * SIZE + (len(icons) - 1) * GAP, SIZE), (0, 0, 0, 0))
     for i, icon in enumerate(icons):
         for (x, y), c in outlined(icon).items():
