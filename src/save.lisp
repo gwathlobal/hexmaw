@@ -15,11 +15,19 @@
 
 (defparameter *save-directory* (uiop:xdg-data-home "hexmaw/saves/")
   "Where saves live: $XDG_DATA_HOME/hexmaw/saves/, usually ~/.local/share/.")
-(defparameter *save-version* 1 "Bumped when old saves can no longer be read.")
+(defparameter *save-version* 2 "Bumped when old saves can no longer be read.")
 (defparameter *saved-generator-settings*
   '(*generator-rooms* *generator-attempts* *corridor-run* *generator-storeys* *generator-blocks* *spawn-pool*
-    *river-length* *max-rivers* *high-length* *max-high-networks* *start-clearance*)
+    *river-length* *max-rivers* *high-length* *max-high-networks* *flooded-length* *max-flooded-networks*
+    *canal-length* *max-canals* *start-clearance*)
   "The variables besides the seed that decide a generated level.")
+
+(defun level-settings (depth)
+  "The generator's settings for level DEPTH of a run, as an alist of those variables."
+  (loop for var in *saved-generator-settings*
+        collect (cons var (if (eq var '*generator-rooms*)
+                              (run-level-property depth :rooms)
+                              (symbol-value var)))))
 
 (defun save-path (slot)
   (merge-pathnames (if (eq slot :quick) "quick.sav" (format NIL "slot-~d.sav" slot))
@@ -41,7 +49,7 @@
   '(feet rotation velocity grounded eye health pain restore-flash restored burn-timer wading swimming climbing breath drown-timer
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
-    block-raise bash-time bash-pending guard-broken run-time damage-taken))
+    block-raise bash-time bash-pending guard-broken run-time damage-taken level-records))
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
@@ -195,7 +203,9 @@ A vector is written in place, since some slots have only a reader."
         :saved (get-universal-time)
         :summary (run-summary)
         :seed *last-level-seed*
-        :generator (loop for var in *saved-generator-settings* collect (cons var (symbol-value var)))
+        :depth *run-depth*
+        :run-seed (current-run-seed)
+        :generator (level-settings *run-depth*)
         :layout (level-layout)
         :globals (list :hit-stop *hit-stop*
                        :light-clock *light-clock*
@@ -252,8 +262,8 @@ A vector is written in place, since some slots have only a reader."
         (multiple-value-bind (s min h d mon) (decode-universal-time (getf save :saved))
           (declare (ignore s))
           (let ((summary (getf save :summary)))
-            (format NIL "~a: ~d/~d slain, ~d ~a ~2,'0d:~2,'0d"
-                    (slot-name slot) (getf summary :slain) (getf summary :monsters)
+            (format NIL "~a: level ~d, ~d/~d slain, ~d ~a ~2,'0d:~2,'0d"
+                    (slot-name slot) (getf save :depth) (getf summary :slain) (getf summary :monsters)
                     d (aref #("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec") (1- mon))
                     h min)))
         (format NIL "~a: empty" (slot-name slot)))))
@@ -290,9 +300,11 @@ A vector is written in place, since some slots have only a reader."
   "Load the run saved in SLOT. True if there was one to load."
   (let ((save (read-save (save-path slot))))
     (cond (save
-           ;; After START-LEVEL, which drops any load still pending.
+           ;; After START-LEVEL, which drops any load still pending and starts at the top.
            (start-level :generated)
-           (setf *pending-load* save)
+           (setf *pending-load* save
+                 *run-depth* (getf save :depth)
+                 *run-seed* (getf save :run-seed))
            T)
           (T
            (v:warn :hexmaw "~a has no save that can be loaded." (slot-name slot))
@@ -301,7 +313,8 @@ A vector is written in place, since some slots have only a reader."
 (defun generate-saved-level (container save)
   (let ((settings (getf save :generator)))
     (progv (mapcar #'car settings) (mapcar #'cdr settings)
-      (generate-level container :seed (getf save :seed)))))
+      (generate-level container :seed (getf save :seed)
+                                :exit (run-level-property (getf save :depth) :exit)))))
 
 (defun save-matches-level-p (save)
   "True if the level just built is the one SAVE was made on."

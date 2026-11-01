@@ -1,0 +1,16 @@
+Pixel-art WALL DECORATION for a Doom/Hexen-style first-person dark-fantasy dungeon game, like the wall textures of Hexen or Daggerfall.
+
+REFERENCE IMAGES: the first is the game's loading screen, a stone stairway falling away into pitch black: draw the same kind of stairway and the same darkness, but only what is described here, none of its torches, skull or dagger. The second is the game's wall stone: build the arch from this stone, the same colours and shading.
+
+THE IMAGE
+- A single stone archway, seen perfectly dead-on from the front, on a solid flat magenta (#FF00FF) background. Only the archway: no wall around it, no ground around it, no shadow on the background.
+- The arch stands on the bottom edge of the picture and is symmetrical left to right. It is a little taller than it is wide (about 5 wide by 6 tall): straight stone jambs up to a round arch of big wedge-shaped stones, a heavy keystone at the top. The stones are about as thick as a hand-span, a plain frame around the opening, not a thick wall.
+- THE OPENING inside the arch is the stairway going on down, away from the viewer: the walls of the passage closing in on both sides and the first four or five worn stone steps at the very bottom of the opening, each narrower and darker than the one before.
+- Above and beyond those steps, all the rest of the opening is PITCH BLACK, pure #000000 and even, nothing to see in it: it must read as a hole that goes down into the dark.
+- Very faint at the bottom of the black, a barely visible hint of dull red, as if something were far below. Small and dim.
+
+STYLE
+- Even, flat lighting on the stone of the arch: no torch, no light source, no cast shadows, no glow. Lighting comes from the game. Only small local shading inside each stone.
+- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients.
+- Muted, grimy dungeon colours, a little desaturated, of medium brightness.
+- No text, symbols, runes, doors, gates, bars, people or monsters.

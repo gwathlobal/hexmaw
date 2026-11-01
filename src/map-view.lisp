@@ -164,6 +164,15 @@
 (defmethod map-drawn-p ((label map-label))
   (map-debug-p))
 
+(defparameter *exit-label-color* (vec4 1.0 0.42 0.2 1)
+  "Not the other labels' colour: over a wall's cut face, that one can't be read.")
+
+(define-shader-entity exit-label (map-label) ()
+  (:documentation "Says where the way down is, once the player has seen its block."))
+
+(defmethod map-drawn-p ((label exit-label))
+  (or (revealed (label-block label)) (map-debug-p)))
+
 (defparameter *map-hint*
   "Storey ~d~a    Drag: turn  Right drag: pan  Wheel: zoom  PgUp/PgDn/Shift+wheel: storey  Space: centre  M: close")
 
@@ -199,6 +208,7 @@ isn't on that storey or is behind the camera. CLIP is a scratch vec4."
    (hint :initform (make-hud-text "" 'map-text) :reader map-hint)
    (shown-hint :initform NIL :accessor shown-hint :documentation "The storey and what's past it, as the hint shows them.")
    (block-labels :initform () :accessor map-labels)
+   (exit-labels :initform () :accessor map-exit-labels)
    (clip :initform (vec4 0 0 0 1) :reader map-clip)))
 
 (defvar *map-view* NIL "The current scene's MAP-VIEW.")
@@ -207,13 +217,18 @@ isn't on that storey or is behind the camera. CLIP is a scratch vec4."
   "Enter the map screen's camera, overlays and controller into CONTAINER. After the
 level is built: there is a label per block."
   (let ((view (make-instance 'map-view)))
-    (setf (map-labels view)
-          (loop for block across *map-blocks*
-                collect (make-instance 'map-label :block block :text (map-block-name block)
-                                                  :font-size (float +glyph-height+ 0f0)
-                                                  :foreground *hud-text-color* :background (vec4 0 0 0 0))))
+    (flet ((label (class block text color)
+             (make-instance class :block block :text text
+                                  :font-size (float +glyph-height+ 0f0)
+                                  :foreground color :background (vec4 0 0 0 0))))
+      (setf (map-labels view)
+            (loop for block across *map-blocks*
+                  collect (label 'map-label block (map-block-name block) *hud-text-color*))
+            (map-exit-labels view)
+            (loop for (nil . block) across *level-exits*
+                  collect (label 'exit-label block "Stairs down" *exit-label-color*))))
     (dolist (entity (list* (map-camera view) (map-arrow view) (map-markers view) (map-hint view)
-                           (map-labels view)))
+                           (append (map-labels view) (map-exit-labels view))))
       (enter entity container))
     (enter view container)
     (setf *map-view* view)))
@@ -314,6 +329,8 @@ shows and the player's own."
             (setf (shown-hint map-view) key
                   (text (map-hint map-view)) (map-hint-text storey above below)))))
       (place (map-hint map-view) *hud-margin* *hud-margin*)
+      (dolist (label (map-exit-labels map-view))
+        (place-map-label label camera (map-clip map-view)))
       (when (map-debug-p)
         (dolist (label (map-labels map-view))
           (place-map-label label camera (map-clip map-view)))))))

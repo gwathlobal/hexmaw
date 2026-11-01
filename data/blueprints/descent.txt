@@ -1,0 +1,35 @@
+; The way down to the next level of a run: in from the north at the top, a flight down one
+; storey, and a landing at the bottom that leaves the level (EXIT), before an arch painted on
+; the end wall, its stair going on down into the dark. No tag the generator grows from: it
+; places this itself, last, on a doorway far from the start.
+cells 1 2
+storeys 2
+ceiling 3
+tags descent
+material descent-arch 0.62 0.6 0.56
+legend
+  ^ stairs north 0 5
+  X exit
+  A wall descent-arch
+
+plan 0
+########
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#^^^^^^#
+#XXXXXX#
+#AAAAAA#
+
+plan 1
+#nnnnnn#
+T      T
+#      #
+#      #
+#      #
+#      #
+#      #
+#      #
+########
