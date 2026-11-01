@@ -1,24 +1,25 @@
 (in-package #:hexmaw)
 
-;;; Pickups: things hovering in the level that the player takes by touching them. A vial or
-;;; flask gives health back at once, a shard or crystal mana; at full, one stays where it is.
+;;; Pickups: things hovering in the level that the player takes by touching them. Herbs give
+;;; health back at once and a shard mana; at full, one stays where it is. A potion goes into the
+;;; inventory (inventory.lisp) instead, to be drunk later, unless there's no room for it.
 ;;; The blocks say where one may go (`pickup` in a blueprint, *PICKUP-SPOTS*), and each
 ;;; generated level puts as many in those spots as its monsters call for (PLACE-PICKUPS).
-;;; A taken pickup stays in the scene, undrawn, so a reset only has to clear the flag. Another
-;;; kind of pickup (an inventory item) is a method on COLLECT-PICKUP.
+;;; A taken pickup stays in the scene, undrawn, so a reset only has to clear the flag.
 
 ;; The strips' cell heights, at the monsters' 64 px per metre.
-(define-fx-animation pickup-vial "sprites/pickups/vial" :fps 5 :loop T :size (/ 26 64.0))
-(define-fx-animation pickup-flask "sprites/pickups/flask" :fps 5 :loop T :size (/ 38 64.0))
+(define-fx-animation pickup-herbs "sprites/pickups/herbs" :fps 5 :loop T :size (/ 32 64.0))
+(define-fx-animation pickup-health-potion "sprites/pickups/flask" :fps 5 :loop T :size (/ 38 64.0))
 (define-fx-animation pickup-shard "sprites/pickups/shard" :fps 5 :loop T :size (/ 28 64.0))
-(define-fx-animation pickup-crystal "sprites/pickups/crystal" :fps 5 :loop T :size (/ 38 64.0))
+(define-fx-animation pickup-mana-potion "sprites/pickups/mana-potion" :fps 5 :loop T :size (/ 38 64.0))
 
 (defparameter *pickup-kinds*
-  '((:vial :animation pickup-vial :resource :health :amount 15)
-    (:flask :animation pickup-flask :resource :health :amount 40 :large T)
+  '((:herbs :animation pickup-herbs :resource :health :amount 15)
+    (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40)
     (:shard :animation pickup-shard :resource :mana :amount 28)
-    (:crystal :animation pickup-crystal :resource :mana :amount 50 :large T))
-  "What each kind of pickup restores, and how much. A large one goes on a reward spot.")
+    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50))
+  "What each kind of pickup restores, and how much, at once or as the :ITEM it gives (keep :AMOUNT
+the item's, *ITEM-KINDS*: a level's budget counts it).")
 
 (defparameter *pickup-hover* 0.15 "Metres from the floor to the bottom of a pickup.")
 (defparameter *pickup-bob* 0.04 "Metres a pickup bobs up and down from its height.")
@@ -32,7 +33,7 @@ step's height, so one on a 0.8 m sarcophagus takes a jump.")
 
 (defparameter *health-per-monster* 10 "Health a generated level's pickups restore, per monster in it.")
 (defparameter *mana-per-monster* 15 "Mana a generated level's pickups restore, per monster in it.")
-(defparameter *pickup-large-every* 4 "Every so many pickups of a resource, one is large if a reward spot is free.")
+(defparameter *pickup-potion-every* 2 "Every so many pickups of a resource, one is a potion, on a reward spot if one is free.")
 (defparameter *pickup-room-weight* 2 "How much likelier a spot in a room is than one in a corridor.")
 (defparameter *jump-reach* 1.0 "Metres above a floor the player can jump to get onto: a reward spot's limit.")
 
@@ -61,18 +62,30 @@ taken ones by their place here. BUILD-LEVEL empties it.")
 (defgeneric collect-pickup (pickup player)
   (:documentation "Give PICKUP to PLAYER. True if it was used up, NIL if it stays where it is."))
 
+(defun flash-resource (player resource)
+  "Flash the view in RESOURCE's colour (RESTORE-FLASH, hud.lisp)."
+  (setf (restore-flash player) *restore-flash-time*
+        (restored player) resource))
+
+(defun restore-resource (player resource amount)
+  "Give PLAYER AMOUNT of RESOURCE, :HEALTH or :MANA, and flash the view. NIL if it was full."
+  (when (ecase resource
+          (:health (when (< (health player) *player-max-health*)
+                     (setf (health player) (min *player-max-health* (+ (health player) amount)))))
+          (:mana (when (< (mana player) *max-mana*)
+                   (setf (mana player) (min *max-mana* (+ (mana player) amount))))))
+    (flash-resource player resource)
+    T))
+
 (defmethod collect-pickup ((pickup pickup) player)
   (let* ((kind (pickup-kind pickup))
          (resource (pickup-property kind :resource))
-         (amount (pickup-property kind :amount)))
-    (when (ecase resource
-            (:health (when (< (health player) *player-max-health*)
-                       (setf (health player) (min *player-max-health* (+ (health player) amount)))))
-            (:mana (when (< (mana player) *max-mana*)
-                     (setf (mana player) (min *max-mana* (+ (mana player) amount))))))
-      (setf (restore-flash player) *restore-flash-time*
-            (restored player) resource)
-      T)))
+         (item (pickup-property kind :item)))
+    (if item
+        (when (give-item player item)
+          (flash-resource player resource)
+          T)
+        (restore-resource player resource (pickup-property kind :amount)))))
 
 (defun touching-pickup-p (pickup player)
   (let* ((feet (feet player))
@@ -154,7 +167,7 @@ with any at all. NIL if there are none."
 
 (defun scatter-pickups (container)
   "Fill a generated level's spots until its pickups restore what its monsters call for. Drawn
-from a random state of their own, so the level, its monsters and old saves of it don't change."
+from a random state of their own, so the level and its monsters don't change."
   (let* ((random (sb-ext:seed-random-state *last-level-seed*))
          (*nav-hazards* :swim)
          (seen (multiple-value-bind (i j k) (nav-nearest-fitting *spawn-point* *player-radius* *player-height*)
@@ -172,15 +185,15 @@ from a random state of their own, so the level, its monsters and old saves of it
          (used ()))
     (flet ((place (health-p)
              ;; True if there was somewhere to put it.
-             (let* ((large (= (1- *pickup-large-every*)
-                              (mod (if health-p health-count mana-count) *pickup-large-every*)))
-                    ;; Never at the cost of a block with two while another has none.
-                    (large-spot (and large (pick-spot spots '(:reward) used random :fresh T)))
-                    (spot (or large-spot (pick-spot spots '(:floor :reward) used random))))
+             (let* ((potion (= (1- *pickup-potion-every*)
+                               (mod (if health-p health-count mana-count) *pickup-potion-every*)))
+                    ;; A reward spot, but never at the cost of a block with two while another has none.
+                    (spot (or (and potion (pick-spot spots '(:reward) used random :fresh T))
+                              (pick-spot spots '(:floor :reward) used random))))
                (when spot
                  (let ((kind (if health-p
-                                 (if large-spot :flask :vial)
-                                 (if large-spot :crystal :shard)))
+                                 (if potion :health-potion :herbs)
+                                 (if potion :mana-potion :shard)))
                        (p (getf spot :position)))
                    (add-pickup container kind (vx p) (vy p) (vz p) :phase (random 10.0 random))
                    (setf spots (remove spot spots))
@@ -204,8 +217,8 @@ from a random state of their own, so the level, its monsters and old saves of it
         for health-p = T then (not health-p)
         do (add-pickup container
                        (if (eq :reward (getf spot :tier))
-                           (if health-p :flask :crystal)
-                           (if health-p :vial :shard))
+                           (if health-p :health-potion :mana-potion)
+                           (if health-p :herbs :shard))
                        (vx p) (vy p) (vz p))))
 
 (defun place-pickups (container)

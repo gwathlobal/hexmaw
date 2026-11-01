@@ -90,8 +90,9 @@ they did after the save.")
 
 (defvar *game-state* :title
   "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING,
-:PAUSED, :MAP (the automap, map-view.lisp) or :DEAD (the player fell on a generated level,
-PLAYER-DIES, then the death screen). Menus (menu.lisp) change it; anything but :PLAYING
+:PAUSED, :MAP (the automap, map-view.lisp), :INVENTORY (the inventory panel, inventory.lisp)
+or :DEAD (the player fell on a generated level, PLAYER-DIES, then the death screen). Menus
+(menu.lisp) change it; anything but :PLAYING
 freezes the world.")
 
 (defvar *level* :test

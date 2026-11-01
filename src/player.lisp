@@ -62,6 +62,7 @@ dive in, a shove), as an exponential.")
 (defparameter *death-roll* 0.45 "Radians the view has rolled by when the fall is over.")
 (defparameter *death-roll-time* 0.7 "Seconds the view takes to roll over.")
 (defparameter *death-panel-delay* 1.2 "Seconds from death to the death screen (menu.lisp).")
+(defparameter *inventory-size* 20 "Cells in the player's inventory (inventory.lisp).")
 
 (defclass player (fps-camera)
   ((name :initform :player)
@@ -92,6 +93,10 @@ dive in, a shove), as an exponential.")
    (drown-timer :initform 0.0 :accessor drown-timer
                 :documentation "Seconds until the next drowning damage can land (BURN-DUE).")
    (mana :initform *max-mana* :accessor mana)
+   (inventory :initform (make-list *inventory-size*) :accessor inventory
+              :documentation "A list of cells, each a stack, (KIND COUNT), or NIL (inventory.lisp).")
+   (quickslot :initform NIL :accessor quickslot
+              :documentation "The stack Q drinks from, or NIL. A count of 0 remembers the kind.")
    (stamina :initform *max-stamina* :accessor stamina)
    (winded :initform NIL :accessor winded
            :documentation "True from running out of stamina until *WINDED-RECOVER*: no running.")

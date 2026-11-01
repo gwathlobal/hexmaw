@@ -399,6 +399,8 @@ title and its buttons.")
         (pain player) 0.0
         (restore-flash player) 0.0
         (mana player) *max-mana*
+        (inventory player) (make-list *inventory-size*)
+        (quickslot player) NIL
         (stamina player) *max-stamina*
         (winded player) NIL
         (breath player) *breath-time*
@@ -552,6 +554,7 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
      (cond (*settings-open* (close-settings))
            (*slot-menu* (close-slot-menu))
            ((eq *game-state* :map) (close-map))
+           ((eq *game-state* :inventory) (close-inventory))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
     (:f5 (queue-menu-action 'quicksave))

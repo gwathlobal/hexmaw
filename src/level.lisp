@@ -129,7 +129,7 @@ upstairs."
     ;; the annex's stair shaft and the platform's steps test where it can follow.
     (spawn-creature (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
     ;; One of each kind of pickup, behind the spawn point.
-    (loop for kind in '(:vial :flask :shard :crystal)
+    (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2
           do (add-pickup container kind x 0 8.5))
     (build-annex container)

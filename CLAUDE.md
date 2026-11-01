@@ -522,10 +522,11 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   ```
 
   To look at one: `tools/hd '(game (cast-spell (find-spell (quote grave-spikes)) (v+ (feet *player*) (vec 0 0 -4)) (vec 0 0 1) (scene +main+)))'`.
-- `src/pickups.lisp`: pickups, which restore a resource at once when the player touches them.
-  `*pickup-kinds*` has the amounts: `:vial` +15 health, `:flask` +40, `:shard` +28 mana (2 bolts),
-  `:crystal` +50. At full one stays where it is; below full it is taken and any excess lost.
-  A `pickup` is an upright, fullbright, unfogged effect sprite with no lamp, bobbing
+- `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the
+  amounts: `:herbs` +15 health and `:shard` +28 mana (2 bolts) restore at once; at full one stays
+  where it is, below full it is taken and any excess lost (`restore-resource`). `:health-potion`
+  (+40) and `:mana-potion` (+50) have an `:item`, and go into the inventory (`give-item`,
+  inventory.lisp) whatever the health, staying only if there's no room. A `pickup` is an upright, fullbright, unfogged effect sprite with no lamp, bobbing
   `*pickup-hover*` over its floor (`pickup-ground`), touched within `*pickup-reach*` across and
   with the feet from `*pickup-below*` under that floor to `*pickup-above*` over it, so one on a
   0.8 m sarcophagus takes a jump. Only the player touches them. Taken (`taken`), it stays in the
@@ -534,15 +535,35 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   a `pain-flash` with its own `flash-color`). The blocks say where one may go (`pickup` in a
   blueprint, `*pickup-spots*`), and `place-pickups`, last in `build-level`, fills a generated level
   (`scatter-pickups`) until they restore `*health-per-monster*` (10) and `*mana-per-monster*` (15)
-  per monster, every `*pickup-large-every*`th (4th) of a resource large if a reward spot is free. It skips
+  per monster, every `*pickup-potion-every*`th (2nd) of a resource a potion, on a reward spot if one
+  is free in a block with no pickup yet and otherwise anywhere. It skips
   the start block and spots the player can't reach (`spot-reached-p`: a floor spot's own cell, or
   for a reward spot a floor up to `*jump-reach*` under it within 2 m), keeps to one a block until
   blocks run out, and likes rooms `*pickup-room-weight*` times as much as corridors. It draws from
-  a random state of its own seeded with the level's, so seeds keep their layouts and old saves
-  stay valid. Over seeds 1 to 50: 15.8 monsters a level (12 to 23), 17 pickups (13 to 23) restoring
-  165 health and 253 mana. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup, such as an
-  inventory item, is a method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
+  a random state of its own seeded with the level's, so a seed always places the same ones. A save
+  names the taken ones by place, so changing how they're scattered makes an older save mark the wrong
+  ones taken. Over seeds 1 to 30: 15.5 monsters a level (13 to 18), 13 pickups (12 to 15), 3 health
+  potions and 3 of mana (one seed in 15 a 4th), restoring 169 health and 250 mana. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
+  method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
+- `src/inventory.lisp`: the inventory, the quickslot and the panel. `*item-kinds*` says what an item
+  is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a stack, 5); a
+  pickup's `:amount` must match its item's, since a level's budget counts it. A stack is a list `(kind
+  count)`, a slot is a cell's index in the player's `inventory` (`*inventory-size*`, 20) or `:quick`
+  (`slot-stack`). Both are `saved-slots`, and `reset-player` empties them. `give-item` puts a
+  found item in the quickslot if it holds that kind, then a stack of it in the bag, then the
+  quickslot if empty, then an empty cell. Q (`use-quickslot`) drinks one, not at full; when the
+  stack runs out the first bag stack of that kind moves in (`refill-quickslot`), and with none
+  the quickslot keeps the kind with a count of 0, dimmed, so the next one found goes back in. I
+  opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. A left
+  drag moves a stack (`move-stack`): into an empty cell, onto its own kind (merging up to the
+  limit), swapping with another kind; dropped on nothing it goes back, and a dimmed quickslot
+  forgets its kind. The stack stays in its slot until the drop. Parts of the panel are `inventory-part`s
+  (`hud-shown-p` only in `:inventory`) with a `late-rank`, so its see-through back never covers
+  world drawn after it. The quickslot sits in the weapon bar's row, the panel right above that row
+  (`panel-box`). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`. To
+  try it: `(game (give-item *player* :health-potion))` and `(game (open-inventory))`; `tools/hd
+  status` shows the quickslot and bag.
 - `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
   breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
@@ -554,7 +575,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   on every screen, counting frames in its render and updating every `*fps-interval*`.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
-  (`:title`, `:playing`, `:paused`, `:map`, `:dead`, defined in creature.lisp) decides which is up;
+  (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:dead`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
@@ -1386,14 +1407,20 @@ python3 tools/slice_frames.py "Imp Death Sheet.webp" data/sprites/imp --pixel 3.
 Hook a strip up with `define-fx-animation` (fps, loop, height in metres) and name it in
 a spell's `:projectile-animation` / `:impact-animation`.
 
-The pickups are one generated sheet, `art/pickups/sheet-2.png` (`art/prompts/pickups.txt`, the
-imp's turnaround as the reference), a row per kind and a 4-frame glint across, at the monsters'
-64 px per metre. The usual keying takes blue for magenta spill and eats the crystals, so `--cold`
-keys only magenta and its blends:
+The shard and health potion come from one generated sheet, `art/pickups/sheet-2.png`
+(`art/prompts/pickups.txt`, the imp's turnaround as the reference), a row per kind and a 4-frame
+glint across, at the monsters' 64 px per metre; its vial and crystal rows are out of use. The usual
+keying takes blue for magenta spill and eats the crystals, so `--cold` keys only magenta and its
+blends. The mana potion is the health potion's flask with its liquid recoloured, so the two share a
+silhouette. The herbs are their own sheet, and the inventory's icons are drawn by a script:
 
 ```bash
 tools/gen_image.py art/pickups/sheet.png --prompt-file art/prompts/pickups.txt --ref "Pixel Demon Character Turnaround.png" --size 1536x1024 -n 2
-python3 tools/slice_frames.py art/pickups/sheet-2.png data/sprites/pickups --pixel 6.5 --filter box --colors 32 --anchor bottom --cold vial:4 flask:4 shard:4 crystal:4
+python3 tools/slice_frames.py art/pickups/sheet-2.png data/sprites/pickups --pixel 6.5 --filter box --colors 32 --anchor bottom --cold vial:4 flask:4 shard:4 crystal:4 && rm data/sprites/pickups/{vial,crystal}.*
+tools/recolor_strip.py data/sprites/pickups/flask data/sprites/pickups/mana-potion --hue 222 --below 13 --reach 60
+tools/gen_image.py art/pickups/herbs.png --prompt-file art/prompts/healing-herbs.txt --ref "Pixel Demon Character Turnaround.png" --ref art/pickups/sheet-2.png --size 1536x1024 -n 3
+python3 tools/slice_frames.py art/pickups/herbs-3.png data/sprites/pickups --pixel 12 --filter box --colors 32 --anchor bottom herbs:4
+tools/draw_item_icons.py data/sprites/icons/items
 ```
 
 The wall torch is two generated images: `art/torch/unlit-2.png` (the unlit torch in its
@@ -1779,7 +1806,8 @@ Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, 
 down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
 hands and 3 for the spear (or the mouse wheel to cycle them), left click to
 attack (swing, thrust, or cast the bolt), right button held to raise the shield (sword only; a left
-click while it's up bashes), M for the automap (see `src/map-view.lisp`), F5 to quicksave
+click while it's up bashes), Q to drink from the quickslot, I for the inventory (drag items with
+the left button; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to quicksave
 and F9 to quickload (generated levels only), F12 for a screenshot.
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
