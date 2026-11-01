@@ -11,16 +11,17 @@ legend
   s door narrow
   % box 0 0.5 stone
   i spawn imp|acolyte south
+  m spawn imp|acolyte south 30
   $ pickup floor
   & box 0 0.5 stone, pickup reward
 
 plan 0
 ##nnnn##########
 #..........%&&%#
-#..........%%%%#
+#..mm......%%%%#
 #..$$..........#
 T......ii......#
 #..........$$..#
-#%%%%..........#
+#%%%%......mm..#
 #%&&%..........#
 ##########ssss##

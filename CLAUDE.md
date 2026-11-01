@@ -591,8 +591,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   blocks run out, and likes rooms `*pickup-room-weight*` times as much as corridors. It draws from
   a random state of its own seeded with the level's, so a seed always places the same ones. A save
   names the taken ones by place, so changing how they're scattered makes an older save mark the wrong
-  ones taken. Over seeds 1 to 30: 15.5 monsters a level (13 to 18), 13 pickups (12 to 15), 3 health
-  potions and 3 of mana (one seed in 15 a 4th), restoring 169 health and 250 mana. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
+  ones taken. Over seeds 1 to 30, on a run's first level: 33 monsters (24 to 42), 26 pickups (20 to 33), half of each
+  resource potions (5 to 8 of each), restoring 343 health and 509 mana. On its second, 40 monsters and 32 pickups;
+  on its third, 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
 - `src/inventory.lisp`: the inventory, the quickslot and the panel. `*item-kinds*` says what an item
@@ -988,8 +989,8 @@ from `any`, the `hall`'s choice and the high quarter's own spawns; the `cavern`,
 doorways (`check-kit` with `*spawn-pool*` set to only ogres checks every block for it).
 Each block fits it, but the way to the start may not (a `stair`, a cave passage, a `narrow`
 doorway, the far bank of a river): one stranded there guards its part of the level, and
-`check-reachable` warns. Over 150 seeds, 69 of 262 ogres were stranded, and no other
-creature.
+`check-reachable` warns. Over seeds 1 to 30 at each of a run's three depths, 109 of 347 ogres
+were stranded, and no other creature.
 `*ogre-dust*` names the effect animation puffed round a landing and the slam's impact
 (`ogre-dust`, preloaded by `setup-scene`; NIL for none).
 
@@ -1566,7 +1567,8 @@ Blender export that keeps the conventions works the same. Conventions:
   doorway's portal away, to shut a doorway nothing is attached to. A block without one
   is walled off outside instead, into the next cell, with a warning.
 - Empties named `spawn_<monster>` (e.g. `spawn_imp`) place a monster facing the
-  empty's −Z; empties named `torch_<anything>` a torch whose flame stands there
+  empty's −Z, `spawn_skip30_<monster>` with a 30% chance of none (`spawn-skipped-p`);
+  empties named `torch_<anything>` a torch whose flame stands there
   (`add-torch` stands it off the nearest wall). Empties named `pickup_floor_<n>` and
   `pickup_reward_<n>` are spots a pickup may stand on (`src/pickups.lisp`).
 - The scene's glTF extras may give `tags` (`room`, `corridor`, `stair`, `start`) and a
@@ -1675,7 +1677,10 @@ lava: a dry dip, under a step so it is walked through), `water [Y]` (deep water 
 cell's floor up to Y, `top` for the storey's top, by default `*water-surface*` (0.3 m) under
 the next storey's floor; never above the slab over the cell or a doorway's lintel; on the
 border only under a canal doorway's open channel), `torch Y`
-and `spawn MONSTER FACING`, where MONSTER may be a choice, `imp|knight`, or `any`
+and `spawn MONSTER FACING [SKIP]`, where SKIP is a percent chance of no monster (every room
+has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has two kinds of
+spawn; a generated level rolls them, the test level leaves them out, and the gallery and
+`check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre and gale wraith 1
 each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), picked as the

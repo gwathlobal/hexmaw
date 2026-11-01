@@ -16,6 +16,7 @@ legend
   [ diagonal / ice 0 0.4
   ] diagonal \ ice 0 0.4
   I box 0 0.8 ice, spawn acolyte south
+  m spawn acolyte south 30
   _ pit 0.2, floor ice                              ; the frozen pond
   { diagonal / floor -0.2 0, pit 0.2, floor ice     ; its shore
   } diagonal \ floor -0.2 0, pit 0.2, floor ice
@@ -34,7 +35,7 @@ plan 0
 T...1122........1122...T
 +...3344.{{__}}.3344...+
 +......{{______}}......+
-+......__________......+
++..mm..__________..mm..+
 T......}}______{{......T
 #\\......}}__{{......//#
 ###\\..$$......$$..//###

@@ -9,6 +9,7 @@ legend
   B door canal
   C door canal, open
   i spawn any north
+  m spawn any north 30
 
 plan 0
 #####~~~~~~#####
@@ -24,7 +25,7 @@ plan 0
 plan 1
 #BBBBCCCCCCBBBB#
 w....      ....e
-w....      ....e
+w.mm.      .mm.e
 w....      ....e
 #....      ....#
 #..............#

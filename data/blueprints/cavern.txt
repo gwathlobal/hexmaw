@@ -18,6 +18,8 @@ legend
   B diagonal \ rock 3 top
   i spawn any-ogre south
   j spawn any-ogre north
+  m spawn any-ogre south 30
+  M spawn any-ogre north 30
   $ pickup floor
   & box 0 0.4 cave-floor, pickup reward
 
@@ -25,10 +27,10 @@ plan 0
 #########nnnnnn#################
 #####//................\\#######
 ###//..........{{,,,,}}..\\#####
-#//.....//##\\.,,,&&,,,....\\###
+#//.....//##\\.,,,&&,,,.mm.\\###
 #..$$...######.}},,,,{{......\\#
 w.......\\##//.................e
-w..............ii..............e
+w...MM.........ii..............e
 w......AAvvBB......//##\\......e
 #\\....vvvvvv......######.$$.//#
 ###\\..BBvvAAjj....\\##//..//###

@@ -17,9 +17,10 @@
 ;;;    "_" (connector_narrow_north) gives its kind, else it's a door.
 ;;;  - Meshes named "plug_<rest>" fill the doorway of connector_<rest>. They're left out
 ;;;    when the block is placed, and SEAL-CONNECTOR puts them in to shut it.
-;;;  - Empties named "spawn_<monster>" place a monster facing the empty's -Z, and empties
-;;;    named "torch_<anything>" a torch whose flame stands there (ADD-TORCH), and empties
-;;;    named "exit_<anything>" a way off the level (*LEVEL-EXITS*).
+;;;  - Empties named "spawn_<monster>" place a monster facing the empty's -Z ("spawn_skip30_<monster>":
+;;;    with a 30% chance of none), and empties named "torch_<anything>" a torch whose flame
+;;;    stands there (ADD-TORCH), and empties named "exit_<anything>" a way off the level
+;;;    (*LEVEL-EXITS*).
 ;;;  - A material named after a surface in *SURFACES* (wall, floor, ceiling, ...) draws
 ;;;    that surface's textures; any other material is flat in its base colour. The
 ;;;    textures come from the game, laid on in world space; a .glb's own aren't read.
@@ -140,6 +141,14 @@
                      (cons (abs (- (vx position) (vx high))) :east))))
     (cdr (first (sort faces #'< :key #'car)))))
 
+(defun spawn-name-parts (rest)
+  "The monster and the percent chance of no monster in what follows an empty's \"spawn_\":
+\"any\", or \"skip30_any\"."
+  (if (prefixp "skip" rest)
+      (let ((end (position #\_ rest)))
+        (values (subseq rest (1+ end)) (parse-integer rest :start 4 :end end)))
+      (values rest 0)))
+
 (defun read-block (path)
   "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :PICKUPS
 (each :TIER and :POSITION), :EXITS (points), :LIQUIDS (each :KIND and :BOUNDS), :BOUNDS
@@ -180,10 +189,11 @@
                                     :position (vcopy (tlocation transform)))
                               connectors)))
                      ((prefixp "spawn_" name)
-                      (push (list :kind (subseq name (length "spawn_"))
-                                  :position (vcopy (tlocation transform))
-                                  :yaw (rotation-yaw (trotation transform)))
-                            spawns))
+                      (multiple-value-bind (kind skip) (spawn-name-parts (subseq name (length "spawn_")))
+                        (push (list :kind kind :skip skip
+                                    :position (vcopy (tlocation transform))
+                                    :yaw (rotation-yaw (trotation transform)))
+                              spawns)))
                      ((prefixp "torch_" name)
                       (push (vcopy (tlocation transform)) torches))
                      ((prefixp "pickup_" name)
@@ -446,6 +456,18 @@ block too tight for them)."
           ;; NIL when every choice was left out.
           finally (return (first (car (last choices)))))))
 
+(defun spawn-skipped-p (spawn)
+  "Whether SPAWN stays empty. One with a :SKIP, a percent chance of no monster, is rolled on a
+generated level; the test level, which keeps its one of each, leaves it out, and the gallery and
+a checked block, which look over every spawn, always place it."
+  (let ((skip (getf spawn :skip 0)))
+    (and (< 0 skip)
+         (let ((roll (random 100 *block-random*)))
+           (case *level*
+             (:generated (< roll skip))
+             (:test T)
+             (T NIL))))))
+
 (defun place-block (name container &key (at (vec 0 0 0)) (turns 0) (spawns T))
   "Place block NAME with its origin at AT, turned TURNS quarter turns counter-clockwise
 seen from above. Enters its pieces into CONTAINER, adds its solids to *SOLIDS*, its room
@@ -483,10 +505,12 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
           ;; The choice is made even for a spawn left out, so a seed builds the same level.
           (let* ((kind (let ((choice (spawn-choice (getf spawn :kind))))
                          (and choice (or *spawn-override* choice))))
+                 (skipped (spawn-skipped-p spawn))
                  (class (and kind (find-symbol (string-upcase kind) '#:hexmaw)))
                  (at (world (getf spawn :position))))
             (cond
               ((null kind))
+              (skipped)
               ((and *spawn-clearance* (< (vdistance at (car *spawn-clearance*)) (cdr *spawn-clearance*))))
               ((and class (find-class class NIL) (subtypep class 'creature))
                 (spawn-creature (make-instance class :location at

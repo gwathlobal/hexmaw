@@ -7,6 +7,7 @@ legend
   % box 0 0.8 dais
   : box 0 0.4 dais
   I box 0 0.8 dais, spawn acolyte south
+  m spawn acolyte south 30
   $ pickup floor
   & box 0 0.8 dais, pickup reward
 
@@ -16,7 +17,7 @@ plan 0
 #.....%%%%%%%%%%%%.....#
 #........::::::........#
 #......................#
-w......................e
+w....mm..........mm....e
 w......................e
 w......................e
 #......................#

@@ -11,10 +11,11 @@ legend
   + door ice
   _ floor ice
   k floor ice, spawn any north
+  m spawn any-ogre north 30
 
 plan 0
 #++++++#
-#......#
+#mm..mm#
 #__kk__#
 #\\__//#
 ########

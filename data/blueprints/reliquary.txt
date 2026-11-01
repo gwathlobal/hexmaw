@@ -10,17 +10,19 @@ legend
   % box 0 0.8 sarcophagus
   a spawn acolyte|necromancer south
   k spawn imp|knight north
+  m spawn imp|knight north 30
+  M spawn acolyte|necromancer south 30
   $ pickup floor
   & pickup reward
 
 plan 0
 #####T####nnnn####T#####
 #..................&&..#
-#...aa.................#
+#...aa...........MM....#
 #........%%%%%%........#
 ####....########....####
 w......................e
-w......................e
+w.................mm...e
 w......................e
 #..........kk..........#
 T......................T

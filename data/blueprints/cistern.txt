@@ -9,6 +9,7 @@ legend
   ~ water
   u door underwater, water
   i spawn any south
+  m spawn any south 30
   $ pickup floor
   & water, pickup reward
 
@@ -34,10 +35,10 @@ plan 1
 T....              ....T
 #....              ....#
 w....              ....e
-w....              ....e
+w....              .mm.e
 w....              ....e
 #....              ....#
 T....              ....T
-#......................#
+#..........mm..........#
 #..................$$..#
 #########ssssss#########

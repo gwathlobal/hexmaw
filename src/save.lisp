@@ -15,7 +15,7 @@
 
 (defparameter *save-directory* (uiop:xdg-data-home "hexmaw/saves/")
   "Where saves live: $XDG_DATA_HOME/hexmaw/saves/, usually ~/.local/share/.")
-(defparameter *save-version* 2 "Bumped when old saves can no longer be read.")
+(defparameter *save-version* 3 "Bumped when old saves can no longer be read.")
 (defparameter *saved-generator-settings*
   '(*generator-rooms* *generator-attempts* *corridor-run* *generator-storeys* *generator-blocks* *spawn-pool*
     *river-length* *max-rivers* *high-length* *max-high-networks* *flooded-length* *max-flooded-networks*

@@ -27,17 +27,18 @@ legend
   A diagonal / rock 3 top            ; its edge
   B diagonal \ rock 3 top
   i spawn any south
+  m spawn any south 30
   $ pickup floor
   & box 0 0.4 cave-floor, pickup reward
 
 plan 0
 ########Tnnnnnn#########
 #####//..........\\#####
-#####........{{,,}}\\###
+#####....mm..{{,,}}\\###
 ###<<~~~~~)).,,&&,,..###
 #<<~~~~~~~~~.}},,{{..\\#
 w..))~~~~~~~...AAvvBB..e
-w....))~~~((ii.vvvvvv..e
+w....))~~~((ii.vvvvvvmme
 w....[[oo]]....BBvvAA..e
 #\\..oooooo//##\\....//#
 ###..]]oo[[######$$//###
