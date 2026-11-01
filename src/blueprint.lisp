@@ -208,6 +208,7 @@ pool stands this far out of the water, within a step.")
                (unless (member tier '("floor" "reward") :test #'string-equal)
                  (fail line NIL "A pickup spot is floor or reward, not ~s." tier))
                (list :pickup (string-downcase tier))))
+            ((string-equal op "exit") (list :exit))
             (T (fail line NIL "Unknown action ~s." op))))))
 
 (defun parse-legend-line (blueprint string line)
@@ -624,7 +625,7 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                          (nth-value 1 (col-span blueprint c1)) y1
                                          (nth-value 1 (row-span blueprint r1))))))
                        spans)
-              ;; Stairs, spawns, pickup spots and torches, one per region or cell.
+              ;; Stairs, spawns, pickup spots, exits and torches, one per region or cell.
               (let ((done (make-hash-table :test 'equal)))
                 (dotimes (r nr)
                   (dotimes (c nc)
@@ -633,8 +634,9 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                            (stairs (action :stairs actions))
                            (spawn (action :spawn actions))
                            (pickup (action :pickup actions))
+                           (exit (action :exit actions))
                            (torch (action :torch actions)))
-                      (when (and (or stairs spawn pickup) (not (gethash (list r c) done)))
+                      (when (and (or stairs spawn pickup exit) (not (gethash (list r c) done)))
                         (let ((cells (region rows r c)))
                           (dolist (cell cells) (setf (gethash cell done) T))
                           (multiple-value-bind (r0 c0 r1 c1) (region-bounds cells)
@@ -671,7 +673,11 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                                   :initial-value (if pit (- base (second pit)) base))))
                                   (push (list (format NIL "pickup_~a_~d" (second pickup) (incf (gethash "pickup" counts 0)))
                                               (list (/ (+ x0 x1) 2) y (/ (+ z0 z1) 2)) NIL)
-                                        empties)))))))
+                                        empties)))
+                              (when exit
+                                (push (list (format NIL "exit_~d" (incf (gethash "exit" counts 0)))
+                                            (list (/ (+ x0 x1) 2) base (/ (+ z0 z1) 2)) NIL)
+                                      empties))))))
                       (when torch
                         (multiple-value-bind (x z) (cell-centre r c)
                           (cond ((= r 0) (setf z (+ (nth-value 1 (row-span blueprint 0)) *torch-inset*)))

@@ -22,6 +22,13 @@ scaled to that size and stood on the bottom of a texture --period metres tall (d
 standing on a floor the strip fits the box's sides whatever storey it is on, as long
 as --period divides the storey height.
 
+A panel (--panel W --on TEXTURE) is one picture on a wall, W metres wide, such as a doorway,
+drawn on a magenta background: it is cropped to what isn't magenta, scaled to that width,
+keyed and stood on the bottom middle of a texture --metres wide and --period tall, over the
+wall TEXTURE repeated as it would lie there, its rows and columns starting at the bottom left.
+Walls lie on the world's grid and rows start at y = 0, so it stays in place on a wall whose
+middle is a cell's as long as --metres is the cell's size and --period divides the storey height.
+
 --brightness scales every colour first, for a generated surface that came
 out too light or dark beside the rest of the level. Writes <out>.png and, beside the source, <source stem>-tiled.png: the
 texture 3 x 3 at 4x zoom, to check the seams by eye. It prints how far the wrapped
@@ -98,6 +105,35 @@ def make_strip(src, args):
     return tex
 
 
+def make_panel(src, args):
+    """The panel texture of SRC, a picture drawn on magenta, as --panel describes."""
+    picture = src.convert("RGBA")
+    px = picture.load()
+    for x in range(picture.width):
+        for y in range(picture.height):
+            r, g, b, _ = px[x, y]
+            if r > 150 and b > 150 and g < 120:
+                px[x, y] = (r, g, b, 0)
+    picture = picture.crop(picture.getchannel("A").point(lambda a: 255 if a else 0).getbbox())
+    width = round(args.panel * PIXELS_PER_METRE)
+    tall = round(picture.height * width / picture.width)
+    picture = picture.resize((width, tall), Image.BOX)
+    solid = picture.getchannel("A").point(lambda a: 255 if a >= 128 else 0)
+    rgb = picture.convert("RGB")
+    if args.brightness != 1.0:
+        rgb = rgb.point(lambda v: min(255, round(v * args.brightness)))
+    if args.colors:
+        rgb = rgb.quantize(args.colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
+    wall = Image.open(args.on).convert("RGB")
+    size = (round(args.metres * PIXELS_PER_METRE), round(args.period * PIXELS_PER_METRE))
+    tex = Image.new("RGB", size)
+    for x in range(0, size[0], wall.width):
+        for y in range(size[1] - wall.height, -wall.height, -wall.height):
+            tex.paste(wall, (x, y))
+    tex.paste(rgb, ((size[0] - width) // 2, size[1] - tall), solid)
+    return tex
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source")
@@ -108,13 +144,15 @@ def main():
                     help="source pixels cross-faded across the wrapped edges (default 0: none)")
     ap.add_argument("--colors", type=int, default=32, help="palette size (default 32, 0 to keep every colour)")
     ap.add_argument("--strip", type=float, default=0, help="metres tall: the source is a strip on magenta")
-    ap.add_argument("--period", type=float, default=1.0, help="metres tall the strip's texture is (default 1)")
+    ap.add_argument("--period", type=float, default=1.0, help="metres tall a strip's or panel's texture is (default 1)")
+    ap.add_argument("--panel", type=float, default=0, help="metres wide: the source is a picture on magenta")
+    ap.add_argument("--on", help="the wall texture a panel stands on")
     ap.add_argument("--brightness", type=float, default=1.0, help="factor every colour is scaled by (default 1)")
     args = ap.parse_args()
 
     src = Image.open(args.source).convert("RGB")
-    if args.strip:
-        tex = make_strip(src, args)
+    if args.strip or args.panel:
+        tex = make_panel(src, args) if args.panel else make_strip(src, args)
         out = Path(args.out).with_suffix(".png")
         out.parent.mkdir(parents=True, exist_ok=True)
         tex.save(out)

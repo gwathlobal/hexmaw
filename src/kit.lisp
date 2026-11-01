@@ -128,6 +128,21 @@ need be (it burns, but it is a way) and swimming through deep water."
                                 (doorway-probes c)))
                        doorways))))))
 
+(defun exit-cell (exit)
+  "The nav cell the player stands in at EXIT's point, or NIL."
+  (let ((p (car exit)))
+    (nav-nearest-fitting (vec (vx p) (+ (vy p) 0.1) (vz p)) *player-radius* *player-height* :search 2 :reach 1.5)))
+
+(defun level-exit-reached-p (&key (from *spawn-point*))
+  "True if the player can walk to an exit from FROM, wading and swimming where they must."
+  (let ((r *player-radius*) (h *player-height*) (*nav-hazards* :swim))
+    (multiple-value-bind (si sj sk) (and *nav-grid* (nav-nearest-fitting from r h))
+      (when si
+        (let ((seen (nav-reached si sj sk r h *step-height*)))
+          (loop for exit across *level-exits*
+                thereis (multiple-value-bind (i j k) (exit-cell exit)
+                          (and i (= 1 (sbit seen (nav-index i j k)))))))))))
+
 (defun stranded-creatures (&key (from *spawn-point*))
   "The creatures that can't walk to FROM from where they live, each on the nav grid at
 its own size and step. A creature whose own cell is too tight for it can't plan a walk
@@ -180,6 +195,7 @@ that can't walk to the player. Returns both."
 ;;;   to its doorways;
 ;;; - every monster reaches the first doorway;
 ;;; - every pickup spot can be got to: a floor spot walking, a reward spot with a jump, swim or wade;
+;;; - every exit can be walked to from a doorway;
 ;;; - in a high block (tag HIGH), every doorway reaches every other at *HIGH-BODY*'s size,
 ;;;   walking: the ogre's leaps are shortcuts there, never its only way.
 
@@ -242,7 +258,11 @@ without its leaps.")
                 do (unless (some (lambda (seen) (and seen (spot-reached-p spot seen)))
                                  (if (eq :reward (getf spot :tier)) wet reach))
                      (push (format NIL "the ~(~a~) pickup spot at ~a can't be reached" (getf spot :tier) (getf spot :position))
-                           problems)))))
+                           problems))))
+        (loop for exit across *level-exits*
+              do (multiple-value-bind (i j k) (exit-cell exit)
+                   (unless (and i (some (lambda (seen) (and seen (= 1 (sbit seen (nav-index i j k))))) reach))
+                     (push (format NIL "the exit at ~a can't be reached" (car exit)) problems)))))
       (dolist (c (stranded-creatures))
         (push (format NIL "~a at ~a can't reach ~a" (type-of c) (home c) (connector-name (first *level-doorways*)))
               problems))

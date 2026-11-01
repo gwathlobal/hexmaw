@@ -272,10 +272,24 @@ void main(){
   color = vec4(c * alpha, alpha);
 }")
 
+;;; The level banner: which level of the run this is, on arriving.
+
+(defparameter *level-banner-time* 3.0 "Seconds of play the banner stays up on arriving at a level.")
+(defvar *level-banner-left* 0.0 "Seconds of play left of the banner.")
+
+(define-shader-entity level-banner (hud-text) ())
+
+(defmethod hud-shown-p ((banner level-banner))
+  (and (eq *game-state* :playing) (< 0.0 *level-banner-left*)))
+
+(defun level-banner-text ()
+  (format NIL "Level ~d of ~d" *run-depth* (run-length)))
+
 ;;; The HUD: owns the elements, keeps them in place and in sync with the player.
 
 (defclass hud (entity listener)
   ((name :initform :hud)
+   (level-banner :initform (make-hud-text (level-banner-text) 'level-banner) :reader level-banner)
    (health-label :initform (make-hud-text "HP") :reader health-label)
    (health-bar :initform (make-instance 'hud-bar :fill-color *health-bar-color*) :reader health-bar)
    (health-text :initform (make-hud-text) :reader health-text)
@@ -303,6 +317,7 @@ void main(){
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
+        (level-banner hud)
         (fps-display hud)))
 
 (defun add-hud (container)
@@ -338,6 +353,9 @@ numbers; breath has none."
       (row (hud-row-y 2) (health-label hud) (health-bar hud) (health-text hud))
       (row (hud-row-y 3) (breath-label hud) (breath-bar hud) NIL)))
   (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* +glyph-height+))
+  (place (level-banner hud)
+         (round (- (/ (width *context*) 2) (* 4.5 (length (text (level-banner hud))))))
+         (round (* 0.75 (height *context*))))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
   (dolist (cover (list (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)))
@@ -345,7 +363,9 @@ numbers; breath has none."
     (setf (vx (scaling cover)) (float (width *context*) 0f0)
           (vy (scaling cover)) (float (height *context*) 0f0))))
 
-(define-handler (hud tick) ()
+(define-handler (hud tick) (dt)
+  (when (eq *game-state* :playing)
+    (setf *level-banner-left* (max 0.0 (- *level-banner-left* dt))))
   (when *player*
     (let ((hp (max 0 (health *player*)))
           (mp (floor (mana *player*)))

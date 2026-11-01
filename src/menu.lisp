@@ -289,7 +289,7 @@ title and its buttons.")
 
 (defclass loading-screen (menu-panel) ()
   (:documentation "Up while a level is built (:LOADING), which freezes the frame for a second or two."))
-(defmethod panel-title ((panel loading-screen)) "Building the level...")
+(defmethod panel-title ((panel loading-screen)) (if *carried-state* "Descending..." "Building the level..."))
 (defmethod panel-splash ((panel loading-screen)) "loading")
 (defmethod panel-buttons ((panel loading-screen)) ())
 
@@ -320,13 +320,14 @@ title and its buttons.")
 
 (defun death-stats ()
   "The run as the death screen tells it, as PANEL-LINES rows."
-  (let ((summary (run-summary)))
+  (let ((totals (run-totals *player*)))
     (list (list "Killed by" (cause-of-death (killed-by *player*)))
+          (list "Reached" (format NIL "level ~d of ~d" *run-depth* (run-length)))
           (list "Time survived" (play-time-text (run-time *player*)))
-          (list "Monsters slain" (format NIL "~d of ~d" (getf summary :slain) (getf summary :monsters)))
-          (list "Areas explored" (format NIL "~d of ~d" (length (revealed-block-indices)) (length *map-blocks*)))
+          (list "Monsters slain" (format NIL "~d of ~d" (getf totals :slain) (getf totals :monsters)))
+          (list "Areas explored" (format NIL "~d of ~d" (getf totals :explored) (getf totals :blocks)))
           (list "Damage taken" (format NIL "~d" (round (damage-taken *player*))))
-          (list "Level seed" (format NIL "~d" *last-level-seed*)))))
+          (list "Run seed" (format NIL "~d" (current-run-seed))))))
 
 (defclass death-screen (menu-panel) ()
   (:documentation "Up after the player dies on a generated level (:DEAD): how the run went, and the way out."))
@@ -414,6 +415,7 @@ title and its buttons.")
         (weapon-lower player) 0.0
         (run-time player) 0.0
         (damage-taken player) 0
+        (level-records player) ()
         (killed-by player) NIL
         (death-time player) 0.0)
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
@@ -429,20 +431,36 @@ the build holds the frame.")
 
 (defvar *loading-countdown* NIL "Ticks left before START-LEVEL's rebuild, or NIL.")
 
-(defun start-level (level)
-  "Leave the main menu for a new run on LEVEL (see *LEVEL*): put the loading screen up,
-then rebuild the scene with a fresh player at its spawn point. SETUP-SCENE starts play."
-  (setf *level* level
-        *settings-open* NIL
+(defun load-level ()
+  "Put the loading screen up, then rebuild the scene with a fresh player at its spawn point.
+SETUP-SCENE starts play."
+  (setf *settings-open* NIL
         *slot-menu* NIL
         *pending-load* NIL
         *new-run* T
         *game-state* :loading
         *loading-countdown* *loading-frames*))
 
+(defun start-level (level)
+  "Leave the main menu for a new run on LEVEL (see *LEVEL*)."
+  (setf *level* level
+        *run-depth* 1
+        *run-seed* NIL
+        *carried-state* NIL)
+  (load-level))
+
 (defun start-game ()
   "Start a run on a newly generated level (a new seed unless *LEVEL-SEED* is set)."
   (start-level :generated))
+
+(defun descend ()
+  "Leave for the next level of the run, for good: only what the player carries goes on."
+  (when (and (eq *game-state* :playing) (< *run-depth* (run-length)))
+    (setf (level-records *player*) (cons (level-record) (level-records *player*))
+          *carried-state* (carried-state *player*)
+          *hit-stop* 0.0)
+    (incf *run-depth*)
+    (load-level)))
 
 (defun start-debug-level ()
   "Start a run on the greybox test level, where the creatures in development live."

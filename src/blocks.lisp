@@ -18,7 +18,8 @@
 ;;;  - Meshes named "plug_<rest>" fill the doorway of connector_<rest>. They're left out
 ;;;    when the block is placed, and SEAL-CONNECTOR puts them in to shut it.
 ;;;  - Empties named "spawn_<monster>" place a monster facing the empty's -Z, and empties
-;;;    named "torch_<anything>" a torch whose flame stands there (ADD-TORCH).
+;;;    named "torch_<anything>" a torch whose flame stands there (ADD-TORCH), and empties
+;;;    named "exit_<anything>" a way off the level (*LEVEL-EXITS*).
 ;;;  - A material named after a surface in *SURFACES* (wall, floor, ceiling, ...) draws
 ;;;    that surface's textures; any other material is flat in its base colour. The
 ;;;    textures come from the game, laid on in world space; a .glb's own aren't read.
@@ -141,10 +142,10 @@
 
 (defun read-block (path)
   "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :PICKUPS
-(each :TIER and :POSITION), :LIQUIDS (each :KIND and :BOUNDS), :BOUNDS
+(each :TIER and :POSITION), :EXITS (points), :LIQUIDS (each :KIND and :BOUNDS), :BOUNDS
 (min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist of :NAME
 :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
-  (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (pickups ()) (liquids ()) (tags ()) (weight 1.0)
+  (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (pickups ()) (exits ()) (liquids ()) (tags ()) (weight 1.0)
         (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
         (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (org.shirakumo.fraf.gltf:with-gltf (gltf path)
@@ -188,7 +189,9 @@
                      ((prefixp "pickup_" name)
                       (push (list :tier (if (prefixp "pickup_reward" name) :reward :floor)
                                   :position (vcopy (tlocation transform)))
-                            pickups))))
+                            pickups))
+                     ((prefixp "exit_" name)
+                      (push (vcopy (tlocation transform)) exits))))
       (let* ((scenes (org.shirakumo.fraf.gltf:scenes gltf))
              (extras (and (plusp (length scenes)) (org.shirakumo.fraf.gltf:extras (aref scenes 0)))))
         (when (hash-table-p extras)
@@ -206,7 +209,7 @@
           unless (find rest connectors :key (lambda (c) (getf c :rest)) :test #'string-equal)
           do (v:warn :hexmaw "~a: plug_~a has no connector_~:*~a." (file-namestring path) rest))
     (list :pieces (nreverse pieces) :connectors (nreverse connectors) :spawns (nreverse spawns)
-          :torches (nreverse torches) :pickups (nreverse pickups) :liquids (nreverse liquids)
+          :torches (nreverse torches) :pickups (nreverse pickups) :exits (nreverse exits) :liquids (nreverse liquids)
           :bounds (list low high) :tags tags :weight weight)))
 
 (defvar *blocks* (make-hash-table :test 'equal)
@@ -422,6 +425,10 @@ with one kind only.")
   "Where the placed blocks allow a pickup (PLACE-PICKUPS, pickups.lisp), each a plist of :TIER,
 :POSITION and :BLOCK, its MAP-BLOCK. BUILD-LEVEL empties it.")
 
+(defvar *level-exits* (make-array 0 :adjustable T :fill-pointer T)
+  "The ways off the level: each a cons of the point on its floor where the player leaves and
+its block's MAP-BLOCK. BUILD-LEVEL empties it.")
+
 (defun spawn-choice (kind)
   "The monster a spawn of KIND places: KIND itself, one of \"a|b|c\" (alike), for
 \"any\" one of *SPAWN-POOL* by weight, or for \"any-a|b\" one of the pool but those (a
@@ -470,6 +477,8 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
         (dolist (spot (getf def :pickups))
           (vector-push-extend (list :tier (getf spot :tier) :position (world (getf spot :position)) :block map-block)
                               *pickup-spots*))
+        (dolist (p (getf def :exits))
+          (vector-push-extend (cons (world p) map-block) *level-exits*))
         (dolist (spawn (and spawns (getf def :spawns)))
           ;; The choice is made even for a spawn left out, so a seed builds the same level.
           (let* ((kind (let ((choice (spawn-choice (getf spawn :kind))))

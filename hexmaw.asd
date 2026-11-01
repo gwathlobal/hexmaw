@@ -21,6 +21,7 @@
                (:file "necromancer")
                (:file "ogre")
                (:file "blocks")
+               (:file "run")
                (:file "fx")
                (:file "lights")
                (:file "liquids")
