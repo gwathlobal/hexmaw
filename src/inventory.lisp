@@ -2,8 +2,8 @@
 
 ;;; The inventory: items the player carries, a quickslot Q drinks from, and a panel to move them
 ;;; around in. A stack is a list (KIND COUNT); a slot, where one lives, is a cell's index in the
-;;; player's INVENTORY or :QUICK. The quickslot is shown in play beside the weapon slots; I opens
-;;; the panel above them (*GAME-STATE* :INVENTORY), which freezes the world as the map does.
+;;; player's INVENTORY or :QUICK. The quickslot is shown in play above the weapon slots; I opens
+;;; the panel above it (*GAME-STATE* :INVENTORY), which freezes the world as the map does.
 ;;; Icons come from data/sprites/icons/items (tools/draw_item_icons.py).
 
 (define-fx-animation item-icons "sprites/icons/items")
@@ -187,21 +187,20 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
   (+ (item-icon-size) *weapon-slot-padding* *weapon-slot-padding*))
 
 (defun quick-position ()
-  "The quickslot's corner: in the weapon bar's row, after the last weapon."
-  (let ((step (+ (item-cell-size) *weapon-slot-gap*)))
-    (values (+ *hud-margin* (* step (/ (length *weapons*) 2)))
-            (+ (hud-top) *weapon-slot-gap*))))
+  "The quickslot's corner: on the left, in a row of its own above the weapon bar."
+  (values *hud-margin*
+          (+ (hud-top) *weapon-slot-gap* (item-cell-size) *weapon-slot-gap*)))
 
 (defun inventory-rows ()
   (ceiling *inventory-size* *inventory-columns*))
 
 (defun panel-box ()
-  "The panel's corner and size: on the weapon bar's left, right above it."
+  "The panel's corner and size: on the left, right above the quickslot."
   (let* ((step (+ (item-cell-size) *weapon-slot-gap*))
          (pad *inventory-padding*)
          (text (+ +glyph-height+ pad)))
     (values *hud-margin*
-            (+ (hud-top) *weapon-slot-gap* step)
+            (+ (nth-value 1 (quick-position)) step)
             (+ pad pad (- (* step *inventory-columns*) *weapon-slot-gap*))
             (+ pad pad text text (- (* step (inventory-rows)) *weapon-slot-gap*)))))
 

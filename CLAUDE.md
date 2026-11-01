@@ -560,8 +560,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   limit), swapping with another kind; dropped on nothing it goes back, and a dimmed quickslot
   forgets its kind. The stack stays in its slot until the drop. Parts of the panel are `inventory-part`s
   (`hud-shown-p` only in `:inventory`) with a `late-rank`, so its see-through back never covers
-  world drawn after it. The quickslot sits in the weapon bar's row, the panel right above that row
-  (`panel-box`). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`. To
+  world drawn after it. The quickslot has a row of its own above the weapon bar (`quick-position`), the panel
+  right above it (`panel-box`). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`. To
   try it: `(game (give-item *player* :health-potion))` and `(game (open-inventory))`; `tools/hd
   status` shows the quickslot and bag.
 - `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
