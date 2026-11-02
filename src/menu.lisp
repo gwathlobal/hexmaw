@@ -306,6 +306,8 @@ title and its buttons.")
   "What the death screen says killed the player, from PLAYER's KILLED-BY."
   (cond ((eq killed-by :lava) "lava")
         ((eq killed-by :drowning) "drowning")
+        ((eq killed-by :fall) "a fall")
+        ((eq killed-by :impact) "being thrown")
         ((null killed-by) "something")
         ;; The boss's title (PLAYER-DIES).
         ((stringp killed-by) (format NIL "the ~a" killed-by))

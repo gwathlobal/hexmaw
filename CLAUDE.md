@@ -306,6 +306,19 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   shield aside (`break-guard`, player.lisp). `turn-speed`
   (radians per second, NIL for instant) is what lets the player get behind it: `turn-to`
   limits every facing change, in walks, idle hunting and an attack's wind-up.
+  **Impacts**: an actor stopped faster than `*impact-speed*` (8 m/s) by a wall, a ceiling or
+  another body is hurt, whatever sent it (a tornado's throw, the ogre's quake or slam, a gust), and
+  so is the body it hit, at the same speed, with no shove. Onto a floor that holds for one
+  `flung` by a tornado; the player's own falls hurt only past `*fall-impact-speed*` (13 m/s, a
+  4 m drop; `:by :fall`), and not into deep water. Damage is `*impact-per-speed*` (2.5) a m/s
+  over, at least 1, at most `*impact-max*` (20), and no shield helps. `hit-surface` hurts one
+  actor (`hurt`, the blood thrown onto what it hit; `hurt-player ... :shove NIL` plus `hit-stop`,
+  `:by` `:tornado` while thrown or held, else `:impact`, or the creature thrown into them);
+  `hit-across` takes what a move lost and `strike-body` finds the body it ran into. Creatures
+  check in `slide` (knockback, not their own walk on ice) and `fly-thrown`, the player in
+  `note-impacts` after each move (walls not while grounded on ice). Running (7 m/s) stays under
+  it. A whole tornado hold costs a creature about 12 in the wind, up to 20 from a wall and 5 to 10
+  landing.
 - `src/flyer.lisp`: `flyer`, a creature that keeps to the air, and the `harpy`. See "Flyers"
   under "Creature movement" below. Creature code reaches it through generics with a
   walker's default: `keep-height` (settle, or hover, dive and fall), `move-lift`,
@@ -547,12 +560,13 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   flinch frame with its `facing` spinning, so its views cycle. **Throw** (`throw-actor`): along
   the orbit and a little out, at `*fling-speed*` and `*fling-lift*`, both scaled down by
   `knockback-scale`, when its hold ends or the vortex dies away; `spat-timer` keeps it from being
-  pulled for `*spat-time*`. A creature flies on `flight` (`fly-thrown`), through other bodies,
+  pulled for `*spat-time*`. A creature flies on `flight` (`fly-thrown`), stopped by walls and bodies,
   and lands on `nav-floor-at` or where `fits-at-p` fails below, its speed going into `momentum` and
   `land-thrown` staggering it (a flyer lies downed). The player flies on `velocity` through
-  `walk`, which keeps their speed while `flung` with no key held. A wall hit above `*slam-speed*`
-  hurts (`slam-damage`): `hurt` for a creature, with the blood going at the wall, and for the
-  player `hurt-player ... :shove NIL` plus `hit-stop`, which a shield can't help. **Struggle:** the
+  `walk`, which keeps their speed while `flung` with no key held. What a thrown actor hits
+  hurts it (`hit-surface`, see "Impacts" under `src/creature.lisp`): walls, bodies, the ceiling
+  and, while `flung`, the floor, and the orbit dashing it against a wall (`note-orbit-miss`, once
+  each time walls start keeping it off its orbit, at the orbit's speed). **Struggle:** the
   player's wish, as far as it points away from the centre, widens their orbit against
   `*whirl-draw*`; past `*whirl-escape*` they drop out at `*struggle-fling*` of a throw. The
   vortex paths on the nav grid under `*nav-hazards*` `:ignore`: a creature's after the player, the

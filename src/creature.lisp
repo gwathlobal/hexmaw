@@ -138,6 +138,46 @@ creatures in development live; :GALLERY, every level block laid out (kit.lisp); 
   (let ((pull (pull actor)))
     (setf (vx pull) 0f0 (vz pull) 0f0)))
 
+;;; Impacts: an actor thrown or knocked into a wall, a ceiling or another body fast enough
+;;; is hurt, whatever sent it, and so is the body it hits. Onto a floor that holds for one a
+;;; vortex threw; the player's own falls hurt only from higher up. Walking, running and
+;;; sliding on ice stay under it.
+
+(defparameter *impact-speed* 8.0
+  "Speed in m/s into a wall, ceiling or body below which an actor is unhurt, and onto a floor for one thrown.")
+(defparameter *fall-impact-speed* 13.0 "Speed in m/s onto a floor below which the player's own fall is unhurt: a 4 m drop.")
+(defparameter *impact-per-speed* 2.5 "Damage per m/s over the speed that hurts.")
+(defparameter *impact-max* 20 "The most damage one impact does.")
+
+(defun impact-damage (speed &optional (threshold *impact-speed*))
+  (max 1 (min *impact-max* (round (* *impact-per-speed* (- speed threshold))))))
+
+(defgeneric hit-surface (actor speed x y z &key threshold by)
+  (:documentation "ACTOR hit something at SPEED m/s going along X Y Z, the way into it: hurt
+it if that is over THRESHOLD (*IMPACT-SPEED*). BY is what to blame, for the death screen."))
+
+(defun strike-body (actor speed x z reach &key by)
+  "ACTOR, stopped going along X Z at SPEED, may have run into another body: if one is within
+REACH metres that way, it takes the impact too, the other way."
+  (let ((len (sqrt (+ (* x x) (* z z)))))
+    (when (and (< *impact-speed* speed) (< 1f-4 len))
+      (let* ((feet (body-feet actor))
+             (k (/ (max reach 0.1) len))
+             (body (nth-value 1 (body-overlapping (+ (vx feet) (* k x)) (+ (vy feet) 0.05) (+ (vz feet) (* k z))
+                                                  (float (body-radius actor) 0f0)
+                                                  (- (float (body-height actor) 0f0) 0.05)
+                                                  actor))))
+        (when body
+          (hit-surface body speed (- x) 0.0 (- z) :by (or by actor)))))))
+
+(defun hit-across (actor hit-x hit-z dt &key by)
+  "ACTOR moving along the ground or through the air was stopped going at HIT-X HIT-Z m/s
+this DT-second tick: a wall or body it hit fast enough hurts it, and the body too."
+  (let ((speed (sqrt (+ (* hit-x hit-x) (* hit-z hit-z)))))
+    (when (< *impact-speed* speed)
+      (hit-surface actor speed hit-x 0.0 hit-z :by by)
+      (strike-body actor speed hit-x hit-z (* speed dt) :by by))))
+
 (define-shader-entity creature (billboard whirlable)
   ((max-health :initarg :max-health :initform 30 :accessor max-health)
    (health :accessor health)
@@ -454,6 +494,14 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
              (bleed-out creature)))
       (setf (dead creature) 0.0))))
 
+(defmethod hit-surface ((creature creature) speed x y z &key (threshold *impact-speed*) by)
+  (declare (ignore by))
+  (when (< threshold speed)
+    (let ((loc (location creature)))
+      ;; Struck from the side away from what it hit, so the blood sprays onto it.
+      (hurt creature (impact-damage speed threshold)
+            :from (vec (- (vx loc) x) (- (+ (vy loc) (* 0.5 (sprite-height creature))) y) (- (vz loc) z))))))
+
 (defun burn (creature amount)
   "Take AMOUNT health from CREATURE standing in lava or drowning: a flash and it notices, but no
 flinch, blood or hit-stop, which would freeze the game every burn."
@@ -518,8 +566,13 @@ friction: on ice by the footing's, and while it walks there it climbs steps as i
     (multiple-value-bind (x-blocked z-blocked)
         (move-creature creature (* (vx kb) dt) (* (vz kb) dt)
                        (if (and footing walking) (move-lift creature) 0.05))
-      (when x-blocked (setf (vx kb) 0.0))
-      (when z-blocked (setf (vz kb) 0.0)))
+      (let ((hit-x (if x-blocked (vx kb) 0.0))
+            (hit-z (if z-blocked (vz kb) 0.0)))
+        (when x-blocked (setf (vx kb) 0.0))
+        (when z-blocked (setf (vz kb) 0.0))
+        ;; Knocked into something hard; its own walk on ice doesn't count.
+        (unless walking
+          (hit-across creature hit-x hit-z dt))))
     (if footing
         (footing-drag kb footing dt (not walking))
         (let* ((speed (sqrt (+ (expt (vx kb) 2) (expt (vz kb) 2))))
