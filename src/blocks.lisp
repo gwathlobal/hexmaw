@@ -511,28 +511,38 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
             (cond
               ((null kind))
               (skipped)
+              ;; The boss: an empowered monster of a kind and powers picked here (boss.lisp).
+              ;; It sleeps until the player is in its arena, so the start's clearance doesn't
+              ;; keep it out.
+              ((string-equal kind "boss")
+               (spawn-creature (make-boss at (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0)))) container))
               ((and *spawn-clearance* (< (vdistance at (car *spawn-clearance*)) (cdr *spawn-clearance*))))
               ((and class (find-class class NIL) (subtypep class 'creature))
                 (spawn-creature (make-instance class :location at
                                                      :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))
                                 container))
               (T (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind)))))
-        (loop for c in (getf def :connectors)
-              for portal in portals
-              collect (let ((plugs (getf c :plugs)))
-                        (first
-                         (push (make-instance 'connector
-                                              :name (getf c :name) :block-name name
-                                              :location (world (getf c :position))
-                                              :direction (turn-direction (getf c :direction) turns)
-                                              :kind (getf c :kind) :storey (getf c :storey) :portal portal
-                                              :plug (when plugs
-                                                      (lambda (container)
-                                                        ;; Sealed later, but still part of this block's map.
-                                                        (let ((*map-block* map-block))
-                                                          (dolist (piece plugs)
-                                                            (enter-piece piece container #'world rotation))))))
-                               *level-doorways*))))))))
+        (let ((connectors
+                (loop for c in (getf def :connectors)
+                      for portal in portals
+                      collect (let ((plugs (getf c :plugs)))
+                                (first
+                                 (push (make-instance 'connector
+                                                      :name (getf c :name) :block-name name
+                                                      :location (world (getf c :position))
+                                                      :direction (turn-direction (getf c :direction) turns)
+                                                      :kind (getf c :kind) :storey (getf c :storey) :portal portal
+                                                      :plug (when plugs
+                                                              (lambda (container)
+                                                                ;; Sealed later, but still part of this block's map.
+                                                                (let ((*map-block* map-block))
+                                                                  (dolist (piece plugs)
+                                                                    (enter-piece piece container #'world rotation))))))
+                                       *level-doorways*))))))
+          ;; The boss's lair: its doorway shuts behind the player (boss.lisp).
+          (when (member :arena (getf def :tags))
+            (note-arena map-block connectors))
+          connectors)))))
 
 (defun add-doorway-portal (position direction &optional (kind "door"))
   "A flat portal filling the doorway of a connector at POSITION facing DIRECTION. If

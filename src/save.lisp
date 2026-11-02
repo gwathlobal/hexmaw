@@ -69,7 +69,13 @@
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
 
-(defmethod saved-slots append ((ogre ogre))
+(defmethod saved-slots append ((sigil summon-sigil))
+  '(caster centre burst))
+
+(defmethod saved-slots append ((boss boss))
+  '(powers dormant enraged boss-power power-cooldowns power-gap power-point roar))
+
+(defmethod saved-slots append ((leaper leaper))
   '(attack-kind leap-from leap-to leap-apex leap-duration leap-time airborne falling fall-speed
     recover leap-cooldown))
 
@@ -221,7 +227,9 @@ A vector is written in place, since some slots have only a reader."
         ;; The blocks the automap shows, by placement order (map-view.lisp).
         :map (revealed-block-indices)
         ;; The seed places the pickups again; a save older than them has none taken.
-        :pickups (taken-pickup-indices)))
+        :pickups (taken-pickup-indices)
+        ;; Whether the gate has dropped behind the player (boss.lisp).
+        :arena (when *arena* (list :sealed (sealed *arena*)))))
 
 ;;; Files.
 
@@ -386,7 +394,9 @@ A vector is written in place, since some slots have only a reader."
            (v:warn :hexmaw "This save's level has changed since (the blocks or generator differ); starting it fresh.")
            NIL)
           (T
-           (handler-case (restore-saved-objects save scene)
+           (handler-case (progn (restore-saved-objects save scene)
+                                (when (getf (getf save :arena) :sealed)
+                                  (seal-arena :instant T)))
              (error (e)
                (v:warn :hexmaw "Restoring the save failed: ~a" e)
                (return-from restore-run NIL)))

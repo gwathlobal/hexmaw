@@ -286,6 +286,9 @@ nothing else meanwhile, and plays its death backwards.")
    (stirring :initform 0.0 :accessor stirring
              :documentation "Seconds left of a corpse's twitching, as something raises it.")
    (drip-timer :initform 0f0 :accessor drip-timer :documentation "Seconds until its next drip.")
+   (size-scale :initarg :size-scale :initform 1.0 :reader size-scale
+               :documentation "How much bigger than its strips' own size it is drawn: a boss's
+empowered form (boss.lisp). Its SPRITE-HEIGHT is already scaled.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
    (base-scaling :reader base-scaling)))
@@ -413,10 +416,23 @@ pain roll says (a flyer's dive, flyer.lisp).")
   (< (random 100 *roll-random*)
      (min *max-pain-chance* (+ (pain-chance creature) bonus))))
 
+(defgeneric stays-dead-p (creature)
+  (:documentation "True if CREATURE never comes back on the test level (*REVIVE-TIME*): one
+summoned mid-game, or a boss (boss.lisp).")
+  (:method ((creature creature)) (summoned creature)))
+
+(defgeneric dormant-p (creature)
+  (:documentation "True while CREATURE sleeps: it neither thinks nor takes harm (a boss
+before its arena is sealed, boss.lisp). A hit only flashes it.")
+  (:method ((creature creature)) NIL))
+
 (defun hurt (creature amount &key from (pain-bonus 0))
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
 the blood sprays away from. It flinches and breaks off what it's doing on a pain roll,
 its PAIN-CHANCE plus PAIN-BONUS percent."
+  (when (and (dormant-p creature) (not (dead creature)))
+    (setf (flash creature) *flash-time*)
+    (return-from hurt))
   (unless (dead creature)
     (decf (health creature) amount)
     (when (bleeds creature)
@@ -441,7 +457,7 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
 (defun burn (creature amount)
   "Take AMOUNT health from CREATURE standing in lava or drowning: a flash and it notices, but no
 flinch, blood or hit-stop, which would freeze the game every burn."
-  (unless (dead creature)
+  (unless (or (dead creature) (dormant-p creature))
     (decf (health creature) amount)
     (setf (flash creature) *flash-time*
           (alert creature) *alert-time*)
@@ -1282,7 +1298,7 @@ flinch, 0 to 1."
          (atlas (animation-atlas animation))
          (count (getf atlas :frames))
          (cycle (floor count views))
-         (h (animation-size animation))
+         (h (* (size-scale creature) (animation-size animation)))
          (scale (scaling creature)))
     (setf (texture creature) (animation-texture animation))
     (strip-uv (frame-uv creature) atlas (+ (* (view-index creature) cycle) (mod frame cycle))
@@ -1295,7 +1311,7 @@ flinch, 0 to 1."
 the flinch, 0 to 1."
   (let* ((animation (find-fx-animation name))
          (atlas (animation-atlas animation))
-         (h (animation-size animation))
+         (h (* (size-scale creature) (animation-size animation)))
          (scale (scaling creature)))
     (setf (texture creature) (animation-texture animation))
     (strip-uv (frame-uv creature) atlas frame (getf atlas :frames))
@@ -1367,7 +1383,7 @@ after the flinch, block and attack.")
              (let* ((animation (find-fx-animation (death-animation creature)))
                     (atlas (animation-atlas animation))
                     (count (getf atlas :frames))
-                    (h (animation-size animation)))
+                    (h (* (size-scale creature) (animation-size animation))))
                (setf (texture creature) (animation-texture animation))
                (strip-uv (frame-uv creature) atlas (min (1- count) (floor (* d (animation-fps animation)))) count)
                (setf (vx scale) (* h (/ (getf atlas :cell-width) (getf atlas :cell-height)))
@@ -1461,6 +1477,7 @@ after the flinch, block and attack.")
               (cond ((< 0 (rising creature))
                      (decf (rising creature) dt))
                     ((< 0 (stagger creature)))
+                    ((dormant-p creature))
                     (afloat
                      (flounder creature dt))
                     (T
@@ -1470,7 +1487,7 @@ after the flinch, block and attack.")
           (keep-height creature dt))
         (when (dead creature)
           (incf (dead creature) dt)
-          (when (and *revive-time* (eq *level* :test) (not (summoned creature))
+          (when (and *revive-time* (eq *level* :test) (not (stays-dead-p creature))
                      (< (+ (death-duration creature) *revive-time*) (dead creature))
                      ;; Wait for whoever stands on its spawn point to move.
                      (let ((home (home creature)))

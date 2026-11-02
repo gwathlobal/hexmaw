@@ -284,7 +284,7 @@ title and its buttons.")
 (defmethod panel-buttons ((panel main-menu))
   `(("Start game" start-game) ("Load game" open-load-menu)
     ;; The test level is for development only.
-    ,@(when *debug-version* '(("Debug level" start-debug-level)))
+    ,@(when *debug-version* '(("Debug level" start-debug-level) ("Boss fight" start-boss-fight)))
     ("Settings" open-settings) ("Exit game" exit-game)))
 
 (defclass loading-screen (menu-panel) ()
@@ -304,12 +304,13 @@ title and its buttons.")
 
 (defun cause-of-death (killed-by)
   "What the death screen says killed the player, from PLAYER's KILLED-BY."
-  (case killed-by
-    (:lava "lava")
-    (:drowning "drowning")
-    ((NIL) "something")
-    (T (let ((name (substitute #\Space #\- (string-downcase killed-by))))
-         (format NIL "~:[a~;an~] ~a" (find (char name 0) "aeiou") name)))))
+  (cond ((eq killed-by :lava) "lava")
+        ((eq killed-by :drowning) "drowning")
+        ((null killed-by) "something")
+        ;; The boss's title (PLAYER-DIES).
+        ((stringp killed-by) (format NIL "the ~a" killed-by))
+        (T (let ((name (substitute #\Space #\- (string-downcase killed-by))))
+             (format NIL "~:[a~;an~] ~a" (find (char name 0) "aeiou") name)))))
 
 (defun play-time-text (seconds)
   (multiple-value-bind (minutes s) (floor (floor seconds) 60)
@@ -318,16 +319,27 @@ title and its buttons.")
           (format NIL "~d:~2,'0d:~2,'0d" hours m s)
           (format NIL "~d:~2,'0d" m s)))))
 
-(defun death-stats ()
-  "The run as the death screen tells it, as PANEL-LINES rows."
+(defun run-stat-lines (time-label)
+  "How the run went, as PANEL-LINES rows, the time under TIME-LABEL: what the death and
+victory screens share."
   (let ((totals (run-totals *player*)))
-    (list (list "Killed by" (cause-of-death (killed-by *player*)))
-          (list "Reached" (format NIL "level ~d of ~d" *run-depth* (run-length)))
-          (list "Time survived" (play-time-text (run-time *player*)))
+    (list (list time-label (play-time-text (run-time *player*)))
           (list "Monsters slain" (format NIL "~d of ~d" (getf totals :slain) (getf totals :monsters)))
           (list "Areas explored" (format NIL "~d of ~d" (getf totals :explored) (getf totals :blocks)))
           (list "Damage taken" (format NIL "~d" (round (damage-taken *player*))))
           (list "Run seed" (format NIL "~d" (current-run-seed))))))
+
+(defun death-stats ()
+  "The run as the death screen tells it, as PANEL-LINES rows."
+  (list* (list "Killed by" (cause-of-death (killed-by *player*)))
+         (list "Reached" (format NIL "level ~d of ~d" *run-depth* (run-length)))
+         (run-stat-lines "Time survived")))
+
+(defun victory-stats ()
+  "The run as the victory screen tells it, as PANEL-LINES rows."
+  (let ((boss (and *arena* (arena-boss *arena*))))
+    (list* (list "Slew" (if boss (boss-title boss) "the boss"))
+           (run-stat-lines "Time"))))
 
 (defclass death-screen (menu-panel) ()
   (:documentation "Up after the player dies on a generated level (:DEAD): how the run went, and the way out."))
@@ -336,6 +348,14 @@ title and its buttons.")
 (defmethod panel-width ((panel death-screen)) 440)
 (defmethod panel-lines ((panel death-screen)) (death-stats))
 (defmethod panel-buttons ((panel death-screen)) '(("Return to main menu" exit-to-title)))
+
+(defclass victory-screen (menu-panel) ()
+  (:documentation "Up once the boss is dead (:VICTORY, boss.lisp): the run is won. How it went, and the way out."))
+(defmethod panel-title ((panel victory-screen)) "VICTORY")
+(defmethod panel-splash ((panel victory-screen)) "victory")
+(defmethod panel-width ((panel victory-screen)) 440)
+(defmethod panel-lines ((panel victory-screen)) (victory-stats))
+(defmethod panel-buttons ((panel victory-screen)) '(("Return to main menu" exit-to-title)))
 
 (defvar *settings-open* NIL
   "True while the settings panel covers the main or pause menu, which Back returns to.")
@@ -386,6 +406,7 @@ title and its buttons.")
     (:loading 'loading-screen)
     ;; After the fall (FALL-DEAD).
     (:dead (when (<= *death-panel-delay* (death-time *player*)) 'death-screen))
+    (:victory 'victory-screen)
     (:paused (cond (*settings-open* 'settings-menu)
                    ((eq *slot-menu* :save) 'save-menu)
                    ((eq *slot-menu* :load) 'load-menu)
@@ -466,6 +487,36 @@ SETUP-SCENE starts play."
   "Start a run on the greybox test level, where the creatures in development live."
   (start-level :test))
 
+(defvar *boss-fight-start* NIL
+  "True while START-BOSS-FIGHT's level is built: SETUP-SCENE then stands the player at the arena's doorway.")
+
+(defun start-boss-fight ()
+  "For testing: a new run started on its last level, with the player outside the boss's
+arena. *BOSS-OVERRIDE* (boss.lisp) picks the boss."
+  (start-level :generated)
+  (setf *run-depth* (run-length)
+        *boss-fight-start* T))
+
+(defun stand-outside-arena (player)
+  "Put PLAYER 2 m outside the arena's doorway, facing in, and take every monster but the
+boss out of the level: a test of the boss, not of the level's last rooms."
+  (when *arena*
+    (let* ((door (arena-door *arena*))
+           (p (connector-location door))
+           (j 0))
+      (loop for c across *creatures*
+            do (if (typep c 'boss)
+                   (progn (setf (aref *creatures* j) c) (incf j))
+                   (despawn c)))
+      (setf (fill-pointer *creatures*) j)
+      (multiple-value-bind (dx dz) (direction-step (connector-direction door))
+        (setf (vx (feet player)) (float (+ (vx p) (* 2 dx)) 0f0)
+              (vy (feet player)) (float (vy p) 0f0)
+              (vz (feet player)) (float (+ (vz p) (* 2 dz)) 0f0)
+              ;; Facing back in, against the doorway's way out: yaw 0 faces -Z.
+              (vy (rotation player)) (float (atan (- dx) dz) 0f0))
+        (place-camera player)))))
+
 (defun pause-game ()
   (when (eq *game-state* :playing)
     (setf *game-state* :paused)
@@ -534,6 +585,8 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (loop for creature across *creatures*
         do (revive creature)
            (update-creature-look creature))
+  ;; The arena's gate goes up again, and its boss back to sleep (boss.lisp).
+  (unseal-arena)
   (when (and +main+ (scene +main+))
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))

@@ -9,9 +9,11 @@
 (defparameter *run-levels*
   '((:rooms 16 :exit "descent")
     (:rooms 19 :exit "descent")
-    (:rooms 22 :exit NIL))
+    (:rooms 22 :exit "arena"))
   "A run's levels, first to last: how many rooms the generator aims for, and the block it
-puts on the doorway furthest from the start, whose exit leaves the level. NIL: no way on.")
+puts on the doorway furthest from the start (or a list of them, tried in order): the
+descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
+(boss.lisp). NIL: no such block.")
 
 (defvar *run-depth* 1 "Which of *RUN-LEVELS* the player is on, from 1.")
 (defvar *run-seed* NIL "The run's seed, or NIL until a level needs one.")

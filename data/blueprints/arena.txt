@@ -1,0 +1,52 @@
+; The boss's lair at the bottom of a run: a 9 m hall with one way in, from the south, which
+; shuts behind the player (the gate, boss.lisp). Four full-height pillars for cover from what
+; it throws, the boss at the north end, and a pickup on a block in each corner by the door.
+; No tag the generator grows from: it places this itself, last, on a doorway far from the start.
+cells 4 4
+storeys 2
+tags arena
+material pillar 0.62 0.36 0.30
+material dais 0.58 0.47 0.30
+legend
+  o box 0 top pillar
+  P wall pillar                     ; the pillar over storey 1, with no slab under it
+  B spawn boss south
+  R box 0 0.8 dais, pickup reward
+
+plan 0
+################################
+#..............................#
+T..............BB..............T
+#..............................#
+#..............................#
+#.....oooo..............oooo...#
+#.....oooo..............oooo...#
+T..............................T
+#..............................#
+#..............................#
+T..............................T
+#.....oooo..............oooo...#
+#.....oooo..............oooo...#
+#..............................#
+#RR..........................RR#
+#..............................#
+#########ssssss#################
+
+plan 1
+################################
+#                              #
+#                              #
+#                              #
+T                              T
+#     PPPP              PPPP   #
+#     PPPP              PPPP   #
+#                              #
+#                              #
+#                              #
+#                              #
+#     PPPP              PPPP   #
+#     PPPP              PPPP   #
+T                              T
+#                              #
+#                              #
+################################

@@ -1,0 +1,22 @@
+Pixel-art sprite for a Doom/Hexen-style first-person dark-fantasy dungeon game: THE GATE OF THE BOSS'S LAIR, a heavy, ORNATE IRON PORTCULLIS that drops behind the player when they enter the last room of the dungeon, shutting them in with the boss.
+
+REFERENCE IMAGES, in the order attached: a monster turnaround sheet from the game (for the pixel-art style only: pixel size, outline weight, hard-edged shading with a few tones), and the game's stone wall texture (for the palette of the stonework the gate stands in). Do not copy the sheet layout or the monster.
+
+THE VIEW
+- Seen STRAIGHT ON, flat, from directly in front, with no perspective, no angle and no floor: like an elevation drawing. The gate is a flat grille facing the viewer.
+- The gate fills the WHOLE IMAGE edge to edge, left to right and top to bottom: its outer frame bars touch all four edges of the picture. No stone, wall, arch or doorway around it, nothing else in the picture.
+
+THE GATE
+- A grid of thick vertical WROUGHT-IRON BARS, about nine of them evenly spaced, crossed by four heavy horizontal crossbars, riveted where they cross. A thick iron frame bar runs round the whole edge.
+- The bottom ends of the vertical bars are long, sharp, slightly barbed SPIKES that stop just above the bottom edge.
+- Ornate: the crossbars are bound with ribbed bands and studded with big domed rivets; curling iron scrollwork fills the spaces of the top row like thorny vines; small iron fleurs at the joints.
+- In the CENTRE, bolted across the middle bars, a large CAST-IRON BOSS PLATE in the shape of a snarling HORNED DEMON SKULL with a gaping fanged jaw, its eye sockets glowing a dull ember orange: the only warm light in the picture.
+- Blackened, pitted iron with dark rust-brown patches and a few worn dull-bronze highlights on the rivets, the skull's horns and the scrollwork. Lit from the front, evenly: no cast shadows.
+
+THE GAPS AND BACKGROUND
+- EVERY gap between the bars, the scrollwork and the plate is flat pure magenta (#FF00FF), so the game sees through the gate. The gaps are wide and clear: most of the picture between the bars is magenta.
+- No gradient, texture, glow, fog or shadow in the magenta. No pink or purple glow bleeding into it, no semi-transparent pixels against it.
+
+STYLE
+- Crisp pixel art with hard edges, chunky art pixels (about 5 image pixels each), a limited palette, no anti-aliasing, no blur.
+- No text, letters, numbers, runes that read as letters, signature or watermark.

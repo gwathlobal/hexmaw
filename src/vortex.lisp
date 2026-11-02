@@ -457,13 +457,17 @@ height, so without this it would reach through a floor."
           (pull-clear actor) (clear-path-p (centre vortex) (body-feet actor) 1.0)))
   (pull-clear actor))
 
+(defgeneric vortex-proof-p (actor)
+  (:documentation "True if no vortex pulls or catches ACTOR (the boss, boss.lisp).")
+  (:method ((actor T)) NIL))
+
 (defun vortex-pull (actor dt)
   "Set ACTOR's PULL from the vortices reaching it. Returns the vortex that catches it, if one does."
   (let ((pull (pull actor))
         (feet (body-feet actor))
         (radius (float (body-radius actor) 0f0)))
     (setf (vx pull) 0f0 (vz pull) 0f0)
-    (when (<= (spat-timer actor) 0)
+    (when (and (<= (spat-timer actor) 0) (not (vortex-proof-p actor)))
       (loop for vortex across *vortices*
             for c = (centre vortex)
             for dx = (- (vx c) (vx feet))
