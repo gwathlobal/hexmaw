@@ -516,6 +516,7 @@ and not the last step of the stair.")
     (whirl-transitions player dt)
     (let ((water (swim-water player))
           (vx0 (vx (velocity player)))
+          (vy0 (vy (velocity player)))
           (vz0 (vz (velocity player))))
       (setf (swimming player) (and water T))
       (cond ((whirl player)
@@ -528,7 +529,7 @@ and not the last step of the stair.")
                    (- (if (retained :space) 1.0 0.0) (if crouching 1.0 0.0))
                    running yaw))
             (T (walk player dt wx wz wlen speed kind crouching)))
-      (end-player-flight player vx0 vz0))
+      (note-impacts player vx0 vy0 vz0 dt))
     (update-stamina player running dt)
     (when (< (vy (feet player)) *kill-height*)
       (respawn player))
@@ -546,6 +547,31 @@ and not the last step of the stair.")
     (let ((target (if (and crouching (not (swimming player))) *crouch-eye-height* *eye-height*)))
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
     (place-camera player)))
+
+(defmethod hit-surface ((player player) speed x y z &key (threshold *impact-speed*) by)
+  (declare (ignore x y z))
+  ;; No shove, so the shield can't help.
+  (when (< threshold speed)
+    (hurt-player player (impact-damage speed threshold) (feet player) :shove NIL
+                 :by (or by (if (or (whirl player) (flung player)) :tornado :impact)))
+    (hit-stop)))
+
+(defun note-impacts (player vx0 vy0 vz0 dt)
+  "After PLAYER, moving at VX0 VY0 VZ0, has moved this DT-second tick: what stopped them
+hurts if they hit it fast enough (HIT-SURFACE), and landing ends a throw. A wall doesn't
+while they slide on ice, nor a floor under water, and their own falls only from higher up."
+  (let ((vel (velocity player)))
+    ;; MOVE-AXIS zeroes the component it was blocked on.
+    (unless (or (footing player) (and (= 0 vx0) (= 0 vz0)))
+      (hit-across player (if (= 0 (vx vel)) vx0 0f0) (if (= 0 (vz vel)) vz0 0f0) dt))
+    (cond ((and (grounded player) (< vy0 0) (not (swimming player)))
+           (if (flung player)
+               (hit-surface player (- vy0) 0.0 -1.0 0.0)
+               (hit-surface player (- vy0) 0.0 -1.0 0.0 :threshold *fall-impact-speed* :by :fall)))
+          ((and (< 0 vy0) (= 0 (vy vel)))
+           (hit-surface player vy0 0.0 1.0 0.0)))
+    (when (and (flung player) (or (grounded player) (swimming player)))
+      (setf (flung player) NIL))))
 
 (defun walk (player dt wx wz wlen speed kind crouching)
   "Move PLAYER on foot or through the air for DT seconds, wishing along WX WZ (WLEN long)
