@@ -673,7 +673,11 @@ PLAYER falls (FALL-DEAD) and the death screen comes up. Elsewhere the run starts
          ;; A vortex lets go of the dead: they fall, with no wind across the view.
          (clear-whirl player)
          (setf *game-state* :dead
-               (killed-by player) (if (typep by 'creature) (type-of by) by)
+               ;; A boss by its title (boss.lisp), a string; any other creature by its kind.
+               (killed-by player) (typecase by
+                                    (boss (boss-title by))
+                                    (creature (type-of by))
+                                    (T by))
                (death-time player) 0.0
                (vy (velocity player)) (min 0f0 (vy (velocity player)))))))
 
@@ -688,8 +692,8 @@ damage, does *BLOCK-DAMAGE-SCALE* of its damage, at least 1, and shoves and lift
 seconds (BREAK-GUARD). With too little stamina the blow goes through in full, takes what
 stamina is left and knocks the shield aside for at least *STAMINA-GUARD-BREAK*. BY is what
 did it, a creature, :LAVA or :DROWNING, for the death screen. At zero health the player
-dies (PLAYER-DIES)."
-  (when (< 0 (health player))
+dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts the player."
+  (when (and (< 0 (health player)) (not (run-won-p)))
     (let ((blocked (and shove (not unblockable) (shield-blocks-p player from))))
       (when blocked
         (let ((cost (* amount *block-stamina-scale*)))

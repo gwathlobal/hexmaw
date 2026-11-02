@@ -285,6 +285,30 @@ void main(){
 (defun level-banner-text ()
   (format NIL "Level ~d of ~d" *run-depth* (run-length)))
 
+;;; The boss bar: the boss's title, its health and its powers, across the top of the screen
+;;; from the moment the arena's gate drops until it dies (boss.lisp).
+
+(defparameter *boss-bar-width* 480)
+(defparameter *boss-bar-height* 14)
+(defparameter *boss-bar-color* (vec4 0.62 0.10 0.06 1))
+(defparameter *boss-bar-top* 28 "Pixels from the top of the screen to the top of the title.")
+
+(define-shader-entity boss-element () ())
+
+(defun shown-boss ()
+  "The boss the bar is for, or NIL when the bar is down."
+  (let ((boss (and *arena* (sealed *arena*) (arena-boss *arena*))))
+    (and boss (not (dead boss)) boss)))
+
+(defmethod hud-shown-p ((element boss-element))
+  (and (member *game-state* '(:playing :paused)) (shown-boss) T))
+
+(define-shader-entity boss-bar (boss-element hud-bar) ())
+(define-shader-entity boss-text (boss-element hud-text) ())
+
+(defun boss-powers-text (boss)
+  (format NIL "~{~a~^  ~}" (mapcar (lambda (name) (power-label (find-power name))) (active-powers boss))))
+
 ;;; The HUD: owns the elements, keeps them in place and in sync with the player.
 
 (defclass hud (entity listener)
@@ -306,6 +330,12 @@ void main(){
    (underwater-tint :initform (make-instance 'underwater-tint) :reader underwater-tint)
    (whirl-streaks :initform (make-instance 'whirl-streaks) :reader whirl-streaks)
    (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
+   (boss-name :initform (make-hud-text "" 'boss-text) :reader boss-name)
+   (boss-bar :initform (make-instance 'boss-bar :fill-color *boss-bar-color*) :reader boss-bar)
+   (boss-half :initform (make-instance 'boss-bar :fill-color (vec4 0 0 0 1)) :reader boss-half
+              :documentation "A mark on the bar at half health, where the boss enrages.")
+   (boss-powers :initform (make-hud-text "" 'boss-text) :reader boss-powers-line)
+   (shown-boss-text :initform NIL :accessor shown-boss-text)
    (shown-health :initform NIL :accessor shown-health)
    (shown-mana :initform NIL :accessor shown-mana)
    (shown-stamina :initform NIL :accessor shown-stamina)))
@@ -318,6 +348,7 @@ void main(){
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
         (level-banner hud)
+        (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
         (fps-display hud)))
 
 (defun add-hud (container)
@@ -356,6 +387,22 @@ numbers; breath has none."
   (place (level-banner hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (level-banner hud))))))
          (round (* 0.75 (height *context*))))
+  ;; The boss bar, centred across the top: the title, the bar, the powers under it.
+  (let* ((w (width *context*))
+         (title-y (- (height *context*) *boss-bar-top* +glyph-height+))
+         (bar-y (- title-y 4 *boss-bar-height*))
+         (bar-x (round (- (/ w 2) (/ *boss-bar-width* 2)))))
+    (flet ((centre (text y)
+             (place text (round (- (/ w 2) (* 4.5 (length (text text))))) y)))
+      (centre (boss-name hud) title-y)
+      (centre (boss-powers-line hud) (- bar-y 4 +glyph-height+)))
+    (place (boss-bar hud) bar-x bar-y -0.1)
+    (setf (vx (scaling (boss-bar hud))) (float *boss-bar-width* 0f0)
+          (vy (scaling (boss-bar hud))) (float *boss-bar-height* 0f0))
+    ;; In front of the bar, at the middle.
+    (place (boss-half hud) (+ bar-x (round *boss-bar-width* 2)) bar-y)
+    (setf (vx (scaling (boss-half hud))) 2f0
+          (vy (scaling (boss-half hud))) (float *boss-bar-height* 0f0)))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
   (dolist (cover (list (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)))
@@ -366,6 +413,15 @@ numbers; breath has none."
 (define-handler (hud tick) (dt)
   (when (eq *game-state* :playing)
     (setf *level-banner-left* (max 0.0 (- *level-banner-left* dt))))
+  (let ((boss (shown-boss)))
+    (when boss
+      (setf (fill-fraction (boss-bar hud)) (/ (float (max 0 (health boss))) (max-health boss)))
+      ;; Re-uploading text costs a buffer update, so only when the powers change (enraged).
+      (let ((powers (active-powers boss)))
+        (unless (equal powers (shown-boss-text hud))
+          (setf (shown-boss-text hud) powers
+                (text (boss-name hud)) (boss-title boss)
+                (text (boss-powers-line hud)) (boss-powers-text boss))))))
   (when *player*
     (let ((hp (max 0 (health *player*)))
           (mp (floor (mana *player*)))

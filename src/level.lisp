@@ -66,7 +66,8 @@ upstairs."
         (fill-pointer *pickup-spots*) 0
         (fill-pointer *pickups*) 0
         (fill-pointer *level-exits*) 0
-        *level-doorways* ())
+        *level-doorways* ()
+        *arena* NIL)
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0))
 
 (defun build-generated-level (container attempt)
@@ -79,11 +80,12 @@ upstairs."
                                     :exit (run-level-property *run-depth* :exit))))))
 
 (defun level-needs-rebuilding-p ()
-  "True if the level just built must have a way off it and the player can't get to one."
+  "True if the level just built must have a way off it, or the boss's arena, and the
+player can't get to one."
   (and (eq *level* :generated)
        (not *pending-load*)
        (run-level-property *run-depth* :exit)
-       (not (level-exit-reached-p))))
+       (not (level-goal-reached-p))))
 
 (defun build-level (container)
   (let ((*block-memo* (make-hash-table :test 'equal)))
@@ -112,6 +114,21 @@ upstairs."
       (check-ice-joins))
     (place-pickups container)))
 
+(defun build-boss-wing (container)
+  "South of the hall, a corridor to the arena (arena.txt) and a boss in it, of a random kind
+with random powers each time the level is built (*BOSS-OVERRIDE* picks them, boss.lisp).
+Killed, it stays dead and the gate goes up again; a reset brings another."
+  (let ((w 0.5) (z0 (+ 10 0.5)) (z1 22))
+    ;; Corridor, 3 m wide, 3 m tall, the floor running under the hall's doorway for the nav grid.
+    (add-room -1.5 0 z0  1.5 3 z1)
+    (add-box container -1.5 -0.5 10  1.5 0 z1 :surface :floor)
+    (add-box container -1.5 3 z0  1.5 3.5 z1 :surface :ceiling)
+    (add-box container (- -1.5 w) 0 z0  -1.5 3 z1 :surface :wall)
+    (add-box container 1.5 0 z0  (+ 1.5 w) 3 z1 :surface :wall)
+    (add-torch container 1.0 2.2 16)
+    ;; Its one doorway faces back up the corridor; nothing else to plug.
+    (attach-block 'arena container "connector_south" :at (vec 0 0 z1) :facing :north)))
+
 (defun build-test-level (container)
   (let ((h 4.0) (w 0.5))
     ;; Down to the floor slab's underside, so the lava pit is in the hall's room.
@@ -130,7 +147,11 @@ upstairs."
     (add-box container 10 0 -10  (+ 10 w) h 3.5 :surface :wall)
     (add-box container 10 0 6.5  (+ 10 w) h 10 :surface :wall)
     (add-box container 10 3 3.5  (+ 10 w) h 6.5 :surface :wall)
-    (add-box container -10 0 10  10 h (+ 10 w) :surface :wall)
+    ;; South wall, with a doorway into the corridor to the boss's arena.
+    (add-box container -10 0 10  -1.5 h (+ 10 w) :surface :wall)
+    (add-box container 1.5 0 10  10 h (+ 10 w) :surface :wall)
+    (add-box container -1.5 3 10  1.5 h (+ 10 w) :surface :wall)
+    (add-portal -1.5 0 10  1.5 3 (+ 10 w))
     (add-box container -10 0 (- -10 w)  -1.5 h -10 :surface :wall)
     (add-box container 1.5 0 (- -10 w)  10 h -10 :surface :wall)
     (add-box container -1.5 3 (- -10 w)  1.5 h -10 :surface :wall)
@@ -164,6 +185,7 @@ upstairs."
           for x from -3 by 2
           do (add-pickup container kind x 0 8.5))
     (build-annex container)
+    (build-boss-wing container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.
     (let ((z0 (- -10 w)) (z1 -25))
       (add-room -1.5 0 z1  1.5 3 z0)

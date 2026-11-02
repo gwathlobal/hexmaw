@@ -30,7 +30,18 @@
         (setf *carried-state* NIL))
       (when (eq *level* :generated)
         (setf *level-banner-left* *level-banner-time*))
+      (when *boss-fight-start*
+        (setf *boss-fight-start* NIL)
+        (stand-outside-arena new))
       (capture-mouse new)))
+  ;; The arena's gate, outside the block batches so it can move (boss.lisp).
+  (add-arena-gate scene)
+  ;; A boss's summons are spawned mid-game, and its kind may be nowhere else in the level.
+  (let ((boss (and *arena* (arena-boss *arena*))))
+    (when boss
+      (preload (make-instance (third (boss-kind-entry (boss-kind boss)))) scene)
+      ;; And the sigils they rise from.
+      (preload (make-instance 'summon-sigil :centre (vec 0 0 0) :animation (find-fx-animation 'summon-sigil)) scene)))
   (add-blood-pool scene)
   (add-hud scene)
   (add-weapon-bar scene)
@@ -116,11 +127,25 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
 
 (defun level-status ()
   "Which level the player is on and where it is left by, for STATUS."
-  (if (eq *level* :generated)
-      (format NIL "level ~d of ~d, ~:[no exit~;~:*exit at ~{(~,2f ~,2f ~,2f)~^, ~}~]" *run-depth* (run-length)
-              (loop for (at) across *level-exits*
-                    append (list (vx at) (vy at) (vz at))))
-      (format NIL "level ~(~a~)" *level*)))
+  (format NIL "~a~@[; ~a~]"
+          (if (eq *level* :generated)
+              (format NIL "level ~d of ~d, ~:[no exit~;~:*exit at ~{(~,2f ~,2f ~,2f)~^, ~}~]" *run-depth* (run-length)
+                      (loop for (at) across *level-exits*
+                            append (list (vx at) (vy at) (vz at))))
+              (format NIL "level ~(~a~)" *level*))
+          (arena-status)))
+
+(defun arena-status ()
+  "The arena and its boss, for STATUS, or NIL without one."
+  (let* ((arena *arena*)
+         (boss (and arena (arena-boss arena))))
+    (when arena
+      (let ((door (connector-location (arena-door arena))))
+        (format NIL "arena door at (~,2f ~,2f ~,2f) ~:[open~;sealed~]~@[, boss ~a~]"
+                (vx door) (vy door) (vz door) (sealed arena)
+                (and boss (format NIL "~(~a~) ~a ~d/~d hp~:[~; dormant~]~:[~; enraged~] powers ~(~{~a~^ ~}~)~@[ using ~(~a~)~]"
+                                  (boss-kind boss) (boss-title boss) (max 0 (health boss)) (max-health boss)
+                                  (dormant boss) (enraged boss) (boss-powers boss) (boss-power boss))))))))
 
 (defun status ()
   "One-line summary of the running game, for agents and the REPL."
@@ -138,6 +163,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                   (:map "map open, world frozen (close with (game (close-map)))")
                   (:inventory "inventory open, world frozen (close with (game (close-inventory)))")
                   (:dead "player dead, world frozen (leave with (game (exit-to-title)))")
+                  (:victory "boss slain, run won, world frozen (leave with (game (exit-to-title)))")
                   (T "playing"))
                 (level-status)
                 (vx feet) (vy feet) (vz feet) (vx rot) (vy rot) (grounded *player*) (footing *player*)

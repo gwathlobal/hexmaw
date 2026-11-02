@@ -166,7 +166,8 @@ Returns the pairs."
 (defun generate-level (container &key (seed (or *level-seed* (random most-positive-fixnum (make-random-state T))))
                                       (rooms *generator-rooms*) exit)
   "Grow a level from SEED, aiming for ROOMS rooms. EXIT names a block to put on the open
-doorway furthest from the start once it has grown. Returns the seed and whether EXIT went in."
+doorway furthest from the start once it has grown, or is a list of them, tried in order.
+Returns the seed and whether EXIT went in."
   (setf *last-level-seed* seed)
   (let* ((*generator-random* (sb-ext:seed-random-state seed))
          (*block-random* *generator-random*)
@@ -341,7 +342,7 @@ doorway furthest from the start once it has grown. Returns the seed and whether 
       ;; The way off the level, as far from the start as a doorway is still open.
       (when exit
         (setf exit-placed (loop for d in (stable-sort (copy-list frontier) #'> :key #'door-depth)
-                                thereis (attach d (allowed d (list exit))))))
+                                thereis (attach d (allowed d (uiop:ensure-list exit))))))
       (dolist (d frontier) (shut d))
       (dolist (c shut) (seal-connector container c))
       ;; Every doorway left open should meet another.

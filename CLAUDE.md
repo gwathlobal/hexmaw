@@ -520,7 +520,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   necromancer's greens (emerald, acid, sea-green) round the ring and deepening toward the
   top. It is added
   over what is behind it (`gl:blend-func :one :one`, no depth written), so it needs no
-  sorting against other glows; it draws both faces. Every
+  sorting against other glows; it draws both faces. `:arc` (radians either side of
+  `aurora-arc-middle`, an angle from +X toward +Z) spreads the same ring over a sector only,
+  fading at its ends; pi, the default, is the whole ring. Every
   aurora shares one ring (`*aurora-vao*`), staged by `preload-spells`: a vertex array made
   mid-game is never loaded onto the GPU. After its `windup` it strikes, once, everything living with feet in
   it (the effects' `area` is the radius, within `*circle-reach-height*` of the floor) except
@@ -585,6 +587,70 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*tempest-retry*`, a released one after `*tempest-cooldown*`, and only one of its tornadoes is up
   at a time. Otherwise it throws `gust`s: a `:gust` effect throws the player, toward its tornado
   if one is near, and with lift, since a shove on the floor dies at once. It has no walk.
+  `casting-tempest-p` is a generic, so a boss's tornado cast keeps its sign up too.
+- `src/boss.lisp`: the boss at the end of a run, in the `arena` block level 3 ends in. It is an
+  empowered form of one of the seven monsters (`*boss-kinds*`: kind, class such as `imp-boss`
+  `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
+  likely, with three powers (`boss-powers`): two from the start, the third when it enrages at
+  `*boss-enrage-at*` (half) health (`active-powers`). `make-boss`, from a `spawn boss` in a
+  blueprint, draws the kind and powers (`pick-boss-powers`, at most one passive) from
+  `*block-random*`, so a seed always gives the same boss. `*boss-override*`, as `'("ogre" :summon
+  :blink :haste)`, forces them for testing (a `defparameter`: reloading boss.lisp clears it, so set
+  it again after). Empowered: drawn `scale` times bigger (`size-scale` on
+  `creature`, which every strip's `:size` is multiplied by), about 3 m, `*boss-health*` (500),
+  `*boss-pain-chance*`, melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
+  never gibbed, flyers hovering `*boss-hover*` so the sword reaches them, step `*nav-tall-lift*`
+  since it is taller than `*nav-clearance-height*`. No vortex pulls or catches it (`vortex-proof-p`).
+  It glows: a class fragment shader on `boss` multiplies it by `*boss-shade*` and draws a pulsing
+  rim in `*boss-glow-color*` on every opaque texel beside a see-through one (on the boss's program
+  only), with a lamp of its own. Warded shows as an arc of violet `aurora` on the floor round its
+  front (`update-ward`, `*ward-colors*`), over exactly the sector its reflection covers
+  (`ward-arc`: the billboard views `shield-views` covers, a quarter of pi each, so 135°), turning
+  with its facing. Powers are
+  `boss-power`s (`define-boss-power`: cooldown, frame times on the kind's `power-animation`, the
+  4-frame attack or cast strip, `usable`, `start`, `release`, and `deny`, the kinds and traits that
+  never get it). `special-attack` starts the first ready, usable one, then waits `*boss-power-gap*`
+  so its own attacks get a turn; while `boss-power` names one, the attack readers and
+  `release-attack` answer for it. Haste and enrage speed its attacks by running `attack-step` on a
+  scaled `dt`, and its walk through methods on `walk-speed` and `chase-speed`.
+
+  | Power | What | Denied to |
+  | --- | --- | --- |
+  | `:fire-volley` | 5 cinders fanned over 0.6 rad | |
+  | `:skull-barrage` | 3 homing grave skulls | |
+  | `:grave-circle` | `grave-spikes` under the player | necromancer |
+  | `:leap` | the ogre's (`try-leap`, `leaper`) | flyers, casters, ogre |
+  | `:shockwave` | a 0.9 s crouch, then `quake` round itself out to `*boss-quake-radius*` | flyers |
+  | `:tornado` | the wraith's cast, sign and tornado; one up at a time | gale wraith |
+  | `:summon` | 2 of its kind at normal size (3 enraged), `summoned`, while fewer than `*boss-max-minions*` live: a `summon-sigil` draws itself in on the floor at each spot through the 1.1 s cast (`begin-summon`, `summon-spots`), and at the release flame bursts up from each (an `aurora` in `*sigil-flame-colors*`) and a minion rises out of it; a broken cast takes its sigils with it | |
+  | `:blink` | a ranged kind 9 m off a close player, a melee kind behind a far one | |
+  | `:warded` (passive) | its front turns spells back (`shield-views`) | knight |
+  | `:haste` (passive) | walk and attacks × `*haste-speed*` | |
+
+  Casters are the acolyte, necromancer and wraith; flyers the harpy and wraith. It sleeps
+  (`dormant-p`, creature.lisp: it neither thinks nor takes harm, a hit only flashes) until the
+  player is `*arena-trigger-depth*` inside the arena's doorway. Then `seal-arena` drops the gate
+  (a `gate-sprite`, an ornate iron portcullis, that `add-arena-gate` makes in `setup-scene`: a
+  `billboard` lit like the monsters but turned for good to face into the arena, its own tick
+  replacing the billboard's, standing in the middle of the doorway's wall and hidden up in it while
+  open; its gaps are see-through, and its solid, `gate-box`, is added to `*solids*` and indexed
+  again) and the boss hunts for good. `*arena*` (an `arena`:
+  its map-block, doorway, boss, gate) is noted by `place-block` for a block tagged `arena`. Enraged
+  (`enrage`): the third power, a roar, moves × `*boss-enrage-speed*`, pauses × `*boss-enrage-pause*`,
+  cooldowns × `*boss-enrage-cooldown*`. Its summons die with it, nothing hurts the player once it
+  is dead (`run-won-p`, asked by `hurt-player`), and `*victory-delay*` after its death animation
+  `win-run` puts up the victory screen; on any other level (the test level) the gate goes up
+  again instead and the boss stays dead (`stays-dead-p`), so a reset brings another. Only a
+  generated level's dead boss makes the player unhurtable. `reset-run` raises the gate and puts it back to sleep
+  (`unseal-arena`, `reset-boss`). A save keeps its powers, sleep, enrage and cooldowns
+  (`saved-slots`) and the seal (`:arena`). The boss bar across the top of the HUD (hud.lisp) shows
+  its title, health with a mark at half, and its powers, from the seal until it dies.
+  `tools/hd status` shows the arena and boss. The debug level has an arena of its own down a
+  corridor south of the hall (see `src/level.lisp`). `(start-boss-fight)` (the main menu's Boss fight in a
+  debug version) starts a run on level 3 with the player outside the arena's doorway and every
+  other monster taken out of the level; a save made there doesn't load (its monsters don't match),
+  so test saves on `(progn (start-level :generated) (setf *run-depth* 3))`. To enrage it,
+  `(game (hurt (arena-boss *arena*) 255))`.
 - `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the
   amounts: `:herbs` +15 health and `:shard` +28 mana (2 bolts) restore at once; at full one stays
   where it is, below full it is taken and any excess lost (`restore-resource`). `:health-potion`
@@ -639,7 +705,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   on every screen, counting frames in its render and updating every `*fps-interval*`.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
-  (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:dead`, defined in creature.lisp) decides which is up;
+  (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
@@ -657,6 +723,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   taken, the seed) and a button back to the main menu. Esc does nothing there, F5 is refused and
   F9 still quickloads. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
   `:drowning`, `:tornado`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
+  Killing the boss sets `:victory` (`win-run`, boss.lisp) and the `victory-screen` comes up:
+  `victory-stats` (the boss slain, then `run-stat-lines`, the rows it shares with the death
+  screen) over the `victory` splash, and the same button back. Esc and F5 do nothing there.
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
   loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
   button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
@@ -668,14 +737,14 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Show
   FPS (`*show-fps*`, in memory only, kept across reloads) and, in a debug version
   (`*debug-version*`), Debug minimap (`*map-debug*`: the automap shows every block, creature
-  markers and block names). The main menu's Debug level is also debug-version only.
+  markers and block names). The main menu's Debug level and Boss fight are also debug-version only.
   Load game (both menus) and Save game (the pause menu, on a generated level only) cover it
   the same way while `*slot-menu*` is `:load` or `:save`: a row per slot in `*save-slots*`
   (1 to 3, then the quicksave), labelled by `slot-info`, and Back (`close-slot-menu`). After
   a save the pause menu's title says where it went (`*save-note*`). F5 quicksaves and F9
   quickloads (`quicksave`, `quickload`, from the menu controller). See `src/save.lisp`.
   `panel-splash` names a picture in `data/splash/` to cover the screen with (the main
-  menu's `title`, the loading screen's `loading`, the death screen's `death`, and Settings' over the main menu; see
+  menu's `title`, the loading screen's `loading`, the death screen's `death`, the victory screen's `victory`, and Settings' over the main menu; see
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
   of the screen (T, the default, centres it; the main menu's `*title-menu-top*` keeps it
   off the dagger in its splash).
@@ -755,7 +824,10 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup; to try a block with one kind only,
+  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup.
+  A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
+  and a boss of a random kind with random powers, a new one at every build (`tools/hd reset`);
+  `*boss-override*` fixes them. To try a block with one kind only,
   bind `*spawn-override*` (blocks.lisp) around its `attach-block`. The debug `ice-rink` block
   (an ice field, a raised ice step, a stone strip, a dry pit to slide into, an imp and a
   knight on the ice; no tags, so never generated) is retired for now, the pool in its place;
@@ -964,6 +1036,10 @@ test level the necromancer stands at the back of the hall, behind the imp; set
 
 ### The ogre
 
+The leap belongs to the `leaper` mixin (its slots, `keep-height`, `attack-step`, `show-own-pose`,
+`try-leap`), so an imp or knight boss leaps too; a leaper with no `leap-animation` poses with the
+first three frames of its attack strip.
+
 The `ogre` (ogre.lisp) is the big one: 2.7 m tall, a body 1 m out from its centre, 120
 health, slow, barely moved by knockback (0.15). It fits the 3 m doorways, corridors and
 stairs, not `narrow` doorways, 2 m stair shafts or the narrow passages of caves, so it is the
@@ -1139,7 +1215,7 @@ not by `tools/hd reset`.
 
 ## Splash screens
 
-The main menu, the loading screen and the death screen draw a picture over the whole window
+The main menu, the loading screen, the death screen and the victory screen draw a picture over the whole window
 (`splash-backdrop` in menu.lisp), cropped to cover it, with nearest filtering and a dark
 veil (`*splash-dim*`, 0.6) so it stays in the background. Each is a generated 1536 × 1024 picture: `art/prompts/splash-common.txt`
 (16:9 crop, no text, a calm dark centre for the menu) plus `splash-title.txt`,
@@ -1485,7 +1561,9 @@ included. Its back-quarter faces right, so the turnaround takes `--mirror back-q
 It has a cast (gather, both arms raised with lightning on the hands, the frame the tornado's cast
 holds, release, recover) and a flinch, made with `tools/gen_monster_views.sh wraith <anim> ...`,
 and a front-only death (`wraith-death.txt`) that settles into an empty heap of rags. It has no walk.
-The sign under its tornado's cast is drawn: `tools/draw_gale_sign.py data/sprites/gale`.
+The sign under its tornado's cast is drawn: `tools/draw_gale_sign.py data/sprites/gale`. So is the
+boss's summoning sigil (embers: a double ring, an inverted triangle, flame tongues):
+`tools/draw_summon_sigil.py data/sprites/summon`.
 
 ```bash
 python3 tools/slice_turnaround.py art/wraith/turnaround-1.png data/sprites/wraith/turnaround --height 115 --filter box --mirror back-quarter
@@ -1524,6 +1602,17 @@ tools/recolor_hue.py data/sprites/pickups/flask data/sprites/pickups/mana-potion
 tools/gen_image.py art/pickups/herbs.png --prompt-file art/prompts/healing-herbs.txt --ref "Pixel Demon Character Turnaround.png" --ref art/pickups/sheet-2.png --size 1536x1024 -n 3
 python3 tools/slice_frames.py art/pickups/herbs-3.png data/sprites/pickups --pixel 12 --filter box --colors 32 --anchor bottom herbs:4
 tools/draw_item_icons.py data/sprites/icons/items
+```
+
+The arena's gate is one generated picture, an ornate iron portcullis flat-on with magenta in its
+gaps (`art/prompts/gate-portcullis.txt`, the imp's turnaround and the stone wall as references),
+filling the square edge to edge so the sprite is the doorway's width; `--pixel 6.3` gives the
+monsters' 64 px per metre at its 3.1 m. Leave off `--colors`: a 32-colour palette greyed the
+skull plate's ember eyes.
+
+```bash
+tools/gen_image.py art/gate/portcullis.png --prompt-file art/prompts/gate-portcullis.txt --ref "Pixel Demon Character Turnaround.png" --ref art/textures/wall-stone-2.png --size 1024x1024 -n 3
+python3 tools/slice_frames.py art/gate/portcullis-2.png data/sprites/gate --pixel 6.3 --filter box gate:1
 ```
 
 The wall torch is two generated images: `art/torch/unlit-2.png` (the unlit torch in its
@@ -1697,7 +1786,7 @@ spawn; a generated level rolls them, the test level leaves them out, and the gal
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre and gale wraith 1
 each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
-tight for them, as the `cavern` and `balcony` are for the ogre), picked as the
+tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
@@ -1755,6 +1844,9 @@ and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
 and galleries `gallery`, `gallery-corner`, `gallery-steps` (climbs a storey) and
 `gallery-chasm` (4 m of lava, a 1.5 m ledge for the player), all 7 m wide.
+The run's ends, tagged so growth never picks them: `descent` (the way down) and `arena` (4 × 4
+cells, 9 m tall, one doorway on the south, four full-height pillars, the boss, `spawn boss`, at
+the north end, and a reward spot on a 0.8 m block in each corner by the door; see `src/boss.lisp`).
 The stone caves (`cave`, `grotto`, `cavern`, `cave-passage`, `cave-bend`, `cave-fork`,
 `lava-lake`, `lava-chasm`, `magma-pool`) are tagged `cave`, and the last three `lava` too. The ice caves have walls of
 `ice-rock` and a floor of `snow` (both grip), frozen ponds of slippery ice sunk 0.2 m
@@ -1917,8 +2009,9 @@ doorway or creature that fails logs a warning.
 
 A run is the generated levels of `*run-levels*` (`src/run.lisp`) one after another: 16, 19 and 22
 rooms. Each entry says how many rooms the generator aims for (over `*generator-rooms*`,
-`level-settings`) and which block leaves the level (`:exit`). The last entry's is NIL, so level 3 has
-no way on: that is where a boss's block goes. Nothing else differs between levels yet, so the
+`level-settings`) and which block it puts on the doorway furthest from the start (`:exit`, a name or
+a list tried in order): the `descent` on levels 1 and 2, the boss's `arena` on level 3 (see
+`src/boss.lisp`), whose boss ends the run. Nothing else differs between levels yet, so the
 monster mix and the kit are the same on each. `*run-depth*` is the level the player is on, from 1,
 and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
 try at level 1 being the run seed itself, so `*level-seed*` still reproduces a level 1 and a whole
@@ -1929,7 +2022,8 @@ The way down is the `descent` block (1 × 2 cells, two storeys: a doorway at the
 a landing in front of a painted arch, its stair going on into the dark; see "Level textures"). It is tagged only `descent`, so growth never picks it; `generate-level`
 puts its `:exit` on the deepest doorway still open when growth stops, by blocks from the start
 (`door-depth`, since there is no nav grid yet), just before the rest are plugged. Then `build-level`
-asks `level-exit-reached-p` (wading and swimming where they must). If the player can't get there it
+asks `level-goal-reached-p` (an exit, or else the arena's doorway, wading and swimming where they
+must). If the player can't get there it
 empties the scene (`clear`) and tries the next seed, up to `*max-level-attempts*`; a loaded level is
 never retried, its seed having passed.
 `level-settings` and the seed are what a save keeps, so a save needs only the level it's on.
@@ -1955,6 +2049,10 @@ with a median at 99.6% of it and the lowest tenth under 81%: blocks from the sta
 It can be close in a straight line (20 m away, but a 91 m walk). 6 of those 200 exits lie behind a
 flooded run, so the only way there is a swim. Frames (seed 12345, 12 spots, frozen, vsync off) cost
 5.9 ms on level 1, 6.4 on 2 and 6.1 on 3: the lamps sent decide the cost, not the level's size.
+Over run seeds 1 to 100, level 3's arena fit on the first seed every time and could be reached, the
+level building in 1.8 s on average through `reload-scene` (2.4 s at most). It can lie close to the
+start in a straight line (seed 27: 6.7 m, a storey up), so the boss's spawn ignores the start's
+clearance. Bosses: necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,

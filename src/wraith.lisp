@@ -122,11 +122,14 @@ if none is up and the player is on a floor to lay the sign on, else throw a gust
   (unless (frozen-p)
     (run-cooldowns gale-wraith dt)))
 
-(defun casting-tempest-p (wraith)
-  "True while WRAITH's tornado has yet to be released. A flinch, its death or a vortex
-catching it all end that by stopping the attack."
-  (and wraith
-       (not (dead wraith))
+(defgeneric casting-tempest-p (caster)
+  (:documentation "True while CASTER's tornado has yet to be released, which is how long its
+sign stays (a boss casts one too, boss.lisp). A flinch, its death or a vortex catching it all
+end that by stopping the attack.")
+  (:method ((caster T)) NIL))
+
+(defmethod casting-tempest-p ((wraith gale-wraith))
+  (and (not (dead wraith))
        (eq :tempest (ability-name (current-ability wraith)))
        (winding-up-p wraith)))
 

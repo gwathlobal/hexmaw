@@ -133,15 +133,19 @@ need be (it burns, but it is a way) and swimming through deep water."
   (let ((p (car exit)))
     (nav-nearest-fitting (vec (vx p) (+ (vy p) 0.1) (vz p)) *player-radius* *player-height* :search 2 :reach 1.5)))
 
-(defun level-exit-reached-p (&key (from *spawn-point*))
-  "True if the player can walk to an exit from FROM, wading and swimming where they must."
+(defun level-goal-reached-p (&key (from *spawn-point*))
+  "True if the player can walk from FROM to an exit, or into the boss's arena (boss.lisp),
+wading and swimming where they must."
   (let ((r *player-radius*) (h *player-height*) (*nav-hazards* :swim))
     (multiple-value-bind (si sj sk) (and *nav-grid* (nav-nearest-fitting from r h))
       (when si
         (let ((seen (nav-reached si sj sk r h *step-height*)))
-          (loop for exit across *level-exits*
-                thereis (multiple-value-bind (i j k) (exit-cell exit)
-                          (and i (= 1 (sbit seen (nav-index i j k)))))))))))
+          (flet ((reached-p (i j k) (and i (= 1 (sbit seen (nav-index i j k))))))
+            (or (loop for exit across *level-exits*
+                      thereis (multiple-value-call #'reached-p (exit-cell exit)))
+                (and *arena*
+                     (multiple-value-call #'reached-p
+                       (nav-nearest-fitting (doorway-inside (arena-door *arena*)) r h :search 2 :reach 1.5))))))))))
 
 (defun stranded-creatures (&key (from *spawn-point*))
   "The creatures that can't walk to FROM from where they live, each on the nav grid at
@@ -149,10 +153,10 @@ its own size and step. A creature whose own cell is too tight for it can't plan 
 at all, so that counts too. Walks go both ways, so one search from FROM per size does. A
 walker's chase wades when there is no dry way (CHASE-PATH), so these walks may too, and they
 cross deep water: no creature swims, but one beyond a flooded run waits there for the
-player, who can."
+player, who can. A boss (boss.lisp) is left out: it stays in its arena."
   (let ((searches (make-hash-table :test 'equal)) (stranded ()) (*nav-hazards* :swim))
     (when *nav-grid*
-      (loop for creature across *creatures*
+      (loop for creature across (remove-if (lambda (c) (typep c 'boss)) *creatures*)
             for r = (float (body-radius creature) 0f0)
             for h = (float (sprite-height creature) 0f0)
             for step = (float (step-height creature) 0f0)

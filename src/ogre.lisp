@@ -16,6 +16,9 @@
 ;;;
 ;;; The flight runs in KEEP-HEIGHT, which runs every tick, so a hit (which stops a
 ;;; creature's thinking for its flinch) never leaves it hanging in the air.
+;;;
+;;; The leap itself belongs to LEAPER, a mixin, so that a boss (boss.lisp) of another kind
+;;; can leap too; the ogre is a leaper that tries it whenever it can (SPECIAL-ATTACK).
 
 (defparameter *ogre-height* 2.7 "Ogre height in metres.")
 
@@ -78,13 +81,36 @@
 ;; A burst of dust and grit, standing on the floor: 66 px cells, about 1 m.
 (define-fx-animation ogre-dust "sprites/ogre/dust" :fps 14 :size (/ 66 64.0))
 
-(define-shader-entity ogre (creature)
+(defclass leaper ()
+  ((leap-animation :initform NIL :reader leap-animation
+                   :documentation "Crouch, airborne and landed frames, one sequence per view; NIL
+for the first three frames of the attack animation.")
+   ;; Which attack ATTACK-STEP runs: its usual one, or a leap PLAN-LEAP laid out.
+   (attack-kind :initform :slam :accessor attack-kind)
+   (leap-from :initform (vec 0 0 0) :reader leap-from)
+   (leap-to :initform (vec 0 0 0) :reader leap-to)
+   (leap-apex :initform 0.0 :accessor leap-apex
+              :documentation "Height its feet reach at the top of the arc.")
+   (leap-duration :initform 0.0 :accessor leap-duration)
+   (leap-time :initform 0.0 :accessor leap-time)
+   (airborne :initform NIL :accessor airborne
+             :documentation "True while it flies a leap's arc.")
+   (falling :initform NIL :accessor falling
+            :documentation "True while it drops, a leap cut short by a wall or a body.")
+   (fall-speed :initform 0.0 :accessor fall-speed)
+   (recover :initform 0.0 :accessor recover
+            :documentation "Seconds it still stands after landing.")
+   (leap-cooldown :initform 0.0 :accessor leap-cooldown))
+  (:documentation "A creature that leaps at the player and quakes the floor where it lands.
+List it before CREATURE or a subclass in the superclasses."))
+
+(define-shader-entity ogre (leaper creature)
   ((texture :initform (// 'hexmaw 'ogre-turnaround))
    (atlas :initform (read-atlas "sprites/ogre/turnaround.lisp"))
    (sprite-height :initform *ogre-height*)
    (walk-animation :initform 'ogre-walk)
    (attack-animation :initform 'ogre-slam)
-   (leap-animation :initform 'ogre-leap :reader leap-animation)
+   (leap-animation :initform 'ogre-leap)
    (hurt-animation :initform 'ogre-hurt)
    (death-animation :initform 'ogre-death)
    (stride :initform 0.4)
@@ -111,32 +137,19 @@
    (gib-overkill :initform 0.12)
    ;; Its bulk shrugs off most blows, nearly as the knight's plate does.
    (pain-chance :initform 17)
-   (max-health :initform 120)
-   ;; Which attack ATTACK-STEP runs: the slam, or a leap PLAN-LEAP laid out.
-   (attack-kind :initform :slam :accessor attack-kind)
-   (leap-from :initform (vec 0 0 0) :reader leap-from)
-   (leap-to :initform (vec 0 0 0) :reader leap-to)
-   (leap-apex :initform 0.0 :accessor leap-apex
-              :documentation "Height its feet reach at the top of the arc.")
-   (leap-duration :initform 0.0 :accessor leap-duration)
-   (leap-time :initform 0.0 :accessor leap-time)
-   (airborne :initform NIL :accessor airborne
-             :documentation "True while it flies a leap's arc.")
-   (falling :initform NIL :accessor falling
-            :documentation "True while it drops, a leap cut short by a wall or a body.")
-   (fall-speed :initform 0.0 :accessor fall-speed)
-   (recover :initform 0.0 :accessor recover
-            :documentation "Seconds it still stands after landing.")
-   (leap-cooldown :initform 0.0 :accessor leap-cooldown)))
+   (max-health :initform 120)))
 
-(defmethod stage :after ((ogre ogre) (area staging-area))
-  (stage (animation-texture (find-fx-animation (leap-animation ogre))) area))
+(defmethod stage :after ((leaper leaper) (area staging-area))
+  (when (leap-animation leaper)
+    (stage (animation-texture (find-fx-animation (leap-animation leaper))) area)))
 
-(defmethod attack-frame-times ((ogre ogre))
+(defmethod attack-frame-times ((leaper leaper))
   ;; A leap's only timed part is the crouch; the flight doesn't run on the attack's clock.
-  (if (eq (attack-kind ogre) :leap) (list *leap-windup* 1000.0) (call-next-method)))
-(defmethod attack-animation ((ogre ogre))
-  (if (eq (attack-kind ogre) :leap) (leap-animation ogre) (call-next-method)))
+  (if (eq (attack-kind leaper) :leap) (list *leap-windup* 1000.0) (call-next-method)))
+(defmethod attack-animation ((leaper leaper))
+  (if (eq (attack-kind leaper) :leap)
+      (or (leap-animation leaper) (call-next-method))
+      (call-next-method)))
 
 (defun leap-log (format &rest args)
   (when *leap-debug*
@@ -230,13 +243,17 @@ true if there is a landing cell and an arc OGRE's body fits."
                               (leap-duration ogre) (float duration 0f0))
                         T)))))))))
 
-(defmethod special-attack ((ogre ogre))
-  (when (and (<= (leap-cooldown ogre) 0) (not (airborne ogre)) (not (falling ogre))
-             (<= *leap-min* (player-distance ogre) (+ *leap-max* 1.0))
-             (plan-leap ogre))
-    (setf (attack-kind ogre) :leap)
-    (start-attack ogre)
+(defun try-leap (leaper)
+  "Start a leap at the player if LEAPER may leap again and PLAN-LEAP finds one: true if it did."
+  (when (and (<= (leap-cooldown leaper) 0) (not (airborne leaper)) (not (falling leaper))
+             (<= *leap-min* (player-distance leaper) (+ *leap-max* 1.0))
+             (plan-leap leaper))
+    (setf (attack-kind leaper) :leap)
+    (start-attack leaper)
     T))
+
+(defmethod special-attack ((ogre ogre))
+  (try-leap ogre))
 
 ;;; The attack.
 
@@ -254,7 +271,7 @@ true if there is a landing cell and an arc OGRE's body fits."
     (leap-log "leaps from ~,2f ~,2f ~,2f to ~,2f ~,2f ~,2f, apex ~,2f, ~,2f s"
               (vx from) (vy from) (vz from) (vx to) (vy to) (vz to) (leap-apex ogre) (leap-duration ogre))))
 
-(defmethod attack-step ((ogre ogre) dt)
+(defmethod attack-step ((ogre leaper) dt)
   (if (eq (attack-kind ogre) :leap)
       (let ((to (leap-to ogre))
             (loc (location ogre)))
@@ -379,14 +396,14 @@ the leap short: it drops from there."
         (setf (vy loc) (float (max floor (- (vy loc) (* (incf (fall-speed ogre) (* *leap-gravity* dt)) dt))) 0f0))
         (land-leap ogre))))
 
-(defmethod break-flight ((ogre ogre))
+(defmethod break-flight ((ogre leaper))
   (setf (airborne ogre) NIL
         (falling ogre) NIL
         (fall-speed ogre) 0.0
         (recover ogre) 0.0
         (attack-kind ogre) :slam))
 
-(defmethod keep-height ((ogre ogre) dt)
+(defmethod keep-height ((ogre leaper) dt)
   (setf (leap-cooldown ogre) (max 0.0 (- (leap-cooldown ogre) dt))
         (recover ogre) (max 0.0 (- (recover ogre) dt)))
   (cond ((or (airborne ogre) (falling ogre))
@@ -400,12 +417,17 @@ the leap short: it drops from there."
            (setf (attack-kind ogre) :slam))
          (call-next-method))))
 
-(defmethod show-own-pose ((ogre ogre) squash)
+(defun leap-pose-animation (leaper)
+  "The strip LEAPER's crouch, flight and landing are frames 0, 1 and 2 of."
+  (or (leap-animation leaper) (slot-value leaper 'attack-animation)))
+
+(defmethod show-own-pose ((ogre leaper) squash)
   (cond ((dead ogre) NIL)
         ((or (airborne ogre) (falling ogre))
-         (show-view-frame ogre (leap-animation ogre) 1 squash) T)
+         (show-view-frame ogre (leap-pose-animation ogre) 1 squash) T)
         ((< 0 (recover ogre))
-         (show-view-frame ogre (leap-animation ogre) 2 squash) T)))
+         (show-view-frame ogre (leap-pose-animation ogre) 2 squash) T)
+        (T (call-next-method))))
 
 ;; It sees down off a balcony's ledge, as far as it leaps down.
 (defmethod sight-rise ((ogre ogre)) (+ *leap-max-drop* 0.5))

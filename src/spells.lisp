@@ -308,6 +308,10 @@ seconds, keeping its speed."
    (colors :initarg :colors :initform *grave-aurora-colors* :reader aurora-colors)
    (spin :initarg :spin :initform 0.0 :reader aurora-spin :documentation "Turns a second its streaks run round the ring.")
    (twist :initarg :twist :initform 0.0 :reader aurora-twist :documentation "Whole turns its streaks lean, foot to top.")
+   (arc :initarg :arc :initform pi :accessor aurora-arc
+        :documentation "Radians either side of ARC-MIDDLE it stands on: pi for the whole ring, less for an arc.")
+   (arc-middle :initarg :arc-middle :initform pi :accessor aurora-arc-middle
+               :documentation "Angle round the ring, from +X toward +Z, of its arc's middle.")
    (height :initform (first *aurora-height*) :accessor aurora-height)
    (strength :initform 0.0 :accessor aurora-strength :documentation "0 (none) to 1 (full).")
    (clock :initform (random 100.0) :accessor aurora-clock)))
@@ -349,6 +353,8 @@ GPU. PRELOAD-SPELLS stages it with the scene.")
           (uniform program "strength") (float (aurora-strength aurora) 0f0)
           (uniform program "spin") (float (aurora-spin aurora) 0f0)
           (uniform program "twist") (float (aurora-twist aurora) 0f0)
+          (uniform program "arc") (float (aurora-arc aurora) 0f0)
+          (uniform program "arc_middle") (float (aurora-arc-middle aurora) 0f0)
           (uniform program "time") (float (aurora-clock aurora) 0f0))
     (destructuring-bind (foot-1 foot-2 foot-3 top band) (aurora-colors aurora)
       (setf (uniform program "foot_1") foot-1
@@ -373,10 +379,13 @@ uniform vec3 centre;
 uniform float radius;
 uniform float height;
 uniform float time;
+uniform float arc;
+uniform float arc_middle;
 out vec2 v_ah;
 
 void main(){
-  float a = in_ah.x * 6.2831853;
+  // The ring's segments spread over its arc: the whole ring when ARC is pi.
+  float a = arc_middle + (in_ah.x - 0.5) * 2.0 * arc;
   // Folds that drift round the ring and sway, growing toward the top: the foot stays
   // on the circle's rim.
   float lean = in_ah.y * in_ah.y;
@@ -394,6 +403,7 @@ uniform float strength;
 uniform float spin;
 uniform float twist;
 uniform float time;
+uniform float arc;
 uniform vec3 foot_1;
 uniform vec3 foot_2;
 uniform vec3 foot_3;
@@ -424,6 +434,8 @@ void main(){
   // The glowing band along its foot.
   float band = exp(-y * 14.0) * (0.45 + 0.55 * broad);
   float light = (streak * rise + 0.7 * band) * strength;
+  // An arc fades out toward its ends; a whole ring meets itself.
+  if(arc < 3.14) light *= smoothstep(0.0, 0.12, min(v_ah.x, 1.0 - v_ah.x));
   // Its colour wanders round the ring through its three foot colours (the necromancer's
   // greens: emerald, acid and sea-green) and deepens toward the top.
   float hue = ring_noise(u * 5.0 + time * 0.12, 5.0) * 2.0;

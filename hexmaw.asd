@@ -30,6 +30,7 @@
                (:file "player")
                (:file "vortex")
                (:file "wraith")
+               (:file "boss")
                (:file "pickups")
                (:file "hud")
                (:file "hands")
