@@ -9,8 +9,9 @@
 ;;; doesn't. CATCH: within the spell's area it is held (WHIRL). It orbits the centre line,
 ;;; spinning faster and carried up to *WHIRL-LIFT* or just under the ceiling, for
 ;;; *WHIRL-HOLD* seconds, losing health to the wind. THROW: then, or when the vortex fades,
-;;; it leaves along its orbit at *FLING-SPEED* and flies (FLUNG) until it lands, hurt if it
-;;; hits a wall fast enough. It can't be pulled again for *SPAT-TIME*. The player can
+;;; it leaves along its orbit at *FLING-SPEED* and flies (FLUNG) until it lands, hurt by
+;;; walls, bodies, ceilings and the floor it hits fast enough (HIT-SURFACE, creature.lisp),
+;;; as it is when the orbit dashes it against a wall. It can't be pulled again for *SPAT-TIME*. The player can
 ;;; still look and attack, and pushing away from the centre widens the orbit; past
 ;;; *WHIRL-ESCAPE* they drop out with a weak throw.
 ;;;
@@ -60,9 +61,6 @@ needs, and too little to land beyond a wall, since a move is only tested where i
 (defparameter *fling-lift* 5.0 "Speed in m/s it is thrown up at.")
 (defparameter *spat-time* 1.5 "Seconds after a throw that no vortex can pull it.")
 (defparameter *land-carry* 0.5 "Share of a thrown creature's speed it keeps sliding with when it lands.")
-(defparameter *slam-speed* 8.0 "Speed in m/s below which something thrown hits a wall unhurt.")
-(defparameter *slam-per-speed* 2.5 "Damage per m/s over that.")
-(defparameter *slam-max* 20 "The most damage hitting a wall does.")
 
 ;;; What every actor is asked.
 
@@ -534,15 +532,18 @@ Walls can keep something a whole orbit's width off that point, or the point beyo
          (k (if (< *whirl-step* d) (/ *whirl-step* d) 1.0)))
     (values (float (* k dx) 0f0) (float (* k dz) 0f0))))
 
-(defun note-orbit-miss (actor x z dt)
-  "See how far walls kept ACTOR from its orbit's point X Z: its orbit narrows to fit, and
-it counts toward being thrown out."
+(defun note-orbit-miss (actor x z dt speed)
+  "See how far walls kept ACTOR, orbiting at SPEED m/s, from its orbit's point X Z: its orbit
+narrows to fit, and it counts toward being thrown out. Dashed against a wall, it is hurt."
   (let ((feet (body-feet actor)))
-    (if (< (* *whirl-miss* *whirl-miss*)
-           (+ (expt (- x (vx feet)) 2) (expt (- z (vz feet)) 2)))
-        (setf (whirl-stuck actor) (+ (whirl-stuck actor) dt)
-              (whirl-radius actor) (max 0.0 (- (whirl-radius actor) (* *whirl-squeeze* dt))))
-        (setf (whirl-stuck actor) 0.0))))
+    (cond ((< (* *whirl-miss* *whirl-miss*)
+              (+ (expt (- x (vx feet)) 2) (expt (- z (vz feet)) 2)))
+           (when (= 0 (whirl-stuck actor))
+             (hit-surface actor speed (- x (vx feet)) 0.0 (- z (vz feet))))
+           (setf (whirl-stuck actor) (+ (whirl-stuck actor) dt)
+                 (whirl-radius actor) (max 0.0 (- (whirl-radius actor) (* *whirl-squeeze* dt)))))
+          (T
+           (setf (whirl-stuck actor) 0.0)))))
 
 (defun whirl-over-p (actor vortex dt)
   "Run down ACTOR's hold on VORTEX by DT seconds. True if it is time to throw it."
@@ -570,9 +571,6 @@ SCALE of the full speed."
           (spat-timer actor) *spat-time*)
     (launch-actor actor (float (* speed dx) 0f0) (float (* k *fling-lift*) 0f0) (float (* speed dz) 0f0))))
 
-(defun slam-damage (speed)
-  (max 1 (min *slam-max* (round (* *slam-per-speed* (- speed *slam-speed*))))))
-
 ;;; Creatures.
 
 (defmethod note-caught ((creature creature))
@@ -590,14 +588,14 @@ SCALE of the full speed."
   (stop-walking creature 0.5))
 
 (defun orbit-creature (creature vortex dt)
-  (multiple-value-bind (x y z) (orbit-point creature vortex dt)
+  (multiple-value-bind (x y z spin) (orbit-point creature vortex dt)
     (let ((loc (location creature))
           (*ignore-bodies* T))
       (multiple-value-bind (dx dz) (orbit-step x z (vx loc) (vz loc))
         (move-creature creature dx dz 0.05))
       (when (fits-at-p (vx loc) y (vz loc) (body-radius creature) (sprite-height creature))
         (setf (vy loc) (float y 0f0)))
-      (note-orbit-miss creature x z dt)))
+      (note-orbit-miss creature x z dt (* spin (whirl-radius creature)))))
   ;; Its flinch frame, its views cycling: it tumbles.
   (setf (stagger creature) (* 0.6 *stagger-time*)
         (facing creature) (mod (+ (facing creature) (* *whirl-tumble* dt)) #.(float (* 2 pi) 0f0)))
@@ -615,32 +613,23 @@ SCALE of the full speed."
     (unless (dead creature)
       (land-thrown creature))))
 
-(defun slam-creature (creature speed lost-x lost-z)
-  "CREATURE flew into a wall at SPEED, which took LOST-X and LOST-Z off its flight."
-  (let ((loc (location creature)))
-    (hurt creature (slam-damage speed)
-          :from (vec (+ (vx loc) lost-x) (+ (vy loc) (* 0.5 (sprite-height creature))) (+ (vz loc) lost-z)))))
-
 (defun fly-thrown (creature dt)
-  "Fly CREATURE DT seconds through the air under gravity, through other bodies, stopping
-at walls, until it comes to a floor."
+  "Fly CREATURE DT seconds through the air under gravity, stopping at walls and bodies,
+until it comes to a floor. What it hits fast enough hurts it (HIT-SURFACE), and a body too."
   (let* ((loc (location creature))
          (v (flight creature))
          (x0 (vx loc)) (z0 (vz loc))
          (dx (* (vx v) dt)) (dz (* (vz v) dt)))
     (decf (vy v) (* *gravity* dt))
-    (let ((*ignore-bodies* T))
-      (move-creature creature dx dz 0.05))
+    (move-creature creature dx dz 0.05)
     ;; Compared with where it meant to go: a slide along a 45 degree wall counts for what it lost.
     (let* ((moved-x (- (vx loc) x0))
            (moved-z (- (vz loc) z0))
            (lost-x (/ (- dx moved-x) dt))
-           (lost-z (/ (- dz moved-z) dt))
-           (lost (sqrt (+ (* lost-x lost-x) (* lost-z lost-z)))))
+           (lost-z (/ (- dz moved-z) dt)))
       (setf (vx v) (/ moved-x dt)
             (vz v) (/ moved-z dt))
-      (when (< *slam-speed* lost)
-        (slam-creature creature lost lost-x lost-z)))
+      (hit-across creature lost-x lost-z dt))
     (let ((y (+ (vy loc) (* (vy v) dt)))
           (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc)))))
       (cond ((< y *kill-height*)
@@ -650,12 +639,15 @@ at walls, until it comes to a floor."
              (land-creature creature))
             ((and floor (<= (vy v) 0) (<= y floor))
              (setf (vy loc) (float floor 0f0))
+             (hit-surface creature (- (vy v)) 0.0 -1.0 0.0)
              (land-creature creature))
             ((fits-at-p (vx loc) y (vz loc) (body-radius creature) (sprite-height creature))
              (setf (vy loc) (float y 0f0)))
             ((< 0 (vy v))
+             (hit-surface creature (vy v) 0.0 1.0 0.0)
              (setf (vy v) 0f0))
             (T
+             (hit-surface creature (- (vy v)) 0.0 -1.0 0.0)
              (land-creature creature))))))
 
 (defun whirl-step (creature dt)
@@ -735,25 +727,11 @@ them; bodies don't, and a share of the spin turns their view."
           (multiple-value-bind (dx dz) (orbit-step x z (vx feet) (vz feet))
             (move-flat player dx dz))
           (move-axis player 1 (float (- y (vy feet)) 0f0))
-          (note-orbit-miss player x z dt)
+          (note-orbit-miss player x z dt (* spin (whirl-radius player)))
           (setf (vx vel) 0f0 (vy vel) 0f0 (vz vel) 0f0
                 (grounded player) NIL
                 (footing player) NIL
                 (vy rot) (float (mod (+ (vy rot) (* *whirl-drift* spin dt)) #.(float (* 2 pi) 0f0)) 0f0)))))))
-
-(defun end-player-flight (player vx0 vz0)
-  "After PLAYER, thrown and moving at VX0 VZ0, has moved this tick: a wall that stopped
-them hurts, as a shield can't help, and landing ends the flight."
-  (when (flung player)
-    (let* ((vel (velocity player))
-           (hit-x (if (= 0 (vx vel)) vx0 0f0))
-           (hit-z (if (= 0 (vz vel)) vz0 0f0))
-           (hit (sqrt (+ (* hit-x hit-x) (* hit-z hit-z)))))
-      (when (< *slam-speed* hit)
-        (hurt-player player (slam-damage hit) (feet player) :shove NIL :by :tornado)
-        (hit-stop))
-      (when (or (grounded player) (swimming player))
-        (setf (flung player) NIL)))))
 
 ;;; The spell.
 

@@ -307,6 +307,8 @@ title and its buttons.")
   (case killed-by
     (:lava "lava")
     (:drowning "drowning")
+    (:fall "a fall")
+    (:impact "being thrown")
     ((NIL) "something")
     (T (let ((name (substitute #\Space #\- (string-downcase killed-by))))
          (format NIL "~:[a~;an~] ~a" (find (char name 0) "aeiou") name)))))
