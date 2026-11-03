@@ -161,8 +161,8 @@ The volley, barrage, grave circle, leap, shockwave and tornado powers reuse the 
 | boss-enrage | 1 | P | 1.8 | 3 | `enrage` boss.lisp:694 |
 | summon-sigil | 2 | P L | 1.5 | 2 | sigil tick boss.lisp:400-404 (stops when the cast breaks, 416) |
 | summon-burst | 2 | P | 1 | 3 | `summon-minions` boss.lisp:335 |
-| blink-out | 2 | P | 0.6 | 2 | `blink` boss.lisp:464 |
-| blink-in | 2 | P | 0.6 | 2 | `blink` boss.lisp:469 |
+| blink-out | 2 | P | 1.2 | 2 | `blink` boss.lisp:464 |
+| blink-in | 2 | P | 1.2 | 2 | `blink` boss.lisp:469 |
 | ward-hum | 3 | P L | 2 | 2 | the ward's glow, boss.lisp:733 |
 
 ## World ambience
