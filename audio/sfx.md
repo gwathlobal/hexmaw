@@ -139,7 +139,7 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | rift-cast | 1 | P | 0.8 | 3 | release: a rift (pull, swap or push) |
 | rift-flight | 1 | P L | 2 | 2 | `launch-projectile` spells.lisp, `rift-pull`, `rift-swap`, `rift-push` |
 | rift-impact | 1 | P | 0.8 | 3 | `impact` spells.lisp, a rift |
-| rift-step | 1 | P | 0.8 | 3 | `rift-move` riftwalker.lisp, at both ends: a blink, a pull, a push, a swap, a called ally |
+| rift-blink | 1 | P | 0.8 | 3 | `rift-move` riftwalker.lisp, the teleport, at both ends: a blink, a pull, a push, a swap, a called ally |
 | rift-call | 2 | P | 1.2 | 2 | `begin-call` riftwalker.lisp, where the ally will step out (it steps out 1 s later) |
 | step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |

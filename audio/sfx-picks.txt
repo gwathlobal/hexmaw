@@ -84,3 +84,8 @@ flesh-hit 2
 bone-hit 3
 grave-circle 7
 grave-cast 4
+riftwalker-pain 3
+riftwalker-alert 1
+riftwalker-death 1
+riftwalker-stab 1
+riftwalker-pain 4

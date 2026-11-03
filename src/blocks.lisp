@@ -597,9 +597,9 @@ the next grid cell."
             (:west (add-box container (- x thick) y (- z half) x top (+ z half) :surface surface))
             (:east (add-box container x y (- z half) (+ x thick) top (+ z half) :surface surface)))))))
 
-(defun attach-block (name container connector &key at facing)
+(defun attach-block (name container connector &key at facing (spawns T))
   "Place block NAME so that its connector named CONNECTOR sits at AT, facing FACING:
 the direction the doorway opens toward, back at whatever it attaches to.
 Returns the placed block's connectors, as PLACE-BLOCK does."
   (multiple-value-bind (origin turns) (attach-placement name connector at facing)
-    (place-block name container :at origin :turns turns)))
+    (place-block name container :at origin :turns turns :spawns spawns)))

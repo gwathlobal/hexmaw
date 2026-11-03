@@ -210,10 +210,10 @@ for the player, whose view flashes instead: the burst would stand in front of th
 (defun rift-move (actor to &key yaw (container (and *player* (container *player*))))
   "Step ACTOR through a rift to TO, a flash where it leaves and where it arrives."
   (rift-flash actor container)
-  (play-sound :rift-step (vcopy (body-feet actor)))
+  (play-sound :rift-blink (vcopy (body-feet actor)))
   (teleport-actor actor to :yaw yaw)
   (rift-flash actor container)
-  (play-sound :rift-step (vcopy (body-feet actor))))
+  (play-sound :rift-blink (vcopy (body-feet actor))))
 
 ;;; The rifts' effects, on the player, and on a creature one strikes once a knight's shield has
 ;;; sent it back as the knight's own.

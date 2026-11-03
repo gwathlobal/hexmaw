@@ -950,7 +950,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup.
+  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup;
+  `*debug-level-monsters*` (a list of kinds, NIL for all) keeps only those in the hall and leaves out
+  the annex's imp, the blocks' monsters and the boss.
   A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
   and a boss of a random kind with random powers, a new one at every build (`tools/hd reset`);
   `*boss-override*` fixes them. To try a block with one kind only,

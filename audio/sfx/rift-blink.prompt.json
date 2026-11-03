@@ -1,6 +1,6 @@
 {
   "prompt": "Someone stepping through a crack in the air and vanishing: a sharp glassy tear, a quick hollow suck of air inward, and a soft deep thump. Short, cold and eerie, no bells, no chimes. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
-  "prompt_file": "audio/prompts/sfx-rift-step.txt",
+  "prompt_file": "audio/prompts/sfx-rift-blink.txt",
   "model_id": "eleven_text_to_sound_v2",
   "prompt_influence": 0.3,
   "loop": false,
