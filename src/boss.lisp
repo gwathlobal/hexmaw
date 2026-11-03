@@ -345,7 +345,7 @@ normal size, gets up out of it."
              (minion (make-instance class :location (vcopy at) :facing (facing boss) :summoned T)))
         (setf (burst sigil) 0.0
               (rising minion) (death-duration minion)
-              (alert minion) *alert-time*)
+              (alert minion) (alert-time))
         (spawn-creature minion (container boss))
         (update-creature-look minion)))))
 
@@ -539,9 +539,68 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
 (define-boss-power :haste
   :label "Haste" :passive T)
 
+;;; A glowing rim, one art pixel wide, round a sprite's silhouette, and a warm or plain cast
+;;; over its whole body, with a lamp of the rim's colour: the boss's look, and an elite's
+;;; (elite.lisp). On the program of a class with it only.
+
+(define-shader-entity rim-glow ()
+  ((glow :initform (vec4 0 0 0 0) :reader glow :documentation "The rim's colour and strength this frame.")
+   (texel :initform (vec2 0 0) :reader texel)
+   (glow-lamp :initform NIL :accessor glow-lamp))
+  (:documentation "A sprite with a glowing rim. List it before the creature's class."))
+
+(defparameter *plain-shade* (vec 1 1 1) "A cast that leaves the colours as they are.")
+
+(defgeneric rim-shade (entity)
+  (:documentation "What ENTITY's whole body is multiplied by.")
+  (:method ((entity rim-glow)) *plain-shade*))
+
+(defun light-rim (entity color strength radius)
+  "Set ENTITY's rim to COLOR at STRENGTH, and its lamp of RADIUS metres to match, making the lamp
+when it has none in *LAMPS*."
+  (let ((glow (glow entity)))
+    (setf (vx glow) (vx color) (vy glow) (vy color) (vz glow) (vz color)
+          (vw glow) strength))
+  (let ((lamp (glow-lamp entity)))
+    (when (and (container entity) (not (and lamp (find lamp *lamps*))))
+      (setf lamp (add-lamp (location entity) (vcopy color) radius :flicker 0.1 :source entity)
+            (glow-lamp entity) lamp))
+    (when lamp
+      (let ((c (color lamp)))
+        (setf (vx c) (* strength (vx color))
+              (vy c) (* strength (vy color))
+              (vz c) (* strength (vz color)))))))
+
+(defmethod render :before ((entity rim-glow) (program shader-program))
+  (let ((texture (texture entity))
+        (texel (texel entity)))
+    (setf (vx texel) (/ 1.0 (width texture)) (vy texel) (/ 1.0 (height texture)))
+    (setf (uniform program "rim_glow") (glow entity))
+    (setf (uniform program "rim_texel") texel)
+    (setf (uniform program "rim_shade") (rim-shade entity))))
+
+(define-class-shader (rim-glow :fragment-shader)
+  "in vec2 uv;
+out vec4 color;
+uniform sampler2D texture_image;
+uniform vec4 rim_glow;
+uniform vec2 rim_texel;
+uniform vec3 rim_shade;
+
+void main(){
+  maybe_call_next_method();
+  // An opaque texel with a see-through one beside it is on the rim.
+  float rim = 0.0;
+  rim = max(rim, step(texture(texture_image, uv + vec2(rim_texel.x, 0.0)).a, 0.5));
+  rim = max(rim, step(texture(texture_image, uv - vec2(rim_texel.x, 0.0)).a, 0.5));
+  rim = max(rim, step(texture(texture_image, uv + vec2(0.0, rim_texel.y)).a, 0.5));
+  rim = max(rim, step(texture(texture_image, uv - vec2(0.0, rim_texel.y)).a, 0.5));
+  color.rgb = mix(color.rgb * rim_shade, rim_glow.rgb, rim * rim_glow.a);
+}")
+
 ;;; The boss.
 
-(define-shader-entity boss ()
+(define-shader-entity boss (rim-glow)
   ((kind :initarg :kind :reader boss-kind :documentation "Its kind, as in *BOSS-KINDS*.")
    (powers :initarg :powers :initform () :accessor boss-powers
            :documentation "Its three powers' names; the third comes in when it enrages.")
@@ -552,9 +611,6 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
    (power-gap :initform 0.0 :accessor power-gap :documentation "Seconds before it may start another power.")
    (power-point :initform (vec 0 0 0) :reader power-point :documentation "Where its tornado will form.")
    (roar :initform 0.0 :accessor roar :documentation "Seconds left of its enraged roar.")
-   (glow :initform (vec4 0 0 0 0) :reader glow :documentation "The rim's colour and strength this frame.")
-   (texel :initform (vec2 0 0) :reader texel)
-   (glow-lamp :initform NIL :accessor glow-lamp)
    (ward :initform NIL :accessor ward :documentation "The AURORA arc that shows Warded, once it has it."))
   (:documentation "The run's boss: an empowered monster. List it first in the superclasses."))
 
@@ -706,19 +762,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
                   ((dormant boss) 0.4)
                   (T 1.0)))
          (pulse (+ 0.75 (* 0.25 (sin (* (if (enraged boss) 7.0 3.5) *light-clock*)))))
-         (strength (* k (min 1.0 (+ pulse (* 1.5 (roar boss))))))
-         (glow (glow boss)))
-    (setf (vx glow) (vx *boss-glow-color*) (vy glow) (vy *boss-glow-color*) (vz glow) (vz *boss-glow-color*)
-          (vw glow) strength)
-    (let ((lamp (glow-lamp boss)))
-      (when (and (container boss) (not (and lamp (find lamp *lamps*))))
-        (setf lamp (add-lamp (location boss) (vcopy *boss-glow-color*) *boss-light-radius* :flicker 0.1 :source boss)
-              (glow-lamp boss) lamp))
-      (when lamp
-        (let ((color (color lamp)))
-          (setf (vx color) (* strength (vx *boss-glow-color*))
-                (vy color) (* strength (vy *boss-glow-color*))
-                (vz color) (* strength (vz *boss-glow-color*))))))
+         (strength (* k (min 1.0 (+ pulse (* 1.5 (roar boss)))))))
+    (light-rim boss *boss-glow-color* strength *boss-light-radius*)
     (update-ward boss k)))
 
 (defun ward-arc (boss)
@@ -785,35 +830,9 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
         (place-gate arena)))
     (update-boss-glow boss)))
 
-;;; Its look: a warm cast over the whole body and a pulsing rim, one art pixel wide, round
-;;; its silhouette. On the boss's program only.
+;;; Its look: a warm cast over the whole body and a pulsing rim (RIM-GLOW).
 
-(defmethod render :before ((boss boss) (program shader-program))
-  (let ((texture (texture boss))
-        (texel (texel boss)))
-    (setf (vx texel) (/ 1.0 (width texture)) (vy texel) (/ 1.0 (height texture)))
-    (setf (uniform program "boss_glow") (glow boss))
-    (setf (uniform program "boss_texel") texel)
-    (setf (uniform program "boss_shade") *boss-shade*)))
-
-(define-class-shader (boss :fragment-shader)
-  "in vec2 uv;
-out vec4 color;
-uniform sampler2D texture_image;
-uniform vec4 boss_glow;
-uniform vec2 boss_texel;
-uniform vec3 boss_shade;
-
-void main(){
-  maybe_call_next_method();
-  // An opaque texel with a see-through one beside it is on the rim.
-  float rim = 0.0;
-  rim = max(rim, step(texture(texture_image, uv + vec2(boss_texel.x, 0.0)).a, 0.5));
-  rim = max(rim, step(texture(texture_image, uv - vec2(boss_texel.x, 0.0)).a, 0.5));
-  rim = max(rim, step(texture(texture_image, uv + vec2(0.0, boss_texel.y)).a, 0.5));
-  rim = max(rim, step(texture(texture_image, uv - vec2(0.0, boss_texel.y)).a, 0.5));
-  color.rgb = mix(color.rgb * boss_shade, boss_glow.rgb, rim * boss_glow.a);
-}")
+(defmethod rim-shade ((boss boss)) *boss-shade*)
 
 ;;; One class per kind.
 

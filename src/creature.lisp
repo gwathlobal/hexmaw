@@ -41,6 +41,8 @@ the weapon's bonus: some hits always pass it by, so it can't be held in its flin
 (defparameter *sight-range* 10.0 "Metres within which a creature sees the player in front of it.")
 (defparameter *hearing-range* 3.0 "Metres within which it notices the player behind it.")
 (defparameter *alert-time* 6.0 "Seconds a creature hunts after it last noticed the player or was hit.")
+
+(defun alert-time () (* *alert-time* (depth-scale :alert)))
 (defparameter *look-interval* 0.25 "Seconds between a creature's looks for the player.")
 (defparameter *chase-replan* 0.5 "Seconds between a hunting creature's fresh paths to the player.")
 (defparameter *chase-pause* 0.1 "Seconds a hunting creature stands at the end of a path before the next.")
@@ -478,7 +480,7 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
     (when (bleeds creature)
       (bleed creature amount from))
     (setf (flash creature) *flash-time*
-          (alert creature) *alert-time*)
+          (alert creature) (alert-time))
     (when (or (<= (health creature) 0)
               (always-pained-p creature)
               (pain-roll-p creature pain-bonus))
@@ -508,7 +510,7 @@ flinch, blood or hit-stop, which would freeze the game every burn."
   (unless (or (dead creature) (dormant-p creature))
     (decf (health creature) amount)
     (setf (flash creature) *flash-time*
-          (alert creature) *alert-time*)
+          (alert creature) (alert-time))
     (when (<= (health creature) 0)
       (stop-walking creature)
       (setf (dead creature) 0.0))))
@@ -541,7 +543,7 @@ seen from FROM is one its shield covers."
   "React to a spell striking CREATURE's shield: no damage, a faint flash, the block pose
 and a moment's brace, unless it's in the middle of an attack."
   (setf (flash creature) (max (flash creature) (* 0.4 *flash-time*))
-        (alert creature) *alert-time*)
+        (alert creature) (alert-time))
   (unless (eq (brain creature) :attacking)
     (setf (brace creature) *block-time*)
     (stop-walking creature *block-time*))
@@ -860,8 +862,8 @@ it can do something about. The ogre, which leaps down, looks further.")
          (distance (sqrt (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2)))))
     (and (< 0 (health *player*))
          (< (abs (- (vy feet) (vy loc))) (sight-rise creature))
-         (or (< distance *hearing-range*)
-             (and (< distance *sight-range*)
+         (or (< distance (* *hearing-range* (depth-scale :hearing)))
+             (and (< distance (* *sight-range* (depth-scale :sight)))
                   (< (player-angle creature) #.(float (/ pi 2) 0f0))))
          (clear-path-p loc feet (* 0.8 (sprite-height creature))))))
 
@@ -874,7 +876,7 @@ it can do something about. The ogre, which leaps down, looks further.")
         ;; Just noticed: cut a wander's pause short, and turn a wander's walk into a chase.
         (setf (idle-timer creature) (min (idle-timer creature) *chase-pause*)
               (replan-timer creature) 0.0))
-      (setf (alert creature) *alert-time*))))
+      (setf (alert creature) (alert-time)))))
 
 (defun player-bearing (point)
   "Direction from the player to POINT, as a yaw."
@@ -1257,7 +1259,7 @@ strike the player if still in reach and in front of it.")
       (setf (attack-pending creature) NIL)
       (release-attack creature))
     (when (<= (reduce #'+ times) time)
-      (stop-walking creature (attack-pause creature)))))
+      (stop-walking creature (* (attack-pause creature) (depth-scale :pause))))))
 
 (defgeneric attack-step (creature dt)
   (:documentation "Run DT seconds of CREATURE's attack: a blow or a cast (ATTACK), or a
