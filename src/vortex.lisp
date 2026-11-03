@@ -237,7 +237,8 @@ void main(){
    (replan :initform 0.0 :accessor vortex-replan :documentation "Seconds until it looks for a fresh path.")
    (ceiling :initform 1000.0 :accessor vortex-ceiling :documentation "The lowest ceiling around it.")
    (puff-timer :initform 0.0 :accessor puff-timer)
-   (funnel :initform NIL :accessor vortex-funnel)))
+   (funnel :initform NIL :accessor vortex-funnel)
+   (sound :initform NIL :accessor vortex-sound :documentation "Its roar, a loop, as loud as it is strong.")))
 
 ;; All that shows of it is its funnel and its dust.
 (defmethod render :around ((vortex spell-vortex) (program shader-program)))
@@ -336,7 +337,8 @@ turns aside. It settles to the floor and notes the ceiling."
   (enter (vortex-funnel vortex) (container vortex))
   ;; A loaded one has its lamp back already (RESTORE-EFFECT).
   (unless (find vortex *lamps* :key #'source)
-    (attach-glow vortex *vortex-light-color* *vortex-light-radius*)))
+    (attach-glow vortex *vortex-light-color* *vortex-light-radius*))
+  (setf (vortex-sound vortex) (start-loop :tornado (location vortex) 0.0)))
 
 ;; Its own tick, not FX-SPRITE's: it doesn't play out an animation.
 (define-handler (spell-vortex tick) (dt)
@@ -359,6 +361,7 @@ turns aside. It settles to the floor and notes the ceiling."
         (loc (location spell-vortex))
         (funnel (vortex-funnel spell-vortex)))
     (setf (vx loc) (vx c) (vy loc) (+ (vy c) 1.0) (vz loc) (vz c))
+    (move-loop (vortex-sound spell-vortex) loc (vortex-strength spell-vortex))
     (when funnel
       (setf (funnel-strength funnel) (vortex-strength spell-vortex)
             (funnel-height funnel) (min 9.0 (max 2.0 (- (vortex-ceiling spell-vortex) (vy c))))))))
@@ -378,6 +381,7 @@ turns aside. It settles to the floor and notes the ceiling."
 ;; A reset or rebuild takes it away before it is done; REVIVE and RESPAWN have cleared
 ;; whatever it held by then, and a despawn at its end holds nothing.
 (defmethod leave :after ((vortex spell-vortex) container)
+  (setf (vortex-sound vortex) (stop-loop (vortex-sound vortex)))
   (when (vortex-funnel vortex)
     (despawn (vortex-funnel vortex))
     (setf (vortex-funnel vortex) NIL))

@@ -1,0 +1,6 @@
+# The takes the game plays, one line a clip: CLIP TAKE... [gain=DB]. Several takes are
+# variants, played in turn. A clip with takes and no line here plays take 1.
+# tools/make_sfx.py converts them into data/sfx/.
+
+player-hurt 1 2 3 4
+shield-raise 2          # take 1 is nearly silent

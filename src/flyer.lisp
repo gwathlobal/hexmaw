@@ -158,7 +158,10 @@ as it lands, then sprawled, its head down, for the corpse."
 while it climbs back to its hover, so it never dives from the floor."
   ;; Hold it still: a hit while it lies there must not set it hunting.
   (stop-walking flyer (max (idle-timer flyer) 0.1))
-  (when (and (setf (landed flyer) (fall flyer dt)) (<= (decf (downed flyer) dt) 0))
+  (let ((was (landed flyer)))
+    (when (and (setf (landed flyer) (fall flyer dt)) (not was))
+      (creature-noise flyer :crash)))
+  (when (and (landed flyer) (<= (decf (downed flyer) dt) 0))
     (setf (downed flyer) 0.0
           (launching flyer) *launch-time*)
     (stop-walking flyer (/ (hover-height flyer) (climb-speed flyer)))))
@@ -190,14 +193,20 @@ while it climbs back to its hover, so it never dives from the floor."
          (setf (downed flyer) 0.0
                (launching flyer) 0.0)
          (when (and (fall flyer dt) (null (landed-dead flyer)))
-           (setf (landed-dead flyer) (dead flyer))))
+           (setf (landed-dead flyer) (dead flyer))
+           (creature-noise flyer :crash)))
         ((< 0 (downed flyer))
          (lie-downed flyer dt))
         ;; The dive moves it.
         ((eq (brain flyer) :attacking))
         (T
          (setf (fall-speed flyer) 0.0)
-         (setf (bob-phase flyer) (mod (+ (bob-phase flyer) (* dt 2 pi *hover-bob-rate*)) (* 2 pi)))
+         (let ((old (bob-phase flyer)))
+           (setf (bob-phase flyer) (mod (+ old (* dt 2 pi *hover-bob-rate*)) (* 2 pi)))
+           ;; The downstroke starts (SHOW-OWN-POSE's frame 1) as the phase passes 7/4 pi.
+           (when (and (< old #.(float (* 7/4 pi) 0f0)) (or (<= #.(float (* 7/4 pi) 0f0) (bob-phase flyer))
+                                                             (< (bob-phase flyer) old)))
+             (creature-noise flyer :flap)))
          (let ((y (hover-y flyer)))
            (when y
              (lift-flyer flyer (max (- (* *flyer-sink-speed* dt))
@@ -218,7 +227,8 @@ while it climbs back to its hover, so it never dives from the floor."
             (T
              (nv/ dir length)
              (setf (dive-left flyer) (+ length (dive-overshoot flyer))))))
-    (face-player flyer)))
+    (face-player flyer)
+    (creature-noise flyer :dive)))
 
 (defun end-dive (flyer)
   (setf (dive-left flyer) NIL)
@@ -303,3 +313,7 @@ length, against a wall or a body, or on the strike."
    (gib-scale :initform 1.1)
    (pain-chance :initform 50)
    (max-health :initform 20)))
+
+(define-creature-sounds harpy
+  :alert :harpy-alert :pain :harpy-pain :death :harpy-death
+  :flap :harpy-flap :dive :harpy-dive :crash :harpy-crash)

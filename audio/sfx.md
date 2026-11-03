@@ -207,18 +207,23 @@ Death and victory screens have their music; F12 needs nothing.
 | map-storey | 3 | 1P | 0.5 | 2 | `step-map-storey` map-view.lisp:243, the storey changes |
 | level-gong | 3 | 1P | 3 | 2 | the level banner, main.lisp:31 |
 
-## Notes for the hook-up
+## In the game
 
-- Downmix and encode the chosen take to mono Ogg in `data/sfx/` (`.ogg`: the .asd has
-  `cl-mixed-vorbis`, not `cl-mixed-wav`). Trim silence and even out loudness on the way.
-- The `:effect` mixer counts in centimetres by default and nothing moves its listener:
-  set its min and max distance for metres, and copy the camera's position and facing to
-  it every tick.
-- A voice plays one copy at a time: overlapping one-shots (several imps) need a
-  `trial:sound-bank`. Loops follow the music's rule: start once, then only pause and
-  unpause (`connected-voice`, music.lisp).
-- Loops pause while the game state freezes the world (not under hit-stop), and resets,
-  loads and `leave` methods stay silent (`reset-run`'s `revive` and `unseal-arena`,
-  `seal-arena :instant`).
-- Nothing fires on frame changes: a sound tied to a frame (a footstep, the harpy's
-  downstroke) watches the frame index change.
+`audio/sfx-picks.txt` says which takes each clip plays (take 1 when it has no line), and
+`tools/make_sfx.py` turns them into `data/sfx/` (mono for P clips, Ogg, one loudness) and its
+`index.lisp`; `src/sound.lisp` plays them. Every tier 1 clip is hooked. Where the hooks differ
+from the tables above:
+
+- A creature's clips are its class's `define-creature-sounds` (a boss shares its kind's):
+  `:windup` plays as `start-attack` starts any attack (the imp's claw, the knight's mace, the
+  skeleton's chop, the acolyte's kindling), so a boss's powers play its kind's wind-up too.
+  The necromancer's and wraith's casts sound from their abilities instead.
+- A spell's clips are `*spell-sounds*` (spells.lisp): its creature cast, flight loop, impact,
+  and a circle's loop and strike. A weapon's are `*weapon-sounds*` (sword.lisp).
+- `player-hurt` plays for a blow or a crash, not each tick of a burn or drowning.
+- `flesh-wet` plays with every wound that bleeds, so a sword hit is `blade-hit-flesh` and it.
+- The boss's shockwave plays `ogre-land`; its leap is the ogre's.
+
+Not hooked yet (no clip): the tier 2 and 3 rows, footsteps among them. Nothing fires on
+frame changes: a sound tied to a frame (a footstep) watches the frame index change, as the
+harpy's flap watches its bob.

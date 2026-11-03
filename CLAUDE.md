@@ -785,6 +785,28 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   to the `:effect` mixer, a space mixer, does it).
   To watch it, `(levels (node :music-director (scene +main+)))`, `(current ...)` and `(wanted ...)`. See "Sound and
   music".
+- `src/sound.lisp`: sound effects, through Harmony like the music. `audio/sfx.md` lists every
+  sound the game needs and where its hook goes. `(play-sound :clip at)` plays a one-shot at a
+  vec (positional clips; without AT, at the listener) or unplaced (first-person clips);
+  `start-loop` holds a loop's voice, `move-loop` moves it each tick (allocating nothing) and
+  `stop-loop` gives it back, returning NIL for the holder's slot: a projectile, circle, vortex,
+  sign or channel keeps its loop in a slot and stops it in its `leave :after`. Clips are
+  keywords from `data/sfx/index.lisp`; a clip not made yet plays nothing. Each clip keeps
+  voices of its own (Trial's sound assets play one copy at a time): `*sfx-voices*` per file,
+  taken in turn, the oldest cut short when all are busy, and `*loop-voices*` per loop, made
+  once by `add-sounds` (from `setup-scene`) and kept in `*sounds*` across rebuilds;
+  `(reload-sounds)` then a reset picks up re-made files. **The game thread never touches a
+  voice's connection**: `play-sound` pushes a request, and the `sound-director`'s tick hands
+  Harmony's mixing thread one function, `sound-frame`, that starts them, moves the listener
+  (`*listener-location*`, the player's eye) and the loops, and pauses the loops whenever
+  `*game-state*` isn't `:playing` (not under hit-stop). Harmony's queue holds 64 jobs, and an
+  error in its thread stops all sound for good, so `sound-frame` keeps its errors in
+  `*sound-error*`. The space mixer's axes are the other hand to the game's, so `copy-into`
+  mirrors Z (checked by recording: a sound on the player's left plays in the left channel);
+  its distances are `*sound-min-distance*` (2 m, full volume) to `*sound-max-distance*` (40 m).
+  A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
+  a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
+  To hear one: `tools/hd '(game (play-sound :imp-pain (v+ (location *player*) (vec -3 0 0))))'`.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
@@ -1263,6 +1285,16 @@ second), each writing a `.prompt.json` beside its output like `gen_image.py`. Bo
 its clip (prompt `audio/prompts/sfx-<clip>.txt`, ending in a shared style line), duration, takes,
 whether it loops and whether it is positional (a mono file on the `:effect` space mixer) or
 first-person. Work from it and keep it current.
+
+Sound effects: each clip's takes are `audio/sfx/<clip>-<n>.wav` (`tools/gen_sfx.py`, with the
+duration, takes and `--loop` from `audio/sfx.md`), gitignored like the music's. The chosen take
+of each goes in `audio/sfx-picks.txt` (`imp-pain 2`; several takes are variants played in
+turn, `gain=-3` evens one out; take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
+levels (the loudest 100 ms at -14 dBFS RMS, peaks under -1 through make_loop.py's limiter),
+downmixes positional clips to mono (the `:effect` space mixer takes only mono) and encodes them
+to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in
+`data/sfx/index.lisp`. Then `tools/hd '(reload-sounds)'` and `tools/hd reset`. Generated takes
+often clip: pick one that doesn't.
 
 Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
 minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro

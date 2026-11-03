@@ -152,7 +152,9 @@ it once the level is built."
   (let ((arena *arena*))
     (when (and arena (not (sealed arena)))
       (setf (sealed arena) T)
-      (when instant (setf (gate-drop arena) 1.0))
+      (if instant
+          (setf (gate-drop arena) 1.0)
+          (play-sound :gate-drop (connector-location (arena-door arena))))
       (place-gate arena)
       ;; Solid at once, while it still falls: the player is already through.
       (vector-push-extend (gate-solid arena) *solids*)
@@ -496,6 +498,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
   :usable (lambda (boss) (< (player-distance boss) (+ (body-radius boss) 3.5)))
   :release (lambda (boss)
              (let ((at (location boss)))
+               (play-sound :ogre-land at)
                (quake boss at *boss-quake-radius* *boss-quake-damage* *quake-shove* *quake-player-shove*
                       *quake-player-lift* :inner (body-radius boss))
                (kick-dust at (* 0.6 *boss-quake-radius*) *ogre-dust-puffs* (container boss))
@@ -696,6 +699,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
         (roar boss) *boss-roar-time*
         (power-gap boss) 0.0)
   (stop-walking boss *boss-roar-time*)
+  (play-sound :boss-enrage (location boss))
   (kick-dust (location boss) (* 0.6 *boss-quake-radius*) *ogre-dust-puffs* (container boss))
   (hit-stop 0.3))
 

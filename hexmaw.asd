@@ -17,6 +17,7 @@
                (:file "footing")
                (:file "sprite")
                (:file "creature")
+               (:file "sound")
                (:file "flyer")
                (:file "necromancer")
                (:file "ogre")

@@ -208,6 +208,7 @@ direction DX DZ (any way when it is 0 0), a BACK fraction of them the other way.
   "Spray blood from CREATURE's wound, struck for AMOUNT from point FROM: away from FROM,
 some of it back toward it. Without FROM the blow comes from the player. The wound drips
 for a while after."
+  (play-sound :flesh-wet (location creature))
   (let* ((loc (location creature))
          (from (or from (and *player* (feet *player*))))
          (dx (if from (- (vx loc) (vx from)) 0.0))
@@ -559,6 +560,7 @@ vanishes and its gibs fly. Its wound stops dripping, since nothing of it is left
   (unless (gibbed creature)
     (setf (gibbed creature) T
           (bleeding creature) 0f0)
+    (play-sound (if (bleeds creature) :gib-burst :bone-shatter) (location creature))
     (burst-gibs creature from)))
 
 (defun dissolve-oldest-gib (pool)

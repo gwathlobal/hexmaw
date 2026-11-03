@@ -80,6 +80,9 @@
    (tempest-point :initform (vec 0 0 0) :reader tempest-point
                   :documentation "Where on the floor the tornado it is casting will form.")))
 
+;; Its casts sound from the sign and the gust (spells.lisp's *SPELL-SOUNDS*).
+(define-creature-sounds gale-wraith :alert :wraith-alert :pain :wraith-pain :death :wraith-death)
+
 ;; A cast, not a flyer's dive; it hangs where it is meanwhile.
 (defmethod attack-step ((wraith gale-wraith) dt)
   (attack wraith dt))
@@ -140,7 +143,8 @@ end that by stopping the attack.")
    (centre :initarg :centre :reader centre)
    (lamp :initform NIL :accessor sign-lamp)
    (funnel :initform NIL :accessor sign-funnel)
-   (aurora :initform NIL :accessor sign-aurora)))
+   (aurora :initform NIL :accessor sign-aurora)
+   (sound :initform NIL :accessor sign-sound :documentation "Its loop, from the first tick.")))
 
 (defmethod initialize-instance :after ((sign gale-sign) &key)
   ;; Flat on the floor, facing up, just off it.
@@ -157,9 +161,11 @@ end that by stopping the attack.")
           (sign-lamp sign) (add-lamp (vec (vx c) (+ (vy c) 0.8) (vz c)) *sign-light-color* *sign-light-radius*
                                      :flicker 0.15))
     (enter (sign-funnel sign) (container sign))
-    (enter (sign-aurora sign) (container sign))))
+    (enter (sign-aurora sign) (container sign))
+    (setf (sign-sound sign) (start-loop :tempest-sign c))))
 
 (defmethod leave :after ((sign gale-sign) container)
+  (setf (sign-sound sign) (stop-loop (sign-sound sign)))
   (when (sign-funnel sign)
     (despawn (sign-funnel sign))
     (setf (sign-funnel sign) NIL))

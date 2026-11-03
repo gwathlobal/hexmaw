@@ -166,6 +166,8 @@ blow knocked it aside (BREAK-GUARD).")
 spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it was cast."
   (let* ((spell (find-spell name))
          (cost (spell-cost spell)))
+    (when (and (<= (cast-timer player) 0) (< (mana player) cost))
+      (play-sound :cast-fizzle))
     (when (and (<= (cast-timer player) 0) (<= cost (mana player)))
       (decf (mana player) cost)
       (setf (cast-timer player) *cast-cooldown*
@@ -177,6 +179,7 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
   "Fire the pending spell from just below the eye toward where the player looks now."
   (let* ((dir (look-direction player))
          (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
+    (play-sound (if (eq (spell-name (pending-spell player)) 'tempest) :tempest-cast :bolt-cast))
     (cast-spell (pending-spell player) origin dir (container player) :caster player)
     (setf (pending-spell player) NIL)))
 
@@ -666,6 +669,7 @@ again for SECONDS."
 (defun player-dies (player by)
   "PLAYER's health ran out, to BY. On a generated level the run is over: the world freezes,
 PLAYER falls (FALL-DEAD) and the death screen comes up. Elsewhere the run starts over."
+  (play-sound :player-death)
   (cond ((not (eq *level* :generated))
          ;; Not now: this runs inside a creature's tick, and RESET-RUN despawns entities.
          (queue-menu-action 'reset-run))
@@ -700,12 +704,17 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
           (cond ((<= cost (stamina player))
                  (decf (stamina player) cost)
                  (setf amount (max 1 (round (* amount *block-damage-scale*))))
+                 (play-sound (if guard-break :shield-guard-break :shield-block))
                  (when guard-break
                    (break-guard player guard-break)))
                 (T
                  (setf (stamina player) 0.0
                        blocked NIL)
+                 (play-sound :shield-guard-break)
                  (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
+      ;; A burn's every tick would grunt: only a blow or a crash does.
+      (when (and (not blocked) (< amount (health player)) (or shove (member by '(:impact :fall))))
+        (play-sound :player-hurt))
       (incf (damage-taken player) (min amount (health player)))
       (decf (health player) amount)
       (setf (pain player) *pain-time*)
