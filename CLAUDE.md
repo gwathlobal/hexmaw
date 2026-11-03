@@ -720,8 +720,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   eye to `*death-eye-height*`, rolls the view (`*death-roll*`, the player's `project-view`) and
   sinks the weapons. After `*death-panel-delay*` the `death-screen` comes up with the mouse
   released: `death-stats` (killed by, time survived, monsters slain, areas explored, damage
-  taken, the seed) and a button back to the main menu. Esc does nothing there, F5 is refused and
-  F9 still quickloads. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
+  taken, the seed) and a button back to the main menu. Esc, F5 and F9 do nothing there: death
+  ends the run, with no quickload back into it. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
   `:drowning`, `:tornado`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
   Killing the boss sets `:victory` (`win-run`, boss.lisp) and the `victory-screen` comes up:
   `victory-stats` (the boss slain, then `run-stat-lines`, the rows it shares with the death
