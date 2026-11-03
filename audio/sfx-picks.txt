@@ -79,4 +79,4 @@ climb-out 5
 blink-in 12
 blink-out 10
 gib-burst 3
-gib-bounce 1
+gib-bounce 3

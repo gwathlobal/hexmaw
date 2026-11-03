@@ -148,7 +148,7 @@ No sound per splat or drip: one burst lands 20 to 40 drops.
 | flesh-wet | 1 | P | 0.5 | 3 | `bleed` gore.lisp:207, once a hit |
 | gib-burst | 1 | P | 1 | 3 | `burst-gibs` gore.lisp:524 |
 | bone-shatter | 1 | P | 1 | 3 | `burst-gibs` gore.lisp:524, dry (skeleton) |
-| gib-bounce | 3 | P | 0.5 | 3 | `step-gib` gore.lisp:622, above 1.5 m/s, throttled |
+| gib-bounce | 3 | P | 0.5 | 3 | `step-gib` gore.lisp, above 3 m/s, one every 0.3 s at most, at half volume |
 
 ## Boss and arena
 

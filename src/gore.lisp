@@ -583,8 +583,9 @@ vanishes and its gibs fly. Its wound stops dripping, since nothing of it is left
   (loop while (and (< *max-gibs* (gib-count pool))
                    (dissolve-oldest-gib pool))))
 
-(defparameter *gib-bounce-sound-speed* 1.5 "Metres per second a gib must strike at to be heard.")
-(defparameter *gib-bounce-gap* 0.08 "Seconds from one gib's bounce sound to the next: a burst lands many at once.")
+(defparameter *gib-bounce-sound-speed* 3.0 "Metres per second a gib must strike at to be heard.")
+(defparameter *gib-bounce-gap* 0.3 "Seconds from one gib's bounce sound to the next: a burst lands many at once.")
+(defparameter *gib-bounce-volume* 0.5)
 (defvar *last-gib-bounce* -1.0 "The SOUND-CLOCK at the last gib's bounce sound.")
 (defvar *gib-sound-at* (vec3) "Scratch: where a gib bounced.")
 
@@ -592,7 +593,7 @@ vanishes and its gibs fly. Its wound stops dripping, since nothing of it is left
   (when (< *gib-bounce-gap* (abs (- *sound-clock* *last-gib-bounce*)))
     (setf *last-gib-bounce* *sound-clock*
           (vx *gib-sound-at*) x (vy *gib-sound-at*) y (vz *gib-sound-at*) z)
-    (play-sound :gib-bounce *gib-sound-at*)))
+    (play-sound :gib-bounce *gib-sound-at* *gib-bounce-volume*)))
 
 (defun step-gib (pool i dt keep fall)
   "Fly gib I of POOL for DT seconds, slowed by KEEP and pulled down by FALL: it drips,
