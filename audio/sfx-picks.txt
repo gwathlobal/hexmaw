@@ -3,4 +3,52 @@
 # tools/make_sfx.py converts them into data/sfx/.
 
 player-hurt 1 2 3 4
-shield-raise 2          # take 1 is nearly silent
+shield-raise 3          # take 1 is nearly silent
+sword-swing 3 gain=-1
+spear-thrust 3
+blade-hit-flesh 2
+blade-hit-bone 2
+shield-guard-break 3
+shield-bash 3
+bash-hit 2
+bash-glance 3
+cast-fizzle 3
+tornado 1
+imp-pain 3
+acolyte-pain 3
+acolyte-death 3
+knight-pain 2
+knight-death 2
+knight-mace 3
+harpy-alert 2
+harpy-pain 2
+harpy-flap 1
+harpy-dive 3
+skull-cast 3
+skeleton-chop 3
+skeleton-rise 3
+ogre-alert 2
+ogre-death 3
+ogre-slam 3
+ogre-leap 2
+wraith-pain 2
+wraith-alert 3
+wraith-death 3
+tempest-sign 2
+gust-cast 2
+flesh-wet 2
+bone-shatter 3
+gate-drop 2
+boss-enrage 2
+cinder-flight 3
+shield-deflect 4
+draw-magic 6
+draw-sword 4
+draw-spear 2
+bolt-impact 5
+cinder-impact 4
+necro-pain 7
+skull-impact 5
+imp-claw 8
+acolyte-alert 9
+knight-alert 4

@@ -37,8 +37,7 @@ First-person, so stereo is fine (`:speech`).
 | bash-glance | 1 | P | 0.6 | 3 | `bash-hit` sword.lisp:223-226, a covered view (knight, warded boss) |
 | draw-sword | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:sword` |
 | draw-spear | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:spear` |
-| draw-fire-hands | 1 | 1P | 0.7 | 2 | `(setf (weapon player))` sword.lisp:270, `:hands` |
-| draw-storm-hands | 1 | 1P | 0.7 | 2 | `(setf (weapon player))` sword.lisp:270, `:tempest` |
+| draw-magic | 1 | 1P | 0.7 | 3 | `(setf (weapon player))` sword.lisp:270, `:hands` and `:tempest` |
 
 ## Player: spells
 
@@ -46,7 +45,7 @@ First-person, so stereo is fine (`:speech`).
 |---|---|---|---|---|---|
 | bolt-cast | 1 | 1P | 1.2 | 3 | `release-spell` player.lisp:176, bolt |
 | bolt-flight | 1 | P L | 2 | 2 | `launch-projectile` spells.lisp:144 until `impact` 157 or despawn 252 |
-| bolt-impact | 1 | P | 1 | 3 | `impact` spells.lisp:157 |
+| bolt-impact | 1 | P | 1.2 | 3 | `impact` spells.lisp:157 |
 | bolt-hiss-water | 2 | P | 0.8 | 2 | `impact` from spells.lisp:250, liquid is water |
 | cast-fizzle | 1 | 1P | 0.5 | 3 | `player-cast` player.lisp:169 fails for mana |
 | tempest-cast | 1 | 1P | 1.2 | 3 | `release-spell` player.lisp:176, tempest |
@@ -126,7 +125,7 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | ogre-death | 1 | P | 2 | 3 | death: ogre |
 | ogre-slam | 1 | P | 1.2 | 3 | `release-attack` ogre.lisp:284 (the maul's impact) |
 | ogre-leap | 1 | P | 0.8 | 3 | `launch-leap` ogre.lisp:260 |
-| ogre-land | 1 | P | 1.5 | 3 | `land-leap` ogre.lisp:351 (the quake) |
+| ogre-land | 1 | P | 2 | 3 | `land-leap` ogre.lisp:351 (the quake) |
 | wraith-alert | 1 | P | 1.5 | 3 | alert: gale wraith |
 | wraith-pain | 1 | P | 0.6 | 3 | pain: gale wraith |
 | wraith-death | 1 | P | 2 | 3 | death: gale wraith (the rags settle) |

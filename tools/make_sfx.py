@@ -25,7 +25,7 @@ data/sfx/index.lisp lists what was made, one plist a clip, which src/sound.lisp 
   (:name "imp-pain" :files ("imp-pain.ogg") :seconds (0.52) :space T :loop NIL)
 
 A run rewrites the index with every clip made so far (it reads the old one), so converting
-one clip keeps the rest. --check only says which clips have takes and what would be used.
+one clip keeps the rest; a clip no longer in the table leaves it, and its files go. --check only says which clips have takes and what would be used.
 """
 
 import argparse
@@ -188,6 +188,13 @@ def main():
     wanted = args.clips or [c for c in table if take_path(c, 1)]
 
     index = read_index()
+    if not args.check:
+        for clip in [c for c in index if c not in table]:
+            for old in OUT.glob(f"{clip}*.ogg"):
+                if re.fullmatch(rf"{re.escape(clip)}(-\d+)?\.ogg", old.name):
+                    old.unlink()
+            del index[clip]
+            print(f"{clip}: no longer in {TABLE.name}, removed")
     OUT.mkdir(parents=True, exist_ok=True)
     for clip in wanted:
         positional, loop = table[clip]

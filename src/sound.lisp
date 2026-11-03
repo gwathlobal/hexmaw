@@ -269,9 +269,13 @@ it (MOVE-LOOP) and to give it back (STOP-LOOP)."
                                                  harmony:*server*)
                        T))))
 
+(defvar *sound-frame-queued* NIL
+  "True while a SOUND-FRAME waits in Harmony's mixing queue.")
+
 (defun sound-frame ()
   "Run in Harmony's mixing thread once a tick (SOUND-DIRECTOR): the listener, the one-shots
 asked for, and every loop's state."
+  (setf *sound-frame-queued* NIL)
   (handler-case
       (let ((space (harmony:segment :effect harmony:*server*)))
         (setf (mixed:location space) *listener-location*
@@ -328,4 +332,8 @@ asked for, and every loop's state."
     (update-listener)
     ;; Loops stop with the world, but not for a hit-stop's blink.
     (setf *loops-paused* (not (eq *game-state* :playing)))
-    (harmony:call-in-mixing-context #'sound-frame harmony:*server* :synchronize NIL)))
+    ;; One waiting frame does all the next would: after a level build Trial runs a burst of
+    ;; catch-up ticks, more than the mixing queue's 64 jobs.
+    (unless *sound-frame-queued*
+      (setf *sound-frame-queued* T)
+      (harmony:call-in-mixing-context #'sound-frame harmony:*server* :synchronize NIL))))

@@ -142,8 +142,8 @@ or down."
 (defparameter *weapon-sounds*
   '(:sword (:swing :sword-swing :draw :draw-sword)
     :spear (:swing :spear-thrust :draw :draw-spear)
-    :hands (:draw :draw-fire-hands)
-    :tempest (:draw :draw-storm-hands))
+    :hands (:draw :draw-magic)
+    :tempest (:draw :draw-magic))
   "Each weapon's clips (sound.lisp): :SWING as a swing starts, :DRAW as it comes up.")
 
 (defun weapon-sound (weapon event)

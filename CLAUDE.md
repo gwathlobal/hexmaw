@@ -1294,7 +1294,12 @@ levels (the loudest 100 ms at -14 dBFS RMS, peaks under -1 through make_loop.py'
 downmixes positional clips to mono (the `:effect` space mixer takes only mono) and encodes them
 to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in
 `data/sfx/index.lisp`. Then `tools/hd '(reload-sounds)'` and `tools/hd reset`. Generated takes
-often clip: pick one that doesn't.
+often clip: pick one that doesn't. To try a clip again, rewrite its prompt and `gen_sfx.py ... --add`,
+which numbers the new takes on from the last (`<clip>-4.wav`, recorded in `<clip>-4.prompt.json`)
+and keeps the old ones; `--influence 0.5` keeps closer to the prompt than the default 0.3. A take
+borrowed from another clip is a copy under the next number with a `.prompt.json` saying where it
+came from (`cinder-flight-3.wav` is `bolt-flight-2.wav`). A clip taken out of `audio/sfx.md`
+leaves the index and `data/sfx/` at the next `make_sfx.py`.
 
 The picker does all that from a page, with the game running: `tools/sfx_picker.py` (or the
 `sfx-picker` config in `.claude/launch.json`) serves http://127.0.0.1:8765/, every clip of
