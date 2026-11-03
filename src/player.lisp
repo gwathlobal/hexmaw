@@ -7,6 +7,7 @@
 (defparameter *walk-speed* 4.0)
 (defparameter *run-speed* 7.0)
 (defparameter *crouch-speed* 2.0)
+(defparameter *backpedal-scale* 0.75 "Fraction of the speed the player keeps walking backward.")
 (defparameter *ground-acceleration* 40.0)
 (defparameter *air-control* 0.3)
 (defparameter *gravity* 20.0)
@@ -218,11 +219,6 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
     (:f12 (screenshot))
     (T (when (eq *game-state* :playing)
          (select-weapon player key)))))
-
-(define-handler (player mouse-scroll) (delta)
-  ;; Wheel down (negative delta) for the next weapon, up for the previous one.
-  (when (and (eq *game-state* :playing) (/= 0 delta))
-    (cycle-weapon player (if (< delta 0) 1 -1))))
 
 (define-handler (player mouse-move) (old-pos pos)
   (when (mouse-look player)
@@ -537,6 +533,7 @@ and not the last step of the stair.")
                          (running *run-speed*)
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
+                   (if (< iz 0.0) *backpedal-scale* 1.0)
                    (if kind (liquid-property kind :speed) 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
@@ -811,6 +808,21 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
     (shove-player target (v- (feet target) (effect-direction source target))
                   (* (float (roll (effect-magnitude effect)) 0f0)
                      (if blocked *block-shove-scale* 1.0)))))
+
+(defun teleport-player (player to &key yaw)
+  "Put PLAYER's feet at TO at once, stopped, out of any vortex, the eye at standing height
+(no step's easing), turned to YAW if given; the view flashes as a pickup's does."
+  (clear-whirl player)
+  (v<- (feet player) to)
+  (let ((vel (velocity player)))
+    (setf (vx vel) 0f0 (vy vel) 0f0 (vz vel) 0f0))
+  (setf (eye player) *eye-height*
+        (wading player) NIL
+        (restore-flash player) *restore-flash-time*
+        (restored player) :rift)
+  (when yaw
+    (setf (vy (rotation player)) (float yaw 0f0)))
+  (place-camera player))
 
 (defun respawn (player)
   (clear-whirl player)

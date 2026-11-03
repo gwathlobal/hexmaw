@@ -15,18 +15,24 @@
 
 (defparameter *save-directory* (uiop:xdg-data-home "hexmaw/saves/")
   "Where saves live: $XDG_DATA_HOME/hexmaw/saves/, usually ~/.local/share/.")
-(defparameter *save-version* 3 "Bumped when old saves can no longer be read.")
+(defparameter *save-version* 4 "Bumped when old saves can no longer be read.")
 (defparameter *saved-generator-settings*
   '(*generator-rooms* *generator-attempts* *corridor-run* *generator-storeys* *generator-blocks* *spawn-pool*
     *river-length* *max-rivers* *high-length* *max-high-networks* *flooded-length* *max-flooded-networks*
-    *canal-length* *max-canals* *start-clearance*)
+    *canal-length* *max-canals* *start-clearance* *spawn-skip-scale* *elite-chance*)
   "The variables besides the seed that decide a generated level.")
+
+(defparameter *level-setting-keys*
+  '((:rooms . *generator-rooms*) (:pool . *spawn-pool*) (:skip-scale . *spawn-skip-scale*)
+    (:elite-chance . *elite-chance*))
+  "Which of *SAVED-GENERATOR-SETTINGS* a level of *RUN-LEVELS* sets, by its key.")
 
 (defun level-settings (depth)
   "The generator's settings for level DEPTH of a run, as an alist of those variables."
   (loop for var in *saved-generator-settings*
-        collect (cons var (if (eq var '*generator-rooms*)
-                              (run-level-property depth :rooms)
+        for key = (car (rassoc var *level-setting-keys*))
+        collect (cons var (if key
+                              (run-level-property depth key (symbol-value var))
                               (symbol-value var)))))
 
 (defun save-path (slot)
@@ -69,6 +75,12 @@
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
 
+(defmethod saved-slots append ((riftwalker riftwalker))
+  '(blink-cooldown blink-timer pounce call-target call-point))
+
+(defmethod saved-slots append ((sign rift-sign))
+  '(caster centre))
+
 (defmethod saved-slots append ((sigil summon-sigil))
   '(caster centre burst))
 
@@ -83,7 +95,7 @@
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing projectile-velocity submerged))
+  '(spell caster homing projectile-velocity submerged evade-asked))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))

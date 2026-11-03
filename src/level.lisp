@@ -178,6 +178,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (spawn-creature (make-instance 'necromancer :location (vec -2 0 -8) :facing pi) container)
     ;; A gale wraith beside it, floating up from the floor.
     (spawn-creature (make-instance 'gale-wraith :location (vec 3 0 -8) :facing pi) container)
+    ;; A riftwalker by the west wall, north of the knight, with the hall's others to call.
+    (spawn-creature (make-instance 'riftwalker :location (vec -7 0 -5) :facing (/ pi 2)) container)
     ;; An ogre in the east of the hall, by the annex doorway, which it just fits through;
     ;; the annex's stair shaft and the platform's steps test where it can follow.
     (spawn-creature (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)

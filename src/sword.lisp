@@ -115,13 +115,6 @@ flash, which they reach into.")
       (setf (wanted-weapon player) weapon)
       T)))
 
-(defun cycle-weapon (player step)
-  "Ask for the weapon STEP places after the one asked for last, wrapping around
-*WEAPONS*; a negative STEP goes back."
-  (let* ((weapons (loop for (nil weapon) on *weapons* by #'cddr collect weapon))
-         (index (or (position (wanted-weapon player) weapons) 0)))
-    (setf (wanted-weapon player) (nth (mod (+ index step) (length weapons)) weapons))))
-
 (defun weapon-drop (player)
   "Fraction of its height the weapon on screen is lowered, eased."
   (let ((k (weapon-lower player)))

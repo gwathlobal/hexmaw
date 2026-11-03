@@ -644,7 +644,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
   (play-sound (if (and (member *game-state* '(:playing :paused)) (save-game :quick)) :game-saved :refused)))
 
 (defun quickload ()
-  (if (and (member *game-state* '(:title :playing :paused :dead)) (slot-used-p :quick))
+  (if (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
       (load-game :quick)
       (play-sound :refused)))
 
