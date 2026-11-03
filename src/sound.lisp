@@ -24,6 +24,9 @@
 (defparameter *sound-min-distance* 2.0 "Metres within which a positional sound is at full volume.")
 (defparameter *sound-max-distance* 40.0 "Metres beyond which a positional sound is silent.")
 (defparameter *sound-rolloff* 1.0 "How fast a positional sound falls off between the two.")
+(defparameter *clip-min-distances* '(:tornado 8.0)
+  "Positional clips heard at full volume further off than *SOUND-MIN-DISTANCE*: the big ones.
+Read as a voice is connected.")
 
 (defclass sfx ()
   ((name :initarg :name :reader sfx-name)
@@ -299,7 +302,10 @@ next. Allocates nothing."
       (mixed:add hvoice (harmony:segment :sources harmony:*server*))
       (harmony:connect hvoice T (harmony:segment (if (sfx-space-p (voice-sfx voice)) :effect :speech)
                                                  harmony:*server*)
-                       T))))
+                       T)
+      (let ((reach (getf *clip-min-distances* (sfx-name (voice-sfx voice)))))
+        (when (and reach (sfx-space-p (voice-sfx voice)))
+          (setf (mixed:min-distance hvoice) (float reach 0f0)))))))
 
 (defvar *sound-frame-queued* NIL
   "The SOUND-CLOCK when a SOUND-FRAME was queued, while it waits in Harmony's mixing queue.")
