@@ -518,9 +518,12 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
                (spawn-creature (make-boss at (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0)))) container))
               ((and *spawn-clearance* (< (vdistance at (car *spawn-clearance*)) (cdr *spawn-clearance*))))
               ((and class (find-class class NIL) (subtypep class 'creature))
-                (spawn-creature (make-instance class :location at
-                                                     :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))
-                                container))
+               (let ((creature (make-instance class :location at
+                                                    :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))))
+                 (spawn-creature creature container)
+                 ;; It may bring a pack, once the nav grid is built (imp.lisp).
+                 (when (typep creature 'imp)
+                   (vector-push-extend creature *pack-leaders*))))
               (T (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind)))))
         (let ((connectors
                 (loop for c in (getf def :connectors)

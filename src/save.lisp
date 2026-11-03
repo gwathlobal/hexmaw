@@ -75,6 +75,9 @@
 (defmethod saved-slots append ((boss boss))
   '(powers dormant enraged boss-power power-cooldowns power-gap power-point roar))
 
+(defmethod saved-slots append ((imp imp))
+  '(downed knocked pounce-struck shriek shrieked fleeing cornered stolen))
+
 (defmethod saved-slots append ((leaper leaper))
   '(attack-kind leap-from leap-to leap-apex leap-duration leap-time airborne falling fall-speed
     recover leap-cooldown))
@@ -182,7 +185,7 @@ A vector is written in place, since some slots have only a reader."
   (let ((effects ()))
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup)))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup carried-loot)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))
@@ -228,6 +231,8 @@ A vector is written in place, since some slots have only a reader."
         :map (revealed-block-indices)
         ;; The seed places the pickups again; a save older than them has none taken.
         :pickups (taken-pickup-indices)
+        ;; What imps dropped (imp.lisp), which the seed doesn't place.
+        :drops (dropped-pickups)
         ;; Whether the gate has dropped behind the player (boss.lisp).
         :arena (when *arena* (list :sealed (sealed *arena*)))))
 
@@ -379,6 +384,7 @@ A vector is written in place, since some slots have only a reader."
     (restore-blood *blood-pool* (getf save :blood)))
   (reveal-block-indices (getf save :map))
   (take-pickups-at (getf save :pickups))
+  (restore-dropped-pickups scene (getf save :drops))
   (let ((globals (getf save :globals)))
     (setf *hit-stop* (getf globals :hit-stop)
           *light-clock* (getf globals :light-clock))

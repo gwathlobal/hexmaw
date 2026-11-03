@@ -68,6 +68,21 @@ there is none."
       (setf (quickslot player) (nth cell bag)
             (nth cell bag) NIL))))
 
+(defun take-item (player)
+  "Take one item from PLAYER, as a thief does (imp.lisp): from the quickslot if it holds any,
+else from the first stack in the bag. Returns its kind, or NIL if there was nothing."
+  (let ((quick (quickslot player))
+        (cell (position-if (lambda (stack) (and stack (< 0 (second stack)))) (inventory player))))
+    (cond ((and quick (< 0 (second quick)))
+           (when (= 0 (decf (second quick)))
+             (refill-quickslot player))
+           (first quick))
+          (cell
+           (let ((stack (nth cell (inventory player))))
+             (when (= 0 (decf (second stack)))
+               (setf (nth cell (inventory player)) NIL))
+             (first stack))))))
+
 (defun use-quickslot (player)
   "Drink one from the quickslot. True if one was drunk; at full, none is."
   (let ((stack (quickslot player)))

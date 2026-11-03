@@ -466,6 +466,16 @@ summoned mid-game, or a boss (boss.lisp).")
 before its arena is sealed, boss.lisp). A hit only flashes it.")
   (:method ((creature creature)) NIL))
 
+(defgeneric creature-hurt (creature amount)
+  (:documentation "CREATURE, still alive, has just taken a blow of AMOUNT (HURT): what its kind
+makes of that (an imp's courage, imp.lisp).")
+  (:method ((creature creature) amount) (declare (ignore amount)) NIL))
+
+(defgeneric creature-died (creature)
+  (:documentation "CREATURE has just died, by a blow or a burn: what its kind leaves behind (a
+thieving imp's loot, imp.lisp).")
+  (:method ((creature creature)) NIL))
+
 (defun hurt (creature amount &key from (pain-bonus 0))
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
 the blood sprays away from. It flinches and breaks off what it's doing on a pain roll,
@@ -487,12 +497,14 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
       (setf (stagger creature) *stagger-time*)
       (stop-walking creature *hurt-pause*))
     (hit-stop)
-    (when (<= (health creature) 0)
-      (cond ((gib-p creature amount)
-             (tear-apart creature :from from))
-            ((bleeds creature)
-             (bleed-out creature)))
-      (setf (dead creature) 0.0))))
+    (cond ((<= (health creature) 0)
+           (cond ((gib-p creature amount)
+                  (tear-apart creature :from from))
+                 ((bleeds creature)
+                  (bleed-out creature)))
+           (setf (dead creature) 0.0)
+           (creature-died creature))
+          (T (creature-hurt creature amount)))))
 
 (defmethod hit-surface ((creature creature) speed x y z &key (threshold *impact-speed*) by)
   (declare (ignore by))
@@ -511,7 +523,8 @@ flinch, blood or hit-stop, which would freeze the game every burn."
           (alert creature) *alert-time*)
     (when (<= (health creature) 0)
       (stop-walking creature)
-      (setf (dead creature) 0.0))))
+      (setf (dead creature) 0.0)
+      (creature-died creature))))
 
 (defun escape-liquid (creature)
   "Set CREATURE, standing in lava or afloat in deep water, walking to the nearest dry cell.
@@ -1108,6 +1121,11 @@ range and in sight, else close in."))
 a caster, or a flyer that dives from out of reach.")
   (:method ((creature creature)) (attack-spell creature)))
 
+(defgeneric holds-back-p (creature)
+  (:documentation "True while CREATURE, hunting, doesn't strike a player in reach: an imp
+fleeing or carrying off loot (imp.lisp).")
+  (:method ((creature creature)) NIL))
+
 (defgeneric special-attack (creature)
   (:documentation "Start an attack of CREATURE's own if it has one ready and it fits, as
 the ogre's leap: true if it started one. HUNT asks it first, so a chasing creature asks
@@ -1264,6 +1282,10 @@ strike the player if still in reach and in front of it.")
 flyer's dive.")
   (:method ((creature creature) dt) (attack creature dt)))
 
+(defgeneric wander (creature)
+  (:documentation "CREATURE, not hunting, has stood long enough: set off somewhere (PLAN-WANDER).")
+  (:method ((creature creature)) (plan-wander creature)))
+
 (defun think (creature dt)
   "Hunt the player while alert, wander otherwise."
   (when (attacker-p creature)
@@ -1276,13 +1298,13 @@ flyer's dive.")
        (when hunting
          (face-player creature dt))
        (when (<= (decf (idle-timer creature) dt) 0)
-         (if hunting (hunt creature) (plan-wander creature))))
+         (if hunting (hunt creature) (wander creature))))
       (:walking
        ;; A flank is over once the shield no longer faces it: lowered, or got past.
        (when (and (flanking creature) (not (shield-facing-p *player* (location creature))))
          (setf (flanking creature) NIL
                (replan-timer creature) 0.0))
-       (cond ((and hunting (not (ranged-p creature)) (not (flanking creature))
+       (cond ((and hunting (not (ranged-p creature)) (not (flanking creature)) (not (holds-back-p creature))
                    (player-within-p creature (* *attack-start-reach* (attack-reach creature))))
               (start-attack creature))
              (T
@@ -1304,6 +1326,10 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
                   (fits-at-p (vx loc) y (vz loc) (body-radius creature) (sprite-height creature)))
           (setf (vy loc) y))))))
 
+(defgeneric creature-revived (creature)
+  (:documentation "CREATURE has just come back at home (REVIVE): forget what its kind kept.")
+  (:method ((creature creature)) NIL))
+
 (defun revive (creature)
   (clear-whirl creature)
   (setf (alert creature) 0.0
@@ -1321,7 +1347,8 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
         (texture creature) (body-texture creature))
   (v<- (location creature) (home creature))
   (let ((kb (momentum creature)))
-    (setf (vx kb) 0.0 (vz kb) 0.0)))
+    (setf (vx kb) 0.0 (vz kb) 0.0))
+  (creature-revived creature))
 
 (defun creature-walking-p (creature)
   (and (eq (brain creature) :walking) (not (dead creature)) (walk-animation creature)))
@@ -1551,42 +1578,6 @@ after the flinch, block and attack.")
             (revive creature))))))
   (update-creature-look creature)
   (update-death-glow creature))
-
-;;; The imp.
-
-(defparameter *imp-height* 1.5
-  "Imp height in metres, horns to feet. The player's eye is at 1.6.")
-
-;; Sliced so the standing imp in its first frame is as tall as a turnaround cell.
-(define-fx-animation imp-death "sprites/imp/death" :fps 10 :size *imp-height*)
-;; Four frames per view, every view scaled to a turnaround cell's height. The frame
-;; follows the distance walked (STRIDE), so :FPS is unused.
-(define-fx-animation imp-walk "sprites/imp/walk" :loop T :size *imp-height*)
-;; The claw swipe: wind-up, lunge, strike, recover, four frames per view. Its cells are
-;; 110 px tall to fit the raised claw, with the standing imp 96 px like the walk's.
-;; The frames run on the imp's ATTACK-FRAME-TIMES, so :FPS is unused.
-(define-fx-animation imp-attack "sprites/imp/attack" :size (* *imp-height* 110/96))
-;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*. Its cells
-;; are 80 px tall, the buckled jolt at the walk's scale (standing imp 96 px).
-(define-fx-animation imp-hurt "sprites/imp/hurt" :size (* *imp-height* 80/96))
-
-(define-shader-entity imp (creature)
-  ((texture :initform (// 'hexmaw 'imp-turnaround))
-   (atlas :initform (read-atlas "sprites/imp/turnaround.lisp"))
-   (sprite-height :initform *imp-height*)
-   (death-animation :initform 'imp-death)
-   (walk-animation :initform 'imp-walk)
-   (attack-animation :initform 'imp-attack)
-   (hurt-animation :initform 'imp-hurt)
-   ;; Its own head and tail, then flesh: two arms, two legs, ribs, an organ, a big
-   ;; chunk, two chunks, two scraps.
-   (gibs :initform '((:imp (:head 0) 3) (:flesh 0 0 1 1 2 4 5 6 6 7 7)))
-   (attack-damage :initform '(6 10))
-   (chase-speed :initform 2.6)
-   ;; Quick and small: it darts round a raised shield.
-   (flanks :initform T)
-   (pain-chance :initform 60)
-   (max-health :initform 30)))
 
 ;;; The acolyte: a robed caster that keeps its distance and throws cinders (spells.lisp).
 ;;; It has no walk: it glides in the standing pose, the robe hiding its feet.

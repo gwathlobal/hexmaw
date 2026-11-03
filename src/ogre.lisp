@@ -18,7 +18,10 @@
 ;;; creature's thinking for its flinch) never leaves it hanging in the air.
 ;;;
 ;;; The leap itself belongs to LEAPER, a mixin, so that a boss (boss.lisp) of another kind
-;;; can leap too; the ogre is a leaper that tries it whenever it can (SPECIAL-ATTACK).
+;;; can leap too; the ogre is a leaper that tries it whenever it can (SPECIAL-ATTACK). Its
+;;; limits and timing are generics (LEAP-MIN-DISTANCE and the rest) whose defaults are the
+;;; ogre's parameters below, and what a landing does is LEAP-LANDED, so the imp (imp.lisp)
+;;; pounces with the same arc: shorter, lower and quicker, a claw at the end.
 
 (defparameter *ogre-height* 2.7 "Ogre height in metres.")
 
@@ -143,17 +146,35 @@ List it before CREATURE or a subclass in the superclasses."))
   (when (leap-animation leaper)
     (stage (animation-texture (find-fx-animation (leap-animation leaper))) area)))
 
+;;; What a leaper's leap is like: the ogre's, unless its class says otherwise.
+
+(defgeneric leap-min-distance (leaper) (:method ((leaper leaper)) *leap-min*))
+(defgeneric leap-max-distance (leaper) (:method ((leaper leaper)) *leap-max*))
+(defgeneric leap-max-rise (leaper) (:method ((leaper leaper)) *leap-max-rise*))
+(defgeneric leap-max-drop (leaper) (:method ((leaper leaper)) *leap-max-drop*))
+(defgeneric leap-rise (leaper)
+  (:documentation "Metres its feet rise above the higher end of a leap, where the ceiling allows.")
+  (:method ((leaper leaper)) *leap-apex*))
+(defgeneric leap-min-rise (leaper) (:method ((leaper leaper)) *leap-min-apex*))
+(defgeneric leap-max-speed (leaper) (:method ((leaper leaper)) *leap-max-speed*))
+(defgeneric leap-gravity (leaper) (:method ((leaper leaper)) *leap-gravity*))
+(defgeneric leap-windup (leaper) (:method ((leaper leaper)) *leap-windup*))
+(defgeneric leap-recover-time (leaper) (:method ((leaper leaper)) *leap-recover*))
+(defgeneric leap-cooldown-time (leaper) (:method ((leaper leaper)) *leap-cooldown*))
+
 (defmethod attack-frame-times ((leaper leaper))
   ;; A leap's only timed part is the crouch; the flight doesn't run on the attack's clock.
-  (if (eq (attack-kind leaper) :leap) (list *leap-windup* 1000.0) (call-next-method)))
+  (if (eq (attack-kind leaper) :leap) (list (leap-windup leaper) 1000.0) (call-next-method)))
 (defmethod attack-animation ((leaper leaper))
   (if (eq (attack-kind leaper) :leap)
       (or (leap-animation leaper) (call-next-method))
       (call-next-method)))
 
+(defvar *leaper* NIL "The leaper LEAP-LOG speaks of.")
+
 (defun leap-log (format &rest args)
   (when *leap-debug*
-    (v:info :hexmaw "Ogre: ~?" format args)))
+    (v:info :hexmaw "~:(~a~): ~?" (if *leaper* (type-of *leaper*) "leaper") format args)))
 
 (defun leap-refused (format &rest args)
   (leap-log "leap refused, ~?" format args)
@@ -161,22 +182,22 @@ List it before CREATURE or a subclass in the superclasses."))
 
 (defvar *leap-peak* 0.0 "Highest its feet got in the last leap, for *LEAP-DEBUG*.")
 
-;;; The arc. Its feet rise from LEAP-FROM to LEAP-APEX and fall to LEAP-TO under
-;;; *LEAP-GRAVITY*, moving across at a steady speed.
+;;; The arc. Its feet rise from LEAP-FROM to LEAP-APEX and fall to LEAP-TO under GRAVITY,
+;;; the leaper's LEAP-GRAVITY, moving across at a steady speed.
 
-(defun rise-time (from-y apex)
-  (sqrt (/ (* 2 (max 0.0 (- apex from-y))) *leap-gravity*)))
+(defun rise-time (from-y apex gravity)
+  (sqrt (/ (* 2 (max 0.0 (- apex from-y))) gravity)))
 
-(defun arc-time (from-y to-y apex)
-  (+ (rise-time from-y apex) (rise-time to-y apex)))
+(defun arc-time (from-y to-y apex gravity)
+  (+ (rise-time from-y apex gravity) (rise-time to-y apex gravity)))
 
-(defun arc-point (from to apex duration time out)
+(defun arc-point (from to apex duration time gravity out)
   "Set OUT to where the arc from FROM to TO over APEX, DURATION long, is TIME seconds in."
   (let* ((k (if (< 0 duration) (min 1.0 (/ time duration)) 1.0))
-         (up (rise-time (vy from) apex))
+         (up (rise-time (vy from) apex gravity))
          (d (- (min time duration) up)))
     (setf (vx out) (float (+ (vx from) (* k (- (vx to) (vx from)))) 0f0)
-          (vy out) (float (- apex (* 0.5 *leap-gravity* d d)) 0f0)
+          (vy out) (float (- apex (* 0.5 gravity d d)) 0f0)
           (vz out) (float (+ (vz from) (* k (- (vz to) (vz from)))) 0f0))
     out))
 
@@ -202,7 +223,7 @@ List it before CREATURE or a subclass in the superclasses."))
          (p (vec 0 0 0)))
     ;; Both ends stand on a floor; the points between are in the air.
     (loop for i from 1 below steps
-          do (arc-point from to apex duration (* duration (/ i steps)) p)
+          do (arc-point from to apex duration (* duration (/ i steps)) (leap-gravity ogre) p)
              (unless (fits-at-p (vx p) (vy p) (vz p) r h)
                (return (leap-refused "arc blocked at ~,2f ~,2f ~,2f" (vx p) (vy p) (vz p))))
           finally (return T))))
@@ -210,7 +231,8 @@ List it before CREATURE or a subclass in the superclasses."))
 (defun plan-leap (ogre)
   "Lay out a leap at the player, into LEAP-FROM, LEAP-TO, LEAP-APEX and LEAP-DURATION:
 true if there is a landing cell and an arc OGRE's body fits."
-  (let* ((loc (ground-point ogre))
+  (let* ((*leaper* ogre)
+         (loc (ground-point ogre))
          (r (body-radius ogre))
          (h (sprite-height ogre)))
     (multiple-value-bind (i j k) (and *nav-grid* (nav-nearest-fitting (feet *player*) r h :search 4))
@@ -219,22 +241,22 @@ true if there is a landing cell and an arc OGRE's body fits."
       (let* ((to (nav-point i j k))
              (distance (sqrt (+ (expt (- (vx to) (vx loc)) 2) (expt (- (vz to) (vz loc)) 2))))
              (rise (- (vy to) (vy loc))))
-        (cond ((not (<= *leap-min* distance *leap-max*))
+        (cond ((not (<= (leap-min-distance ogre) distance (leap-max-distance ogre)))
                (leap-refused "landing ~,1f m away" distance))
-              ((< *leap-max-rise* rise) (leap-refused "~,1f m up" rise))
-              ((< *leap-max-drop* (- rise)) (leap-refused "~,1f m down" (- rise)))
+              ((< (leap-max-rise ogre) rise) (leap-refused "~,1f m up" rise))
+              ((< (leap-max-drop ogre) (- rise)) (leap-refused "~,1f m down" (- rise)))
               ((not (clear-path-p (location ogre) (feet *player*) (cast-height ogre)))
                (leap-refused "no line to the player"))
               (T
                (let* ((top (max (vy loc) (vy to)))
                       (ceiling (lowest-ceiling-along loc to top))
                       (apex (if ceiling
-                                (min (+ top *leap-apex*) (- ceiling h *leap-headroom*))
-                                (+ top *leap-apex*)))
-                      (duration (arc-time (vy loc) (vy to) apex)))
-                 (cond ((< apex (+ top *leap-min-apex*))
+                                (min (+ top (leap-rise ogre)) (- ceiling h *leap-headroom*))
+                                (+ top (leap-rise ogre))))
+                      (duration (arc-time (vy loc) (vy to) apex (leap-gravity ogre))))
+                 (cond ((< apex (+ top (leap-min-rise ogre)))
                         (leap-refused "ceiling too low, apex ~,2f over ~,2f" apex top))
-                       ((< (* *leap-max-speed* duration) distance)
+                       ((< (* (leap-max-speed ogre) duration) distance)
                         (leap-refused "~,1f m too far for a ~,2f s arc" distance duration))
                        ((arc-clear-p ogre loc to apex duration)
                         (v<- (leap-from ogre) loc)
@@ -246,7 +268,7 @@ true if there is a landing cell and an arc OGRE's body fits."
 (defun try-leap (leaper)
   "Start a leap at the player if LEAPER may leap again and PLAN-LEAP finds one: true if it did."
   (when (and (<= (leap-cooldown leaper) 0) (not (airborne leaper)) (not (falling leaper))
-             (<= *leap-min* (player-distance leaper) (+ *leap-max* 1.0))
+             (<= (leap-min-distance leaper) (player-distance leaper) (+ (leap-max-distance leaper) 1.0))
              (plan-leap leaper))
     (setf (attack-kind leaper) :leap)
     (start-attack leaper)
@@ -264,12 +286,13 @@ true if there is a landing cell and an arc OGRE's body fits."
     (v<- from (location ogre))
     (setf (airborne ogre) T
           (leap-time ogre) 0.0
-          (leap-cooldown ogre) *leap-cooldown*
-          (leap-duration ogre) (float (arc-time (vy from) (vy to) (leap-apex ogre)) 0f0))
+          (leap-cooldown ogre) (leap-cooldown-time ogre)
+          (leap-duration ogre) (float (arc-time (vy from) (vy to) (leap-apex ogre) (leap-gravity ogre)) 0f0))
     (turn-to ogre (atan (- (vx to) (vx from)) (- (vz from) (vz to))) 100.0)
     (setf *leap-peak* (vy from))
-    (leap-log "leaps from ~,2f ~,2f ~,2f to ~,2f ~,2f ~,2f, apex ~,2f, ~,2f s"
-              (vx from) (vy from) (vz from) (vx to) (vy to) (vz to) (leap-apex ogre) (leap-duration ogre))))
+    (let ((*leaper* ogre))
+      (leap-log "leaps from ~,2f ~,2f ~,2f to ~,2f ~,2f ~,2f, apex ~,2f, ~,2f s"
+                (vx from) (vy from) (vz from) (vx to) (vy to) (vz to) (leap-apex ogre) (leap-duration ogre)))))
 
 (defmethod attack-step ((ogre leaper) dt)
   (if (eq (attack-kind ogre) :leap)
@@ -277,7 +300,7 @@ true if there is a landing cell and an arc OGRE's body fits."
             (loc (location ogre)))
         (unless (airborne ogre)
           (turn-to ogre (atan (- (vx to) (vx loc)) (- (vz loc) (vz to))) dt)
-          (when (<= *leap-windup* (incf (attack-time ogre) dt))
+          (when (<= (leap-windup ogre) (incf (attack-time ogre) dt))
             (launch-leap ogre))))
       (call-next-method)))
 
@@ -348,21 +371,29 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
           (spawn-standing-fx *ogre-dust* (+ (vx centre) (* radius (cos a))) (vy centre)
                              (+ (vz centre) (* radius (sin a))) container))))))
 
+(defgeneric leap-landed (leaper)
+  (:documentation "LEAPER, alive, has just come down from a leap, or from a fall that cut one
+short: the ogre's quake, by default.")
+  (:method ((ogre leaper))
+    (let ((at (location ogre)))
+      (setf (recover ogre) (leap-recover-time ogre))
+      (stop-walking ogre (leap-recover-time ogre))
+      (quake ogre at *quake-radius* *quake-damage* *quake-shove* *quake-player-shove* *quake-player-lift*
+             :inner (body-radius ogre))
+      (kick-dust at (* 0.6 *quake-radius*) *ogre-dust-puffs* (container ogre))
+      (hit-stop *leap-hit-stop*))))
+
 (defun land-leap (ogre)
   (setf (airborne ogre) NIL
         (falling ogre) NIL
         (fall-speed ogre) 0.0
         (attack-kind ogre) :slam)
   (unless (dead ogre)
-    (let ((at (location ogre)))
+    (let ((at (location ogre))
+          (*leaper* ogre))
       (leap-log "lands at ~,2f ~,2f ~,2f, its feet at most ~,2f up"
-                (vx at) (vy at) (vz at) (- *leap-peak* (vy at)))
-      (setf (recover ogre) *leap-recover*)
-      (stop-walking ogre *leap-recover*)
-      (quake ogre at *quake-radius* *quake-damage* *quake-shove* *quake-player-shove* *quake-player-lift*
-             :inner (body-radius ogre))
-      (kick-dust at (* 0.6 *quake-radius*) *ogre-dust-puffs* (container ogre))
-      (hit-stop *leap-hit-stop*))))
+                (vx at) (vy at) (vz at) (- *leap-peak* (vy at))))
+    (leap-landed ogre)))
 
 (defvar *arc-point* (vec 0 0 0) "Where FLY-LEAP is on the arc this tick, reused.")
 
@@ -371,7 +402,7 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
 the leap short: it drops from there."
   (let* ((loc (location ogre))
          (p (arc-point (leap-from ogre) (leap-to ogre) (leap-apex ogre) (leap-duration ogre)
-                       (incf (leap-time ogre) dt) *arc-point*))
+                       (incf (leap-time ogre) dt) (leap-gravity ogre) *arc-point*))
          (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc))))
          (y (if floor (max floor (vy p)) (vy p))))
     (if (fits-at-p (vx loc) y (vz loc) (body-radius ogre) (sprite-height ogre))
@@ -381,7 +412,8 @@ the leap short: it drops from there."
     (unless (falling ogre)
       (multiple-value-bind (x-blocked z-blocked) (move-creature ogre (- (vx p) (vx loc)) (- (vz p) (vz loc)) 0.05)
         (when (or x-blocked z-blocked)
-          (leap-log "leap cut short at ~,2f ~,2f ~,2f" (vx loc) (vy loc) (vz loc))
+          (let ((*leaper* ogre))
+            (leap-log "leap cut short at ~,2f ~,2f ~,2f" (vx loc) (vy loc) (vz loc)))
           (setf (falling ogre) T))))
     (cond ((falling ogre)
            (setf (airborne ogre) NIL))
@@ -393,7 +425,7 @@ the leap short: it drops from there."
   (let* ((loc (location ogre))
          (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc)))))
     (if (and floor (< floor (vy loc)))
-        (setf (vy loc) (float (max floor (- (vy loc) (* (incf (fall-speed ogre) (* *leap-gravity* dt)) dt))) 0f0))
+        (setf (vy loc) (float (max floor (- (vy loc) (* (incf (fall-speed ogre) (* (leap-gravity ogre) dt)) dt))) 0f0))
         (land-leap ogre))))
 
 (defmethod break-flight ((ogre leaper))

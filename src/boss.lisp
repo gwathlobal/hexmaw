@@ -485,9 +485,10 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
              (cast-spell (find-spell 'grave-spikes) (floor-under (feet *player*)) (vec 0 0 -1) (container boss)
                          :caster boss)))
 
-;; The ogre's leap (ogre.lisp), on its own cooldown, LEAP-COOLDOWN.
+;; The ogre's leap (ogre.lisp), on its own cooldown, LEAP-COOLDOWN. The ogre and the imp leap
+;; already, each its own way.
 (define-boss-power :leap
-  :label "Leap" :deny '(:flyer :caster "ogre")
+  :label "Leap" :deny '(:flyer :caster "ogre" "imp")
   :usable (lambda (boss) (typep boss 'leaper))
   :start #'try-leap)
 
@@ -817,7 +818,7 @@ void main(){
 
 ;;; One class per kind.
 
-(define-shader-entity imp-boss (boss leaper imp) ())
+(define-shader-entity imp-boss (boss imp) ())
 (define-shader-entity acolyte-boss (boss acolyte) ())
 (define-shader-entity knight-boss (boss leaper knight) ())
 (define-shader-entity harpy-boss (boss harpy) ())
@@ -826,5 +827,7 @@ void main(){
 (define-shader-entity wraith-boss (boss gale-wraith) ())
 
 (defmethod power-animation ((boss harpy-boss)) (flap-animation boss))
+;; It pounces as an imp does, but doesn't run, spring back or steal.
+(defmethod skittish-p ((boss imp-boss)) NIL)
 (defmethod power-animation ((boss necromancer-boss)) 'necromancer-cast)
 (defmethod power-animation ((boss wraith-boss)) 'wraith-cast)
