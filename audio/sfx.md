@@ -211,8 +211,8 @@ Death and victory screens have their music; F12 needs nothing.
 `audio/sfx-picks.txt` says which takes each clip plays (take 1 when it has no line), and
 `tools/make_sfx.py` turns them into `data/sfx/` (mono for P clips, Ogg, one loudness) and its
 `index.lisp`; `src/sound.lisp` plays them. `tools/sfx_picker.py` is a page to choose takes on,
-swapping each into the running game. Every tier 1 clip is hooked. Where the hooks differ
-from the tables above:
+swapping each into the running game. Every clip is hooked. Where the hooks differ from the
+tables above:
 
 - A creature's clips are its class's `define-creature-sounds` (a boss shares its kind's):
   `:windup` plays as `start-attack` starts any attack (the imp's claw, the knight's mace, the
@@ -223,7 +223,19 @@ from the tables above:
 - `player-hurt` plays for a blow or a crash, not each tick of a burn or drowning.
 - `flesh-wet` plays with every wound that bleeds, so a sword hit is `blade-hit-flesh` and it.
 - The boss's shockwave plays `ogre-land`; its leap is the ogre's.
+- The player's footsteps, strokes and loops are `body-sounds` (player.lisp): a footstep every
+  `*footstep-stride*` metres on foot, `footstep-snow` where the floor's tread is snow
+  (`floor-tread`, greybox.lisp: snow is in `*footings*` with no friction, so it is no slipperier),
+  none while sliding on ice, which plays `ice-slide` instead; a stroke every `*swim-stroke-stride*`.
+- A creature's footstep is its `:step` clip, every two walk frames (`creature-steps`), so it
+  follows the walk animation; the acolyte glides and the flyers flap, so they have none.
+- `player-burn` and `drowning` play for each tick of a burn or of drowning; `gate-rise` only on
+  the test level, the one place the gate goes up after a fight.
+- Torches, lava and water are `*ambient-sources*` (liquids.lisp): each loop on its nearest few
+  sources in reach, chosen again every `*ambience-interval*`, a lava or water box heard from the
+  nearest point of its surface. `dungeon-drips` is the room tone, quiet under water.
+- `menu-hover` plays for the mouse only, not for the keyboard moving the focus; a Back or Resume
+  button plays `menu-back`, not `menu-select`.
 
-Not hooked yet (no clip): the tier 2 and 3 rows, footsteps among them. Nothing fires on
-frame changes: a sound tied to a frame (a footstep) watches the frame index change, as the
-harpy's flap watches its bob.
+Nothing fires on frame changes: a sound tied to a frame (a footstep) watches the frame index
+change, as the harpy's flap watches its bob.

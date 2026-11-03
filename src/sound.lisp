@@ -71,6 +71,9 @@ mixing thread pops, both atomically.")
   (def *listener-direction* "Which way the listener faces.")
   (def *listener-up* "Which way is up for the listener."))
 (defvar *loops-paused* NIL "T while the world is frozen by the game state: loops pause.")
+(defvar *ambient-voices* (make-hash-table :test 'eq)
+  "Per ambient clip, a vector of the loops held on its nearest sources, nearest first
+(AMBIENT-VOICE).")
 
 (defun sound-key (name)
   (if (keywordp name) name (intern (string-upcase name) :keyword)))
@@ -99,6 +102,7 @@ enter the director."
     ;; Whatever held a loop went with the old scene.
     (dolist (voice *loop-voice-list*)
       (setf (voice-held voice) NIL))
+    (clrhash *ambient-voices*)
     (unless (find-sound :%mixer-set)
       (harmony:with-server (harmony:*server* :synchronize T)
         (let ((mixer (harmony:segment :effect harmony:*server*)))
@@ -258,6 +262,31 @@ it (MOVE-LOOP) and to give it back (STOP-LOOP)."
   (when voice (setf (voice-held voice) NIL (voice-auditioning voice) NIL))
   NIL)
 
+(defun hold-loop (voice name at &optional (volume 1.0))
+  "The loop a holder keeps in a slot while it wants one, called every tick: with NAME, VOICE
+(started if NIL) sounding at AT; with NAME NIL, VOICE given back. Returns what the slot holds
+next. Allocates nothing."
+  (cond (name (if voice (move-loop voice at volume) (start-loop name at volume)))
+        (T (stop-loop voice))))
+
+;;; Ambience: loops on the nearest few of many sources (torches, lava, water), which
+;;; UPDATE-AMBIENCE (liquids.lisp) picks a few times a second. ADD-SOUNDS forgets them with
+;;; the scene, since what held them went with it.
+
+(defun ambient-voice (name i at volume)
+  "Hold the Ith loop of ambient clip NAME at AT, VOLUME loud."
+  (let ((voices (or (gethash name *ambient-voices*)
+                    (setf (gethash name *ambient-voices*) (make-array 8 :initial-element NIL)))))
+    (when (< i (length voices))
+      (setf (aref voices i) (hold-loop (aref voices i) name at volume)))))
+
+(defun drop-ambient-voices (name from)
+  "Give back ambient clip NAME's loops from the FROMth on."
+  (let ((voices (gethash name *ambient-voices*)))
+    (when voices
+      (loop for i from from below (length voices)
+            do (setf (aref voices i) (stop-loop (aref voices i)))))))
+
 ;;; The mixing thread's side
 
 (defun place-voice (voice)
@@ -336,6 +365,8 @@ asked for, and every loop's state."
     (incf *sound-clock* dt)
     (end-auditions)
     (update-listener)
+    ;; In liquids.lisp, which knows the torches, lava and water.
+    (update-ambience dt)
     ;; Loops stop with the world, but not for a hit-stop's blink.
     (setf *loops-paused* (not (eq *game-state* :playing)))
     ;; One waiting frame does all the next would: after a level build Trial runs a burst of

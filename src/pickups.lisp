@@ -14,12 +14,14 @@
 (define-fx-animation pickup-mana-potion "sprites/pickups/mana-potion" :fps 5 :loop T :size (/ 38 64.0))
 
 (defparameter *pickup-kinds*
-  '((:herbs :animation pickup-herbs :resource :health :amount 15)
-    (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40)
-    (:shard :animation pickup-shard :resource :mana :amount 28)
-    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50))
+  '((:herbs :animation pickup-herbs :resource :health :amount 15 :sound :pickup-herbs)
+    (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40
+     :sound :pickup-potion)
+    (:shard :animation pickup-shard :resource :mana :amount 28 :sound :pickup-shard)
+    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50
+     :sound :pickup-potion))
   "What each kind of pickup restores, and how much, at once or as the :ITEM it gives (keep :AMOUNT
-the item's, *ITEM-KINDS*: a level's budget counts it).")
+the item's, *ITEM-KINDS*: a level's budget counts it), and the :SOUND of taking it.")
 
 (defparameter *pickup-hover* 0.15 "Metres from the floor to the bottom of a pickup.")
 (defparameter *pickup-bob* 0.04 "Metres a pickup bobs up and down from its height.")
@@ -103,6 +105,7 @@ taken ones by their place here. BUILD-LEVEL empties it.")
              (* *pickup-bob* (sin (* *pickup-bob-rate* (age pickup))))))
     (when (and *player* (< 0 (health *player*)) (touching-pickup-p pickup *player*)
                (collect-pickup pickup *player*))
+      (play-sound (pickup-property (pickup-kind pickup) :sound))
       (setf (taken pickup) T))))
 
 (defmethod render :around ((pickup pickup) (program shader-program))

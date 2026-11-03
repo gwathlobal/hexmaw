@@ -205,9 +205,11 @@ end that by stopping the attack.")
 ;;; The gust.
 
 (defmethod apply-effect ((kind (eql :gust)) effect (target creature) source)
+  (play-sound :gust-hit (location target))
   (push-creature target (effect-direction source target) (float (roll (effect-magnitude effect)) 0f0)))
 
 (defmethod apply-effect ((kind (eql :gust)) effect (target player) (source spell-projectile))
+  (play-sound :gust-hit (feet target))
   (let* ((feet (feet target))
          (flight (projectile-velocity source))
          (vortex (and (caster source) (not (eq (caster source) target)) (own-vortex (caster source))))

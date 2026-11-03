@@ -345,6 +345,7 @@ normal size, gets up out of it."
     (dolist (sigil sigils)
       (let* ((at (centre sigil))
              (minion (make-instance class :location (vcopy at) :facing (facing boss) :summoned T)))
+        (play-sound :summon-burst at)
         (setf (burst sigil) 0.0
               (rising minion) (death-duration minion)
               (alert minion) *alert-time*)
@@ -370,7 +371,8 @@ normal size, gets up out of it."
    (centre :initarg :centre :reader centre)
    (burst :initform NIL :accessor burst :documentation "Seconds since the flame burst up, or NIL.")
    (lamp :initform NIL :accessor sigil-lamp)
-   (flame :initform NIL :accessor sigil-flame)))
+   (flame :initform NIL :accessor sigil-flame)
+   (sound :initform NIL :accessor sigil-sound :documentation "Its loop through the cast, or NIL.")))
 
 (defmethod initialize-instance :after ((sigil summon-sigil) &key)
   ;; Flat on the floor, facing up, just off it.
@@ -378,6 +380,7 @@ normal size, gets up out of it."
   (incf (vy (location sigil)) 0.01))
 
 (defmethod leave :after ((sigil summon-sigil) container)
+  (setf (sigil-sound sigil) (stop-loop (sigil-sound sigil)))
   (when (sigil-flame sigil)
     (despawn (sigil-flame sigil))
     (setf (sigil-flame sigil) NIL))
@@ -409,6 +412,9 @@ normal size, gets up out of it."
             (make-instance 'aurora :centre (vcopy c) :radius *sigil-flame-radius*
                                    :colors *sigil-flame-colors* :spin 0.6 :twist 0.35))
       (enter (sigil-flame summon-sigil) (container summon-sigil)))
+    (setf (sigil-sound summon-sigil)
+          (hold-loop (sigil-sound summon-sigil)
+                     (and (container summon-sigil) (not (burst summon-sigil)) :summon-sigil) c))
     (unless (frozen-p)
       (incf (age summon-sigil) dt)
       (cond ((burst summon-sigil)
@@ -464,6 +470,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
         (loc (location boss)))
     (when to
       (spawn-fx 'bolt-burst (vec (vx loc) (+ (vy loc) (* 0.5 (sprite-height boss))) (vz loc)) (container boss))
+      (play-sound :blink-out loc)
+      (play-sound :blink-in to)
       (v<- loc to)
       (let ((kb (momentum boss))) (setf (vx kb) 0.0 (vz kb) 0.0))
       (setf (path boss) ())
@@ -558,7 +566,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
    (glow :initform (vec4 0 0 0 0) :reader glow :documentation "The rim's colour and strength this frame.")
    (texel :initform (vec2 0 0) :reader texel)
    (glow-lamp :initform NIL :accessor glow-lamp)
-   (ward :initform NIL :accessor ward :documentation "The AURORA arc that shows Warded, once it has it."))
+   (ward :initform NIL :accessor ward :documentation "The AURORA arc that shows Warded, once it has it.")
+   (ward-sound :initform NIL :accessor ward-sound :documentation "The ward's hum while it is up, or NIL."))
   (:documentation "The run's boss: an empowered monster. List it first in the superclasses."))
 
 (defmethod initialize-instance :after ((boss boss) &key)
@@ -739,6 +748,10 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
                                         :colors *ward-colors* :spin 0.15 :twist 0.05 :arc (ward-arc boss))
             (ward boss) ward)
       (enter ward (container boss)))
+    (setf (ward-sound boss)
+          (hold-loop (ward-sound boss)
+                     (and ward (container boss) (has-power-p boss :warded) (not (dead boss)) :ward-hum)
+                     (location boss) k))
     (when ward
       (let* ((loc (location boss))
              (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc))))
@@ -750,6 +763,7 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
               (aurora-strength ward) (if (has-power-p boss :warded) (* *ward-strength* k) 0.0))))))
 
 (defmethod leave :after ((boss boss) container)
+  (setf (ward-sound boss) (stop-loop (ward-sound boss)))
   (when (ward boss)
     (despawn (ward boss))
     (setf (ward boss) NIL)))
@@ -770,6 +784,7 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
                      ;; Elsewhere (the test level) there is no run to win: the gate goes up
                      ;; again, so the player can leave.
                      (when (and arena (sealed arena))
+                       (play-sound :gate-rise (connector-location (arena-door arena)))
                        (unseal-arena)))))
               ((dormant boss)
                (when (and arena (eq (arena-boss arena) boss) *player* (< 0 (health *player*))

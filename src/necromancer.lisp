@@ -116,7 +116,7 @@ the superclasses, so that its methods here come before the slot readers there.")
    (max-health :initform 20)))
 
 (define-creature-sounds skeleton-warrior
-  :alert :skeleton-alert :pain :skeleton-pain :death :skeleton-collapse :windup :skeleton-chop)
+  :alert :skeleton-alert :pain :skeleton-pain :death :skeleton-collapse :windup :skeleton-chop :step :step-bone)
 
 (defun spawn-raised-skeleton (corpse container)
   "Raise a skeleton where CORPSE lies, getting up and already hunting. Returns it."
@@ -197,7 +197,8 @@ the superclasses, so that its methods here come before the slot readers there.")
    (max-health :initform 35)))
 
 ;; Its casts sound from the abilities (RELEASE-ATTACK), not a wind-up.
-(define-creature-sounds necromancer :alert :necro-alert :pain :necro-pain :death :necro-death)
+(define-creature-sounds necromancer
+  :alert :necro-alert :pain :necro-pain :death :necro-death :step :step-light)
 
 (defmethod spares-p ((n necromancer) target) (undead target))
 

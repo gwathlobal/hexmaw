@@ -271,6 +271,9 @@ WALK-ANIMATION; NIL to attack in the standing pose.")
 side being shut too.")
    (walk-distance :initform 0.0 :accessor walk-distance
                   :documentation "Metres walked so far; picks the walk animation's frame.")
+   (step-count :initform 0 :accessor step-count
+               :documentation "Footsteps WALK-DISTANCE had come to at the last one (CREATURE-STEPS).")
+   (flounder-sound :initform NIL :accessor flounder-sound :documentation "Its splashing loop while afloat, or NIL.")
    (walk-animation :initarg :walk-animation :initform NIL :accessor walk-animation
                    :documentation "Frame animation of the walk: one cycle per view, in the
 billboard's view order. NIL to glide in the standing pose.")
@@ -475,10 +478,23 @@ DEFINE-CREATURE-SOUNDS gives a class its own.")
   `(defmethod creature-sound ((creature ,class) event)
      (getf ',clips event)))
 
-(defun creature-noise (creature event)
+(defun creature-noise (creature event &optional (volume 1.0))
   "Play CREATURE's clip for EVENT where it stands."
   (let ((clip (creature-sound creature event)))
-    (when clip (play-sound clip (location creature)))))
+    (when clip (play-sound clip (location creature) volume))))
+
+(defparameter *creature-step-volume* 0.7)
+
+(defun creature-steps (creature)
+  "A footstep (its :STEP clip) every two walk frames, from the distance walked: two to a cycle."
+  (let ((n (floor (walk-distance creature) (* 2 (stride creature)))))
+    (unless (= n (step-count creature))
+      (when (and (< (step-count creature) n) (creature-walking-p creature) (not (afloat-p creature)))
+        (creature-noise creature :step *creature-step-volume*))
+      (setf (step-count creature) n))))
+
+(defmethod leave :after ((creature creature) container)
+  (setf (flounder-sound creature) (stop-loop (flounder-sound creature))))
 
 (defgeneric dormant-p (creature)
   (:documentation "True while CREATURE sleeps: it neither thinks nor takes harm (a boss
@@ -1550,6 +1566,8 @@ after the flinch, block and attack.")
             (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt damage)
               (setf (burn-timer creature) timer)
               (when (< 0 due)
+                (unless afloat
+                  (play-sound :creature-sizzle loc))
                 (burn creature due)))
             (when (and (< 0 damage) (not afloat) (not (dead creature)) (eq (brain creature) :idle))
               (escape-liquid creature))
@@ -1565,6 +1583,11 @@ after the flinch, block and attack.")
                        (think creature dt)))))))
         (unless held
           (keep-height creature dt))
+        (creature-steps creature)
+        (setf (flounder-sound creature)
+              (hold-loop (flounder-sound creature)
+                         (and (not held) (not (dead creature)) (afloat-p creature) :flounder)
+                         (location creature)))
         (when (dead creature)
           (incf (dead creature) dt)
           (when (and *revive-time* (eq *level* :test) (not (stays-dead-p creature))
@@ -1615,7 +1638,8 @@ after the flinch, block and attack.")
    (pain-chance :initform 60)
    (max-health :initform 30)))
 
-(define-creature-sounds imp :alert :imp-alert :pain :imp-pain :death :imp-death :windup :imp-claw)
+(define-creature-sounds imp
+  :alert :imp-alert :pain :imp-pain :death :imp-death :windup :imp-claw :step :step-light)
 
 ;;; The acolyte: a robed caster that keeps its distance and throws cinders (spells.lisp).
 ;;; It has no walk: it glides in the standing pose, the robe hiding its feet.
@@ -1734,4 +1758,4 @@ after the flinch, block and attack.")
    (max-health :initform 60)))
 
 (define-creature-sounds knight
-  :alert :knight-alert :pain :knight-pain :death :knight-death :windup :knight-mace)
+  :alert :knight-alert :pain :knight-pain :death :knight-death :windup :knight-mace :step :step-armour)

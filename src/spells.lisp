@@ -173,15 +173,15 @@ its strike. The player's own casts sound from the hands (player.lisp).")
     (attach-glow projectile (light-color spell) (light-radius spell))
     projectile))
 
-(defun impact (projectile)
-  "Play the spell's impact where PROJECTILE hit, and remove it."
+(defun impact (projectile &key water)
+  "Play the spell's impact where PROJECTILE hit, and remove it. Into WATER it hisses out."
   (let* ((spell (spell projectile))
          (name (impact-animation spell)))
     (when (and name (container projectile))
       (let* ((velocity (projectile-velocity projectile))
              (at (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
         (attach-glow (spawn-fx name at (container projectile)) (light-color spell) (light-radius spell))
-        (play-sound (spell-sound spell :impact) at))))
+        (play-sound (if water :bolt-hiss-water (spell-sound spell :impact)) at))))
   (despawn projectile))
 
 ;; The player's own projectiles never hit them, nor a creature's that creature.
@@ -266,14 +266,16 @@ seconds, keeping its speed."
             (setf (projectile-sound spell-projectile)
                   (start-loop (spell-sound (spell spell-projectile) :flight) loc))))
       (let ((victim (projectile-victim spell-projectile loc r))
-            (entered (and (liquid-at (vx loc) (vy loc) (vz loc)) (not (submerged spell-projectile)))))
+            (entered (and (not (submerged spell-projectile)) (liquid-at (vx loc) (vy loc) (vz loc)))))
         (setf (submerged spell-projectile) (and (liquid-at (vx loc) (vy loc) (vz loc)) T))
         (cond ((and victim (deflects-p victim spell-projectile))
                (deflect victim spell-projectile))
               (victim
                (apply-spell (spell spell-projectile) victim spell-projectile)
                (impact spell-projectile))
-              ((or (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)) entered)
+              (entered
+               (impact spell-projectile :water (liquid-property (liquid-kind entered) :swim)))
+              ((solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))
                (impact spell-projectile))
               ((< (or (spell-lifetime (spell spell-projectile)) *projectile-lifetime*) (age spell-projectile))
                (despawn spell-projectile)))))))

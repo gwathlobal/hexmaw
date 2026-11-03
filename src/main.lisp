@@ -29,6 +29,7 @@
         (restore-state new *carried-state*)
         (setf *carried-state* NIL))
       (when (eq *level* :generated)
+        (play-sound :level-gong)
         (setf *level-banner-left* *level-banner-time*))
       (when *boss-fight-start*
         (setf *boss-fight-start* NIL)

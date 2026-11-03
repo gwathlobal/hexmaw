@@ -806,6 +806,12 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   its distances are `*sound-min-distance*` (2 m, full volume) to `*sound-max-distance*` (40 m).
   A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
   a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
+  `hold-loop`, called every tick, keeps a holder's loop in a slot while it is wanted (the
+  player's slide on ice, the water and the wind, a creature floundering, the boss's ward).
+  The player's footsteps and strokes are `body-sounds` (player.lisp); the torches', lava's and
+  water's loops and the room tone are `update-ambience` (liquids.lisp, `*ambient-sources*`),
+  holding `ambient-voice`s on the nearest few sources. `audio/sfx.md` says where each clip
+  plays and how the hooks differ from its tables.
   To hear one: `tools/hd '(game (play-sound :imp-pain (v+ (location *player*) (vec -3 0 0))))'`.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the

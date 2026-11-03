@@ -140,7 +140,8 @@ List it before CREATURE or a subclass in the superclasses."))
    (max-health :initform 120)))
 
 ;; Its slam sounds where the maul lands (RELEASE-ATTACK), its landing as it quakes (LAND-LEAP).
-(define-creature-sounds ogre :alert :ogre-alert :pain :ogre-pain :death :ogre-death :leap :ogre-leap)
+(define-creature-sounds ogre
+  :alert :ogre-alert :pain :ogre-pain :death :ogre-death :leap :ogre-leap :step :step-heavy)
 
 (defmethod stage :after ((leaper leaper) (area staging-area))
   (when (leap-animation leaper)

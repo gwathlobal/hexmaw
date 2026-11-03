@@ -231,6 +231,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
 
 (defun open-inventory ()
   (when (and (eq *game-state* :playing) *player*)
+    (play-sound :bag-open)
     (setf *game-state* :inventory)
     (release-mouse *player*)
     ;; No move has told it yet where the released pointer is.
@@ -242,6 +243,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
     ;; A drag in hand goes back where it was: its stack never left that slot.
     (when *inventory-view*
       (setf (dragging *inventory-view*) NIL))
+    (play-sound :bag-close)
     (setf *game-state* :playing)
     (when *player* (capture-mouse *player*))))
 
@@ -249,7 +251,8 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
   (case *game-state*
     (:playing (case key
                 (:i (open-inventory))
-                (:q (when *player* (use-quickslot *player*)))))
+                (:q (when *player*
+                      (play-sound (if (use-quickslot *player*) :potion-drink :refused))))))
     (:inventory (when (eq key :i) (close-inventory)))))
 
 (define-handler (inventory-view mouse-move) (pos)
@@ -261,6 +264,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
     (v<- (pointer inventory-view) pos)
     (let ((slot (slot-at (vx pos) (vy pos))))
       (when (and slot (slot-stack *player* slot))
+        (play-sound :item-pick)
         (setf (dragging inventory-view) slot)))))
 
 (define-handler (inventory-view mouse-release) (button pos)
@@ -269,6 +273,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
           (to (slot-at (vx pos) (vy pos))))
       (setf (dragging inventory-view) NIL)
       (when (eq *game-state* :inventory)
+        (play-sound :item-drop)
         (cond (to
                (move-stack *player* from to))
               ;; Dropped on nothing a stack goes back, but a remembered kind is forgotten.
