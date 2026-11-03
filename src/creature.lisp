@@ -53,7 +53,9 @@ is a long walk round by the stairs.")
 (defparameter *block-hit-stop* 0.04 "Seconds of hit-stop when a spell hits a shield.")
 (defparameter *attack-start-reach* 0.5
   "Fraction of its ATTACK-REACH within which a creature starts an attack. The rest
-leaves the player room to back out of the blow during the wind-up.")
+leaves the player room to back out of the blow during the wind-up, unless it lunges.")
+(defparameter *lunge-stop* 0.3
+  "Fraction of its ATTACK-REACH within which a lunging creature stops stepping in.")
 (defparameter *flank-range* 5.0
   "Metres within which a creature that FLANKS walks round a raised shield instead of into it.")
 (defparameter *flank-margin* 0.35
@@ -193,7 +195,7 @@ this DT-second tick: a wall or body it hit fast enough hurts it, and the body to
    (turn-speed :initarg :turn-speed :initform NIL :accessor turn-speed
                :documentation "Radians per second it turns; NIL to turn at once. A slow turner
 can be got behind.")
-   (pain-chance :initarg :pain-chance :initform 50 :reader pain-chance
+   (pain-chance :initarg :pain-chance :initform 25 :reader pain-chance
                 :documentation "Percent chance a hit makes it flinch and breaks off its walk or
 attack; the weapon adds its pain bonus, up to *MAX-PAIN-CHANCE*.")
    (knockback-scale :initarg :knockback-scale :initform 1.0 :accessor knockback-scale
@@ -254,6 +256,9 @@ from: where the casting hand is on the release frame.")
                      :documentation "Frame (from 0) on which the blow lands.")
    (attack-pause :initarg :attack-pause :initform 0.5 :accessor attack-pause
                  :documentation "Seconds it stands after an attack before the next move.")
+   (lunge-speed :initarg :lunge-speed :initform NIL :accessor lunge-speed
+                :documentation "Metres per second a melee creature steps in along its facing
+until its blow lands, so backing off doesn't escape it (a sidestep does); NIL for none.")
    (attack-animation :initarg :attack-animation :initform NIL :accessor attack-animation
                      :documentation "Frame animation of the attack, one sequence per view like
 WALK-ANIMATION; NIL to attack in the standing pose.")
@@ -1253,6 +1258,14 @@ strike the player if still in reach and in front of it.")
     ;; after that the blow is committed.
     (when (< time (if (ranged-p creature) (attack-hit-time creature) (first times)))
       (face-attack-target creature dt))
+    ;; A melee blow steps in along the committed line until it lands.
+    (let ((speed (lunge-speed creature)))
+      (when (and speed (attack-pending creature) (not (ranged-p creature))
+                 (< time (attack-hit-time creature))
+                 (not (player-within-p creature (* *lunge-stop* (attack-reach creature)))))
+        (let ((yaw (facing creature))
+              (step (* speed dt)))
+          (move-creature creature (* step (sin yaw)) (- (* step (cos yaw))) (step-height creature)))))
     (when (and (attack-pending creature) (<= (attack-hit-time creature) time))
       (setf (attack-pending creature) NIL)
       (release-attack creature))
@@ -1582,10 +1595,14 @@ after the flinch, block and attack.")
    ;; chunk, two chunks, two scraps.
    (gibs :initform '((:imp (:head 0) 3) (:flesh 0 0 1 1 2 4 5 6 6 7 7)))
    (attack-damage :initform '(6 10))
-   (chase-speed :initform 2.6)
+   ;; A quick swipe: wind-up, lunge, strike, recover, darting in through the first two.
+   (attack-frame-times :initform '(0.25 0.1 0.2 0.3))
+   (attack-pause :initform 0.3)
+   (lunge-speed :initform 3.5)
+   (chase-speed :initform 3.4)
    ;; Quick and small: it darts round a raised shield.
    (flanks :initform T)
-   (pain-chance :initform 60)
+   (pain-chance :initform 30)
    (max-health :initform 30)))
 
 ;;; The acolyte: a robed caster that keeps its distance and throws cinders (spells.lisp).
@@ -1626,12 +1643,12 @@ after the flinch, block and attack.")
    (keep-away :initform 4.0)
    (cast-offset :initform 0.25)
    ;; The fireball is held up longest, as the warning; it leaves on the release frame.
-   (attack-frame-times :initform '(0.35 0.4 0.3 0.3))
+   (attack-frame-times :initform '(0.3 0.25 0.3 0.3))
    (attack-pause :initform 1.2)
    (walk-speed :initform 1.2)
    (chase-speed :initform 1.8)
    (wander-radius :initform 2.0)
-   (pain-chance :initform 50)
+   (pain-chance :initform 25)
    (max-health :initform 24)))
 
 ;;; The knight: slow, in heavy plate, behind a tower shield from its feet to its helm.
@@ -1679,18 +1696,19 @@ after the flinch, block and attack.")
    (body-radius :initform 0.45)
    (shield-views :initform 1)
    (block-animation :initform 'knight-block)
-   (turn-speed :initform 1.6)
+   (turn-speed :initform 3.0)
    (knockback-scale :initform 0.35)
    (attack-damage :initform '(12 18))
    (attack-reach :initform 0.8)
    (attack-arc :initform 0.7)
-   ;; A slow, heavy blow: a long wind-up to back out of.
-   (attack-frame-times :initform '(0.6 0.15 0.25 0.45))
-   (attack-pause :initform 0.9)
+   ;; A heavy blow, stepping in behind the shield as the mace comes over.
+   (attack-frame-times :initform '(0.4 0.12 0.25 0.4))
+   (attack-pause :initform 0.6)
+   (lunge-speed :initform 3.0)
    ;; The mace beats a raised shield aside.
    (guard-break :initform 0.8)
    (walk-speed :initform 0.9)
-   (chase-speed :initform 1.4)
+   (chase-speed :initform 2.2)
    (wander-radius :initform 2.0)
    ;; Flesh from inside the plate, drawn bigger for its size. No single blow overkills
    ;; 60 health by the usual fraction, so it tears apart more easily.
@@ -1698,5 +1716,5 @@ after the flinch, block and attack.")
    (gib-scale :initform 1.3)
    (gib-overkill :initform 0.15)
    ;; Plate and a steady stance: most blows don't stagger it.
-   (pain-chance :initform 15)
+   (pain-chance :initform 8)
    (max-health :initform 60)))

@@ -33,7 +33,8 @@ powers. Every kind is as likely.")
 then gets, as (\"ogre\" :fire-volley :summon :blink). NIL for the seed's choice.")
 
 (defparameter *boss-health* 500)
-(defparameter *boss-pain-chance* 10 "Percent: few hits make it flinch, so it can't be held.")
+(defparameter *boss-pain-chance* 1
+  "Percent: hardly a hit makes it flinch, so it can't be held; a weapon's pain bonus still adds.")
 (defparameter *boss-damage-scale* 1.5 "Its melee blow's damage against its kind's.")
 (defparameter *boss-max-knockback* 0.2 "Most of a blow's knockback it takes.")
 (defparameter *boss-max-radius* 1.3 "Widest its body gets, scaled up.")
@@ -646,6 +647,10 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
 
 (defmethod attack-animation ((boss boss))
   (if (boss-power boss) (power-animation boss) (call-next-method)))
+
+;; A power's crouch or cast stands its ground; only its kind's own blow lunges.
+(defmethod lunge-speed ((boss boss))
+  (unless (boss-power boss) (call-next-method)))
 
 (defmethod face-attack-target ((boss boss) dt)
   (if (boss-power boss) (face-player boss dt) (call-next-method)))
