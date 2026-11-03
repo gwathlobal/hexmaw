@@ -466,6 +466,11 @@ summoned mid-game, or a boss (boss.lisp).")
 before its arena is sealed, boss.lisp). A hit only flashes it.")
   (:method ((creature creature)) NIL))
 
+(defgeneric react-to-hit (creature)
+  (:documentation "What CREATURE does after a hit it lived through, once HURT has done the
+rest (the riftwalker blinks away, riftwalker.lisp).")
+  (:method ((creature creature)) NIL))
+
 (defun hurt (creature amount &key from (pain-bonus 0))
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
 the blood sprays away from. It flinches and breaks off what it's doing on a pain roll,
@@ -492,7 +497,9 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
              (tear-apart creature :from from))
             ((bleeds creature)
              (bleed-out creature)))
-      (setf (dead creature) 0.0))))
+      (setf (dead creature) 0.0))
+    (unless (dead creature)
+      (react-to-hit creature))))
 
 (defmethod hit-surface ((creature creature) speed x y z &key (threshold *impact-speed*) by)
   (declare (ignore by))

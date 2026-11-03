@@ -132,7 +132,10 @@ turns it aside ends it.")
    (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
-and bursts only on entering one from outside.")))
+and bursts only on entering one from outside.")
+   (evade-asked :initform NIL :accessor evade-asked
+                :documentation "The creature last asked whether it evades this (the player's)
+projectile about to reach it, so each is asked once.")))
 
 ;; It strikes from behind itself, along its flight, and pushes along it.
 (defmethod effect-origin ((source spell-projectile))
@@ -231,6 +234,30 @@ seconds, keeping its speed."
                         (vy v) (* speed (+ (* c uy) (* s wy)))
                         (vz v) (* speed (+ (* c uz) (* s wz))))))))))))
 
+(defparameter *evade-look-ahead* 0.2
+  "Seconds of flight ahead of the player's projectile that a creature sees it coming (EVADE-PROJECTILE).")
+
+(defgeneric evade-projectile (creature projectile)
+  (:documentation "Give CREATURE, which the player's PROJECTILE is about to reach, its chance
+to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per projectile.")
+  (:method (creature projectile) NIL))
+
+(defvar *evade-probe* (vec 0 0 0))
+
+(defun look-ahead (projectile r)
+  "Ask the creature the player's PROJECTILE will reach within *EVADE-LOOK-AHEAD* whether it evades it."
+  (let ((probe *evade-probe*)
+        (loc (location projectile))
+        (v (projectile-velocity projectile))
+        (k (float *evade-look-ahead* 0f0)))
+    (setf (vx probe) (+ (vx loc) (* k (vx v)))
+          (vy probe) (+ (vy loc) (* k (vy v)))
+          (vz probe) (+ (vz loc) (* k (vz v))))
+    (let ((c (creature-at probe r *player*)))
+      (when (and c (not (eq c (evade-asked projectile))))
+        (setf (evade-asked projectile) c)
+        (evade-projectile c projectile)))))
+
 ;; After FX-SPRITE's tick, which animates and ages it.
 (define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
@@ -238,6 +265,8 @@ seconds, keeping its speed."
            (r (* 0.5 (float *projectile-size* 0f0))))
       (when (and (homing spell-projectile) *player* (not (eq (caster spell-projectile) *player*)))
         (steer spell-projectile (float dt 0f0)))
+      (when (and *player* (eq (caster spell-projectile) *player*))
+        (look-ahead spell-projectile r))
       (nv+* loc (projectile-velocity spell-projectile) dt)
       (let ((victim (projectile-victim spell-projectile loc r))
             (entered (and (liquid-at (vx loc) (vy loc) (vz loc)) (not (submerged spell-projectile)))))

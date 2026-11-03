@@ -736,6 +736,21 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
                   (* (float (roll (effect-magnitude effect)) 0f0)
                      (if blocked *block-shove-scale* 1.0)))))
 
+(defun teleport-player (player to &key yaw)
+  "Put PLAYER's feet at TO at once, stopped, out of any vortex, the eye at standing height
+(no step's easing), turned to YAW if given; the view flashes as a pickup's does."
+  (clear-whirl player)
+  (v<- (feet player) to)
+  (let ((vel (velocity player)))
+    (setf (vx vel) 0f0 (vy vel) 0f0 (vz vel) 0f0))
+  (setf (eye player) *eye-height*
+        (wading player) NIL
+        (restore-flash player) *restore-flash-time*
+        (restored player) :rift)
+  (when yaw
+    (setf (vy (rotation player)) (float yaw 0f0)))
+  (place-camera player))
+
 (defun respawn (player)
   (clear-whirl player)
   (let ((feet (feet player)))

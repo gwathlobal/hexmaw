@@ -23,7 +23,8 @@
     ("harpy" harpy-boss harpy "Harpy Queen" 1.7 (:flyer))
     ("necromancer" necromancer-boss necromancer "Archnecromancer" 1.5 (:caster))
     ("ogre" ogre-boss ogre "Ogre Warlord" 1.3 ())
-    ("gale-wraith" wraith-boss gale-wraith "Storm Wraith" 1.7 (:flyer :caster)))
+    ("gale-wraith" wraith-boss gale-wraith "Storm Wraith" 1.7 (:flyer :caster))
+    ("riftwalker" riftwalker-boss riftwalker "Rift Lord" 1.6 ()))
   "What a boss can be: the kind as a spawn names it, the boss's class, the class it is an
 empowered form of, its title, how much bigger it is drawn, and its traits, which deny it
 powers. Every kind is as likely.")
@@ -434,6 +435,28 @@ normal size, gets up out of it."
             (setf (aurora-height flame) (+ low (* (- high low) (min 1.0 (* 4.0 u))))
                   (aurora-strength flame) (* (min 1.0 (* 8.0 u)) (- 1.0 (* u u))))))))))
 
+(defun same-arena-side-p (from to margin)
+  "True if TO is on the same side of the arena's walls as FROM: both in it, TO at least
+MARGIN metres in, or both outside it, TO at least MARGIN out. T with no arena."
+  (or (null *arena*)
+      (if (arena-contains-p from 0.0)
+          (arena-contains-p to margin)
+          (not (arena-contains-p to (- margin))))))
+
+(defun free-spot (point radius height &key (search 2) ignore sight-of from)
+  "The floor point of the nav cell nearest POINT, within SEARCH columns, that a body RADIUS
+by HEIGHT fits: dry, no other body than IGNORE in it, a clear line to point SIGHT-OF if
+given, and on the same side of the arena's walls as point FROM (default POINT). Or NIL."
+  (when *nav-grid*
+    (multiple-value-bind (i j k) (let ((*nav-hazards* :avoid)) (nav-nearest-fitting point radius height :search search))
+      (when i
+        (let ((to (nav-point i j k)))
+          (when (and (same-arena-side-p (or from point) to (+ radius 0.5))
+                     (or (null sight-of) (clear-path-p to sight-of 1.0))
+                     (not (body-overlapping (vx to) (+ (vy to) 0.05) (vz to) (float radius 0f0)
+                                            (- (float height 0f0) 0.05) ignore)))
+            to))))))
+
 (defun blink-destination (boss)
   "Where BOSS's Blink takes it: a ranged kind 9 m from the player on its own side of them, a
 melee kind right behind them. A cell its body fits in the arena, in sight of the player, or NIL."
@@ -449,13 +472,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
     (loop for turn in '(0.0 0.7 -0.7 1.4 -1.4 2.2 -2.2)
           for yaw = (+ base turn)
           for p = (vec (+ (vx feet) (* d (sin yaw))) (vy feet) (- (vz feet) (* d (cos yaw))))
-          do (multiple-value-bind (i j k) (and *nav-grid* (nav-nearest-fitting p r h :search 2))
-               (when i
-                 (let ((to (nav-point i j k)))
-                   (when (and (arena-contains-p to (+ r 0.5))
-                              (clear-path-p to feet 1.0)
-                              (not (body-overlapping (vx to) (+ (vy to) 0.05) (vz to) (float r 0f0) (- (float h 0f0) 0.05) boss)))
-                     (return to))))))))
+          for to = (free-spot p r h :ignore boss :sight-of feet :from loc)
+          when to return to)))
 
 (defun blink (boss)
   (let ((to (blink-destination boss))
@@ -526,7 +544,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
   :release #'summon-minions)
 
 (define-boss-power :blink
-  :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4
+  :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4 :deny '("riftwalker")
   :usable (lambda (boss)
             (if (ranged-p boss)
                 (< (player-distance boss) 4.0)

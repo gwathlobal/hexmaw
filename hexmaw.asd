@@ -31,6 +31,7 @@
                (:file "vortex")
                (:file "wraith")
                (:file "boss")
+               (:file "riftwalker")
                (:file "pickups")
                (:file "hud")
                (:file "hands")
