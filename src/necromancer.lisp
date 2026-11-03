@@ -104,15 +104,16 @@ the superclasses, so that its methods here come before the slot readers there.")
    (gib-overkill :initform 0.1)
    (attack-damage :initform '(7 11))
    (attack-reach :initform 0.7)
-   (attack-frame-times :initform '(0.5 0.12 0.25 0.35))
-   (attack-pause :initform 0.7)
+   (attack-frame-times :initform '(0.35 0.1 0.25 0.35))
+   (attack-pause :initform 0.45)
+   (lunge-speed :initform 3.0)
    (walk-speed :initform 1.1)
-   (chase-speed :initform 2.1)
+   (chase-speed :initform 3.0)
    (wander-radius :initform 3.0)
    (knockback-scale :initform 0.8)
    ;; Raised in numbers: they spread round a raised shield.
    (flanks :initform T)
-   (pain-chance :initform 40)
+   (pain-chance :initform 20)
    (max-health :initform 20)))
 
 (defun spawn-raised-skeleton (corpse container)
@@ -160,12 +161,12 @@ the superclasses, so that its methods here come before the slot readers there.")
 
 (defun necromancer-abilities ()
   (list (make-instance 'ability :name :skull :spell 'grave-skull :animation 'necromancer-thrust
-                                :frame-times '(0.35 0.15 0.2 0.3) :hit-frame 1 :pause 1.0)
+                                :frame-times '(0.25 0.12 0.2 0.3) :hit-frame 1 :pause 1.0)
         ;; The channel's held frame is the warning: two seconds to break it with a hit.
         (make-instance 'ability :name :raise :animation 'necromancer-cast
                                 :frame-times '(0.3 1.7 0.25 0.35) :hit-frame 2 :pause 0.8 :cooldown 7.0)
         (make-instance 'ability :name :nova :spell 'grave-spikes :animation 'necromancer-cast
-                                :frame-times '(0.3 0.4 0.25 0.35) :hit-frame 2 :pause 1.0 :cooldown 14.0)))
+                                :frame-times '(0.3 0.25 0.25 0.35) :hit-frame 2 :pause 1.0 :cooldown 14.0)))
 
 (define-shader-entity necromancer (ability-user creature)
   ((texture :initform (// 'hexmaw 'necromancer-turnaround))
@@ -188,7 +189,7 @@ the superclasses, so that its methods here come before the slot readers there.")
    (chase-speed :initform 1.6)
    (wander-radius :initform 2.0)
    ;; Frail: a hit usually breaks its cast, the raise's channel too.
-   (pain-chance :initform 70)
+   (pain-chance :initform 35)
    (max-health :initform 35)))
 
 (defmethod spares-p ((n necromancer) target) (undead target))

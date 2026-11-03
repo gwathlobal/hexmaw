@@ -285,7 +285,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 15, ogre 17, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
+  knight 8, ogre 9, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
@@ -598,7 +598,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   :blink :haste)`, forces them for testing (a `defparameter`: reloading boss.lisp clears it, so set
   it again after). Empowered: drawn `scale` times bigger (`size-scale` on
   `creature`, which every strip's `:size` is multiplied by), about 3 m, `*boss-health*` (500),
-  `*boss-pain-chance*`, melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
+  `*boss-pain-chance*` (1, the weapon's bonus still added), melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
   never gibbed, flyers hovering `*boss-hover*` so the sword reaches them, step `*nav-tall-lift*`
   since it is taller than `*nav-clearance-height*`. No vortex pulls or catches it (`vortex-proof-p`).
   It glows: `rim-glow`, a shader mixin the boss and elites (`src/elite.lisp`) share, multiplies it
@@ -856,7 +856,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   middle rather than against the right edge, so the thrust goes where the player looks on any
   screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
   (`art/spear/spear-frames.txt` says how).
-- `src/player.lisp`: first-person controller and box collision. Mana doesn't regenerate:
+- `src/player.lisp`: first-person controller and box collision. Walking backward keeps
+  `*backpedal-scale*` (0.75) of the speed. Mana doesn't regenerate:
   only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
   `*stamina-regen*` except while running, which costs `*run-stamina*` a second, on foot or
   swimming with Shift (`update-stamina`); running it empty leaves the player `winded`, walking,
@@ -1000,8 +1001,11 @@ costs a few milliseconds in an open hall, so keep the limit no longer than level
 `attack-reach` it stops and attacks: the frames run on `attack-frame-times` (it turns to
 follow the player through the first), and on `attack-hit-frame` the blow lands if the player
 is still within `attack-reach`, inside `attack-arc` and not behind a wall (`hurt-player`:
-damage, a shove, the pain flash, hit-stop). Backing off during the wind-up dodges it, and a
-hit breaks the attack off. Then it stands `attack-pause` and hunts on.
+damage, a shove, the pain flash, hit-stop). Until the blow lands it lunges: steps in along
+its facing at `lunge-speed` (imp 3.5 m/s, skeleton and knight 3, ogre 2.5; not a boss's power)
+until within `*lunge-stop*` of its reach, so backing off at a walk doesn't escape it; running
+back does, and so does a sidestep from a slow turner once its facing is set (the imp turns at
+once, so it follows a sidestep through its wind-up). A hit breaks the attack off. Then it stands `attack-pause` and hunts on.
 
 A creature that `flanks` (the imp, the skeleton) doesn't attack into a raised shield: within
 `*flank-range*` and in front of it (`shield-facing-p`, the shield's arc plus `*flank-margin*`)
@@ -1033,7 +1037,7 @@ with the player's); in the 3 m corridor it flies at 1.1 m, in reach. Bolts reach
 
 It hunts as a caster does (`ranged-p`, `hunt-from-range`: back off within `keep-away`, attack
 within `attack-range` with a clear line), but its attack is a dive (`attack-step`): it hangs
-and rises `dive-rise` for `dive-windup` (0.7 s, the warning), then flies a straight line at
+and rises `dive-rise` for `dive-windup` (0.5 s, the warning), then flies a straight line at
 `dive-speed` toward the player's head (`strike-height` above the feet) as it was when the dive
 left, `dive-overshoot` beyond, skimming the floor. The talons strike once, `attack-damage`, if
 the player comes within `attack-reach`; a sidestep makes it miss. It then stands

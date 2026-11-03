@@ -49,7 +49,7 @@
 
 (defun wraith-abilities ()
   (list (make-instance 'ability :name :gust :spell 'gust :animation 'wraith-cast
-                                :frame-times '(0.3 0.25 0.25 0.3) :hit-frame 2 :pause 1.2)
+                                :frame-times '(0.25 0.15 0.25 0.3) :hit-frame 2 :pause 1.2)
         (make-instance 'ability :name :tempest :spell 'tempest :animation 'wraith-cast
                                 :frame-times (list 0.3 (- *tempest-cast-time* 0.3) 0.25 0.35)
                                 :hit-frame 2 :pause 1.0 :cooldown *tempest-cooldown*)))
@@ -74,7 +74,7 @@
    (walk-speed :initform 1.2)
    (chase-speed :initform 2.0)
    (wander-radius :initform 2.5)
-   (pain-chance :initform 60)
+   (pain-chance :initform 30)
    (gibs :initform '((:flesh 0 1 2 4 5 6 7)))
    (max-health :initform 40)
    (tempest-point :initform (vec 0 0 0) :reader tempest-point

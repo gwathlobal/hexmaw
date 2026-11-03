@@ -32,7 +32,7 @@
 (defparameter *leap-gravity* 15.0 "Acceleration, in m/s², along a leap's arc and of a fall.")
 (defparameter *leap-max-speed* 16.0 "Fastest, in m/s across, it flies: a low ceiling limits how far it leaps.")
 (defparameter *leap-sample* 0.25 "Metres between the points of an arc that are checked against solids.")
-(defparameter *leap-windup* 0.6 "Seconds it crouches before it leaps.")
+(defparameter *leap-windup* 0.45 "Seconds it crouches before it leaps.")
 (defparameter *leap-recover* 1.2 "Seconds it stands after landing.")
 (defparameter *leap-cooldown* 6.0 "Seconds from one leap to the next.")
 (defparameter *leap-hit-stop* 0.12 "Hit-stop on landing.")
@@ -124,19 +124,20 @@ List it before CREATURE or a subclass in the superclasses."))
    (attack-reach :initform 1.0)
    (attack-arc :initform 0.9)
    ;; Wind-up overhead, swing, the maul in the floor (the blow lands), recover.
-   (attack-frame-times :initform '(0.7 0.15 0.2 0.5))
-   (attack-pause :initform 1.0)
+   (attack-frame-times :initform '(0.5 0.12 0.2 0.45))
+   (attack-pause :initform 0.7)
+   (lunge-speed :initform 2.5)
    ;; The maul knocks a raised shield aside; its shockwave comes up through the floor,
    ;; under it (QUAKE).
    (guard-break :initform 1.2)
    (walk-speed :initform 0.8)
-   (chase-speed :initform 1.6)
+   (chase-speed :initform 2.0)
    (wander-radius :initform 2.0)
    (gibs :initform '((:flesh 0 0 1 1 2 3 4 5 5 6 6 7 7)))
    (gib-scale :initform 1.8)
    (gib-overkill :initform 0.12)
    ;; Its bulk shrugs off most blows, nearly as the knight's plate does.
-   (pain-chance :initform 17)
+   (pain-chance :initform 9)
    (max-health :initform 120)))
 
 (defmethod stage :after ((leaper leaper) (area staging-area))
