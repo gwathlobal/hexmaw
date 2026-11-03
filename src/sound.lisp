@@ -24,7 +24,7 @@
 (defparameter *sound-min-distance* 2.0 "Metres within which a positional sound is at full volume.")
 (defparameter *sound-max-distance* 40.0 "Metres beyond which a positional sound is silent.")
 (defparameter *sound-rolloff* 1.0 "How fast a positional sound falls off between the two.")
-(defparameter *clip-min-distances* '(:tornado 8.0)
+(defparameter *clip-min-distances* '(:tornado 8.0 :ogre-land 6.0)
   "Positional clips heard at full volume further off than *SOUND-MIN-DISTANCE*: the big ones.
 Read as a voice is connected.")
 

@@ -804,6 +804,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*sound-error*`. The space mixer's axes are the other hand to the game's, so `copy-into`
   mirrors Z (checked by recording: a sound on the player's left plays in the left channel);
   its distances are `*sound-min-distance*` (2 m, full volume) to `*sound-max-distance*` (40 m).
+  A big sound keeps full volume further out (`*clip-min-distances*`: the tornado 8 m, the ogre's
+  landing 6 m), set on its voice as it connects.
   A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
   a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
   `hold-loop`, called every tick, keeps a holder's loop in a slot while it is wanted (the
@@ -1295,7 +1297,8 @@ first-person. Work from it and keep it current.
 Sound effects: each clip's takes are `audio/sfx/<clip>-<n>.wav` (`tools/gen_sfx.py`, with the
 duration, takes and `--loop` from `audio/sfx.md`), gitignored like the music's. The chosen take
 of each goes in `audio/sfx-picks.txt` (`imp-pain 2`; several takes are variants played in
-turn, `gain=-3` evens one out; take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
+turn, `gain=-3` evens one out, `even` flattens a loop that swells and fades within itself;
+take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
 levels (the loudest 100 ms at -14 dBFS RMS, peaks under -1 through make_loop.py's limiter),
 downmixes positional clips to mono (the `:effect` space mixer takes only mono) and encodes them
 to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in

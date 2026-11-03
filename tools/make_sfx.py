@@ -11,6 +11,7 @@ tools/gen_sfx.py writes them. audio/sfx-picks.txt says which to use, one line a 
   imp-pain 2              take 2
   player-hurt 1 2 4       three variants, played in turn
   ogre-alert 3 gain=-4    take 3, 4 dB quieter than the rest
+  tornado 4 even          take 4 with its slow swells evened out (EVEN_OUT): a steady loop
 
 A clip with takes and no line uses take 1, so every generated clip is in the game until it
 is chosen. Each take is trimmed of the silence before and after it (not a loop's: it is cut
@@ -63,7 +64,7 @@ def read_table():
 
 
 def read_picks():
-    """{clip: ([takes], gain dB)} from audio/sfx-picks.txt."""
+    """{clip: ([takes], gain dB, even)} from audio/sfx-picks.txt."""
     picks = {}
     if not PICKS.exists():
         return picks
@@ -71,15 +72,17 @@ def read_picks():
         words = line.split("#")[0].split()
         if not words:
             continue
-        takes, gain = [], 0.0
+        takes, gain, even = [], 0.0, False
         for w in words[1:]:
             if w.startswith("gain="):
                 gain = float(w[5:])
+            elif w == "even":
+                even = True
             elif w.isdigit():
                 takes.append(int(w))
             else:
                 sys.exit(f"{PICKS}:{n}: what is {w!r}?")
-        picks[words[0]] = (takes or [1], gain)
+        picks[words[0]] = (takes or [1], gain, even)
     return picks
 
 
@@ -128,7 +131,33 @@ def loudest(x, rate, window=0.1):
     return 10 * np.log10((sums[w:] - sums[:-w]).max() / w + 1e-12)
 
 
-def make_clip(path, positional, loop, level, gain):
+def even_out(x, rate, loop, window=0.4, most=12.0):
+    """X with its slow swells taken out: its loudness, smoothed over WINDOW seconds (round the
+    circle for a loop), brought to its median by at most MOST dB either way. A wind loop that
+    rises and falls within itself then roars steadily."""
+    hop = max(1, int(0.01 * rate))
+    n = len(x) // hop
+    blocks = (x[:n * hop] ** 2).mean(1).reshape(n, hop).mean(1)
+    k = max(1, int(window / 0.01))
+    kernel = np.hanning(k + 2)[1:-1]
+    kernel /= kernel.sum()
+    if loop:
+        padded = np.concatenate([blocks[-k:], blocks, blocks[:k]])
+        smooth = np.convolve(padded, kernel, "same")[k:-k]
+    else:
+        smooth = np.convolve(blocks, kernel, "same")
+    level = np.sqrt(np.maximum(smooth, 1e-12))
+    gain = np.clip(np.median(level) / level, 10 ** (-most / 20), 10 ** (most / 20))
+    centres = (np.arange(n) + 0.5) * hop
+    at = np.arange(len(x))
+    if loop:
+        gain = np.interp(at, centres, gain, period=len(x))
+    else:
+        gain = np.interp(at, centres, gain)
+    return x * gain[:, None]
+
+
+def make_clip(path, positional, loop, level, gain, even=False):
     x, rate = read_wav(path)
     if not loop:
         x = trim(x, rate)
@@ -136,6 +165,8 @@ def make_clip(path, positional, loop, level, gain):
         x[-fade:] *= np.linspace(1, 0, fade)[:, None]
     if positional and x.shape[1] > 1:
         x = x.mean(1, keepdims=True)
+    if even:
+        x = even_out(x, rate, loop)
     x = x * 10 ** ((level + gain - loudest(x, rate)) / 20)
     if loop:
         x, _ = limit(x, rate, CEILING)
@@ -181,7 +212,7 @@ def main():
     for clip in list(args.clips) + list(picks):
         if clip not in table:
             sys.exit(f"{clip}: not in {TABLE}")
-    for clip, (takes, _) in picks.items():
+    for clip, (takes, _, _) in picks.items():
         for n in takes:
             if not take_path(clip, n):
                 sys.exit(f"{clip}: no take {n} in {TAKES}")
@@ -198,12 +229,12 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for clip in wanted:
         positional, loop = table[clip]
-        takes, gain = picks.get(clip, ([1], 0.0))
+        takes, gain, even = picks.get(clip, ([1], 0.0, False))
         paths = [take_path(clip, n) for n in takes]
         if None in paths:
             print(f"{clip}: no takes", file=sys.stderr)
             continue
-        kind = ("positional" if positional else "first-person") + (", loop" if loop else "")
+        kind = ("positional" if positional else "first-person") + (", loop" if loop else "") + (", evened" if even else "")
         if args.check:
             print(f"{clip}: takes {' '.join(map(str, takes))}, {kind}")
             continue
@@ -213,7 +244,7 @@ def main():
         files, seconds = [], []
         for i, path in enumerate(paths, 1):
             name = f"{clip}.ogg" if len(paths) == 1 else f"{clip}-{i}.ogg"
-            x, rate = make_clip(path, positional, loop, args.level, gain)
+            x, rate = make_clip(path, positional, loop, args.level, gain, even)
             encode(x, rate, OUT / name)
             files.append(name)
             seconds.append(round(len(x) / rate, 3))

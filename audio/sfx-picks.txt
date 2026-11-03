@@ -13,7 +13,7 @@ shield-bash 3
 bash-hit 2
 bash-glance 3
 cast-fizzle 3
-tornado 4 gain=8
+tornado 4 gain=8 even
 imp-pain 3
 acolyte-pain 3
 acolyte-death 3
@@ -29,7 +29,7 @@ skeleton-chop 3
 skeleton-rise 3
 ogre-alert 2
 ogre-death 3
-ogre-slam 3 gain=8
+ogre-slam 3 gain=12
 ogre-leap 2
 wraith-pain 2
 wraith-alert 3
@@ -52,7 +52,7 @@ skull-impact 5
 imp-claw 8
 acolyte-alert 9
 knight-alert 4
-ogre-land 5 gain=8
+ogre-land 5 gain=12
 bolt-cast 1
 bolt-flight 1
 footstep-snow 4

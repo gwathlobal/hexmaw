@@ -108,17 +108,20 @@ def read_picks():
             if words:
                 takes = [int(w) for w in words[1:] if w.isdigit()]
                 gain = next((float(w[5:]) for w in words[1:] if w.startswith("gain=")), 0.0)
-                picks[words[0]] = {"takes": takes or [1], "gain": gain}
+                picks[words[0]] = {"takes": takes or [1], "gain": gain, "even": "even" in words[1:]}
     return picks
 
 
 def write_pick(clip, takes, gain):
-    """Set CLIP's line in the picks file, keeping every other line and its own comment."""
+    """Set CLIP's line in the picks file, keeping every other line, its own comment and its
+    flags (even)."""
     lines = PICKS.read_text().splitlines() if PICKS.exists() else []
     entry = f"{clip} {' '.join(map(str, takes))}" + (f" gain={gain:g}" if gain else "")
     for i, line in enumerate(lines):
         words = line.split("#")[0].split()
         if words and words[0] == clip:
+            if "even" in words[1:]:
+                entry += " even"
             comment = line[line.index("#"):] if "#" in line else ""
             lines[i] = f"{entry:<24}{comment}".rstrip() if comment else entry
             break
