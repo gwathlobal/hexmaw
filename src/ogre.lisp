@@ -265,7 +265,7 @@ true if there is a landing cell and an arc OGRE's body fits."
     (v<- from (location ogre))
     (setf (airborne ogre) T
           (leap-time ogre) 0.0
-          (leap-cooldown ogre) *leap-cooldown*
+          (leap-cooldown ogre) (* *leap-cooldown* (depth-scale :cooldown))
           (leap-duration ogre) (float (arc-time (vy from) (vy to) (leap-apex ogre)) 0f0))
     (turn-to ogre (atan (- (vx to) (vx from)) (- (vz from) (vz to))) 100.0)
     (setf *leap-peak* (vy from))

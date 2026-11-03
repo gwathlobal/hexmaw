@@ -7,13 +7,29 @@
 ;;; left (LEVEL-RECORD), which is what the run's totals add up.
 
 (defparameter *run-levels*
-  '((:rooms 16 :exit "descent")
-    (:rooms 19 :exit "descent")
-    (:rooms 22 :exit "arena"))
-  "A run's levels, first to last: how many rooms the generator aims for, and the block it
-puts on the doorway furthest from the start (or a list of them, tried in order): the
-descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
-(boss.lisp). NIL: no such block.")
+  '((:rooms 16 :exit "descent"
+     :pool (("imp" 5) ("acolyte" 2) ("knight" 2) ("harpy" 1) ("necromancer" 1))
+     :skip-scale 1.0 :elite-chance 0.0
+     :sight 1.0 :hearing 1.0 :alert 1.0 :pause 1.0 :cooldown 1.0)
+    (:rooms 19 :exit "descent"
+     :pool (("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1) ("gale-wraith" 1))
+     :skip-scale 0.75 :elite-chance 0.12
+     :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
+    (:rooms 22 :exit "arena"
+     :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2))
+     :skip-scale 0.5 :elite-chance 0.2
+     :sight 1.3 :hearing 1.6 :alert 1.6 :pause 0.7 :cooldown 0.8))
+  "A run's levels, first to last. :ROOMS is how many rooms the generator aims for, and :EXIT
+the block it puts on the doorway furthest from the start (or a list of them, tried in order):
+the descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
+(boss.lisp). NIL: no such block.
+
+How hard its monsters are. Decided as it is built (LEVEL-SETTINGS): :POOL, what a spawn_any
+picks from (*SPAWN-POOL*; leave a kind out rather than give it weight 0), :SKIP-SCALE, which
+scales a spawn's chance of no monster (*SPAWN-SKIP-SCALE*), and :ELITE-CHANCE, a spawn's chance
+of an elite (*ELITE-CHANCE*, elite.lisp). Asked in play (DEPTH-SCALE): :SIGHT and :HEARING scale
+how far a creature notices the player, :ALERT how long it hunts after, :PAUSE its pause after an
+attack and :COOLDOWN its abilities' cooldowns. A key left out keeps the variable, or 1.")
 
 (defvar *run-depth* 1 "Which of *RUN-LEVELS* the player is on, from 1.")
 (defvar *run-seed* NIL "The run's seed, or NIL until a level needs one.")
@@ -33,8 +49,15 @@ SETUP-SCENE carries the weapon anyway.")
 
 (defun run-length () (length *run-levels*))
 
-(defun run-level-property (depth key)
-  (getf (nth (1- depth) *run-levels*) key))
+(defun run-level-property (depth key &optional default)
+  (getf (nth (1- depth) *run-levels*) key default))
+
+(defun depth-scale (key)
+  "How much the level being played scales a creature's KEY (see *RUN-LEVELS*): 1 but on a
+generated level."
+  (if (eq *level* :generated)
+      (float (run-level-property *run-depth* key 1.0) 0f0)
+      1f0))
 
 (defun current-run-seed ()
   "The seed this run's levels come from, picked when first asked for; *LEVEL-SEED* fixes it for testing."

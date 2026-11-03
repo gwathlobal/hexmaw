@@ -125,7 +125,7 @@ the superclasses, so that its methods here come before the slot readers there.")
                                                         (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet)))
                                                         (facing corpse)))))
     (setf (rising skeleton) (death-duration skeleton)
-          (alert skeleton) *alert-time*)
+          (alert skeleton) (alert-time))
     (spawn-creature skeleton container)
     (update-creature-look skeleton)
     skeleton))
@@ -267,7 +267,7 @@ else throw skulls, or close in."
       (:raise (raise-corpse necromancer))
       (:nova (cast-grave-circle necromancer)))
     (when (< 0 (ability-cooldown ability))
-      (setf (getf (cooldowns necromancer) (ability-name ability)) (ability-cooldown ability)))))
+      (setf (getf (cooldowns necromancer) (ability-name ability)) (* (ability-cooldown ability) (depth-scale :cooldown))))))
 
 (defun channelling-p (necromancer)
   "True while NECROMANCER is in the middle of raising a corpse."

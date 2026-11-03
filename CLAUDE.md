@@ -601,9 +601,10 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*boss-pain-chance*` (1, the weapon's bonus still added), melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
   never gibbed, flyers hovering `*boss-hover*` so the sword reaches them, step `*nav-tall-lift*`
   since it is taller than `*nav-clearance-height*`. No vortex pulls or catches it (`vortex-proof-p`).
-  It glows: a class fragment shader on `boss` multiplies it by `*boss-shade*` and draws a pulsing
-  rim in `*boss-glow-color*` on every opaque texel beside a see-through one (on the boss's program
-  only), with a lamp of its own. Warded shows as an arc of violet `aurora` on the floor round its
+  It glows: `rim-glow`, a shader mixin the boss and elites (`src/elite.lisp`) share, multiplies it
+  by its `rim-shade` (the boss's `*boss-shade*`) and draws a pulsing rim on every opaque texel
+  beside a see-through one (on that class's program only), in `*boss-glow-color*`, with a lamp of
+  its own (`light-rim`). Warded shows as an arc of violet `aurora` on the floor round its
   front (`update-ward`, `*ward-colors*`), over exactly the sector its reflection covers
   (`ward-arc`: the billboard views `shield-views` covers, a quarter of pi each, so 135°), turning
   with its facing. Powers are
@@ -651,6 +652,20 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   other monster taken out of the level; a save made there doesn't load (its monsters don't match),
   so test saves on `(progn (start-level :generated) (setf *run-depth* 3))`. To enrage it,
   `(game (hurt (arena-boss *arena*) 255))`.
+- `src/elite.lisp`: elites, a deeper level's stronger monsters. A spawn on a generated level is
+  one with the level's `*elite-chance*` (`:elite-chance` in `*run-levels*`): `elite-roll`, from
+  `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
+  every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
+  its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `*elite-kinds*`):
+  `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
+  `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
+  kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
+  none of them the boss's orange. Its one trait (`elite-trait`): `:haste` (cyan, walk and attacks ×
+  `*elite-haste*`), `:warded` (violet, its front turns spells back, `shield-views`; never the
+  knight's) or `:tough` (bone-white, half the pain chance and the knockback). Summoned and raised
+  creatures and the boss never are. A save needn't keep the trait: the rebuild draws it again.
+  `*elite-override*` (`:all`, or a trait) makes every block spawn an elite, on any level (on the test
+  level, the blocks attached to it: the shrine and the pool). `tools/hd status` shows `elite:<trait>`.
 - `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the
   amounts: `:herbs` +15 health and `:shard` +28 mana (2 bolts) restore at once; at full one stays
   where it is, below full it is taken and any excess lost (`restore-resource`). `:health-potion`
@@ -1906,10 +1921,10 @@ has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has 
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre and gale wraith 1
-each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
-own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
+own state; one float draw whatever the weights, so changing a pool never changes the layout). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
 is one monster at its centre, so `ii` centres one on a 1 m spot. `pickup floor` or `pickup
 reward` is a spot where a level may put a pickup, one per group like a spawn, on top of a `box` in
@@ -2132,8 +2147,20 @@ A run is the generated levels of `*run-levels*` (`src/run.lisp`) one after anoth
 rooms. Each entry says how many rooms the generator aims for (over `*generator-rooms*`,
 `level-settings`) and which block it puts on the doorway furthest from the start (`:exit`, a name or
 a list tried in order): the `descent` on levels 1 and 2, the boss's `arena` on level 3 (see
-`src/boss.lisp`), whose boss ends the run. Nothing else differs between levels yet, so the
-monster mix and the kit are the same on each. `*run-depth*` is the level the player is on, from 1,
+`src/boss.lisp`), whose boss ends the run. The kit is the same on each, but the monsters get
+harder going down, by keys in each entry (none are flat stat multipliers):
+
+- built into the level (`level-settings` sets their variables for the generator, so a save keeps
+  them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre or
+  wraith on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
+  0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
+- asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
+  `*sight-range*` and `*hearing-range*` in `sees-player-p`, `:alert` the hunt's `alert-time`,
+  `:pause` the pause after an attack, `:cooldown` the necromancer's and wraith's abilities and the
+  ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+
+Pickups stay budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,
 and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
 try at level 1 being the run seed itself, so `*level-seed*` still reproduces a level 1 and a whole
 run. A reset on a generated level rebuilds the same level, since the run keeps its seed; a new one
@@ -2163,7 +2190,9 @@ to walk the stair, stand at the `descent` connector in `*level-doorways*` and ho
 
 Over seeds 1 to 200 at each size, every exit fit on the first seed and could be reached, and the
 rooms always reached their target (16.1, 19.1, 22.1 on average; 16 to 18 at the lowest size, 22 to 24
-at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run;
+at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run
+(an older count: over run seeds 1 to 20, `*creatures*` held 33.0, 42.3 and 54.3 after the depth
+scaling, against 31.9, 40.3 and 48.9 before it, with 10% elites on level 2 and 19% on level 3);
 pickups 13.2, 15.7, 18.3. A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
 levels 1 and 2 the walk to the exit is 136 m on average against 143 m for the level's longest walk,
 with a median at 99.6% of it and the lowest tenth under 81%: blocks from the start are a good stand-in.

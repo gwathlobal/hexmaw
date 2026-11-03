@@ -116,7 +116,7 @@ if none is up and the player is on a floor to lay the sign on, else throw a gust
       (:gust (release-attack-spell wraith))
       (:tempest
        (cast-spell (find-spell 'tempest) (tempest-point wraith) (vec 0 0 -1) (container wraith) :caster wraith)
-       (setf (getf (cooldowns wraith) :tempest) (ability-cooldown ability))))))
+       (setf (getf (cooldowns wraith) :tempest) (* (ability-cooldown ability) (depth-scale :cooldown)))))))
 
 (define-handler (gale-wraith tick :after) (dt)
   (unless (frozen-p)
