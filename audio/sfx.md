@@ -112,8 +112,8 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | skull-impact | 1 | P | 0.8 | 3 | `impact` spells.lisp:157, `grave-skull` |
 | raise-channel | 1 | P L | 2 | 2 | `update-raise-glow` necromancer.lisp:283-301 (stops on a broken channel) |
 | raise-release | 1 | P | 1.5 | 3 | `raise-corpse` necromancer.lisp:245 |
-| grave-cast | 1 | P | 0.8 | 2 | `cast-grave-circle` necromancer.lisp:254 |
-| grave-circle | 1 | P L | 2.5 | 2 | `place-circle` spells.lisp:604 until it strikes |
+| grave-cast | 1 | P | 1.5 | 3 | `cast-grave-circle` necromancer.lisp:254 |
+| grave-circle | 1 | P L | 4 | 3 | `place-circle` spells.lisp:604 until it strikes |
 | grave-spikes | 1 | P | 1 | 3 | `strike-circle` spells.lisp:523 |
 | skeleton-alert | 1 | P | 0.8 | 3 | alert: skeleton |
 | skeleton-pain | 1 | P | 0.5 | 3 | pain: skeleton |
