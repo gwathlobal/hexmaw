@@ -77,6 +77,9 @@ mixing thread pops, both atomically.")
   (def *listener-direction* "Which way the listener faces.")
   (def *listener-up* "Which way is up for the listener."))
 (defvar *loops-paused* NIL "T while the world is frozen by the game state: loops pause.")
+(defvar *muted* ()
+  "Clips that play nothing for now: one-shots aren't started, loops fall silent while held.
+For finding which sound misbehaves (MUTE).")
 (defvar *ambient-voices* (make-hash-table :test 'eq)
   "Per ambient clip, a vector of the loops held on its nearest sources, nearest first
 (AMBIENT-VOICE).")
@@ -251,7 +254,7 @@ made yet, or without a sound server. A positional one beyond *SOUND-MAX-DISTANCE
 nothing, and with all its voices busy it cuts short the furthest, or doesn't play if it is
 the furthest itself."
   (let ((sfx (find-sound name)))
-    (when (and sfx (not (sfx-loop-p sfx)))
+    (when (and sfx (not (sfx-loop-p sfx)) (not (member name *muted*)))
       (let* ((d2 (if (and at (sfx-space-p sfx) *player*)
                      (let ((ear (location *player*)))
                        (+ (expt (- (vx at) (vx ear)) 2) (expt (- (vy at) (vy ear)) 2) (expt (- (vz at) (vz ear)) 2)))
@@ -289,6 +292,35 @@ it (MOVE-LOOP) and to give it back (STOP-LOOP)."
   "Give a held loop back; it falls silent in the next tick. Returns NIL, for the holder's slot."
   (when voice (setf (voice-held voice) NIL (voice-auditioning voice) NIL))
   NIL)
+
+(defparameter *sound-groups*
+  '((:ambience :torch-crackle :lava-bubble :water-lap :dungeon-drips)
+    (:footsteps :footstep-stone :footstep-snow :step-light :step-armour :step-heavy :step-bone)
+    (:body :jump :land :swim-stroke :splash-in :splash-out :ice-slide :underwater :whirl-wind)
+    (:hits :flesh-hit :bone-hit :flesh-wet)
+    (:menus :menu-hover :menu-select :menu-back :menu-slider))
+  "Names MUTE takes for several clips at once.")
+
+(defun mute (&rest names)
+  "Silence clips NAMES (keywords from the index, or groups of *SOUND-GROUPS*; :MUSIC for the
+music, :EFFECTS for every clip) until UNMUTE. Returns what is muted."
+  (dolist (name names *muted*)
+    (case name
+      (:music (setf (mixed:volume (harmony:segment :music harmony:*server*)) 0.0))
+      (:effects (loop for key being the hash-keys of *sounds* do (pushnew key *muted*)))
+      (T (dolist (clip (or (rest (assoc name *sound-groups*)) (list name)))
+           (pushnew clip *muted*))))))
+
+(defun unmute (&rest names)
+  "Let clips NAMES play again (as MUTE takes them); with none, everything."
+  (unless names
+    (setf names (list* :music *muted*)))
+  (dolist (name names *muted*)
+    (case name
+      (:music (setf (mixed:volume (harmony:segment :music harmony:*server*)) (float (symbol-value '*music-volume*) 0f0)))
+      (:effects (setf *muted* ()))
+      (T (dolist (clip (or (rest (assoc name *sound-groups*)) (list name)))
+           (setf *muted* (remove clip *muted*)))))))
 
 (defun hold-loop (voice name at &optional (volume 1.0))
   "The loop a holder keeps in a slot while it wants one, called every tick: with NAME, VOICE
@@ -380,7 +412,8 @@ asked for, and every loop's state."
         (dolist (voice *loop-voice-list*)
           (let ((hvoice (sfx-voice-voice voice))
                 (on (and (voice-held voice)
-                         (or (not *loops-paused*) (voice-auditioning voice)))))
+                         (or (not *loops-paused*) (voice-auditioning voice))
+                         (not (member (sfx-name (voice-sfx voice)) *muted*)))))
             (cond (on
                    (unless (voice-connected voice)
                      (connect-voice voice)

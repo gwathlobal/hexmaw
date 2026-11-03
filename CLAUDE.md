@@ -818,6 +818,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   holding `ambient-voice`s on the nearest few sources. `audio/sfx.md` says where each clip
   plays and how the hooks differ from its tables.
   To hear one: `tools/hd '(game (play-sound :imp-pain (v+ (location *player*) (vec -3 0 0))))'`.
+  To find which sound misbehaves, `tools/hd '(game (mute :ambience))'` silences a clip or a group of
+  `*sound-groups*` (`:music`, `:effects` for every clip), loops already playing too, and `(unmute)`
+  brings everything back.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
