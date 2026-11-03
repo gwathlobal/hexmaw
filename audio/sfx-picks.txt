@@ -80,3 +80,5 @@ blink-in 12
 blink-out 10
 gib-burst 3
 gib-bounce 12 gain=2
+flesh-hit 2
+bone-hit 3

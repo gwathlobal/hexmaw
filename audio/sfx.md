@@ -146,6 +146,8 @@ No sound per splat or drip: one burst lands 20 to 40 drops.
 | Clip | Tier | Pos | s | Takes | Hook |
 |---|---|---|---|---|---|
 | flesh-wet | 1 | P | 0.5 | 3 | `bleed` gore.lisp:207, once a hit |
+| flesh-hit | 1 | P | 0.5 | 4 | `hurt` creature.lisp, every hit on a creature that bleeds: the blow on the body |
+| bone-hit | 1 | P | 0.5 | 3 | `hurt`, every hit on one that doesn't (the skeleton) |
 | gib-burst | 1 | P | 1 | 3 | `burst-gibs` gore.lisp:524 |
 | bone-shatter | 1 | P | 1 | 3 | `burst-gibs` gore.lisp:524, dry (skeleton) |
 | gib-bounce | 3 | P | 0.5 | 3 | `step-gib` gore.lisp, above 3 m/s, one every 0.3 s at most, at half volume |
@@ -221,7 +223,9 @@ tables above:
 - A spell's clips are `*spell-sounds*` (spells.lisp): its creature cast, flight loop, impact,
   and a circle's loop and strike. A weapon's are `*weapon-sounds*` (sword.lisp).
 - `player-hurt` plays for a blow or a crash, not each tick of a burn or drowning.
-- `flesh-wet` plays with every wound that bleeds, so a sword hit is `blade-hit-flesh` and it.
+- Every hit on a creature plays `flesh-hit` (`bone-hit` on one that doesn't bleed), whatever
+  struck it, and `flesh-wet` with every wound that bleeds: so a sword hit is `blade-hit-flesh` and
+  both. A pain cry plays only when the hit makes it flinch (`pain-roll-p`), as in Doom.
 - The boss's shockwave plays `ogre-land`; its leap is the ogre's.
 - The player's footsteps, strokes and loops are `body-sounds` (player.lisp): a footstep every
   `*footstep-stride*` metres on foot, `footstep-snow` where the floor's tread is snow

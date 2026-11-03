@@ -512,6 +512,8 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
     (return-from hurt))
   (unless (dead creature)
     (decf (health creature) amount)
+    ;; The blow on the body, whatever struck it: a pain cry is the flinch's.
+    (play-sound (if (bleeds creature) :flesh-hit :bone-hit) (location creature))
     (when (bleeds creature)
       (bleed creature amount from))
     (setf (flash creature) *flash-time*

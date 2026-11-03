@@ -1,0 +1,21 @@
+{
+  "prompt": "A heavy blow landing on a walking skeleton: one hard, dry knock of bone being struck, a hollow crack with a short rattle of loose bones. No voice, no flesh, no blade. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-bone-hit.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.5,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793731357,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.48,
+    0.48,
+    0.48
+  ]
+}
