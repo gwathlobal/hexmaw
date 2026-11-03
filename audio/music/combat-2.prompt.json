@@ -1,0 +1,16 @@
+{
+  "prompt": "Combat music for a 1990s first-person dark fantasy game, played while the player fights monsters in a dungeon. Urgent, 130 BPM, harmonic minor. Galloping low strings in triplets, war drums, a fierce horn melody answered by trombones, cymbal swells at the end of each phrase. Sounds like a General MIDI orchestral soundtrack played through a 1990s sound card wavetable: slightly synthetic, punchy, no modern cinematic trailer sound, no electric guitars. Keeps one driving energy all the way through: no intro, no breakdown, no ending or fade-out, as it will loop for as long as the fight lasts.",
+  "prompt_file": "audio/prompts/music-combat-2.txt",
+  "music_length_ms": 120000,
+  "model_id": "music_v1",
+  "force_instrumental": true,
+  "output_format": "pcm_44100",
+  "n": 1,
+  "created": 1793657571,
+  "request_ids": [
+    null
+  ],
+  "seconds": [
+    120.0
+  ]
+}

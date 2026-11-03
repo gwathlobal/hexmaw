@@ -47,7 +47,7 @@ once it is up, so the user can tell the windows apart:
 ```
 
 Builds the game into `dist/` (gitignored), about 200 MB: `hexmaw`, the executable,
-the native libraries it loads (GLFW, evdev), and `pool/` with the assets: `pool/hexmaw/`
+the native libraries it loads (GLFW, evdev, and for sound libmixed, libvorbis and PipeWire's spa; PulseAudio and ALSA come from the system), and `pool/` with the assets: `pool/hexmaw/`
 is `data/` without the blueprints, beside Trial's own pools and the font cache. Copy `dist/`
 anywhere and run `dist/hexmaw`; it needs no SBCL, Quicklisp or source tree. It takes
 about 2.5 minutes and needs `patchelf` (`apt install patchelf`), which Deploy uses on the
@@ -728,13 +728,20 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   screen) over the `victory` splash, and the same button back. Esc and F5 do nothing there.
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
   loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
-  button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
-  variable; an action may also be a closure. Hovering a row gives it the keyboard focus, so
+  button, `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
+  variable, or `(label :slider variable)`, a slider from 0 to 1 (`menu-slider`: the whole row,
+  filled from the left, the percentage at its right, `*menu-slider-step*` a key or wheel notch);
+  an action may also be a closure. Hovering a row gives it the keyboard focus, so
   one row is lit at a time. `panel-width` is the column's width (`*menu-width*`; the slot
   panels' is wider, for their labels). `panel-lines` adds `(label value)` rows of text
   between the title and the buttons (`menu-stat`, `*menu-stat-height*`; the death screen's stats).
+  The panel works out its column's height from its rows, a `*menu-row-gap*` per row and
+  `*menu-slack*`; too short, the last button hangs out of the column, and Alloy sends no click on
+  that strip to it (the death screen's button lost its bottom 18 px, the main menu's 8). After
+  changing row sizes, check no element sticks out of its parent's bounds.
   Settings (`open-settings`, on both menus) covers the menu it came from while
-  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Show
+  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Music and
+  Sound volume (`*music-volume*`, `*sound-volume*`, music.lisp), Show
   FPS (`*show-fps*`, in memory only, kept across reloads) and, in a debug version
   (`*debug-version*`), Debug minimap (`*map-debug*`: the automap shows every block, creature
   markers and block names). The main menu's Debug level and Boss fight are also debug-version only.
@@ -748,6 +755,36 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
   of the screen (T, the default, centres it; the main menu's `*title-menu-top*` keeps it
   off the dagger in its splash).
+- `src/music.lisp`: music, through Harmony (`trial-harmony`; `main` is its `main`, which starts
+  the sound server: PulseAudio here). In play the `music-director` (entered by `add-music` in
+  `setup-scene`, which stages every track's voice) plays `*music-playlist*` at random, the three
+  exploration and five combat loops (assets `music-explore-1` to `-3`, `music-combat-1` to `-5`,
+  `data/music/<name>.ogg`, on Harmony's `:music` mixer), crossfading over `*music-fade-time*` to
+  another (`pick-track`, from `*music-random*`, never the one playing) every `*music-track-time*`
+  (3 min) of play. `*screen-music*` gives the main menu `music-title` (composed, see "Sound and
+  music"), the death screen `music-death` (the first explore-2, a drone) and the victory screen
+  combat-4; a screen's track starts from the top whenever its screen comes up (`restart-track`,
+  which seeks in the mixing thread). `music-wanted` says which track the game state wants and
+  `music-target` how loud: `*music-pause-volume*` under the pause menu, silent on the loading
+  screen, full everywhere else. A playlist track faded out pauses and picks up there when it comes
+  round again. (Music that followed the fighting, combat while a monster hunted the player, was
+  dropped: monsters notice and lose the player every few seconds, so it swapped back and forth.)
+  `*music-volume*` and `*sound-volume*` (Settings, in memory only like Show FPS) are the
+  `:music` and the `:effect` and `:speech` mixers' volumes (`apply-volumes`). **Every track is
+  started once and then only paused and unpaused** (`connected-voice`, `*connected-voices*`, which
+  outlives rebuilds; `harmony:paused-p` is a flag on the voice's unpacker: paused, its source stops
+  decoding and it outputs silence). Never `harmony:stop` and `play` again: `play` only queues the
+  voice's connection for the mixing thread, while `stop` decides on the game thread, from whether
+  it is connected yet, to do nothing. A rebuild that picked a fresh exploration track and then hit a
+  fight at once stopped it before it was connected, and its next start left it silent for good,
+  though it read as playing and its position advanced. To check what really reaches the speakers,
+  record the game's own PulseAudio stream: `parec --monitor-stream=<its sink-input index>` (`pactl
+  list sink-inputs`, application name `trial`). An error in Harmony's mixing thread doesn't reach the
+  runtime-error guard: it waits in the debugger (seen in `./run.sh`'s output), the queue stops, and
+  every later start, stop and `harmony:with-server :synchronize T` hangs (connecting a stereo voice
+  to the `:effect` mixer, a space mixer, does it).
+  To watch it, `(levels (node :music-director (scene +main+)))`, `(current ...)` and `(wanted ...)`. See "Sound and
+  music".
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
@@ -1216,6 +1253,86 @@ grain across its underside.
 
 A re-made PNG is picked up by reloading greybox.lisp (`tools/hd reload src/greybox.lisp`),
 not by `tools/hd reset`.
+
+## Sound and music
+
+Sounds and music are generated with ElevenLabs (a paid plan: the free one refuses music), the
+key in `~/.config/elevenlabs/api_key`. `tools/gen_sfx.py` makes sound effects (0.5 to 30 s,
+about 10 credits a second) and `tools/gen_music.py` instrumental tracks (10 to 300 s, about 12 a
+second), each writing a `.prompt.json` beside its output like `gen_image.py`. Both save `.wav`
+(the API's PCM is stereo) or `.mp3`. Sources and prompts live under `audio/` (`audio/prompts/`,
+`audio/sfx/`, `audio/music/`), as `art/` holds the pictures; what the game plays goes in `data/`.
+
+Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
+minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro
+or ending (`music-explore-1` is `music-explore-loop.txt`), which keeps the loop easy to find, and
+all share the 1990s General MIDI wavetable style line. `tools/make_loop.py` cuts the loop (its
+docstring says how it finds the join): the two ends match in harmony and sound, the first 4 s
+crossfaded from what follows the end, so the loop's end runs on into its start. It writes
+`<name>-loop.wav` beside the source and, through GStreamer (no ffmpeg or sox here), Ogg Vorbis
+into `data/music/`, about a tenth of the size, checking that the Ogg says it holds the same sample
+count (`ogg_length`, its last page's granule position, which the game's decoder trims to). Decoding
+it back through GStreamer is no check: its timestamps are nanoseconds, and at some lengths it
+comes out a sample or two long. Loops come out at whole bars (72.0, 88.6, 60.0, 64.0 s), between 1 and
+2 minutes:
+
+```bash
+tools/gen_music.py audio/music/combat-6.wav -f audio/prompts/music-combat-6.txt -l 120
+tools/make_loop.py audio/music/combat-6.wav data/music/combat-6.ogg --min-loop 50 --loudness -11 --preview /tmp/join.wav
+```
+
+then a `define-asset` for it in music.lisp and its name in `*music-moods*`. `--preview` writes the
+join, 8 s either side, to listen to; `--pick 2` takes the next-best join, and `--start` keeps the
+loop to a later part of a track.
+
+`--loudness` evens out what the generator made: its takes came 5 dB apart (a drum section as
+loud as combat). Exploration loops are -14 LUFS, combat -11, so a fight comes in a little louder;
+a gain that would clip goes through a look-ahead limiter. They were cut with: explore-1
+`--min-loop 100`, explore-3 `--min-loop 90`, combat `--min-loop 50`.
+
+What exploration wants, from listening: an instrument always playing a melody over a moving
+part (explore-1's strings, harp and bell). Drones and pads with little over them (the first
+explore-2 and -3, kept as `*-drone.wav`) were off-putting, and flute, lute and harp arpeggios
+(`music-explore-2-pastoral.txt`) came out pastoral, a meadow rather than a crypt. Asked for
+"unobtrusive", the generator gave drones; "something is always moving: no drones, no long held
+notes on their own" fixed that. explore-3 is take 2 of `music-explore-3.txt` (dulcimer and
+marimba ostinato, horn and clarinet, frame drum; rather jolly, kept for its curious undertone).
+
+**Composed music.** Music can also be written out as notes: `tools/compose_explore.py` and
+`tools/compose_combat.py` are pieces, each a function returning its notes plus its General MIDI
+instruments, and `tools/midi_music.py` (the shared part) writes them as MIDI, renders that through
+GStreamer's FluidSynth element and the TimGM6mb soundfont in `/usr/share/sounds/sf2/` (a small GM
+set, the sound of a 1990s wavetable card: "this is Daggerfall"), and finishes the loop with
+make_loop.py's loudness and encoding. It renders the piece twice and keeps the second pass, which
+opens with the first's reverb tails, so the join needs no crossfade; the beat is chosen so the
+loop is a whole number of samples and of FluidSynth's 64-sample blocks, and the two passes then
+correlate at 1.0000. A dense piece clips inside FluidSynth before the limiter can act, so a piece
+passes its own synth `gain` (combat 0.4, exploration 0.8) and the run warns of any clipped samples.
+No credits, 17 s a render. `compose_title.py` is the main menu's: C minor at 75 BPM, 102 s, a
+horn theme, a choir, the theme on brass over an organ, a solo cello, all over a harp's arpeggio.
+The current explore-2 is `compose_explore.py`: D minor at 80 BPM, horn
+and low clarinet over dulcimer, bass, frame drum, timpani and bell, with no C or F major (a first
+version with them, and an octave higher, was right but too bright for a dungeon):
+
+```bash
+tools/compose_explore.py audio/music/explore-2 data/music/explore-2.ogg --preview /tmp/join.wav
+tools/compose_combat.py audio/music/combat-5 data/music/combat-5.ogg --preview /tmp/join.wav
+tools/compose_title.py audio/music/title data/music/title.ogg --preview /tmp/join.wav
+```
+
+`compose_combat.py` is combat-5, a battle piece after combat-3: E minor at 160 BPM, 64 bars, a
+96 s loop, cellos grinding over contrabasses, drums, taiko and timpani on every beat, brass stabs,
+a tremolo string figure, a horn theme, choir and orchestra hits, the Phrygian F major for menace;
+its four sections come twice, scored anew the second time. At 120 BPM it lacked energy: combat-3,
+asked for 110, plays at about 160 (a tempo estimate from onset autocorrelation finds half of it,
+0.75 s), and once at 160, 32 bars (48 s) was too short.
+
+Harmony picks a decoder by the file's extension, and quickloads its system when it isn't loaded;
+the binary has no Quicklisp, so each format the game plays is a dependency in the .asd
+(`cl-mixed-vorbis` for `.ogg`, `cl-mixed-wav` for `.wav`). A changed `main` class or new
+dependency needs a restart of `./run.sh`. In this version, `trial:seek` on a voice fails
+(`mixed:seek` takes no `:by`); seek its source by frames instead. A vorbis source's
+`frame-count` reads twice the real length, though it ends and loops where it should.
 
 ## Splash screens
 

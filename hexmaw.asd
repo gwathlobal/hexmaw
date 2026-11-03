@@ -38,6 +38,7 @@
                (:file "spear")
                (:file "inventory")
                (:file "menu")
+               (:file "music")
                (:file "map-view")
                (:file "level")
                (:file "kit")
@@ -51,4 +52,6 @@
                :trial-png
                :trial-gltf
                :trial-alloy
+               :trial-harmony
+               :cl-mixed-vorbis
                :sb-bsd-sockets))

@@ -1,6 +1,6 @@
 (in-package #:hexmaw)
 
-(defclass main (trial:main)
+(defclass main (org.shirakumo.fraf.trial.harmony:main)
   ()
   (:default-initargs
    :context '(:title "hexmaw" :width 1280 :height 720)))
@@ -57,6 +57,7 @@
   ;; And the dust an ogre kicks up.
   (preload (make-instance 'upright-fx :animation (find-fx-animation 'ogre-dust)) scene)
   (enter (make-instance 'menu-controller) scene)
+  (add-music scene)
   ;; The automap screen (map-view.lisp), after the player: its camera mustn't become the scene's.
   (add-map-view scene)
   ;; The game draws into one pass and the menus (Alloy) into another; the blend
