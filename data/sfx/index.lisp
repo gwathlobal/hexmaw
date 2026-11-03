@@ -92,7 +92,7 @@
 (:name "raise-channel" :files ("raise-channel.ogg") :seconds (2.25) :space T :loop T)
 (:name "raise-release" :files ("raise-release.ogg") :seconds (1.48) :space T :loop NIL)
 (:name "refused" :files ("refused.ogg") :seconds (0.189) :space NIL :loop NIL)
-(:name "rift-blink" :files ("rift-blink.ogg") :seconds (0.832) :space T :loop NIL)
+(:name "rift-blink" :files ("rift-blink.ogg") :seconds (0.821) :space T :loop NIL)
 (:name "rift-call" :files ("rift-call.ogg") :seconds (1.2) :space T :loop NIL)
 (:name "rift-cast" :files ("rift-cast.ogg") :seconds (0.8) :space T :loop NIL)
 (:name "rift-flight" :files ("rift-flight.ogg") :seconds (2.25) :space T :loop T)
