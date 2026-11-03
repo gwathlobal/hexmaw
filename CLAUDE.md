@@ -1259,6 +1259,11 @@ second), each writing a `.prompt.json` beside its output like `gen_image.py`. Bo
 (the API's PCM is stereo) or `.mp3`. Sources and prompts live under `audio/` (`audio/prompts/`,
 `audio/sfx/`, `audio/music/`), as `art/` holds the pictures; what the game plays goes in `data/`.
 
+`audio/sfx.md` lists every sound effect the game needs: the moment, the code where it starts,
+its clip (prompt `audio/prompts/sfx-<clip>.txt`, ending in a shared style line), duration, takes,
+whether it loops and whether it is positional (a mono file on the `:effect` space mixer) or
+first-person. Work from it and keep it current.
+
 Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
 minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro
 or ending (`music-explore-1` is `music-explore-loop.txt`), which keeps the loop easy to find, and
@@ -1325,7 +1330,7 @@ asked for 110, plays at about 160 (a tempo estimate from onset autocorrelation f
 
 Harmony picks a decoder by the file's extension, and quickloads its system when it isn't loaded;
 the binary has no Quicklisp, so each format the game plays is a dependency in the .asd
-(`cl-mixed-vorbis` for `.ogg`, `cl-mixed-wav` for `.wav`). A changed `main` class or new
+(`cl-mixed-vorbis` for `.ogg`; a `.wav` would need `cl-mixed-wav`, not there yet). A changed `main` class or new
 dependency needs a restart of `./run.sh`. In this version, `trial:seek` on a voice fails
 (`mixed:seek` takes no `:by`); seek its source by frames instead. A vorbis source's
 `frame-count` reads twice the real length, though it ends and loops where it should.

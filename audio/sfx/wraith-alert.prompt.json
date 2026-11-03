@@ -1,0 +1,21 @@
+{
+  "prompt": "A faceless wind spirit sensing the living: a hollow ghostly moan carried on a gust of wind. Retro 1990s first-person fantasy game monster sound effect, a single creature, dry, no words, no music.",
+  "prompt_file": "audio/prompts/sfx-wraith-alert.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 1.5,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793677722,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    1.48,
+    1.48,
+    1.48
+  ]
+}

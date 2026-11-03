@@ -1,0 +1,21 @@
+{
+  "prompt": "A huge ogre leaping into the air: a loud effortful roar and a heavy whoosh. Retro 1990s first-person fantasy game monster sound effect, a single creature, dry, no words, no music.",
+  "prompt_file": "audio/prompts/sfx-ogre-leap.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 0.8,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793677717,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.8,
+    0.8,
+    0.8
+  ]
+}
