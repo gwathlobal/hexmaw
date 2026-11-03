@@ -174,31 +174,65 @@ def even_out(x, rate, loop, window=0.4, most=12.0):
     return x * gain[:, None]
 
 
+def high_pass(x, rate, cutoff):
+    """X through two 2nd-order Butterworth high-pass sections at CUTOFF Hz (24 dB an octave),
+    run forward in time: its ringing follows a transient, never comes before it."""
+    w = 2 * np.pi * cutoff / rate
+    alpha = np.sin(w) / (2 * np.sqrt(0.5))
+    cw = np.cos(w)
+    b = np.array([(1 + cw) / 2, -(1 + cw), (1 + cw) / 2]) / (1 + alpha)
+    a1, a2 = -2 * cw / (1 + alpha), (1 - alpha) / (1 + alpha)
+    y = x.copy()
+    for _ in range(2):
+        for c in range(y.shape[1]):
+            src = y[:, c].tolist()
+            out = [0.0] * len(src)
+            x1 = x2 = y1 = y2 = 0.0
+            for i, v in enumerate(src):
+                o = b[0] * v + b[1] * x1 + b[2] * x2 - a1 * y1 - a2 * y2
+                x2, x1, y2, y1 = x1, v, y1, o
+                out[i] = o
+            y[:, c] = out
+    return y
+
+
 def low_cut(x, rate, cutoff, loop=False):
-    """X with what lies under CUTOFF Hz rolled off, 24 dB an octave, through the FFT. A heavy
-    generated thud is mostly sub-bass, which leveling counts and small speakers don't play: cut,
-    the crunch over it is what gets brought up. The FFT is circular, which a loop wants (it
-    still joins); a one-shot is padded with silence first, or the thump's ringing wraps round
-    and claps at its end."""
-    pad = 0 if loop else int(0.5 * rate)
-    y = np.concatenate([np.zeros((pad, x.shape[1])), x, np.zeros((pad, x.shape[1]))]) if pad else x
-    f = np.fft.rfftfreq(len(y), 1 / rate)
-    response = 1 / np.sqrt(1 + (cutoff / np.maximum(f, 1e-3)) ** 8)
-    y = np.fft.irfft(np.fft.rfft(y, axis=0) * response[:, None], n=len(y), axis=0)
-    return y[pad:pad + len(x)]
+    """X with what lies under CUTOFF Hz rolled off, 24 dB an octave. A heavy generated thud is
+    mostly sub-bass, which leveling counts and small speakers don't play: cut, the crunch over
+    it is what gets brought up. A loop goes through the FFT, which is circular as a loop is (it
+    still joins); a one-shot through HIGH_PASS, given 0.2 s of silence after it to ring out
+    in: through the FFT its ringing came before the thump and clapped."""
+    if loop:
+        f = np.fft.rfftfreq(len(x), 1 / rate)
+        response = 1 / np.sqrt(1 + (cutoff / np.maximum(f, 1e-3)) ** 8)
+        return np.fft.irfft(np.fft.rfft(x, axis=0) * response[:, None], n=len(x), axis=0)
+    return high_pass(np.concatenate([x, np.zeros((int(0.2 * rate), x.shape[1]))]), rate, cutoff)
+
+
+def fade_in(x, rate, seconds=0.003):
+    """X faded in over its first SECONDS: a generated take may start mid-sound, which clicks."""
+    n = max(1, min(len(x), int(seconds * rate)))
+    x = x.copy()
+    x[:n] *= np.linspace(0, 1, n)[:, None]
+    return x
 
 
 def make_clip(path, positional, loop, level, gain, even=False, lowcut=None):
     x, rate = read_wav(path)
     if not loop:
-        x = trim(x, rate)
-        x = fade_out(x, rate)
+        x = fade_in(trim(x, rate), rate)
     if positional and x.shape[1] > 1:
         x = x.mean(1, keepdims=True)
     if lowcut:
         x = low_cut(x, rate, lowcut, loop)
     if even:
         x = even_out(x, rate, loop)
+    if not loop:
+        # Last, so it fades what the filters left too; the end trimmed by the clip's own peak,
+        # since a filter leaves it quieter than TRIM's levels assume.
+        peaks = np.abs(x).max(1)
+        loud = np.nonzero(peaks > peaks.max() * 10 ** (-60 / 20))[0]
+        x = fade_out(x[:loud[-1] + 1] if len(loud) else x, rate)
     x = x * 10 ** ((level + gain - loudest(x, rate)) / 20)
     if loop:
         x, _ = limit(x, rate, CEILING)
