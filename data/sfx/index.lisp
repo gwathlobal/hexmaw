@@ -39,7 +39,7 @@
 (:name "gate-rise" :files ("gate-rise.ogg") :seconds (1.931) :space T :loop NIL)
 (:name "gib-bounce" :files ("gib-bounce.ogg") :seconds (0.343) :space T :loop NIL)
 (:name "gib-burst" :files ("gib-burst.ogg") :seconds (1.0) :space T :loop NIL)
-(:name "grave-cast" :files ("grave-cast.ogg") :seconds (0.8) :space T :loop NIL)
+(:name "grave-cast" :files ("grave-cast.ogg") :seconds (1.394) :space T :loop NIL)
 (:name "grave-circle" :files ("grave-circle.ogg") :seconds (4.0) :space T :loop T)
 (:name "grave-spikes" :files ("grave-spikes.ogg") :seconds (1.0) :space T :loop NIL)
 (:name "gust-cast" :files ("gust-cast.ogg") :seconds (0.717) :space T :loop NIL)
