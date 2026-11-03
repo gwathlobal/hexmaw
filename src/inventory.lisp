@@ -273,7 +273,8 @@ quickslot, swapping it with what was there; a negative STEP goes back. True if i
 (define-handler (inventory-view mouse-scroll) (delta)
   ;; Wheel down (negative delta) for the next kind, up for the previous one.
   (when (and (eq *game-state* :playing) *player* (/= 0 delta))
-    (cycle-quickslot *player* (if (< delta 0) 1 -1))))
+    (when (cycle-quickslot *player* (if (< delta 0) 1 -1))
+      (play-sound :item-drop))))
 
 (define-handler (inventory-view mouse-move) (pos)
   (when (eq *game-state* :inventory)

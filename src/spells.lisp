@@ -144,7 +144,10 @@ projectile about to reach it, so each is asked once.")
     cinder (:flight :cinder-flight :impact :cinder-impact)
     grave-skull (:cast :skull-cast :flight :skull-flight :impact :skull-impact)
     grave-spikes (:circle :grave-circle :strike :grave-spikes)
-    gust (:cast :gust-cast))
+    gust (:cast :gust-cast)
+    rift-pull (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rift-swap (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rift-push (:cast :rift-cast :flight :rift-flight :impact :rift-impact))
   "Each spell's clips (sound.lisp) by event: :CAST where a creature lets it go, :FLIGHT its
 projectile's loop, :IMPACT its burst, :CIRCLE a circle's loop through its wind-up and :STRIKE
 its strike. The player's own casts sound from the hands (player.lisp).")

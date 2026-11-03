@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-129 clips; tier 1: 74 clips, 219 s of takes, tier 2: 29 clips, 72 s of takes, tier 3: 26 clips, 70 s of takes. About 10 credits a second: 361 s, about 3,606 credits for everything.
+139 clips; tier 1: 83 clips, 256 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 404 s, about 4,043 credits for everything.
 
 ## Player: weapons and shield
 
@@ -132,7 +132,16 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | tempest-sign | 1 | P L | 1.5 | 2 | gale-sign tick wraith.lisp:174-197 (also the boss's tornado cast) |
 | gust-cast | 1 | P | 0.8 | 3 | release: the wraith's gust |
 | gust-hit | 2 | P | 0.6 | 2 | `apply-effect :gust` wraith.lisp:204 |
-| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer |
+| riftwalker-alert | 1 | P | 1.2 | 3 | alert: riftwalker |
+| riftwalker-pain | 1 | P | 0.5 | 3 | pain: riftwalker |
+| riftwalker-death | 1 | P | 1.5 | 3 | death: riftwalker |
+| riftwalker-stab | 1 | P | 0.5 | 3 | wind-up: the riftwalker's stab (`creature-sound` riftwalker.lisp, `:stab` only) |
+| rift-cast | 1 | P | 0.8 | 3 | release: a rift (pull, swap or push) |
+| rift-flight | 1 | P L | 2 | 2 | `launch-projectile` spells.lisp, `rift-pull`, `rift-swap`, `rift-push` |
+| rift-impact | 1 | P | 0.8 | 3 | `impact` spells.lisp, a rift |
+| rift-step | 1 | P | 0.8 | 3 | `rift-move` riftwalker.lisp, at both ends: a blink, a pull, a push, a swap, a called ally |
+| rift-call | 2 | P | 1.2 | 2 | `begin-call` riftwalker.lisp, where the ally will step out (it steps out 1 s later) |
+| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |
 | step-heavy | 2 | P | 0.6 | 3 | step: ogre |
 | step-bone | 2 | P | 0.5 | 3 | step: skeleton |
@@ -187,7 +196,7 @@ Loops on many sources: play only the nearest few of each kind.
 | pickup-potion | 2 | 1P | 0.5 | 2 | same, either potion |
 | potion-drink | 2 | 1P | 0.8 | 3 | `use-quickslot` inventory.lisp:71 |
 | item-pick | 3 | 1P | 0.5 | 2 | `mouse-press` inventory.lisp:262, `dragging` set |
-| item-drop | 3 | 1P | 0.5 | 2 | `mouse-release` inventory.lisp:266 |
+| item-drop | 3 | 1P | 0.5 | 2 | `mouse-release` inventory.lisp:266; the wheel swapping the quickslot (`cycle-quickslot`) |
 | bag-open | 3 | 1P | 0.5 | 2 | `open-inventory` inventory.lisp:232 |
 | bag-close | 3 | 1P | 0.5 | 2 | `close-inventory` inventory.lisp:240 |
 
