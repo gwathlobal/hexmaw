@@ -18,6 +18,7 @@
 ;;; Each actor runs all this in its own tick, so its camera can't lag the vortex, and
 ;;; heavier ones (KNOCKBACK-SCALE) are dragged and thrown less.
 
+(defparameter *whirl-cry-gap* 1.0 "Seconds at least between the pain cries of a creature a vortex holds.")
 (defparameter *tornado-volume* 1.5
   "How loud its roar plays: over 1, since it is heard from across a room as it roams.")
 (defparameter *vortex-pull-radius* 6.0 "Metres from the centre line that a vortex drags things from.")
@@ -609,10 +610,15 @@ SCALE of the full speed."
   ;; Its flinch frame, its views cycling: it tumbles.
   (setf (stagger creature) (* 0.6 *stagger-time*)
         (facing creature) (mod (+ (facing creature) (* *whirl-tumble* dt)) #.(float (* 2 pi) 0f0)))
+  (setf (cry-timer creature) (max 0.0 (- (cry-timer creature) dt)))
   (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt (whirl-damage creature))
     (setf (burn-timer creature) timer)
     (when (< 0 due)
-      (burn creature due))))
+      (burn creature due)
+      ;; The wind tears at it: a cry, though BURN makes none, every *WHIRL-CRY-GAP*.
+      (when (and (not (dead creature)) (<= (cry-timer creature) 0))
+        (setf (cry-timer creature) *whirl-cry-gap*)
+        (creature-noise creature :pain)))))
 
 (defun land-creature (creature)
   (let ((m (momentum creature))

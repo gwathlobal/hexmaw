@@ -274,6 +274,8 @@ side being shut too.")
    (step-count :initform 0 :accessor step-count
                :documentation "Footsteps WALK-DISTANCE had come to at the last one (CREATURE-STEPS).")
    (flounder-sound :initform NIL :accessor flounder-sound :documentation "Its splashing loop while afloat, or NIL.")
+   (cry-timer :initform 0.0 :accessor cry-timer
+              :documentation "Seconds before a vortex's burns may make it cry out in pain again.")
    (walk-animation :initarg :walk-animation :initform NIL :accessor walk-animation
                    :documentation "Frame animation of the walk: one cycle per view, in the
 billboard's view order. NIL to glide in the standing pose.")

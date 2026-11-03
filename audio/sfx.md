@@ -226,6 +226,8 @@ tables above:
 - Every hit on a creature plays `flesh-hit` (`bone-hit` on one that doesn't bleed), whatever
   struck it, and `flesh-wet` with every wound that bleeds: so a sword hit is `blade-hit-flesh` and
   both. A pain cry plays only when the hit makes it flinch (`pain-roll-p`), as in Doom.
+  A vortex's burns, which make no flinch, make a creature it holds cry out every `*whirl-cry-gap*`
+  (vortex.lisp).
 - The boss's shockwave plays `ogre-land`; its leap is the ogre's.
 - The player's footsteps, strokes and loops are `body-sounds` (player.lisp): a footstep every
   `*footstep-stride*` metres on foot, `footstep-snow` where the floor's tread is snow
