@@ -9,6 +9,7 @@
     --bg: #14110f; --panel: #1d1916; --panel-2: #26211d; --line: #3a322b;
     --text: #e8dfd3; --muted: #9b8f80; --accent: #e0a040; --accent-ink: #1a1206;
     --ok: #7fbf6a; --warn: #e07a4f; --chosen: #3b2c14;
+    --t2: #5fb3c9; --t3: #b48ce0;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
@@ -37,6 +38,13 @@
   .name { font: 600 14px ui-monospace, "SFMono-Regular", monospace; }
   .badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel-2); color: var(--muted); }
   .badge.t1 { color: var(--accent); }
+  .badge.t2 { color: var(--t2); } .badge.t3 { color: var(--t3); }
+  .clip.t2 { border-left: 3px solid var(--t2); } .clip.t3 { border-left: 3px solid var(--t3); }
+  .tier { display: flex; align-items: baseline; gap: 10px; margin: 34px 0 0; padding: 8px 12px;
+          border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); }
+  .tier b { font-size: 15px; } .tier span { color: var(--muted); font-size: 12px; }
+  .tier.t1 b { color: var(--accent); } .tier.t2 { border-color: var(--t2); } .tier.t2 b { color: var(--t2); }
+  .tier.t3 { border-color: var(--t3); } .tier.t3 b { color: var(--t3); }
   .hook { color: var(--muted); font-size: 12px; flex: 1 1 260px; min-width: 0; }
   .hook code { font-size: 11px; color: #c8b9a6; }
   .actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
@@ -91,6 +99,7 @@
 </main>
 <div id="toast"></div>
 <script>
+const TIER_NAMES = {1: "the core combat loop", 2: "the world feeling alive", 3: "polish"};
 const state = { clips: [], tier: 0, q: "", withTakes: true, focus: null };
 const audio = new Audio();
 let playingKey = null;
@@ -149,7 +158,7 @@ function clipHTML(c) {
     </div>`;
   }).join("");
   const gain = c.pick.gain || 0;
-  return `<div class="clip" tabindex="0" data-clip="${c.name}">
+  return `<div class="clip t${c.tier}" tabindex="0" data-clip="${c.name}">
     <div class="top">
       <span class="name">${c.name}</span>
       <span class="badge t${c.tier}">tier ${c.tier}</span>
@@ -168,9 +177,17 @@ function clipHTML(c) {
 
 function render() {
   const list = $("#list");
-  const visible = state.clips.filter(shown);
-  let html = "", section = null;
+  // Tier by tier, each in the table's order, so the newer tiers stand apart.
+  const visible = state.clips.filter(shown).map((c, i) => [c, i])
+    .sort((a, b) => a[0].tier - b[0].tier || a[1] - b[1]).map(x => x[0]);
+  let html = "", section = null, tier = null;
   for (const c of visible) {
+    if (c.tier !== tier) {
+      tier = c.tier; section = null;
+      const n = visible.filter(x => x.tier === tier).length;
+      const done = visible.filter(x => x.tier === tier && !x.pick.default).length;
+      html += `<div class="tier t${tier}"><b>Tier ${tier}</b><span>${TIER_NAMES[tier] || ""} · ${n} clips, ${done} chosen</span></div>`;
+    }
     if (c.section !== section) { section = c.section; html += `<h2>${esc(section)}</h2>`; }
     html += clipHTML(c);
   }

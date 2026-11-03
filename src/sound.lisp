@@ -273,7 +273,9 @@ it (MOVE-LOOP) and to give it back (STOP-LOOP)."
                        T))))
 
 (defvar *sound-frame-queued* NIL
-  "True while a SOUND-FRAME waits in Harmony's mixing queue.")
+  "The SOUND-CLOCK when a SOUND-FRAME was queued, while it waits in Harmony's mixing queue.")
+(defparameter *sound-frame-lost* 0.25
+  "Seconds after which a SOUND-FRAME still waiting is taken for lost and queued again.")
 
 (defun sound-frame ()
   "Run in Harmony's mixing thread once a tick (SOUND-DIRECTOR): the listener, the one-shots
@@ -338,9 +340,11 @@ asked for, and every loop's state."
     (setf *loops-paused* (not (eq *game-state* :playing)))
     ;; One waiting frame does all the next would: after a level build Trial runs a burst of
     ;; catch-up ticks, more than the mixing queue's 64 jobs.
-    (unless *sound-frame-queued*
-      (setf *sound-frame-queued* T)
-      ;; A full queue (it once filled while a level built) signals here, and the frame
-      ;; never runs to clear the flag: without this, no sound played again.
-      (handler-case (harmony:call-in-mixing-context #'sound-frame harmony:*server* :synchronize NIL)
-        (error () (setf *sound-frame-queued* NIL))))))
+    ;; A frame still waiting after *SOUND-FRAME-LOST* is lost: Harmony's queue can strand a
+    ;; job pushed just as the mixing thread ends its pass, and no sound would play again.
+    (let ((queued *sound-frame-queued*))
+      (unless (and queued (< (- *sound-clock* queued) *sound-frame-lost*))
+        (setf *sound-frame-queued* *sound-clock*)
+        ;; A full queue (it once filled while a level built) signals here.
+        (handler-case (harmony:call-in-mixing-context #'sound-frame harmony:*server* :synchronize NIL)
+          (error () (setf *sound-frame-queued* NIL)))))))
