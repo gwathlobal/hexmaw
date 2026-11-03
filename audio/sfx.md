@@ -124,7 +124,7 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | ogre-pain | 1 | P | 0.7 | 3 | pain: ogre |
 | ogre-death | 1 | P | 2 | 3 | death: ogre |
 | ogre-slam | 1 | P | 1.2 | 3 | `release-attack` ogre.lisp:284 (the maul's impact) |
-| ogre-leap | 1 | P | 0.8 | 3 | `launch-leap` ogre.lisp:260 |
+| ogre-leap | 1 | P | 0.8 | 3 | `try-leap` ogre.lisp, as the crouch starts: the warning |
 | ogre-land | 1 | P | 2 | 3 | `land-leap` ogre.lisp:351 (the quake) |
 | wraith-alert | 1 | P | 1.5 | 3 | alert: gale wraith |
 | wraith-pain | 1 | P | 0.6 | 3 | pain: gale wraith |

@@ -254,6 +254,8 @@ true if there is a landing cell and an arc OGRE's body fits."
              (plan-leap leaper))
     (setf (attack-kind leaper) :leap)
     (start-attack leaper)
+    ;; As it crouches, not as it leaves: the roar is the warning.
+    (creature-noise leaper :leap)
     T))
 
 (defmethod special-attack ((ogre ogre))
@@ -272,7 +274,6 @@ true if there is a landing cell and an arc OGRE's body fits."
           (leap-duration ogre) (float (arc-time (vy from) (vy to) (leap-apex ogre)) 0f0))
     (turn-to ogre (atan (- (vx to) (vx from)) (- (vz from) (vz to))) 100.0)
     (setf *leap-peak* (vy from))
-    (creature-noise ogre :leap)
     (leap-log "leaps from ~,2f ~,2f ~,2f to ~,2f ~,2f ~,2f, apex ~,2f, ~,2f s"
               (vx from) (vy from) (vz from) (vx to) (vy to) (vz to) (leap-apex ogre) (leap-duration ogre))))
 

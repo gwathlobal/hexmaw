@@ -30,7 +30,7 @@ skeleton-rise 3
 ogre-alert 2
 ogre-death 3
 ogre-slam 3 gain=12
-ogre-leap 2
+ogre-leap 2 gain=10
 wraith-pain 2
 wraith-alert 3
 wraith-death 3

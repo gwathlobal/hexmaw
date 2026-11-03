@@ -804,8 +804,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*sound-error*`. The space mixer's axes are the other hand to the game's, so `copy-into`
   mirrors Z (checked by recording: a sound on the player's left plays in the left channel);
   its distances are `*sound-min-distance*` (2 m, full volume) to `*sound-max-distance*` (40 m).
-  A big sound keeps full volume further out (`*clip-min-distances*`: the tornado 8 m, the ogre's
-  landing 6 m), set on its voice as it connects.
+  A big sound keeps full volume further out (`*clip-min-distances*`: the tornado and the ogre's leap
+  roar 8 m, its landing 6 m), set on its voice as it connects.
   A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
   a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
   `hold-loop`, called every tick, keeps a holder's loop in a slot while it is wanted (the
