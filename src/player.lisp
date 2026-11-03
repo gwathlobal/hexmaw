@@ -202,11 +202,6 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
     (T (when (eq *game-state* :playing)
          (select-weapon player key)))))
 
-(define-handler (player mouse-scroll) (delta)
-  ;; Wheel down (negative delta) for the next weapon, up for the previous one.
-  (when (and (eq *game-state* :playing) (/= 0 delta))
-    (cycle-weapon player (if (< delta 0) 1 -1))))
-
 (define-handler (player mouse-move) (old-pos pos)
   (when (mouse-look player)
     (let ((rot (rotation player)))

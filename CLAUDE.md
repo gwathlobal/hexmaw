@@ -699,7 +699,10 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   found item in the quickslot if it holds that kind, then a stack of it in the bag, then the
   quickslot if empty, then an empty cell. Q (`use-quickslot`) drinks one, not at full; when the
   stack runs out the first bag stack of that kind moves in (`refill-quickslot`), and with none
-  the quickslot keeps the kind with a count of 0, dimmed, so the next one found goes back in. I
+  the quickslot keeps the kind with a count of 0, dimmed, so the next one found goes back in. The
+  mouse wheel in play (`cycle-quickslot`) swaps the next kind in `*item-kinds*` that the bag holds
+  into the quickslot through `move-stack` (wheel down the next, up the previous), skipping kinds it
+  holds none of. I
   opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. A left
   drag moves a stack (`move-stack`): into an empty cell, onto its own kind (merging up to the
   limit), swapping with another kind; dropped on nothing it goes back, and a dimmed quickslot
@@ -817,8 +820,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (`swing-frame-times`, `swing-hit-frame`, `swing-reach`, `swing-arc`, `swing-damage`,
   `swing-knockback`, `swing-pain-bonus`), and generics on the sprite which weapon it draws
   for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
-  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon, the mouse wheel cycles
-  (`cycle-weapon`). The weapon slots above the HP bar (`weapon-bar`) show one icon per
+  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon (the mouse wheel is the
+  quickslot's, inventory.lisp). The weapon slots above the HP bar (`weapon-bar`) show one icon per
   weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
@@ -2208,7 +2211,7 @@ Controls: click the window to capture the mouse, Esc to pause (release the mouse
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
 down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
-hands, 3 for the spear and 4 for the tornado (or the mouse wheel to cycle them), left click to
+hands, 3 for the spear and 4 for the tornado, the mouse wheel to change the quickslot's potion, left click to
 attack (swing, thrust, or cast the bolt or the tornado), right button held to raise the shield (sword only; a left
 click while it's up bashes), Q to drink from the quickslot, I for the inventory (drag items with
 the left button; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to quicksave
@@ -2239,4 +2242,4 @@ it. `(select-weapon *player* :4)` then `(player-attack *player*)` casts the play
 `(whirl *player*)` is the vortex holding them. Right after several level builds in a row, time
 runs fast for a few seconds as Trial's fixed step catches up, so a vortex's age is no measure then.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
-the wheel one notch down (next weapon).
+the wheel one notch down (the next kind into the quickslot).
