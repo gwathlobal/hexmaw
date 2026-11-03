@@ -114,14 +114,13 @@ def read_picks():
 
 def write_pick(clip, takes, gain):
     """Set CLIP's line in the picks file, keeping every other line, its own comment and its
-    flags (even)."""
+    flags (even, lowcut=)."""
     lines = PICKS.read_text().splitlines() if PICKS.exists() else []
     entry = f"{clip} {' '.join(map(str, takes))}" + (f" gain={gain:g}" if gain else "")
     for i, line in enumerate(lines):
         words = line.split("#")[0].split()
         if words and words[0] == clip:
-            if "even" in words[1:]:
-                entry += " even"
+            entry += "".join(f" {w}" for w in words[1:] if w == "even" or w.startswith("lowcut="))
             comment = line[line.index("#"):] if "#" in line else ""
             lines[i] = f"{entry:<24}{comment}".rstrip() if comment else entry
             break

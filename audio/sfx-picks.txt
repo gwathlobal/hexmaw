@@ -71,7 +71,7 @@ potion-drink 3
 surface-gasp 2
 drowning 2
 winded 1 gain=-4
-step-heavy 2
+step-heavy 8 lowcut=120
 torch-crackle 4
 pickup-potion 4
 swim-stroke 4

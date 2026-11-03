@@ -12,6 +12,8 @@ tools/gen_sfx.py writes them. audio/sfx-picks.txt says which to use, one line a 
   player-hurt 1 2 4       three variants, played in turn
   ogre-alert 3 gain=-4    take 3, 4 dB quieter than the rest
   tornado 4 even          take 4 with its slow swells evened out (EVEN_OUT): a steady loop
+  step-heavy 8 lowcut=120 take 8 with what is under 120 Hz rolled off (LOW_CUT) before leveling,
+                          so the part speakers play is what gets brought up
 
 A clip with takes and no line uses take 1, so every generated clip is in the game until it
 is chosen. Each take is trimmed of the silence before and after it (not a loop's: it is cut
@@ -64,7 +66,7 @@ def read_table():
 
 
 def read_picks():
-    """{clip: ([takes], gain dB, even)} from audio/sfx-picks.txt."""
+    """{clip: ([takes], gain dB, even, lowcut Hz or None)} from audio/sfx-picks.txt."""
     picks = {}
     if not PICKS.exists():
         return picks
@@ -72,17 +74,19 @@ def read_picks():
         words = line.split("#")[0].split()
         if not words:
             continue
-        takes, gain, even = [], 0.0, False
+        takes, gain, even, lowcut = [], 0.0, False, None
         for w in words[1:]:
             if w.startswith("gain="):
                 gain = float(w[5:])
+            elif w.startswith("lowcut="):
+                lowcut = float(w[7:])
             elif w == "even":
                 even = True
             elif w.isdigit():
                 takes.append(int(w))
             else:
                 sys.exit(f"{PICKS}:{n}: what is {w!r}?")
-        picks[words[0]] = (takes or [1], gain, even)
+        picks[words[0]] = (takes or [1], gain, even, lowcut)
     return picks
 
 
@@ -157,7 +161,16 @@ def even_out(x, rate, loop, window=0.4, most=12.0):
     return x * gain[:, None]
 
 
-def make_clip(path, positional, loop, level, gain, even=False):
+def low_cut(x, rate, cutoff):
+    """X with what lies under CUTOFF Hz rolled off, 24 dB an octave, through the FFT (circular,
+    so a loop still joins). A heavy generated thud is mostly sub-bass, which leveling counts
+    and small speakers don't play: cut, the crunch over it is what gets brought up."""
+    f = np.fft.rfftfreq(len(x), 1 / rate)
+    response = 1 / np.sqrt(1 + (cutoff / np.maximum(f, 1e-3)) ** 8)
+    return np.fft.irfft(np.fft.rfft(x, axis=0) * response[:, None], n=len(x), axis=0)
+
+
+def make_clip(path, positional, loop, level, gain, even=False, lowcut=None):
     x, rate = read_wav(path)
     if not loop:
         x = trim(x, rate)
@@ -165,6 +178,8 @@ def make_clip(path, positional, loop, level, gain, even=False):
         x[-fade:] *= np.linspace(1, 0, fade)[:, None]
     if positional and x.shape[1] > 1:
         x = x.mean(1, keepdims=True)
+    if lowcut:
+        x = low_cut(x, rate, lowcut)
     if even:
         x = even_out(x, rate, loop)
     x = x * 10 ** ((level + gain - loudest(x, rate)) / 20)
@@ -212,7 +227,7 @@ def main():
     for clip in list(args.clips) + list(picks):
         if clip not in table:
             sys.exit(f"{clip}: not in {TABLE}")
-    for clip, (takes, _, _) in picks.items():
+    for clip, (takes, *_) in picks.items():
         for n in takes:
             if not take_path(clip, n):
                 sys.exit(f"{clip}: no take {n} in {TAKES}")
@@ -229,12 +244,12 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for clip in wanted:
         positional, loop = table[clip]
-        takes, gain, even = picks.get(clip, ([1], 0.0, False))
+        takes, gain, even, lowcut = picks.get(clip, ([1], 0.0, False, None))
         paths = [take_path(clip, n) for n in takes]
         if None in paths:
             print(f"{clip}: no takes", file=sys.stderr)
             continue
-        kind = ("positional" if positional else "first-person") + (", loop" if loop else "") + (", evened" if even else "")
+        kind = ("positional" if positional else "first-person") + (", loop" if loop else "") + (", evened" if even else "") + (f", cut under {lowcut:g} Hz" if lowcut else "")
         if args.check:
             print(f"{clip}: takes {' '.join(map(str, takes))}, {kind}")
             continue
@@ -244,7 +259,7 @@ def main():
         files, seconds = [], []
         for i, path in enumerate(paths, 1):
             name = f"{clip}.ogg" if len(paths) == 1 else f"{clip}-{i}.ogg"
-            x, rate = make_clip(path, positional, loop, args.level, gain, even)
+            x, rate = make_clip(path, positional, loop, args.level, gain, even, lowcut)
             encode(x, rate, OUT / name)
             files.append(name)
             seconds.append(round(len(x) / rate, 3))
