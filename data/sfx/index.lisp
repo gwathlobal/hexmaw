@@ -110,7 +110,7 @@
 (:name "splash-out" :files ("splash-out.ogg") :seconds (0.752) :space NIL :loop NIL)
 (:name "step-armour" :files ("step-armour.ogg") :seconds (0.48) :space T :loop NIL)
 (:name "step-bone" :files ("step-bone.ogg") :seconds (0.35) :space T :loop NIL)
-(:name "step-heavy" :files ("step-heavy.ogg") :seconds (0.607) :space T :loop NIL)
+(:name "step-heavy" :files ("step-heavy.ogg") :seconds (0.374) :space T :loop NIL)
 (:name "step-light" :files ("step-light.ogg") :seconds (0.33) :space T :loop NIL)
 (:name "summon-burst" :files ("summon-burst.ogg") :seconds (0.916) :space T :loop NIL)
 (:name "summon-sigil" :files ("summon-sigil.ogg") :seconds (1.86) :space T :loop T)
