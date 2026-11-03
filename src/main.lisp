@@ -29,6 +29,7 @@
         (restore-state new *carried-state*)
         (setf *carried-state* NIL))
       (when (eq *level* :generated)
+        (play-sound :level-gong)
         (setf *level-banner-left* *level-banner-time*))
       (when *boss-fight-start*
         (setf *boss-fight-start* NIL)
@@ -60,6 +61,7 @@
   (preload (make-instance 'upright-fx :animation (find-fx-animation 'ogre-dust)) scene)
   (enter (make-instance 'menu-controller) scene)
   (add-music scene)
+  (add-sounds scene)
   ;; The automap screen (map-view.lisp), after the player: its camera mustn't become the scene's.
   (add-map-view scene)
   ;; The game draws into one pass and the menus (Alloy) into another; the blend

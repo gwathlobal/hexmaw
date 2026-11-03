@@ -96,6 +96,7 @@ lower middle of its splash clear.")
 ;; The mouse moves the keyboard's selection too, so only one row is ever lit.
 (defmethod (setf alloy:hovered-p) :after (value (row menu-focusable))
   (when (and value (not (alloy:focus row)))
+    (play-sound :menu-hover)
     (setf (alloy:focus row) :weak)))
 
 (defclass menu-button (menu-focusable alloy:button) ())
@@ -284,6 +285,9 @@ special variable VARIABLE to T or NIL as it is clicked; or (LABEL :SLIDER VARIAB
 title and its buttons.")
   (:method ((panel menu-panel)) ()))
 
+(defparameter *back-actions* '(resume-game close-settings close-slot-menu)
+  "Menu actions that go back, playing :MENU-BACK rather than :MENU-SELECT.")
+
 (defmethod initialize-instance :after ((panel menu-panel) &key)
   (let* ((buttons (panel-buttons panel))
          (lines (panel-lines panel))
@@ -329,11 +333,17 @@ title and its buttons.")
                   (alloy:represent-with (if (eq action :toggle) 'menu-toggle 'menu-slider)
                                         (make-instance 'alloy:place-data
                                                        :getter (lambda () (symbol-value variable))
-                                                       :setter (lambda (value) (setf (symbol-value variable) value)))
+                                                       :setter (lambda (value)
+                                                                 (unless (eql value (symbol-value variable))
+                                                                   (play-sound (if (eq action :toggle) :menu-select :menu-slider)))
+                                                                 (setf (symbol-value variable) value)))
                                         :text label :layout-parent column :focus-parent focus))
                  (T
                   (let ((button (alloy:represent label 'menu-button :layout-parent column :focus-parent focus)))
                     (alloy:on (alloy:activate button) ()
+                      ;; Going back plays its own sound.
+                      (unless (member action *back-actions*)
+                        (play-sound :menu-select))
                       (queue-menu-action action)))))))
     (alloy:finish-structure panel backdrop focus)))
 
@@ -593,6 +603,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
 
 (defun resume-game ()
   (when (eq *game-state* :paused)
+    (play-sound :menu-back)
     (setf *game-state* :playing
           *save-note* NIL)
     (when *player* (capture-mouse *player*))))
@@ -609,6 +620,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
     (setf *settings-open* T)))
 
 (defun close-settings ()
+  (play-sound :menu-back)
   (setf *settings-open* NIL))
 
 (defun open-save-menu ()
@@ -620,20 +632,21 @@ boss out of the level: a test of the boss, not of the level's last rooms."
     (setf *slot-menu* :load)))
 
 (defun close-slot-menu ()
+  (play-sound :menu-back)
   (setf *slot-menu* NIL))
 
 (defun save-to-slot (slot)
   "The save panel's action: save, then back to the pause menu, which says where it went."
-  (save-game slot)
-  (close-slot-menu))
+  (play-sound (if (save-game slot) :game-saved :refused))
+  (setf *slot-menu* NIL))
 
 (defun quicksave ()
-  (when (member *game-state* '(:playing :paused))
-    (save-game :quick)))
+  (play-sound (if (and (member *game-state* '(:playing :paused)) (save-game :quick)) :game-saved :refused)))
 
 (defun quickload ()
-  (when (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
-    (load-game :quick)))
+  (if (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
+      (load-game :quick)
+      (play-sound :refused)))
 
 (defun reset-run ()
   "Put the level back as it was built, in place: the player at the spawn point, every

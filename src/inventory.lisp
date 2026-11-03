@@ -246,6 +246,7 @@ quickslot, swapping it with what was there; a negative STEP goes back. True if i
 
 (defun open-inventory ()
   (when (and (eq *game-state* :playing) *player*)
+    (play-sound :bag-open)
     (setf *game-state* :inventory)
     (release-mouse *player*)
     ;; No move has told it yet where the released pointer is.
@@ -257,6 +258,7 @@ quickslot, swapping it with what was there; a negative STEP goes back. True if i
     ;; A drag in hand goes back where it was: its stack never left that slot.
     (when *inventory-view*
       (setf (dragging *inventory-view*) NIL))
+    (play-sound :bag-close)
     (setf *game-state* :playing)
     (when *player* (capture-mouse *player*))))
 
@@ -264,13 +266,15 @@ quickslot, swapping it with what was there; a negative STEP goes back. True if i
   (case *game-state*
     (:playing (case key
                 (:i (open-inventory))
-                (:q (when *player* (use-quickslot *player*)))))
+                (:q (when *player*
+                      (play-sound (if (use-quickslot *player*) :potion-drink :refused))))))
     (:inventory (when (eq key :i) (close-inventory)))))
 
 (define-handler (inventory-view mouse-scroll) (delta)
   ;; Wheel down (negative delta) for the next kind, up for the previous one.
   (when (and (eq *game-state* :playing) *player* (/= 0 delta))
-    (cycle-quickslot *player* (if (< delta 0) 1 -1))))
+    (when (cycle-quickslot *player* (if (< delta 0) 1 -1))
+      (play-sound :item-drop))))
 
 (define-handler (inventory-view mouse-move) (pos)
   (when (eq *game-state* :inventory)
@@ -281,6 +285,7 @@ quickslot, swapping it with what was there; a negative STEP goes back. True if i
     (v<- (pointer inventory-view) pos)
     (let ((slot (slot-at (vx pos) (vy pos))))
       (when (and slot (slot-stack *player* slot))
+        (play-sound :item-pick)
         (setf (dragging inventory-view) slot)))))
 
 (define-handler (inventory-view mouse-release) (button pos)
@@ -289,6 +294,7 @@ quickslot, swapping it with what was there; a negative STEP goes back. True if i
           (to (slot-at (vx pos) (vy pos))))
       (setf (dragging inventory-view) NIL)
       (when (eq *game-state* :inventory)
+        (play-sound :item-drop)
         (cond (to
                (move-stack *player* from to))
               ;; Dropped on nothing a stack goes back, but a remembered kind is forgotten.

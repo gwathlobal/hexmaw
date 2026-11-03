@@ -1,0 +1,21 @@
+{
+  "prompt": "A lean masked assassin dying: a choked gasp behind a metal mask, then a light body falling and a brass mask clattering on stone, a faint glassy shimmer fading out. Retro 1990s first-person fantasy game monster sound effect, a single creature, dry, no words, no music.",
+  "prompt_file": "audio/prompts/sfx-riftwalker-death.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 1.5,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793747673,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    1.48,
+    1.48,
+    1.48
+  ]
+}

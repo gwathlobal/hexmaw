@@ -51,13 +51,24 @@ upstairs."
     (add-torch container (- x1 0.5) 2.2 4)
     (add-torch container (+ x0 0.5) (+ upper 2.0) 5)
     (add-torch container (- shaft 0.5) 4.5 6)
-    (spawn-creature (make-instance 'imp :location (vec 14.5 upper 5) :facing (/ pi 2)) container)))
+    (unless *debug-level-monsters*
+      (spawn-creature (make-instance 'imp :location (vec 14.5 upper 5) :facing (/ pi 2)) container))))
+
+(defparameter *debug-level-monsters* '(imp riftwalker)
+  "The kinds of monster the debug level's hall keeps, or NIL for all of them. With a list, the
+annex's imp, the blocks' monsters and the arena's boss stay out too.")
+
+(defun debug-spawn (creature container)
+  "Spawn CREATURE in the debug level's hall, if *DEBUG-LEVEL-MONSTERS* lets its kind in."
+  (when (or (null *debug-level-monsters*) (member (type-of creature) *debug-level-monsters*))
+    (spawn-creature creature container)))
 
 (defun clear-level ()
   "Forget the level last built, ahead of the next."
   (setf (fill-pointer *solids*) 0
         (fill-pointer *creatures*) 0
         (fill-pointer *lamps*) 0
+        (fill-pointer *torch-points*) 0
         (fill-pointer *vortices*) 0
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
@@ -127,7 +138,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (add-box container 1.5 0 z0  (+ 1.5 w) 3 z1 :surface :wall)
     (add-torch container 1.0 2.2 16)
     ;; Its one doorway faces back up the corridor; nothing else to plug.
-    (attach-block 'arena container "connector_south" :at (vec 0 0 z1) :facing :north)))
+    (attach-block 'arena container "connector_south" :at (vec 0 0 z1) :facing :north
+                                     :spawns (null *debug-level-monsters*))))
 
 (defun build-test-level (container)
   (let ((h 4.0) (w 0.5))
@@ -166,22 +178,22 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (loop for (x z) in '((-9.5 0) (9.5 0) (0 9.5) (-5 -9.5) (5 -9.5))
           do (add-torch container x 2.4 z))
     ;; An imp in the middle of the hall, facing the spawn point.
-    (spawn-creature (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
+    (debug-spawn (make-instance 'imp :location (vec 0 0 -3) :facing pi) container)
     ;; An acolyte up on the platform, facing the spawn point.
-    (spawn-creature (make-instance 'acolyte :location (vec 7.5 1.2 -7.5) :facing -2.6) container)
+    (debug-spawn (make-instance 'acolyte :location (vec 7.5 1.2 -7.5) :facing -2.6) container)
     ;; A knight by the west pillars, its shield toward the spawn point.
-    (spawn-creature (make-instance 'knight :location (vec -6 0 0) :facing pi) container)
+    (debug-spawn (make-instance 'knight :location (vec -6 0 0) :facing pi) container)
     ;; A harpy in the south-east of the hall; it rises to its hover from the floor.
-    (spawn-creature (make-instance 'harpy :location (vec 6 0 7) :facing (- (/ pi 2))) container)
+    (debug-spawn (make-instance 'harpy :location (vec 6 0 7) :facing (- (/ pi 2))) container)
     ;; A necromancer at the back of the hall, behind the imp, facing the spawn point.
-    (spawn-creature (make-instance 'necromancer :location (vec -2 0 -8) :facing pi) container)
+    (debug-spawn (make-instance 'necromancer :location (vec -2 0 -8) :facing pi) container)
     ;; A gale wraith beside it, floating up from the floor.
-    (spawn-creature (make-instance 'gale-wraith :location (vec 3 0 -8) :facing pi) container)
+    (debug-spawn (make-instance 'gale-wraith :location (vec 3 0 -8) :facing pi) container)
     ;; A riftwalker by the west wall, north of the knight, with the hall's others to call.
-    (spawn-creature (make-instance 'riftwalker :location (vec -7 0 -5) :facing (/ pi 2)) container)
+    (debug-spawn (make-instance 'riftwalker :location (vec -7 0 -5) :facing (/ pi 2)) container)
     ;; An ogre in the east of the hall, by the annex doorway, which it just fits through;
     ;; the annex's stair shaft and the platform's steps test where it can follow.
-    (spawn-creature (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
+    (debug-spawn (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2
@@ -200,12 +212,14 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
       ;; The shrine block (data/blueprints/shrine.txt) at the corridor's end, attached by
       ;; its south doorway. West of it the pool (pool.txt), deep water under a ledge,
       ;; through its east doorway; their other doorways are plugged.
-      (let* ((shrine (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south))
+      (let* ((shrine (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south
+                                                :spawns (null *debug-level-monsters*)))
              (west (find "connector_west" shrine :key #'connector-name :test #'string-equal)))
         (dolist (c shrine)
           (unless (member (connector-name c) '("connector_south" "connector_west") :test #'string-equal)
             (seal-connector container c)))
-        (dolist (c (attach-block 'pool container "connector_east" :at (connector-location west) :facing :east))
+        (dolist (c (attach-block 'pool container "connector_east" :at (connector-location west) :facing :east
+                                      :spawns (null *debug-level-monsters*)))
           (if (string-equal (connector-name c) "connector_east")
               ;; Two doorways that meet share one portal.
               (drop-portal c)

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sfx-picker",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["tools/sfx_picker.py"],
+      "port": 8765
+    }
+  ]
+}

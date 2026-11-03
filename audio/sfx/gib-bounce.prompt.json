@@ -1,0 +1,21 @@
+{
+  "prompt": "A small piece of flesh landing on stone: a soft wet slap. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-gib-bounce.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.5,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793714105,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.48,
+    0.48,
+    0.48
+  ]
+}

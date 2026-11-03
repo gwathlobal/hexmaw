@@ -278,6 +278,11 @@ WALK-ANIMATION; NIL to attack in the standing pose.")
 side being shut too.")
    (walk-distance :initform 0.0 :accessor walk-distance
                   :documentation "Metres walked so far; picks the walk animation's frame.")
+   (step-count :initform 0 :accessor step-count
+               :documentation "Footsteps WALK-DISTANCE had come to at the last one (CREATURE-STEPS).")
+   (flounder-sound :initform NIL :accessor flounder-sound :documentation "Its splashing loop while afloat, or NIL.")
+   (cry-timer :initform 0.0 :accessor cry-timer
+              :documentation "Seconds before a vortex's burns may make it cry out in pain again.")
    (walk-animation :initarg :walk-animation :initform NIL :accessor walk-animation
                    :documentation "Frame animation of the walk: one cycle per view, in the
 billboard's view order. NIL to glide in the standing pose.")
@@ -468,6 +473,40 @@ pain roll says (a flyer's dive, flyer.lisp).")
 summoned mid-game, or a boss (boss.lisp).")
   (:method ((creature creature)) (summoned creature)))
 
+(defgeneric creature-sound (creature event)
+  (:documentation "The clip (sound.lisp) CREATURE plays for EVENT: :ALERT on noticing the
+player, :PAIN on a flinch, :DEATH, :WINDUP as an attack starts and :RELEASE on its hit frame;
+a flyer's :FLAP, :DIVE and :CRASH (flyer.lisp), a leaper's :LEAP (ogre.lisp). NIL for none.
+DEFINE-CREATURE-SOUNDS gives a class its own.")
+  (:method ((creature creature) event)
+    (declare (ignore event))
+    NIL))
+
+(defmacro define-creature-sounds (class &rest clips)
+  "CLASS's clips by event, a plist (see CREATURE-SOUND); its subclasses (its boss) share them."
+  `(defmethod creature-sound ((creature ,class) event)
+     (getf ',clips event)))
+
+(defun creature-noise (creature event &optional (volume 1.0))
+  "Play CREATURE's clip for EVENT where it stands."
+  (let ((clip (creature-sound creature event)))
+    (when clip (play-sound clip (location creature) volume))))
+
+(defparameter *creature-step-volume* 0.9)
+(defparameter *creature-step-reach* 25.0 "Metres from the player within which a creature's footsteps play.")
+
+(defun creature-steps (creature)
+  "A footstep (its :STEP clip) every two walk frames, from the distance walked: two to a cycle."
+  (let ((n (floor (walk-distance creature) (* 2 (stride creature)))))
+    (unless (= n (step-count creature))
+      (when (and (< (step-count creature) n) (creature-walking-p creature) (not (afloat-p creature))
+                 *player* (< (vdistance (location creature) (location *player*)) *creature-step-reach*))
+        (creature-noise creature :step *creature-step-volume*))
+      (setf (step-count creature) n))))
+
+(defmethod leave :after ((creature creature) container)
+  (setf (flounder-sound creature) (stop-loop (flounder-sound creature))))
+
 (defgeneric dormant-p (creature)
   (:documentation "True while CREATURE sleeps: it neither thinks nor takes harm (a boss
 before its arena is sealed, boss.lisp). A hit only flashes it.")
@@ -487,6 +526,8 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
     (return-from hurt))
   (unless (dead creature)
     (decf (health creature) amount)
+    ;; The blow on the body, whatever struck it: a pain cry is the flinch's.
+    (play-sound (if (bleeds creature) :flesh-hit :bone-hit) (location creature))
     (when (bleeds creature)
       (bleed creature amount from))
     (setf (flash creature) *flash-time*
@@ -497,9 +538,12 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
       ;; Stop (a hit breaks off an attack too), and plan afresh once the flinch is over:
       ;; knockback moves it off its path.
       (setf (stagger creature) *stagger-time*)
-      (stop-walking creature *hurt-pause*))
+      (stop-walking creature *hurt-pause*)
+      (when (< 0 (health creature))
+        (creature-noise creature :pain)))
     (hit-stop)
     (when (<= (health creature) 0)
+      (creature-noise creature :death)
       (cond ((gib-p creature amount)
              (tear-apart creature :from from))
             ((bleeds creature)
@@ -525,6 +569,7 @@ flinch, blood or hit-stop, which would freeze the game every burn."
           (alert creature) (alert-time))
     (when (<= (health creature) 0)
       (stop-walking creature)
+      (creature-noise creature :death)
       (setf (dead creature) 0.0))))
 
 (defun escape-liquid (creature)
@@ -887,7 +932,8 @@ it can do something about. The ogre, which leaps down, looks further.")
       (when (<= (alert creature) 0)
         ;; Just noticed: cut a wander's pause short, and turn a wander's walk into a chase.
         (setf (idle-timer creature) (min (idle-timer creature) *chase-pause*)
-              (replan-timer creature) 0.0))
+              (replan-timer creature) 0.0)
+        (creature-noise creature :alert))
       (setf (alert creature) (alert-time)))))
 
 (defun player-bearing (point)
@@ -1068,7 +1114,8 @@ another; with none, it waits off."
   (setf (brain creature) :attacking
         (path creature) ()
         (attack-time creature) 0.0
-        (attack-pending creature) T))
+        (attack-pending creature) T)
+  (creature-noise creature :windup))
 
 (defun chase (creature)
   "Set off along a fresh path toward the player."
@@ -1241,8 +1288,9 @@ with both taken it doesn't. True if it set off."
                       (+ (vz loc) (- (* out (cos yaw))) (* side (sin yaw)))))
          (aim (v- (vec (vx feet) (+ (vy feet) *cast-aim-height*) (vz feet)) origin)))
     (when (< 1f-4 (vlength aim))
-      (cast-spell (find-spell (attack-spell creature)) origin (nvunit aim) (container creature)
-                  :caster creature))))
+      (let ((spell (find-spell (attack-spell creature))))
+        (play-sound (spell-sound spell :cast) origin)
+        (cast-spell spell origin (nvunit aim) (container creature) :caster creature)))))
 
 (defgeneric release-attack (creature)
   (:documentation "Land CREATURE's attack, on its ATTACK-HIT-FRAME: cast its spell, or
@@ -1277,6 +1325,7 @@ strike the player if still in reach and in front of it.")
           (move-creature creature (* step (sin yaw)) (- (* step (cos yaw))) (step-height creature)))))
     (when (and (attack-pending creature) (<= (attack-hit-time creature) time))
       (setf (attack-pending creature) NIL)
+      (creature-noise creature :release)
       (release-attack creature))
     (when (<= (reduce #'+ times) time)
       (stop-walking creature (* (attack-pause creature) (depth-scale :pause))))))
@@ -1545,6 +1594,8 @@ after the flinch, block and attack.")
             (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt damage)
               (setf (burn-timer creature) timer)
               (when (< 0 due)
+                (unless afloat
+                  (play-sound :creature-sizzle loc))
                 (burn creature due)))
             (when (and (< 0 damage) (not afloat) (not (dead creature)) (eq (brain creature) :idle))
               (escape-liquid creature))
@@ -1560,6 +1611,11 @@ after the flinch, block and attack.")
                        (think creature dt)))))))
         (unless held
           (keep-height creature dt))
+        (creature-steps creature)
+        (setf (flounder-sound creature)
+              (hold-loop (flounder-sound creature)
+                         (and (not held) (not (dead creature)) (afloat-p creature) :flounder)
+                         (location creature)))
         (when (dead creature)
           (incf (dead creature) dt)
           (when (and *revive-time* (eq *level* :test) (not (stays-dead-p creature))
@@ -1614,6 +1670,9 @@ after the flinch, block and attack.")
    (pain-chance :initform 30)
    (max-health :initform 30)))
 
+(define-creature-sounds imp
+  :alert :imp-alert :pain :imp-pain :death :imp-death :windup :imp-claw :step :step-light)
+
 ;;; The acolyte: a robed caster that keeps its distance and throws cinders (spells.lisp).
 ;;; It has no walk: it glides in the standing pose, the robe hiding its feet.
 
@@ -1659,6 +1718,9 @@ after the flinch, block and attack.")
    (wander-radius :initform 2.0)
    (pain-chance :initform 25)
    (max-health :initform 24)))
+
+(define-creature-sounds acolyte
+  :alert :acolyte-alert :pain :acolyte-pain :death :acolyte-death :windup :acolyte-cast)
 
 ;;; The knight: slow, in heavy plate, behind a tower shield from its feet to its helm.
 ;;; The shield turns spells away from the front and front-quarter views (and reflects
@@ -1727,3 +1789,6 @@ after the flinch, block and attack.")
    ;; Plate and a steady stance: most blows don't stagger it.
    (pain-chance :initform 8)
    (max-health :initform 60)))
+
+(define-creature-sounds knight
+  :alert :knight-alert :pain :knight-pain :death :knight-death :windup :knight-mace :step :step-armour)

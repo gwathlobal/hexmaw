@@ -9,7 +9,9 @@ The format follows the output's extension: .wav (16-bit stereo PCM at --rate, wr
 or .mp3 (44.1 kHz, 128 kbit/s). With -n 3 the clips go to <stem>-1.wav, <stem>-2.wav,
 <stem>-3.wav, one request each. Existing files are never overwritten unless --force is
 given. Next to the output, <stem>.prompt.json records the prompt and options, so a good
-result can be reproduced or varied.
+result can be reproduced or varied. --add makes more takes of a clip that has some: they are
+numbered on from the last one (<stem>-4.wav, ...), recorded in <stem>-4.prompt.json, and the
+earlier takes and their record stay as they are.
 
 --duration is 0.5 to 30 seconds; without it the model picks one. --influence (0 to 1,
 default 0.3) is how literally it takes the prompt: higher follows it closer, lower varies
@@ -47,7 +49,12 @@ def api_key():
     return key
 
 
-def output_paths(out, n):
+def output_paths(out, n, add=False):
+    if add:
+        have = [int(p.stem[len(out.stem) + 1:]) for p in out.parent.glob(f"{out.stem}-*{out.suffix}")
+                if p.stem[len(out.stem) + 1:].isdigit()]
+        first = max(have, default=1 if out.exists() else 0) + 1
+        return [out.with_name(f"{out.stem}-{i}{out.suffix}") for i in range(first, first + n)]
     if n == 1:
         return [out]
     return [out.with_name(f"{out.stem}-{i}{out.suffix}") for i in range(1, n + 1)]
@@ -100,6 +107,7 @@ def main():
     ap.add_argument("--model", default="eleven_text_to_sound_v2")
     ap.add_argument("-n", type=int, default=1, help="number of clips")
     ap.add_argument("--force", action="store_true", help="overwrite existing outputs")
+    ap.add_argument("--add", action="store_true", help="number new takes after the existing ones")
     ap.add_argument("--dry-run", action="store_true", help="print the request, send nothing")
     args = ap.parse_args()
 
@@ -109,7 +117,7 @@ def main():
         ap.error("--duration is 0.5 to 30 seconds")
     if not 0 <= args.influence <= 1:
         ap.error("--influence is 0 to 1")
-    outs = output_paths(args.out, args.n)
+    outs = output_paths(args.out, args.n, args.add)
     taken = [p for p in outs if p.exists()]
     if taken and not args.force:
         ap.error(f"{taken[0]} exists (pass --force to overwrite)")
@@ -122,7 +130,7 @@ def main():
     if args.duration is not None:
         body["duration_seconds"] = args.duration
     if args.dry_run:
-        print(f"POST {url}, {args.n} time(s)")
+        print(f"POST {url}, {args.n} time(s), to {', '.join(p.name for p in outs)}")
         print(json.dumps(body, indent=2))
         sys.exit()
 
@@ -136,7 +144,8 @@ def main():
         lengths.append(round(save(path, data, args.rate), 2))
         ids.append(request_id)
         print(path)
-    meta_path = args.out.with_name(f"{args.out.stem}.prompt.json")
+    meta_path = (outs[0] if args.add else args.out).with_name(
+        f"{(outs[0] if args.add else args.out).stem}.prompt.json")
     meta_path.write_text(json.dumps({
         "prompt": text, "prompt_file": str(args.prompt_file) if args.prompt_file else None,
         **{k: v for k, v in body.items() if k != "text"}, "output_format": fmt, "n": args.n,

@@ -1,0 +1,23 @@
+{
+  "prompt": "A grown man grunting in pain as a blow hits him: a short pained exhale through the teeth, no words. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-player-hurt.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 0.5,
+  "output_format": "pcm_44100",
+  "n": 4,
+  "created": 1793677637,
+  "request_ids": [
+    null,
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.48,
+    0.48,
+    0.48,
+    0.48
+  ]
+}

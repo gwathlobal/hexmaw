@@ -1,0 +1,94 @@
+# The takes the game plays, one line a clip: CLIP TAKE... [gain=DB]. Several takes are
+# variants, played in turn. A clip with takes and no line here plays take 1.
+# tools/make_sfx.py converts them into data/sfx/.
+
+player-hurt 1 2 3 4
+shield-raise 3          # take 1 is nearly silent
+sword-swing 3 gain=-1
+spear-thrust 3
+blade-hit-flesh 2
+blade-hit-bone 2
+shield-guard-break 3
+shield-bash 3
+bash-hit 2
+bash-glance 3
+cast-fizzle 3
+tornado 4 gain=8 even
+imp-pain 3
+acolyte-pain 3
+acolyte-death 3
+knight-pain 2
+knight-death 2
+knight-mace 3
+harpy-alert 2
+harpy-pain 2
+harpy-flap 1
+harpy-dive 3
+skull-cast 3
+skeleton-chop 3
+skeleton-rise 3
+ogre-alert 2
+ogre-death 3
+ogre-slam 3 gain=12
+ogre-leap 2 gain=10
+wraith-pain 2
+wraith-alert 3
+wraith-death 3
+tempest-sign 2
+gust-cast 2
+flesh-wet 2
+bone-shatter 3
+gate-drop 2
+boss-enrage 2
+cinder-flight 3
+shield-deflect 4
+draw-magic 6
+draw-sword 4
+draw-spear 2
+bolt-impact 5
+cinder-impact 4
+necro-pain 7
+skull-impact 5
+imp-claw 8
+acolyte-alert 9
+knight-alert 4
+ogre-land 5 gain=12
+bolt-cast 1
+bolt-flight 1
+footstep-snow 4
+ice-slide 1
+splash-out 2
+lava-step 2
+gate-rise 2
+footstep-stone 2
+gust-hit 2
+step-armour 3
+step-bone 3
+creature-sizzle 2
+summon-burst 2
+pickup-herbs 1
+potion-drink 3
+surface-gasp 2
+drowning 2
+winded 1 gain=-4
+step-heavy 8 lowcut=120
+torch-crackle 4
+pickup-potion 4
+swim-stroke 4
+climb-out 5
+blink-in 12
+blink-out 10
+gib-burst 3
+gib-bounce 12 gain=2
+flesh-hit 2
+bone-hit 3
+grave-circle 7
+grave-cast 4
+riftwalker-alert 1
+riftwalker-death 4
+riftwalker-stab 1
+riftwalker-pain 4
+rift-cast 4
+rift-flight 3
+rift-impact 6
+rift-blink 14

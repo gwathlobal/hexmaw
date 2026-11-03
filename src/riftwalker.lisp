@@ -129,6 +129,14 @@
                :documentation "Where on the floor the ally it is calling will step out.")))
 
 ;; A melee hunter, but its casts turn after the player until they leave, as a caster's do.
+(define-creature-sounds riftwalker
+  :alert :riftwalker-alert :pain :riftwalker-pain :death :riftwalker-death :step :step-light)
+
+;; Only the stab has a wind-up of its own; the rifts sound as they leave (*SPELL-SOUNDS*).
+(defmethod creature-sound ((riftwalker riftwalker) (event (eql :windup)))
+  (when (eq :stab (ability-name (current-ability riftwalker)))
+    :riftwalker-stab))
+
 (defmethod ranged-p ((riftwalker riftwalker))
   (and (eq (brain riftwalker) :attacking)
        (not (eq :stab (ability-name (current-ability riftwalker))))))
@@ -202,8 +210,10 @@ for the player, whose view flashes instead: the burst would stand in front of th
 (defun rift-move (actor to &key yaw (container (and *player* (container *player*))))
   "Step ACTOR through a rift to TO, a flash where it leaves and where it arrives."
   (rift-flash actor container)
+  (play-sound :rift-blink (vcopy (body-feet actor)))
   (teleport-actor actor to :yaw yaw)
-  (rift-flash actor container))
+  (rift-flash actor container)
+  (play-sound :rift-blink (vcopy (body-feet actor))))
 
 ;;; The rifts' effects, on the player, and on a creature one strikes once a knight's shield has
 ;;; sent it back as the knight's own.
@@ -357,6 +367,7 @@ it would step out on; or NIL."
   (setf (call-target riftwalker) ally)
   (v<- (call-point riftwalker) spot)
   (start-ability riftwalker :call)
+  (play-sound :rift-call spot)
   (enter (make-instance 'rift-sign :caster riftwalker :centre (vcopy spot) :location (vcopy spot)
                                    :animation (find-fx-animation 'rift-sign))
          (container riftwalker)))

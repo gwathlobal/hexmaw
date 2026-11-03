@@ -64,6 +64,14 @@ dive in, a shove), as an exponential.")
 (defparameter *death-roll-time* 0.7 "Seconds the view takes to roll over.")
 (defparameter *death-panel-delay* 1.2 "Seconds from death to the death screen (menu.lisp).")
 (defparameter *inventory-size* 20 "Cells in the player's inventory (inventory.lisp).")
+(defparameter *footstep-stride* 2.0 "Metres walked on foot from one footstep to the next.")
+(defparameter *footstep-volume* 0.5)
+(defparameter *swim-stroke-stride* 2.2 "Metres swum from one stroke to the next.")
+(defparameter *land-sound-speed* 3.0 "Metres per second a landing must come down at to be heard.")
+(defparameter *splash-gap* 0.6
+  "Seconds after a splash before the next: wading at the waist goes in and out of the water.")
+(defparameter *gasp-breath* 0.5 "Fraction of *BREATH-TIME* left, under which surfacing gasps.")
+(defparameter *ice-slide-speed* 6.0 "Metres per second at which the slide on ice is at full volume.")
 
 (defclass player (fps-camera whirlable)
   ((name :initform :player)
@@ -135,7 +143,14 @@ blow knocked it aside (BREAK-GUARD).")
    (killed-by :initform NIL :accessor killed-by
               :documentation "What killed the player: a creature's type, :LAVA or :DROWNING.")
    (death-time :initform 0.0 :accessor death-time
-               :documentation "Seconds since the player died (*GAME-STATE* :DEAD).")))
+               :documentation "Seconds since the player died (*GAME-STATE* :DEAD).")
+   (stride-left :initform 0.0 :accessor stride-left
+                :documentation "Metres to walk or swim before the next footstep or stroke.")
+   (splash-timer :initform 0.0 :accessor splash-timer :documentation "Seconds before a splash may sound again.")
+   (breath-under :initform NIL :accessor breath-under :documentation "True if the eye was under water last tick.")
+   (slide-sound :initform NIL :accessor slide-sound :documentation "The loop of a slide on ice, or NIL.")
+   (underwater-sound :initform NIL :accessor underwater-sound :documentation "The loop heard under water, or NIL.")
+   (whirl-sound :initform NIL :accessor whirl-sound :documentation "The wind's loop while a vortex holds the player, or NIL.")))
 
 ;; Trial's camera has no roll; the player's view rolls as it falls dead (FALL-DEAD).
 (defmethod project-view ((camera player))
@@ -167,6 +182,8 @@ blow knocked it aside (BREAK-GUARD).")
 spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it was cast."
   (let* ((spell (find-spell name))
          (cost (spell-cost spell)))
+    (when (and (<= (cast-timer player) 0) (< (mana player) cost))
+      (play-sound :cast-fizzle))
     (when (and (<= (cast-timer player) 0) (<= cost (mana player)))
       (decf (mana player) cost)
       (setf (cast-timer player) *cast-cooldown*
@@ -178,6 +195,7 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
   "Fire the pending spell from just below the eye toward where the player looks now."
   (let* ((dir (look-direction player))
          (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
+    (play-sound (if (eq (spell-name (pending-spell player)) 'tempest) :tempest-cast :bolt-cast))
     (cast-spell (pending-spell player) origin dir (container player) :caster player)
     (setf (pending-spell player) NIL)))
 
@@ -387,6 +405,7 @@ up and down keys (1, 0 or -1)."
       (when (and at-surface (< 0 iz)
                  (or (/= vx0 (vx vel)) (/= vz0 (vz vel)))
                  (ledge-ahead-p player surface yaw))
+        (play-sound :climb-out)
         (setf (climbing player) *climb-time*)))))
 
 (defun climb-out (player dt yaw)
@@ -411,6 +430,9 @@ up and down keys (1, 0 or -1)."
 with none left."
   (let* ((feet (feet player))
          (under (swim-liquid-at (vx feet) (+ (vy feet) (eye player)) (vz feet))))
+    (when (and (breath-under player) (not under) (< (breath player) (* *gasp-breath* *breath-time*)))
+      (play-sound :surface-gasp))
+    (setf (breath-under player) (and under T))
     (setf (breath player) (if under
                               (max 0.0 (- (breath player) dt))
                               (min *breath-time* (+ (breath player) (* *breath-refill* dt)))))
@@ -442,6 +464,8 @@ follows *DEATH-PANEL-DELAY* after it began, when the mouse goes back to the menu
 player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a walk."
   (if running
       (when (<= (decf (stamina player) (* *run-stamina* dt)) 0.0)
+        (unless (winded player)
+          (play-sound :winded))
         (setf (stamina player) 0.0
               (winded player) T))
       (setf (stamina player) (min *max-stamina* (+ (stamina player) (* *stamina-regen* dt)))))
@@ -496,7 +520,10 @@ and not the last step of the stair.")
          (liquid (let ((feet (feet player))) (liquid-at (vx feet) (+ (vy feet) 0.05) (vz feet))))
          ;; A jump from a liquid stays slowed until it lands outside one.
          (kind (if (grounded player)
-                   (setf (wading player) (and liquid (liquid-kind liquid)))
+                   (let ((now (and liquid (liquid-kind liquid))))
+                     (when (and (eq now :lava) (not (eq (wading player) :lava)))
+                       (play-sound :lava-step))
+                     (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
          (running (and (retained :left-shift) (< 0.0 wlen) (not crouching) (= 0.0 raise)
@@ -515,6 +542,11 @@ and not the last step of the stair.")
           (vx0 (vx (velocity player)))
           (vy0 (vy (velocity player)))
           (vz0 (vz (velocity player))))
+      (setf (splash-timer player) (max 0.0 (- (splash-timer player) dt)))
+      (unless (eq (swimming player) (and water T))
+        (when (<= (splash-timer player) 0.0)
+          (play-sound (if water :splash-in :splash-out))
+          (setf (splash-timer player) *splash-gap*)))
       (setf (swimming player) (and water T))
       (cond ((whirl player)
              (orbit-player player dt wx wz))
@@ -526,7 +558,8 @@ and not the last step of the stair.")
                    (- (if (retained :space) 1.0 0.0) (if crouching 1.0 0.0))
                    running yaw))
             (T (walk player dt wx wz wlen speed kind crouching)))
-      (note-impacts player vx0 vy0 vz0 dt))
+      (note-impacts player vx0 vy0 vz0 dt)
+      (body-sounds player dt))
     (update-stamina player running dt)
     (when (< (vy (feet player)) *kill-height*)
       (respawn player))
@@ -545,10 +578,39 @@ and not the last step of the stair.")
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
     (place-camera player)))
 
+(defun body-sounds (player dt)
+  "Footsteps on foot (in snow on snow), a stroke now and then swimming, and the loops of a
+slide on ice, of the water round an eye under it and of a vortex's wind."
+  (let* ((vel (velocity player))
+         (feet (feet player))
+         (speed (sqrt (+ (expt (vx vel) 2) (expt (vz vel) 2))))
+         (on-foot (and (grounded player) (not (swimming player)) (not (whirl player))
+                       (not (climbing player)) (< 0.5 speed)))
+         (sliding (and on-foot (footing player))))
+    (cond ((and on-foot (not sliding))
+           (when (<= (decf (stride-left player) (* speed dt)) 0.0)
+             (setf (stride-left player) *footstep-stride*)
+             (play-sound (if (eq (floor-tread (vx feet) (vy feet) (vz feet) *player-radius*) :snow)
+                             :footstep-snow
+                             :footstep-stone)
+                         NIL *footstep-volume*)))
+          ((and (swimming player) (not (climbing player)))
+           (when (<= (decf (stride-left player) (* (+ speed (abs (vy vel))) dt)) 0.0)
+             (setf (stride-left player) *swim-stroke-stride*)
+             (play-sound :swim-stroke)))
+          ;; Standing, or in the air: the first step after comes soon.
+          (T (setf (stride-left player) (* 0.4 *footstep-stride*))))
+    (let ((at (location player)))
+      (setf (slide-sound player) (hold-loop (slide-sound player) (and sliding :ice-slide) at
+                                            (min 1.0 (/ speed *ice-slide-speed*)))
+            (underwater-sound player) (hold-loop (underwater-sound player) (and *eye-underwater* :underwater) at)
+            (whirl-sound player) (hold-loop (whirl-sound player) (and (whirl player) :whirl-wind) at)))))
+
 (defmethod hit-surface ((player player) speed x y z &key (threshold *impact-speed*) by)
   (declare (ignore x y z))
   ;; No shove, so the shield can't help.
   (when (< threshold speed)
+    (play-sound :body-impact)
     (hurt-player player (impact-damage speed threshold) (feet player) :shove NIL
                  :by (or by (if (or (whirl player) (flung player)) :tornado :impact)))
     (hit-stop)))
@@ -562,6 +624,8 @@ while they slide on ice, nor a floor under water, and their own falls only from 
     (unless (or (footing player) (and (= 0 vx0) (= 0 vz0)))
       (hit-across player (if (= 0 (vx vel)) vx0 0f0) (if (= 0 (vz vel)) vz0 0f0) dt))
     (cond ((and (grounded player) (< vy0 0) (not (swimming player)))
+           (when (< *land-sound-speed* (- vy0))
+             (play-sound :land))
            (if (flung player)
                (hit-surface player (- vy0) 0.0 -1.0 0.0)
                (hit-surface player (- vy0) 0.0 -1.0 0.0 :threshold *fall-impact-speed* :by :fall)))
@@ -599,6 +663,7 @@ at SPEED, out of liquid KIND if any."
     (when (and (grounded player) (retained :space) (not crouching)
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
+      (play-sound :jump)
       (setf (vy vel) (float (* *jump-speed* (if kind (liquid-property kind :jump) 1.0)) 0f0)))
     (decf (vy vel) (* *gravity* dt))
     ;; Steps only while walking: not mid-air, and not on the frame a jump starts.
@@ -663,6 +728,7 @@ again for SECONDS."
 (defun player-dies (player by)
   "PLAYER's health ran out, to BY. On a generated level the run is over: the world freezes,
 PLAYER falls (FALL-DEAD) and the death screen comes up. Elsewhere the run starts over."
+  (play-sound :player-death)
   (cond ((not (eq *level* :generated))
          ;; Not now: this runs inside a creature's tick, and RESET-RUN despawns entities.
          (queue-menu-action 'reset-run))
@@ -697,12 +763,22 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
           (cond ((<= cost (stamina player))
                  (decf (stamina player) cost)
                  (setf amount (max 1 (round (* amount *block-damage-scale*))))
+                 (play-sound (if guard-break :shield-guard-break :shield-block))
                  (when guard-break
                    (break-guard player guard-break)))
                 (T
                  (setf (stamina player) 0.0
                        blocked NIL)
+                 (play-sound :shield-guard-break)
                  (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
+      ;; A burn's every tick would grunt: only a blow or a crash does.
+      (when (and (not blocked) (< amount (health player)))
+        (cond ((or shove (member by '(:impact :fall)))
+               (play-sound :player-hurt))
+              ((member by '(:lava :tornado))
+               (play-sound :player-burn))
+              ((eq by :drowning)
+               (play-sound :drowning))))
       (incf (damage-taken player) (min amount (health player)))
       (decf (health player) amount)
       (setf (pain player) *pain-time*)

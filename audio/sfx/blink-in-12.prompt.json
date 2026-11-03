@@ -1,0 +1,21 @@
+{
+  "prompt": "A magical teleport, vanishing: a breathy, warbling low hum swells up quickly like gathering energy, then bursts into a deep soft boom with a bright fizzing sizzle of sparks that fades away. Low hum and deep boom under a crackling fizz, not shrill, no bells, no chimes. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-blink-out.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 1.2,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793726981,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    1.2,
+    1.2,
+    1.2
+  ]
+}

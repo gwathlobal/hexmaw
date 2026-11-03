@@ -837,6 +837,42 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   to the `:effect` mixer, a space mixer, does it).
   To watch it, `(levels (node :music-director (scene +main+)))`, `(current ...)` and `(wanted ...)`. See "Sound and
   music".
+- `src/sound.lisp`: sound effects, through Harmony like the music. `audio/sfx.md` lists every
+  sound the game needs and where its hook goes. `(play-sound :clip at)` plays a one-shot at a
+  vec (positional clips; without AT, at the listener) or unplaced (first-person clips);
+  `start-loop` holds a loop's voice, `move-loop` moves it each tick (allocating nothing) and
+  `stop-loop` gives it back, returning NIL for the holder's slot: a projectile, circle, vortex,
+  sign or channel keeps its loop in a slot and stops it in its `leave :after`. Clips are
+  keywords from `data/sfx/index.lisp`; a clip not made yet plays nothing. Each clip keeps
+  voices of its own (Trial's sound assets play one copy at a time): `*sfx-voices*` per file,
+  taken in turn, the oldest cut short when all are busy, and `*loop-voices*` per loop, made
+  once by `add-sounds` (from `setup-scene`) and kept in `*sounds*` across rebuilds;
+  `(reload-sounds)` then a reset picks up re-made files. **The game thread never touches a
+  voice's connection**: `play-sound` pushes a request, and the `sound-director`'s tick hands
+  Harmony's mixing thread one function, `sound-frame`, that starts them, moves the listener
+  (`*listener-location*`, the player's eye) and the loops, and pauses the loops whenever
+  `*game-state*` isn't `:playing` (not under hit-stop). Harmony's queue holds 64 jobs, and an
+  error in its thread stops all sound for good, so `sound-frame` keeps its errors in
+  `*sound-error*`. The space mixer's axes are the other hand to the game's, so `copy-into`
+  mirrors Z (checked by recording: a sound on the player's left plays in the left channel);
+  a positional sound is at full volume within `*sound-min-distance*` (4 m) and then fades as
+  (distance / min)^-`*sound-rolloff*` (0.75: 4.5 dB a doubling; at 1 and 2 m, as it was, sounds
+  were barely heard across a room), no quieter past `*sound-max-distance*` (50 m). A big sound keeps
+  full volume further out (`*clip-min-distances*`: the tornado and the ogre's leap roar 12 m, its
+  landing 10, its footsteps 8). `tune-voice` sets them on a voice as it connects;
+  `(game (retune-sounds))` re-tunes those connected already after a change.
+  A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
+  a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
+  `hold-loop`, called every tick, keeps a holder's loop in a slot while it is wanted (the
+  player's slide on ice, the water and the wind, a creature floundering, the boss's ward).
+  The player's footsteps and strokes are `body-sounds` (player.lisp); the torches', lava's and
+  water's loops and the room tone are `update-ambience` (liquids.lisp, `*ambient-sources*`),
+  holding `ambient-voice`s on the nearest few sources. `audio/sfx.md` says where each clip
+  plays and how the hooks differ from its tables.
+  To hear one: `tools/hd '(game (play-sound :imp-pain (v+ (location *player*) (vec -3 0 0))))'`.
+  To find which sound misbehaves, `tools/hd '(game (mute :ambience))'` silences a clip or a group of
+  `*sound-groups*` (`:music`, `:effects` for every clip), loops already playing too, and `(unmute)`
+  brings everything back.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
@@ -914,7 +950,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup.
+  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup;
+  `*debug-level-monsters*` (a list of kinds, NIL for all) keeps only those in the hall and leaves out
+  the annex's imp, the blocks' monsters and the boss.
   A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
   and a boss of a random kind with random powers, a new one at every build (`tools/hd reset`);
   `*boss-override*` fixes them. To try a block with one kind only,
@@ -1315,6 +1353,39 @@ second), each writing a `.prompt.json` beside its output like `gen_image.py`. Bo
 (the API's PCM is stereo) or `.mp3`. Sources and prompts live under `audio/` (`audio/prompts/`,
 `audio/sfx/`, `audio/music/`), as `art/` holds the pictures; what the game plays goes in `data/`.
 
+`audio/sfx.md` lists every sound effect the game needs: the moment, the code where it starts,
+its clip (prompt `audio/prompts/sfx-<clip>.txt`, ending in a shared style line), duration, takes,
+whether it loops and whether it is positional (a mono file on the `:effect` space mixer) or
+first-person. Work from it and keep it current.
+
+Sound effects: each clip's takes are `audio/sfx/<clip>-<n>.wav` (`tools/gen_sfx.py`, with the
+duration, takes and `--loop` from `audio/sfx.md`), gitignored like the music's. The chosen take
+of each goes in `audio/sfx-picks.txt` (`imp-pain 2`; several takes are variants played in
+turn, `gain=-3` evens one out, `even` flattens a loop that swells and fades within itself,
+`lowcut=120` rolls off the sub-bass of a heavy thud before leveling, which otherwise counts it and
+leaves the part speakers play tiny; take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
+levels (the loudest 100 ms at -14 dBFS RMS, peaks under -1 through make_loop.py's limiter),
+downmixes positional clips to mono (the `:effect` space mixer takes only mono) and encodes them
+to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in
+`data/sfx/index.lisp`. Then `tools/hd '(reload-sounds)'` and `tools/hd reset`. Generated takes
+often clip: pick one that doesn't. To try a clip again, rewrite its prompt and `gen_sfx.py ... --add`,
+which numbers the new takes on from the last (`<clip>-4.wav`, recorded in `<clip>-4.prompt.json`)
+and keeps the old ones; `--influence 0.5` keeps closer to the prompt than the default 0.3. A take
+borrowed from another clip is a copy under the next number with a `.prompt.json` saying where it
+came from (`cinder-flight-3.wav` is `bolt-flight-2.wav`). A clip taken out of `audio/sfx.md`
+leaves the index and `data/sfx/` at the next `make_sfx.py`.
+
+The picker does all that from a page, with the game running: `tools/sfx_picker.py` (or the
+`sfx-picker` config in `.claude/launch.json`) serves http://127.0.0.1:8765/, every clip of
+`audio/sfx.md` with its takes to hear in the browser (marked when they clip or are quiet).
+**Use** on a take, **+**/**−** for variants or the gain buttons rewrite that clip's line in
+`audio/sfx-picks.txt`, run `make_sfx.py` on it and have the game swap it in at once
+(`reload-sound`, which frees the clip's old voices in the mixing thread and makes new ones,
+no reset) and play it 3 m in front of the player (`audition-sound`; a loop for 2 s, even with the
+game paused). **▶ In game** converts and loads a clip the game doesn't have yet. Switch as
+often as you like. It talks to the game `tools/hd` would (`.eval-port`). Its Ogg files differ
+byte for byte each run (Vorbis stream serials), the sound not.
+
 Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
 minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro
 or ending (`music-explore-1` is `music-explore-loop.txt`), which keeps the loop easy to find, and
@@ -1381,7 +1452,7 @@ asked for 110, plays at about 160 (a tempo estimate from onset autocorrelation f
 
 Harmony picks a decoder by the file's extension, and quickloads its system when it isn't loaded;
 the binary has no Quicklisp, so each format the game plays is a dependency in the .asd
-(`cl-mixed-vorbis` for `.ogg`, `cl-mixed-wav` for `.wav`). A changed `main` class or new
+(`cl-mixed-vorbis` for `.ogg`; a `.wav` would need `cl-mixed-wav`, not there yet). A changed `main` class or new
 dependency needs a restart of `./run.sh`. In this version, `trial:seek` on a voice fails
 (`mixed:seek` takes no `:by`); seek its source by frames instead. A vorbis source's
 `frame-count` reads twice the real length, though it ends and loops where it should.

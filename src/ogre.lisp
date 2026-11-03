@@ -140,6 +140,10 @@ List it before CREATURE or a subclass in the superclasses."))
    (pain-chance :initform 9)
    (max-health :initform 120)))
 
+;; Its slam sounds where the maul lands (RELEASE-ATTACK), its landing as it quakes (LAND-LEAP).
+(define-creature-sounds ogre
+  :alert :ogre-alert :pain :ogre-pain :death :ogre-death :leap :ogre-leap :step :step-heavy)
+
 (defmethod stage :after ((leaper leaper) (area staging-area))
   (when (leap-animation leaper)
     (stage (animation-texture (find-fx-animation (leap-animation leaper))) area)))
@@ -251,6 +255,8 @@ true if there is a landing cell and an arc OGRE's body fits."
              (plan-leap leaper))
     (setf (attack-kind leaper) :leap)
     (start-attack leaper)
+    ;; As it crouches, not as it leaves: the roar is the warning.
+    (creature-noise leaper :leap)
     T))
 
 (defmethod special-attack ((ogre ogre))
@@ -293,6 +299,7 @@ true if there is a landing cell and an arc OGRE's body fits."
     (when hit
       (hurt-player *player* (roll (attack-damage ogre)) loc :shove *slam-shove* :lift *slam-lift*
                    :guard-break (guard-break ogre) :by ogre))
+    (play-sound :ogre-slam impact)
     (quake ogre impact *slam-quake-radius* NIL *slam-quake-shove*
            (unless hit *slam-quake-shove*) *slam-quake-lift*)
     (kick-dust impact 0.0 1 (container ogre))))
@@ -360,6 +367,7 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
                 (vx at) (vy at) (vz at) (- *leap-peak* (vy at)))
       (setf (recover ogre) *leap-recover*)
       (stop-walking ogre *leap-recover*)
+      (play-sound :ogre-land at)
       (quake ogre at *quake-radius* *quake-damage* *quake-shove* *quake-player-shove* *quake-player-lift*
              :inner (body-radius ogre))
       (kick-dust at (* 0.6 *quake-radius*) *ogre-dust-puffs* (container ogre))

@@ -1,0 +1,19 @@
+{
+  "prompt": "A short soft sound of going back: a dull wooden knock. Retro 1990s fantasy game menu sound, short and clean, dry, no music.",
+  "prompt_file": "audio/prompts/sfx-menu-back.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.5,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1793714210,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    0.48,
+    0.48
+  ]
+}
