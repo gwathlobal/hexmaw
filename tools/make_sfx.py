@@ -17,7 +17,7 @@ tools/gen_sfx.py writes them. audio/sfx-picks.txt says which to use, one line a 
 
 A clip with takes and no line uses take 1, so every generated clip is in the game until it
 is chosen. Each take is trimmed of the silence before and after it (not a loop's: it is cut
-to join), faded out over its last 10 ms, brought to one loudness (--level, the loudest
+to join), faded out over its last 10 ms (its last quarter if it still sounds there, FADE_OUT), brought to one loudness (--level, the loudest
 100 ms window's RMS in dBFS, -14 by default, then its gain=), its peaks held under -1 dBFS by
 make_loop.py's look-ahead limiter (round the circle for a loop), downmixed to mono if it is
 positional (Harmony's :effect mixer is a space mixer and takes only mono), and encoded through
@@ -127,6 +127,19 @@ def trim(x, rate, start_db=-45, end_db=-50, pad=0.005):
     return x[first:last]
 
 
+def fade_out(x, rate, loud_db=-45.0):
+    """X faded out at its end: over 10 ms, or, if its last 20 ms are still louder than LOUD_DB
+    against its loudest (the generator cut it off at the length asked for), over its last
+    quarter, at most 150 ms, so it dies away instead of stopping."""
+    end = max(1, int(0.02 * rate))
+    tail = 10 * np.log10((x[-end:] ** 2).mean() + 1e-12) - loudest(x, rate)
+    fade = int(0.01 * rate) if tail < loud_db else min(len(x) // 4, int(0.15 * rate))
+    fade = max(1, min(len(x), fade))
+    x = x.copy()
+    x[-fade:] *= np.linspace(1, 0, fade)[:, None] ** 2
+    return x
+
+
 def loudest(x, rate, window=0.1):
     """The RMS of X's loudest WINDOW seconds, in dBFS."""
     w = max(1, min(len(x), int(window * rate)))
@@ -161,25 +174,29 @@ def even_out(x, rate, loop, window=0.4, most=12.0):
     return x * gain[:, None]
 
 
-def low_cut(x, rate, cutoff):
-    """X with what lies under CUTOFF Hz rolled off, 24 dB an octave, through the FFT (circular,
-    so a loop still joins). A heavy generated thud is mostly sub-bass, which leveling counts
-    and small speakers don't play: cut, the crunch over it is what gets brought up."""
-    f = np.fft.rfftfreq(len(x), 1 / rate)
+def low_cut(x, rate, cutoff, loop=False):
+    """X with what lies under CUTOFF Hz rolled off, 24 dB an octave, through the FFT. A heavy
+    generated thud is mostly sub-bass, which leveling counts and small speakers don't play: cut,
+    the crunch over it is what gets brought up. The FFT is circular, which a loop wants (it
+    still joins); a one-shot is padded with silence first, or the thump's ringing wraps round
+    and claps at its end."""
+    pad = 0 if loop else int(0.5 * rate)
+    y = np.concatenate([np.zeros((pad, x.shape[1])), x, np.zeros((pad, x.shape[1]))]) if pad else x
+    f = np.fft.rfftfreq(len(y), 1 / rate)
     response = 1 / np.sqrt(1 + (cutoff / np.maximum(f, 1e-3)) ** 8)
-    return np.fft.irfft(np.fft.rfft(x, axis=0) * response[:, None], n=len(x), axis=0)
+    y = np.fft.irfft(np.fft.rfft(y, axis=0) * response[:, None], n=len(y), axis=0)
+    return y[pad:pad + len(x)]
 
 
 def make_clip(path, positional, loop, level, gain, even=False, lowcut=None):
     x, rate = read_wav(path)
     if not loop:
         x = trim(x, rate)
-        fade = min(len(x), int(0.01 * rate))
-        x[-fade:] *= np.linspace(1, 0, fade)[:, None]
+        x = fade_out(x, rate)
     if positional and x.shape[1] > 1:
         x = x.mean(1, keepdims=True)
     if lowcut:
-        x = low_cut(x, rate, lowcut)
+        x = low_cut(x, rate, lowcut, loop)
     if even:
         x = even_out(x, rate, loop)
     x = x * 10 ** ((level + gain - loudest(x, rate)) / 20)
