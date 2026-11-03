@@ -118,7 +118,7 @@
    (flanks :initform T)
    ;; Its casts are hard to break with a blow: a sidestep is the answer to a rift.
    (pain-chance :initform 22)
-   (max-health :initform 35)
+   (max-health :initform 45)
    (blink-cooldown :initform 0.0 :accessor blink-cooldown :documentation "Seconds before it can blink again.")
    (blink-timer :initform 5.0 :accessor blink-timer
                 :documentation "Seconds of hunting until it blinks of its own accord.")
