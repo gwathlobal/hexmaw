@@ -51,7 +51,9 @@
    (held :initform NIL :accessor voice-held
          :documentation "A loop's: T while a caller holds it (START-LOOP to STOP-LOOP).")
    (connected :initform NIL :accessor voice-connected
-              :documentation "A loop's: set in the mixing thread once it is connected.")))
+              :documentation "A loop's: set in the mixing thread once it is connected.")
+   (auditioning :initform NIL :accessor voice-auditioning
+                :documentation "A loop's: T while AUDITION-SOUND plays it, paused game or not.")))
 
 (defvar *sounds* (make-hash-table :test 'eq)
   "The clips by keyword (the index's name), with their voices. Kept across reloads and
@@ -157,7 +159,7 @@ Returns the new clip, or NIL if the index no longer has it."
 
 (defun audition-sound (name &optional (seconds 2.0))
   "Play clip NAME for the picker: a positional one 3 m in front of the player, a loop there
-for SECONDS. Run it in the game thread."
+for SECONDS, even while the game is paused. Run it in the game thread."
   (let* ((sfx (find-sound (sound-key name)))
          (player *player*)
          (at (if player
@@ -168,6 +170,7 @@ for SECONDS. Run it in the game thread."
           ((sfx-loop-p sfx)
            (let ((voice (start-loop (sfx-name sfx) at)))
              (when voice
+               (setf (voice-auditioning voice) T)
                (push (cons voice (+ *sound-clock* seconds)) *auditions*))
              (and voice T)))
           (T (and (play-sound (sfx-name sfx) at) T)))))
@@ -252,7 +255,7 @@ it (MOVE-LOOP) and to give it back (STOP-LOOP)."
 
 (defun stop-loop (voice)
   "Give a held loop back; it falls silent in the next tick. Returns NIL, for the holder's slot."
-  (when voice (setf (voice-held voice) NIL))
+  (when voice (setf (voice-held voice) NIL (voice-auditioning voice) NIL))
   NIL)
 
 ;;; The mixing thread's side
@@ -293,7 +296,8 @@ asked for, and every loop's state."
                    (place-voice voice)))
         (dolist (voice *loop-voice-list*)
           (let ((hvoice (sfx-voice-voice voice))
-                (on (and (voice-held voice) (not *loops-paused*))))
+                (on (and (voice-held voice)
+                         (or (not *loops-paused*) (voice-auditioning voice)))))
             (cond (on
                    (unless (voice-connected voice)
                      (connect-voice voice)
@@ -336,4 +340,7 @@ asked for, and every loop's state."
     ;; catch-up ticks, more than the mixing queue's 64 jobs.
     (unless *sound-frame-queued*
       (setf *sound-frame-queued* T)
-      (harmony:call-in-mixing-context #'sound-frame harmony:*server* :synchronize NIL))))
+      ;; A full queue (it once filled while a level built) signals here, and the frame
+      ;; never runs to clear the flag: without this, no sound played again.
+      (handler-case (harmony:call-in-mixing-context #'sound-frame harmony:*server* :synchronize NIL)
+        (error () (setf *sound-frame-queued* NIL))))))

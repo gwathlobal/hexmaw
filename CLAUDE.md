@@ -1307,7 +1307,8 @@ The picker does all that from a page, with the game running: `tools/sfx_picker.p
 **Use** on a take, **+**/**−** for variants or the gain buttons rewrite that clip's line in
 `audio/sfx-picks.txt`, run `make_sfx.py` on it and have the game swap it in at once
 (`reload-sound`, which frees the clip's old voices in the mixing thread and makes new ones,
-no reset) and play it 3 m in front of the player (`audition-sound`; a loop for 2 s). Switch as
+no reset) and play it 3 m in front of the player (`audition-sound`; a loop for 2 s, even with the
+game paused). **▶ In game** converts and loads a clip the game doesn't have yet. Switch as
 often as you like. It talks to the game `tools/hd` would (`.eval-port`). Its Ogg files differ
 byte for byte each run (Vorbis stream serials), the sound not.
 

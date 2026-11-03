@@ -146,6 +146,25 @@ def use(clip, takes, gain, audition):
                  "note": None if ok else text}
 
 
+def audition(clip):
+    """Play CLIP in the game, converting it first if data/sfx/ has none yet (a clip generated
+    since the last make_sfx.py run) and loading it if the game hasn't (one made since it started)."""
+    if not takes_of(clip):
+        return 400, {"error": f"{clip} has no takes."}
+    with LOCK:
+        if f'(:name "{clip}"' not in (ROOT / "data/sfx/index.lisp").read_text():
+            made = subprocess.run([sys.executable, str(ROOT / "tools/make_sfx.py"), clip],
+                                  capture_output=True, text=True)
+            if made.returncode:
+                return 500, {"error": made.stderr.strip() or made.stdout.strip()}
+        ok, text = game_eval(f"(game (and (or (find-sound :{clip}) (reload-sound :{clip})) (audition-sound :{clip})))")
+    if not ok:
+        return 503, {"error": text}
+    if text == "NIL":
+        return 500, {"error": f"The game couldn't play {clip} (all its voices busy?)."}
+    return 200, {"game": text}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
@@ -189,8 +208,8 @@ class Handler(BaseHTTPRequestHandler):
             clip = body.get("clip", "")
             if not re.fullmatch(r"[a-z0-9-]+", clip):
                 return self.send(400, {"error": "bad clip"})
-            ok, text = game_eval(f"(game (audition-sound :{clip}))")
-            return self.send(200 if ok else 503, {"game": text} if ok else {"error": text})
+            code, reply = audition(clip)
+            return self.send(code, reply)
         self.send(404, {"error": "not found"})
 
 
