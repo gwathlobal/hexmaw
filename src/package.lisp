@@ -7,5 +7,7 @@
    (#:trial-alloy #:org.shirakumo.fraf.trial.alloy)
    (#:simple #:org.shirakumo.alloy.renderers.simple)
    (#:presentations #:org.shirakumo.alloy.renderers.simple.presentations)
-   (#:chroma #:org.shirakumo.alloy.chroma))
+   (#:chroma #:org.shirakumo.alloy.chroma)
+   (#:harmony #:org.shirakumo.fraf.harmony)
+   (#:mixed #:org.shirakumo.fraf.mixed))
   (:export #:main #:launch))

@@ -1,0 +1,16 @@
+{
+  "prompt": "Dark ambient dungeon exploration music for a 1990s first-person fantasy game, for deep caves. Slow, around 75 BPM, in the Phrygian mode. Low brass pads over a soft pulsing low bass note, a slow plucked dulcimer ostinato, eerie high string harmonics, a hand drum softly marking every other bar, an occasional low gong. Sounds like a General MIDI orchestral soundtrack played through a 1990s sound card wavetable: slightly synthetic, clean, no modern cinematic bombast. Steady and unobtrusive so it can play under gameplay, keeping one even texture all the way through: no intro, no big build, no ending or fade-out, as it will loop for as long as the player explores.",
+  "prompt_file": "audio/prompts/music-explore-3.txt",
+  "music_length_ms": 180000,
+  "model_id": "music_v1",
+  "force_instrumental": true,
+  "output_format": "pcm_44100",
+  "n": 1,
+  "created": 1793657544,
+  "request_ids": [
+    null
+  ],
+  "seconds": [
+    180.0
+  ]
+}

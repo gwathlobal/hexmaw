@@ -1,0 +1,16 @@
+{
+  "prompt": "Dark ambient dungeon exploration music for a 1990s first-person fantasy game, for crypts and catacombs. Very slow, around 60 BPM, in a minor mode. A low organ drone and deep sustained cellos, a lonely wooden flute melody that wanders and pauses, sparse glockenspiel notes like water dripping, a distant low choir pad. Sounds like a General MIDI orchestral soundtrack played through a 1990s sound card wavetable: slightly synthetic, clean, no modern cinematic bombast. Steady and unobtrusive so it can play under gameplay, keeping one even texture all the way through: no intro, no big build, no ending or fade-out, as it will loop for as long as the player explores.",
+  "prompt_file": "audio/prompts/music-explore-2.txt",
+  "music_length_ms": 180000,
+  "model_id": "music_v1",
+  "force_instrumental": true,
+  "output_format": "pcm_44100",
+  "n": 1,
+  "created": 1793657528,
+  "request_ids": [
+    null
+  ],
+  "seconds": [
+    180.0
+  ]
+}

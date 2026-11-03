@@ -1,0 +1,18 @@
+{
+  "prompt": "Melodic dungeon exploration music for a 1990s first-person fantasy game, for crypts and catacombs. Moderately slow, around 80 BPM, in a minor key. A clear, haunting melody is always being played by a solo instrument, passed between a wooden flute and an oboe, over plucked lute and harp arpeggios that never stop, pizzicato cellos walking a bass line, soft string chords that change every bar, and a light hand drum and tambourine. Something is always moving: no drones, no long held notes on their own, no ambient washes or pads. Sounds like a General MIDI orchestral soundtrack played through a 1990s sound card wavetable: slightly synthetic, clean, no modern cinematic bombast. Keeps the same instruments and energy all the way through: no intro, no big build, no ending or fade-out, as it will loop for as long as the player explores.",
+  "prompt_file": "audio/prompts/music-explore-2.txt",
+  "music_length_ms": 180000,
+  "model_id": "music_v1",
+  "force_instrumental": true,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1793659378,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    180.0,
+    180.0
+  ]
+}
