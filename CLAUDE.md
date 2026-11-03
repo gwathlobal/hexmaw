@@ -285,7 +285,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 8, ogre 9, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
+  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
@@ -588,8 +588,41 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   at a time. Otherwise it throws `gust`s: a `:gust` effect throws the player, toward its tornado
   if one is near, and with lift, since a shove on the floor dies at once. It has no walk.
   `casting-tempest-p` is a generic, so a boss's tornado cast keeps its sign up too.
+- `src/riftwalker.lisp` (after boss.lisp, whose `free-spot` and `same-arena-side-p` it uses): the
+  `riftwalker`, a masked assassin, an `ability-user` and a melee hunter (`ranged-p` is true only
+  while a cast of its runs, so the cast turns after the player as a caster's does) that flanks.
+  Its stab is its only damage. Its other abilities move things, chosen in `special-attack`:
+  `:call` (cd 14 s) brings the live ally nearest it (within `*call-reach*`, at least
+  `*call-min-distance*` from the player, no boss) to stand to the player's front quarter on the
+  side away from the riftwalker (`call-spot`), a 1 s cast
+  marked by a `rift-sign` on the floor (`tools/draw_rift_sign.py data/sprites/rift`) that a flinch
+  breaks; `:push` (cd 12 s) with the player on top of it while it is under half health or their
+  shield is up; else `:pull` (cd 8, 6 to 16 m) or `:swap` (cd 10, 5 to 14 m), 50/50 when both are
+  ready. The three are projectiles at 10 m/s (`rift-pull` violet, `rift-swap` gold, `rift-push`
+  cyan by their light), with effects `:teleport-to`, `:swap` and `:teleport-away`. They pass
+  through every creature (`spares-p`): a rift that struck the ally it had just called stood in
+  its line swapped the two. A sidestep dodges them and a raised shield facing them stops them
+  (`rift-stopped-p`); a knight's shield sends one back as its own, which moves whatever it then
+  strikes (the effects are methods on `apply-effect` for any target). A pull puts the target in front of the caster (`spot-around`), turned to it, and
+  the stab follows; a swap trades places, the player keeping their facing, and `*pounce-delay*`
+  later it blinks in right behind them (`pounce`); a push sends the target to `spot-away`, a dry
+  cell `*rift-away-walk*` (10 to 25 m) of walking off and within `*rift-away-within*`
+  (`nav-reachable-spot`'s `:test`), so the way back is always on foot. Every destination keeps to
+  its side of the arena's walls. **Blink**: every `*blink-interval*` (4 to 8 s) of hunting it steps
+  through a rift to a random spot `*blink-range*` (3 to 6 m) off in sight of the player
+  (`blink-spot`), and, past `*blink-cooldown*`, `*blink-dodge-chance*` (35%) after a hit it lives
+  through (`react-to-hit`, a generic `hurt` asks) and `*blink-evade-chance*` (50%) when the
+  player's projectile is about to reach it (`evade-projectile`, asked once per projectile from its
+  tick, `*evade-look-ahead*` ahead, spells.lisp). Moving goes through `teleport-actor` (the
+  player's is `teleport-player`, player.lisp: stopped, out of a vortex, the eye snapped, the view
+  flashing `*rift-flash-color*`) and `rift-move`, a `rift-flash` at both ends. Rolls use
+  `*roll-random*`. As a boss it is the Rift Lord (`riftwalker-boss`, defined here), denied the
+  boss's `:blink`, and an elite as `elite-riftwalker`. It spawns from level 2 of a run on (weight 1,
+  then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
+  `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
+  riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block level 3 ends in. It is an
-  empowered form of one of the seven monsters (`*boss-kinds*`: kind, class such as `imp-boss`
+  empowered form of one of the eight monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
   likely, with three powers (`boss-powers`): two from the start, the third when it enrages at
   `*boss-enrage-at*` (half) health (`active-powers`). `make-boss`, from a `spawn boss` in a
@@ -624,7 +657,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   | `:shockwave` | a 0.9 s crouch, then `quake` round itself out to `*boss-quake-radius*` | flyers |
   | `:tornado` | the wraith's cast, sign and tornado; one up at a time | gale wraith |
   | `:summon` | 2 of its kind at normal size (3 enraged), `summoned`, while fewer than `*boss-max-minions*` live: a `summon-sigil` draws itself in on the floor at each spot through the 1.1 s cast (`begin-summon`, `summon-spots`), and at the release flame bursts up from each (an `aurora` in `*sigil-flame-colors*`) and a minion rises out of it; a broken cast takes its sigils with it | |
-  | `:blink` | a ranged kind 9 m off a close player, a melee kind behind a far one | |
+  | `:blink` | a ranged kind 9 m off a close player, a melee kind behind a far one | riftwalker |
   | `:warded` (passive) | its front turns spells back (`shield-views`) | knight |
   | `:haste` (passive) | walk and attacks × `*haste-speed*` | |
 
@@ -656,7 +689,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   one with the level's `*elite-chance*` (`:elite-chance` in `*run-levels*`): `elite-roll`, from
   `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
   every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
-  its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `*elite-kinds*`):
+  its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `elite-riftwalker`
+  in riftwalker.lisp, `*elite-kinds*`):
   `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
   `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
   kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
@@ -1711,6 +1745,39 @@ python3 tools/slice_frames.py art/wraith/death.png data/sprites/wraith --pixel 3
 Its strips need `--violet`: without it the slicer takes blue above green for a blend with the
 magenta background, so it keys out the violet rags, eyes and lightning and greys what's left.
 
+The riftwalker (a lean knife fighter in a low crouch, a close charcoal hood over a featureless
+mask of polished brass, wrappings of charcoal and deep indigo cracked with pale silver-blue light,
+a curved dagger in the right hand, a shard of light over the left palm) is
+`art/riftwalker/turnaround-2.png` (`art/prompts/riftwalker-turnaround.txt`, the imp's, acolyte's,
+knight's, necromancer's and wraith's sheets as style references), sliced at `--height 115` for its
+1.8 m. No view needed mirroring. Its walk, stab (wind-up, lunge, strike, recover), cast (the rift
+gathered in the left hand, held up as a jagged diamond, flung, recover: every rift and the call)
+and flinch are made with `tools/gen_monster_views.sh riftwalker <anim> ...`, and its front-only
+death (`riftwalker-death.txt`) cracks the mask and folds it face down beside the dagger. Its
+strips take `--violet` too, which keeps the indigo and the blue cracks the plain keying greys.
+
+```bash
+python3 tools/slice_turnaround.py art/riftwalker/turnaround-2.png data/sprites/riftwalker/turnaround --height 115 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk:20 stab:20 cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/riftwalker $a $(for v in $V; do echo art/riftwalker/${a%:*}-$v.png; done) --height 920 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
+python3 tools/slice_frames.py art/riftwalker/death.png data/sprites/riftwalker --pixel 3.54 --anchor bottom --filter box --violet death:8
+```
+
+Its rifts are one generated sheet, `art/spells/rift-orb.png` (`art/prompts/rift-orb.txt`, the bolt
+sheet as reference: a void diamond rimmed in cold light, then its burst into shards), whose blue
+flight is recoloured into the three rifts; the flash where something steps through is
+`art/spells/rift-flash.png` (`rift-flash.txt`, a crack as tall as a body tearing open and
+snapping shut). Both take `--cold`, which keeps the blues the usual keying takes for magenta
+spill. The orb sheet's bottom cyan line runs under its last row, where no separator bounds the
+cells, so the burst's last two frames keep a strip of it: the last command clears it.
+
+```bash
+python3 tools/slice_frames.py art/spells/rift-orb.png data/sprites/rift --pixel 10 --cold flight:5 burst:7
+for r in pull:285 swap:45 push:188; do tools/recolor_hue.py data/sprites/rift/flight data/sprites/rift/${r%:*} --from 230 --reach 50 --hue ${r#*:}; done; rm data/sprites/rift/flight.*
+python3 tools/slice_frames.py art/spells/rift-flash.png data/sprites/rift --pixel 6 --cold flash:6
+python3 -c "from PIL import Image; p='data/sprites/rift/burst.png'; im=Image.open(p).convert('RGBA'); im.putdata([(0,0,0,0) if a and r<90 and g>170 and b>170 and abs(g-b)<50 else (r,g,b,a) for r,g,b,a in im.getdata()]); im.save(p)"
+```
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -1920,8 +1987,8 @@ and `spawn MONSTER FACING [SKIP]`, where SKIP is a percent chance of no monster 
 has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has two kinds of
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre and gale wraith 1
-each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith and
+riftwalker 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state; one float draw whatever the weights, so changing a pool never changes the layout). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
@@ -2151,14 +2218,14 @@ a list tried in order): the `descent` on levels 1 and 2, the boss's `arena` on l
 harder going down, by keys in each entry (none are flat stat multipliers):
 
 - built into the level (`level-settings` sets their variables for the generator, so a save keeps
-  them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre or
-  wraith on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre,
+  wraith or riftwalker on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
   `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
   0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
 - asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
   `*sight-range*` and `*hearing-range*` in `sees-player-p`, `:alert` the hunt's `alert-time`,
-  `:pause` the pause after an attack, `:cooldown` the necromancer's and wraith's abilities and the
-  ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+  `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
+  abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
 
 Pickups stay budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,
 and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
@@ -2202,7 +2269,8 @@ flooded run, so the only way there is a swim. Frames (seed 12345, 12 spots, froz
 Over run seeds 1 to 100, level 3's arena fit on the first seed every time and could be reached, the
 level building in 1.8 s on average through `reload-scene` (2.4 s at most). It can lie close to the
 start in a straight line (seed 27: 6.7 m, a storey up), so the boss's spawn ignores the start's
-clearance. Bosses: necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
+clearance. Bosses (before the riftwalker joined `*boss-kinds*`, which changed every seed's draw):
+necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,

@@ -52,6 +52,8 @@
   (add-shield scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)
+  ;; And a riftwalker's rifts.
+  (preload-riftwalker scene)
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
   ;; And the dust an ogre kicks up.
