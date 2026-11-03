@@ -484,12 +484,14 @@ DEFINE-CREATURE-SOUNDS gives a class its own.")
     (when clip (play-sound clip (location creature) volume))))
 
 (defparameter *creature-step-volume* 0.9)
+(defparameter *creature-step-reach* 25.0 "Metres from the player within which a creature's footsteps play.")
 
 (defun creature-steps (creature)
   "A footstep (its :STEP clip) every two walk frames, from the distance walked: two to a cycle."
   (let ((n (floor (walk-distance creature) (* 2 (stride creature)))))
     (unless (= n (step-count creature))
-      (when (and (< (step-count creature) n) (creature-walking-p creature) (not (afloat-p creature)))
+      (when (and (< (step-count creature) n) (creature-walking-p creature) (not (afloat-p creature))
+                 *player* (< (vdistance (location creature) (location *player*)) *creature-step-reach*))
         (creature-noise creature :step *creature-step-volume*))
       (setf (step-count creature) n))))
 

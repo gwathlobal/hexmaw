@@ -213,18 +213,33 @@ sound on the player's left came out on the right), so Z is mirrored."
         (aref array 2) (float (- (vz vec)) 0f0))
   array)
 
-(defun take-voice (sfx)
-  "A free voice of SFX's next variant, or that variant's that will be done soonest."
+(defun voice-distance-squared (voice)
+  "How far VOICE sounds from the listener, squared (both as the space mixer counts)."
+  (let ((a (voice-location voice)) (b *listener-location*))
+    (+ (expt (- (aref a 0) (aref b 0)) 2) (expt (- (aref a 1) (aref b 1)) 2) (expt (- (aref a 2) (aref b 2)) 2))))
+
+(defun take-voice (sfx &optional (d2 0.0))
+  "A free voice of SFX's next variant; with none, for a positional clip the one furthest from
+the listener, if further than D2 (the new sound's distance squared), else NIL: the new sound
+is the one to go. A first-person clip's soonest done."
   (let* ((files (length (sfx-files sfx)))
          (variant (mod (sfx-turn sfx) files))
          (start (* variant *sfx-voices*))
-         (best NIL))
+         (free NIL) (best NIL) (best-d2 0.0))
     (setf (sfx-turn sfx) (1+ variant))
     (loop for i from start below (+ start *sfx-voices*)
           for voice = (aref (sfx-voices sfx) i)
-          do (when (or (null best) (< (busy-until voice) (busy-until best)))
-               (setf best voice)))
-    best))
+          do (cond ((<= (busy-until voice) *sound-clock*)
+                    (setf free voice))
+                   ((sfx-space-p sfx)
+                    (let ((vd2 (voice-distance-squared voice)))
+                      (when (or (null best) (< best-d2 vd2))
+                        (setf best voice best-d2 vd2))))
+                   ((or (null best) (< (busy-until voice) (busy-until best)))
+                    (setf best voice))))
+    (cond (free)
+          ((not (sfx-space-p sfx)) best)
+          ((< d2 best-d2) best))))
 
 (defun listener-or (at)
   (or at (and *player* (location *player*)) (vec 0 0 0)))
@@ -232,17 +247,24 @@ sound on the player's left came out on the right), so Z is mirrored."
 (defun play-sound (name &optional at (volume 1.0))
   "Play the one-shot NAME (a keyword from the index). A positional clip plays at AT, a vec,
 or at the listener without one; a first-person clip ignores AT. Does nothing for a clip not
-made yet, or without a sound server."
+made yet, or without a sound server. A positional one beyond *SOUND-MAX-DISTANCE* plays
+nothing, and with all its voices busy it cuts short the furthest, or doesn't play if it is
+the furthest itself."
   (let ((sfx (find-sound name)))
     (when (and sfx (not (sfx-loop-p sfx)))
-      (let ((voice (take-voice sfx)))
-        (copy-into (voice-location voice) (listener-or at))
-        (setf (voice-volume voice) (float volume 0f0))
-        ;; A voice asked for twice before it starts starts once.
-        (unless (< *sound-clock* (- (busy-until voice) (voice-seconds voice)))
-          (sb-ext:atomic-push voice (symbol-value '*sound-requests*)))
-        (setf (busy-until voice) (+ *sound-clock* (voice-seconds voice) 0.05))
-        voice))))
+      (let* ((d2 (if (and at (sfx-space-p sfx) *player*)
+                     (let ((ear (location *player*)))
+                       (+ (expt (- (vx at) (vx ear)) 2) (expt (- (vy at) (vy ear)) 2) (expt (- (vz at) (vz ear)) 2)))
+                     0.0))
+             (voice (and (< d2 (expt *sound-max-distance* 2)) (take-voice sfx d2))))
+        (when voice
+          (copy-into (voice-location voice) (listener-or at))
+          (setf (voice-volume voice) (float volume 0f0))
+          ;; A voice asked for twice before it starts starts once.
+          (unless (< *sound-clock* (- (busy-until voice) (voice-seconds voice)))
+            (sb-ext:atomic-push voice (symbol-value '*sound-requests*)))
+          (setf (busy-until voice) (+ *sound-clock* (voice-seconds voice) 0.05))
+          voice)))))
 
 (defun start-loop (name &optional at (volume 1.0))
   "Hold a free voice of the loop NAME, sounding at AT; NIL when none is free. Keep it to move
