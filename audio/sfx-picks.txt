@@ -52,3 +52,4 @@ skull-impact 5
 imp-claw 8
 acolyte-alert 9
 knight-alert 4
+ogre-land 5

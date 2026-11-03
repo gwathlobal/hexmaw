@@ -43,7 +43,7 @@
 (:name "necro-pain" :files ("necro-pain.ogg") :seconds (0.6) :space T :loop NIL)
 (:name "ogre-alert" :files ("ogre-alert.ogg") :seconds (1.48) :space T :loop NIL)
 (:name "ogre-death" :files ("ogre-death.ogg") :seconds (2.0) :space T :loop NIL)
-(:name "ogre-land" :files ("ogre-land.ogg") :seconds (1.48) :space T :loop NIL)
+(:name "ogre-land" :files ("ogre-land.ogg") :seconds (2.0) :space T :loop NIL)
 (:name "ogre-leap" :files ("ogre-leap.ogg") :seconds (0.8) :space T :loop NIL)
 (:name "ogre-pain" :files ("ogre-pain.ogg") :seconds (0.68) :space T :loop NIL)
 (:name "ogre-slam" :files ("ogre-slam.ogg") :seconds (1.096) :space T :loop NIL)
