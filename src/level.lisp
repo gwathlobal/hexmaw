@@ -54,7 +54,7 @@ upstairs."
     (unless *debug-level-monsters*
       (spawn-creature (make-instance 'imp :location (vec 14.5 upper 5) :facing (/ pi 2)) container))))
 
-(defparameter *debug-level-monsters* '(imp riftwalker)
+(defparameter *debug-level-monsters* NIL
   "The kinds of monster the debug level's hall keeps, or NIL for all of them. With a list, the
 annex's imp, the blocks' monsters and the arena's boss stay out too.")
 
