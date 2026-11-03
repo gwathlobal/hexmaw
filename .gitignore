@@ -29,3 +29,7 @@ __pycache__/
 # tools/slice_views.py slices without writing them
 /art/**/*-sheet.png
 /art/imp/Imp * Sheet.png
+
+# Audio sources, takes and loops (tools/gen_music.py, gen_sfx.py, make_loop.py, compose_*.py);
+# each rebuilds from its .prompt.json or script, and the game plays data/music/*.ogg
+/audio/**/*.wav

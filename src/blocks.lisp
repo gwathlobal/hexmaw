@@ -418,7 +418,18 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
 
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1)
                              ("gale-wraith" 1) ("riftwalker" 1))
-  "What a block's spawn_any picks from, each monster with its weight.")
+  "What a block's spawn_any picks from, each monster with its weight. A level of the run sets
+its own (*RUN-LEVELS*' :POOL).")
+
+(defparameter *spawn-skip-scale* 1.0
+  "Scales a spawn's chance of no monster on a generated level; a level of the run sets its own.")
+
+(defparameter *elite-chance* 0.0
+  "A generated level's chance that a spawn is an elite (elite.lisp); a level of the run sets its own.")
+
+(defvar *elite-random* (make-random-state T)
+  "Draws which spawns are elites. The generator binds it to a state seeded with the level's, apart
+from its own, so elites leave the layout as it was.")
 
 (defvar *spawn-clearance* NIL
   "(point . metres) while a level is generated: no block spawns a monster that close to
@@ -449,7 +460,9 @@ block too tight for them)."
                            (remove-if (lambda (choice) (member (first choice) left-out :test #'string-equal))
                                       *spawn-pool*)))
                         (T (mapcar (lambda (k) (list k 1)) (uiop:split-string kind :separator "|")))))
-         (pick (and choices (random (reduce #'+ choices :key #'second) *block-random*))))
+         ;; One float draw, whatever the weights: an integer RANDOM draws a varying number of
+         ;; times, so changing a pool's weights would change the rest of the level.
+         (pick (and choices (* (random 1.0 *block-random*) (reduce #'+ choices :key #'second)))))
     (loop for (name weight) in choices
           do (decf pick weight)
           when (< pick 0) return name
@@ -464,7 +477,7 @@ a checked block, which look over every spawn, always place it."
     (and (< 0 skip)
          (let ((roll (random 100 *block-random*)))
            (case *level*
-             (:generated (< roll skip))
+             (:generated (< roll (* skip *spawn-skip-scale*)))
              (:test T)
              (T NIL))))))
 
@@ -506,6 +519,8 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
           (let* ((kind (let ((choice (spawn-choice (getf spawn :kind))))
                          (and choice (or *spawn-override* choice))))
                  (skipped (spawn-skipped-p spawn))
+                 ;; Drawn for every spawn, so a seed's elites stay where they were.
+                 (elite (elite-roll kind))
                  (class (and kind (find-symbol (string-upcase kind) '#:hexmaw)))
                  (at (world (getf spawn :position))))
             (cond
@@ -518,9 +533,11 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
                (spawn-creature (make-boss at (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0)))) container))
               ((and *spawn-clearance* (< (vdistance at (car *spawn-clearance*)) (cdr *spawn-clearance*))))
               ((and class (find-class class NIL) (subtypep class 'creature))
-                (spawn-creature (make-instance class :location at
-                                                     :facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0))))
-                                container))
+                (let ((facing (- (getf spawn :yaw) (* turns (float (/ pi 2) 0f0)))))
+                  (spawn-creature (if elite
+                                      (make-instance (first elite) :location at :facing facing :trait (second elite))
+                                      (make-instance class :location at :facing facing))
+                                  container)))
               (T (v:warn :hexmaw "Block ~a: no creature called ~s; spawn ignored." name kind)))))
         (let ((connectors
                 (loop for c in (getf def :connectors)

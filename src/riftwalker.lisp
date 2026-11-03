@@ -117,7 +117,7 @@
    (wander-radius :initform 3.0)
    (flanks :initform T)
    ;; Its casts are hard to break with a blow: a sidestep is the answer to a rift.
-   (pain-chance :initform 22)
+   (pain-chance :initform 11)
    (max-health :initform 45)
    (blink-cooldown :initform 0.0 :accessor blink-cooldown :documentation "Seconds before it can blink again.")
    (blink-timer :initform 5.0 :accessor blink-timer
@@ -307,7 +307,7 @@ whatever it was doing. True if it went."
 
 (defmethod evade-projectile ((riftwalker riftwalker) projectile)
   (when (and (can-blink-p riftwalker) (< (random 100 *roll-random*) *blink-evade-chance*))
-    (setf (alert riftwalker) (max (alert riftwalker) *alert-time*))
+    (setf (alert riftwalker) (max (alert riftwalker) (alert-time)))
     (blink riftwalker)))
 
 ;;; The call.
@@ -370,7 +370,7 @@ it would step out on; or NIL."
       (let ((to (free-spot spot (body-radius ally) (sprite-height ally) :search 1 :ignore ally)))
         (when to
           (rift-move ally to :yaw (bearing to (feet *player*)) :container (container riftwalker))
-          (setf (alert ally) (max (alert ally) *alert-time*)))))))
+          (setf (alert ally) (max (alert ally) (alert-time))))))))
 
 (defun calling-p (riftwalker)
   "True while RIFTWALKER's call has yet to bring its ally: how long its sign stays."
@@ -417,7 +417,8 @@ shield; or throw a pull or a swap at one in range. True if it started one."
       (:call (release-call riftwalker))
       (T (release-attack-spell riftwalker)))
     (when (< 0 (ability-cooldown ability))
-      (setf (getf (cooldowns riftwalker) (ability-name ability)) (ability-cooldown ability)))))
+      (setf (getf (cooldowns riftwalker) (ability-name ability))
+            (* (ability-cooldown ability) (depth-scale :cooldown))))))
 
 (define-handler (riftwalker tick :after) (dt)
   (unless (frozen-p)
@@ -481,8 +482,10 @@ shield; or throw a pull or a swap at one in range. True if it started one."
   (preload (make-instance 'fx-sprite :animation (find-fx-animation 'rift-flash)) scene)
   (preload (make-instance 'rift-sign :centre (vec 0 0 0) :animation (find-fx-animation 'rift-sign)) scene))
 
-;;; As a boss (boss.lisp): the Rift Lord. Its powers' attacks show its cast.
+;;; As a boss (boss.lisp): the Rift Lord. Its powers' attacks show its cast. And as an elite
+;;; (elite.lisp).
 
 (define-shader-entity riftwalker-boss (boss riftwalker) ())
+(define-shader-entity elite-riftwalker (elite riftwalker) ())
 
 (defmethod power-animation ((boss riftwalker-boss)) 'riftwalker-cast)

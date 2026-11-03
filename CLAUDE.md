@@ -47,7 +47,7 @@ once it is up, so the user can tell the windows apart:
 ```
 
 Builds the game into `dist/` (gitignored), about 200 MB: `hexmaw`, the executable,
-the native libraries it loads (GLFW, evdev), and `pool/` with the assets: `pool/hexmaw/`
+the native libraries it loads (GLFW, evdev, and for sound libmixed, libvorbis and PipeWire's spa; PulseAudio and ALSA come from the system), and `pool/` with the assets: `pool/hexmaw/`
 is `data/` without the blueprints, beside Trial's own pools and the font cache. Copy `dist/`
 anywhere and run `dist/hexmaw`; it needs no SBCL, Quicklisp or source tree. It takes
 about 2.5 minutes and needs `patchelf` (`apt install patchelf`), which Deploy uses on the
@@ -285,7 +285,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 15, ogre 17, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
+  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
@@ -617,7 +617,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   player's is `teleport-player`, player.lisp: stopped, out of a vortex, the eye snapped, the view
   flashing `*rift-flash-color*`) and `rift-move`, a `rift-flash` at both ends. Rolls use
   `*roll-random*`. As a boss it is the Rift Lord (`riftwalker-boss`, defined here), denied the
-  boss's `:blink`. On the test level it stands by the hall's west wall. To try it:
+  boss's `:blink`, and an elite as `elite-riftwalker`. It spawns from level 2 of a run on (weight 1,
+  then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
   `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
   riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block level 3 ends in. It is an
@@ -630,12 +631,13 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   :blink :haste)`, forces them for testing (a `defparameter`: reloading boss.lisp clears it, so set
   it again after). Empowered: drawn `scale` times bigger (`size-scale` on
   `creature`, which every strip's `:size` is multiplied by), about 3 m, `*boss-health*` (500),
-  `*boss-pain-chance*`, melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
+  `*boss-pain-chance*` (1, the weapon's bonus still added), melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
   never gibbed, flyers hovering `*boss-hover*` so the sword reaches them, step `*nav-tall-lift*`
   since it is taller than `*nav-clearance-height*`. No vortex pulls or catches it (`vortex-proof-p`).
-  It glows: a class fragment shader on `boss` multiplies it by `*boss-shade*` and draws a pulsing
-  rim in `*boss-glow-color*` on every opaque texel beside a see-through one (on the boss's program
-  only), with a lamp of its own. Warded shows as an arc of violet `aurora` on the floor round its
+  It glows: `rim-glow`, a shader mixin the boss and elites (`src/elite.lisp`) share, multiplies it
+  by its `rim-shade` (the boss's `*boss-shade*`) and draws a pulsing rim on every opaque texel
+  beside a see-through one (on that class's program only), in `*boss-glow-color*`, with a lamp of
+  its own (`light-rim`). Warded shows as an arc of violet `aurora` on the floor round its
   front (`update-ward`, `*ward-colors*`), over exactly the sector its reflection covers
   (`ward-arc`: the billboard views `shield-views` covers, a quarter of pi each, so 135°), turning
   with its facing. Powers are
@@ -683,6 +685,21 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   other monster taken out of the level; a save made there doesn't load (its monsters don't match),
   so test saves on `(progn (start-level :generated) (setf *run-depth* 3))`. To enrage it,
   `(game (hurt (arena-boss *arena*) 255))`.
+- `src/elite.lisp`: elites, a deeper level's stronger monsters. A spawn on a generated level is
+  one with the level's `*elite-chance*` (`:elite-chance` in `*run-levels*`): `elite-roll`, from
+  `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
+  every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
+  its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `elite-riftwalker`
+  in riftwalker.lisp, `*elite-kinds*`):
+  `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
+  `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
+  kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
+  none of them the boss's orange. Its one trait (`elite-trait`): `:haste` (cyan, walk and attacks ×
+  `*elite-haste*`), `:warded` (violet, its front turns spells back, `shield-views`; never the
+  knight's) or `:tough` (bone-white, half the pain chance and the knockback). Summoned and raised
+  creatures and the boss never are. A save needn't keep the trait: the rebuild draws it again.
+  `*elite-override*` (`:all`, or a trait) makes every block spawn an elite, on any level (on the test
+  level, the blocks attached to it: the shrine and the pool). `tools/hd status` shows `elite:<trait>`.
 - `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the
   amounts: `:herbs` +15 health and `:shard` +28 mana (2 bolts) restore at once; at full one stays
   where it is, below full it is taken and any excess lost (`restore-resource`). `:health-potion`
@@ -752,21 +769,28 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   eye to `*death-eye-height*`, rolls the view (`*death-roll*`, the player's `project-view`) and
   sinks the weapons. After `*death-panel-delay*` the `death-screen` comes up with the mouse
   released: `death-stats` (killed by, time survived, monsters slain, areas explored, damage
-  taken, the seed) and a button back to the main menu. Esc does nothing there, F5 is refused and
-  F9 still quickloads. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
+  taken, the seed) and a button back to the main menu. Esc, F5 and F9 do nothing there: death
+  ends the run, with no quickload back into it. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
   `:drowning`, `:tornado`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
   Killing the boss sets `:victory` (`win-run`, boss.lisp) and the `victory-screen` comes up:
   `victory-stats` (the boss slain, then `run-stat-lines`, the rows it shares with the death
   screen) over the `victory` splash, and the same button back. Esc and F5 do nothing there.
   A new menu is a `menu-panel` subclass with `panel-title` and `panel-buttons` (the
   loading screen is one with no buttons). A `panel-buttons` row is `(label action)`, a
-  button, or `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
-  variable; an action may also be a closure. Hovering a row gives it the keyboard focus, so
+  button, `(label :toggle variable)`, a checkbox (`menu-toggle`) that sets that special
+  variable, or `(label :slider variable)`, a slider from 0 to 1 (`menu-slider`: the whole row,
+  filled from the left, the percentage at its right, `*menu-slider-step*` a key or wheel notch);
+  an action may also be a closure. Hovering a row gives it the keyboard focus, so
   one row is lit at a time. `panel-width` is the column's width (`*menu-width*`; the slot
   panels' is wider, for their labels). `panel-lines` adds `(label value)` rows of text
   between the title and the buttons (`menu-stat`, `*menu-stat-height*`; the death screen's stats).
+  The panel works out its column's height from its rows, a `*menu-row-gap*` per row and
+  `*menu-slack*`; too short, the last button hangs out of the column, and Alloy sends no click on
+  that strip to it (the death screen's button lost its bottom 18 px, the main menu's 8). After
+  changing row sizes, check no element sticks out of its parent's bounds.
   Settings (`open-settings`, on both menus) covers the menu it came from while
-  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Show
+  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Music and
+  Sound volume (`*music-volume*`, `*sound-volume*`, music.lisp), Show
   FPS (`*show-fps*`, in memory only, kept across reloads) and, in a debug version
   (`*debug-version*`), Debug minimap (`*map-debug*`: the automap shows every block, creature
   markers and block names). The main menu's Debug level and Boss fight are also debug-version only.
@@ -780,6 +804,36 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
   of the screen (T, the default, centres it; the main menu's `*title-menu-top*` keeps it
   off the dagger in its splash).
+- `src/music.lisp`: music, through Harmony (`trial-harmony`; `main` is its `main`, which starts
+  the sound server: PulseAudio here). In play the `music-director` (entered by `add-music` in
+  `setup-scene`, which stages every track's voice) plays `*music-playlist*` at random, the three
+  exploration and five combat loops (assets `music-explore-1` to `-3`, `music-combat-1` to `-5`,
+  `data/music/<name>.ogg`, on Harmony's `:music` mixer), crossfading over `*music-fade-time*` to
+  another (`pick-track`, from `*music-random*`, never the one playing) every `*music-track-time*`
+  (3 min) of play. `*screen-music*` gives the main menu `music-title` (composed, see "Sound and
+  music"), the death screen `music-death` (the first explore-2, a drone) and the victory screen
+  combat-4; a screen's track starts from the top whenever its screen comes up (`restart-track`,
+  which seeks in the mixing thread). `music-wanted` says which track the game state wants and
+  `music-target` how loud: `*music-pause-volume*` under the pause menu, silent on the loading
+  screen, full everywhere else. A playlist track faded out pauses and picks up there when it comes
+  round again. (Music that followed the fighting, combat while a monster hunted the player, was
+  dropped: monsters notice and lose the player every few seconds, so it swapped back and forth.)
+  `*music-volume*` and `*sound-volume*` (Settings, in memory only like Show FPS) are the
+  `:music` and the `:effect` and `:speech` mixers' volumes (`apply-volumes`). **Every track is
+  started once and then only paused and unpaused** (`connected-voice`, `*connected-voices*`, which
+  outlives rebuilds; `harmony:paused-p` is a flag on the voice's unpacker: paused, its source stops
+  decoding and it outputs silence). Never `harmony:stop` and `play` again: `play` only queues the
+  voice's connection for the mixing thread, while `stop` decides on the game thread, from whether
+  it is connected yet, to do nothing. A rebuild that picked a fresh exploration track and then hit a
+  fight at once stopped it before it was connected, and its next start left it silent for good,
+  though it read as playing and its position advanced. To check what really reaches the speakers,
+  record the game's own PulseAudio stream: `parec --monitor-stream=<its sink-input index>` (`pactl
+  list sink-inputs`, application name `trial`). An error in Harmony's mixing thread doesn't reach the
+  runtime-error guard: it waits in the debugger (seen in `./run.sh`'s output), the queue stops, and
+  every later start, stop and `harmony:with-server :synchronize T` hangs (connecting a stereo voice
+  to the `:effect` mixer, a space mixer, does it).
+  To watch it, `(levels (node :music-director (scene +main+)))`, `(current ...)` and `(wanted ...)`. See "Sound and
+  music".
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
@@ -836,7 +890,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   middle rather than against the right edge, so the thrust goes where the player looks on any
   screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
   (`art/spear/spear-frames.txt` says how).
-- `src/player.lisp`: first-person controller and box collision. Mana doesn't regenerate:
+- `src/player.lisp`: first-person controller and box collision. Walking backward keeps
+  `*backpedal-scale*` (0.75) of the speed. Mana doesn't regenerate:
   only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
   `*stamina-regen*` except while running, which costs `*run-stamina*` a second, on foot or
   swimming with Shift (`update-stamina`); running it empty leaves the player `winded`, walking,
@@ -980,8 +1035,11 @@ costs a few milliseconds in an open hall, so keep the limit no longer than level
 `attack-reach` it stops and attacks: the frames run on `attack-frame-times` (it turns to
 follow the player through the first), and on `attack-hit-frame` the blow lands if the player
 is still within `attack-reach`, inside `attack-arc` and not behind a wall (`hurt-player`:
-damage, a shove, the pain flash, hit-stop). Backing off during the wind-up dodges it, and a
-hit breaks the attack off. Then it stands `attack-pause` and hunts on.
+damage, a shove, the pain flash, hit-stop). Until the blow lands it lunges: steps in along
+its facing at `lunge-speed` (imp 3.5 m/s, skeleton and knight 3, ogre 2.5; not a boss's power)
+until within `*lunge-stop*` of its reach, so backing off at a walk doesn't escape it; running
+back does, and so does a sidestep from a slow turner once its facing is set (the imp turns at
+once, so it follows a sidestep through its wind-up). A hit breaks the attack off. Then it stands `attack-pause` and hunts on.
 
 A creature that `flanks` (the imp, the skeleton) doesn't attack into a raised shield: within
 `*flank-range*` and in front of it (`shield-facing-p`, the shield's arc plus `*flank-margin*`)
@@ -1013,7 +1071,7 @@ with the player's); in the 3 m corridor it flies at 1.1 m, in reach. Bolts reach
 
 It hunts as a caster does (`ranged-p`, `hunt-from-range`: back off within `keep-away`, attack
 within `attack-range` with a clear line), but its attack is a dive (`attack-step`): it hangs
-and rises `dive-rise` for `dive-windup` (0.7 s, the warning), then flies a straight line at
+and rises `dive-rise` for `dive-windup` (0.5 s, the warning), then flies a straight line at
 `dive-speed` toward the player's head (`strike-height` above the feet) as it was when the dive
 left, `dive-overshoot` beyond, skimming the floor. The talons strike once, `attack-damage`, if
 the player comes within `attack-reach`; a sidestep makes it miss. It then stands
@@ -1244,6 +1302,86 @@ grain across its underside.
 
 A re-made PNG is picked up by reloading greybox.lisp (`tools/hd reload src/greybox.lisp`),
 not by `tools/hd reset`.
+
+## Sound and music
+
+Sounds and music are generated with ElevenLabs (a paid plan: the free one refuses music), the
+key in `~/.config/elevenlabs/api_key`. `tools/gen_sfx.py` makes sound effects (0.5 to 30 s,
+about 10 credits a second) and `tools/gen_music.py` instrumental tracks (10 to 300 s, about 12 a
+second), each writing a `.prompt.json` beside its output like `gen_image.py`. Both save `.wav`
+(the API's PCM is stereo) or `.mp3`. Sources and prompts live under `audio/` (`audio/prompts/`,
+`audio/sfx/`, `audio/music/`), as `art/` holds the pictures; what the game plays goes in `data/`.
+
+Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
+minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro
+or ending (`music-explore-1` is `music-explore-loop.txt`), which keeps the loop easy to find, and
+all share the 1990s General MIDI wavetable style line. `tools/make_loop.py` cuts the loop (its
+docstring says how it finds the join): the two ends match in harmony and sound, the first 4 s
+crossfaded from what follows the end, so the loop's end runs on into its start. It writes
+`<name>-loop.wav` beside the source and, through GStreamer (no ffmpeg or sox here), Ogg Vorbis
+into `data/music/`, about a tenth of the size, checking that the Ogg says it holds the same sample
+count (`ogg_length`, its last page's granule position, which the game's decoder trims to). Decoding
+it back through GStreamer is no check: its timestamps are nanoseconds, and at some lengths it
+comes out a sample or two long. Loops come out at whole bars (72.0, 88.6, 60.0, 64.0 s), between 1 and
+2 minutes:
+
+```bash
+tools/gen_music.py audio/music/combat-6.wav -f audio/prompts/music-combat-6.txt -l 120
+tools/make_loop.py audio/music/combat-6.wav data/music/combat-6.ogg --min-loop 50 --loudness -11 --preview /tmp/join.wav
+```
+
+then a `define-asset` for it in music.lisp and its name in `*music-moods*`. `--preview` writes the
+join, 8 s either side, to listen to; `--pick 2` takes the next-best join, and `--start` keeps the
+loop to a later part of a track.
+
+`--loudness` evens out what the generator made: its takes came 5 dB apart (a drum section as
+loud as combat). Exploration loops are -14 LUFS, combat -11, so a fight comes in a little louder;
+a gain that would clip goes through a look-ahead limiter. They were cut with: explore-1
+`--min-loop 100`, explore-3 `--min-loop 90`, combat `--min-loop 50`.
+
+What exploration wants, from listening: an instrument always playing a melody over a moving
+part (explore-1's strings, harp and bell). Drones and pads with little over them (the first
+explore-2 and -3, kept as `*-drone.wav`) were off-putting, and flute, lute and harp arpeggios
+(`music-explore-2-pastoral.txt`) came out pastoral, a meadow rather than a crypt. Asked for
+"unobtrusive", the generator gave drones; "something is always moving: no drones, no long held
+notes on their own" fixed that. explore-3 is take 2 of `music-explore-3.txt` (dulcimer and
+marimba ostinato, horn and clarinet, frame drum; rather jolly, kept for its curious undertone).
+
+**Composed music.** Music can also be written out as notes: `tools/compose_explore.py` and
+`tools/compose_combat.py` are pieces, each a function returning its notes plus its General MIDI
+instruments, and `tools/midi_music.py` (the shared part) writes them as MIDI, renders that through
+GStreamer's FluidSynth element and the TimGM6mb soundfont in `/usr/share/sounds/sf2/` (a small GM
+set, the sound of a 1990s wavetable card: "this is Daggerfall"), and finishes the loop with
+make_loop.py's loudness and encoding. It renders the piece twice and keeps the second pass, which
+opens with the first's reverb tails, so the join needs no crossfade; the beat is chosen so the
+loop is a whole number of samples and of FluidSynth's 64-sample blocks, and the two passes then
+correlate at 1.0000. A dense piece clips inside FluidSynth before the limiter can act, so a piece
+passes its own synth `gain` (combat 0.4, exploration 0.8) and the run warns of any clipped samples.
+No credits, 17 s a render. `compose_title.py` is the main menu's: C minor at 75 BPM, 102 s, a
+horn theme, a choir, the theme on brass over an organ, a solo cello, all over a harp's arpeggio.
+The current explore-2 is `compose_explore.py`: D minor at 80 BPM, horn
+and low clarinet over dulcimer, bass, frame drum, timpani and bell, with no C or F major (a first
+version with them, and an octave higher, was right but too bright for a dungeon):
+
+```bash
+tools/compose_explore.py audio/music/explore-2 data/music/explore-2.ogg --preview /tmp/join.wav
+tools/compose_combat.py audio/music/combat-5 data/music/combat-5.ogg --preview /tmp/join.wav
+tools/compose_title.py audio/music/title data/music/title.ogg --preview /tmp/join.wav
+```
+
+`compose_combat.py` is combat-5, a battle piece after combat-3: E minor at 160 BPM, 64 bars, a
+96 s loop, cellos grinding over contrabasses, drums, taiko and timpani on every beat, brass stabs,
+a tremolo string figure, a horn theme, choir and orchestra hits, the Phrygian F major for menace;
+its four sections come twice, scored anew the second time. At 120 BPM it lacked energy: combat-3,
+asked for 110, plays at about 160 (a tempo estimate from onset autocorrelation finds half of it,
+0.75 s), and once at 160, 32 bars (48 s) was too short.
+
+Harmony picks a decoder by the file's extension, and quickloads its system when it isn't loaded;
+the binary has no Quicklisp, so each format the game plays is a dependency in the .asd
+(`cl-mixed-vorbis` for `.ogg`, `cl-mixed-wav` for `.wav`). A changed `main` class or new
+dependency needs a restart of `./run.sh`. In this version, `trial:seek` on a voice fails
+(`mixed:seek` takes no `:by`); seek its source by frames instead. A vorbis source's
+`frame-count` reads twice the real length, though it ends and loops where it should.
 
 ## Splash screens
 
@@ -1850,10 +1988,10 @@ has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has 
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith and
-riftwalker 1 each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+riftwalker 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
-own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
+own state; one float draw whatever the weights, so changing a pool never changes the layout). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
 is one monster at its centre, so `ii` centres one on a 1 m spot. `pickup floor` or `pickup
 reward` is a spot where a level may put a pickup, one per group like a spawn, on top of a `box` in
@@ -2076,8 +2214,20 @@ A run is the generated levels of `*run-levels*` (`src/run.lisp`) one after anoth
 rooms. Each entry says how many rooms the generator aims for (over `*generator-rooms*`,
 `level-settings`) and which block it puts on the doorway furthest from the start (`:exit`, a name or
 a list tried in order): the `descent` on levels 1 and 2, the boss's `arena` on level 3 (see
-`src/boss.lisp`), whose boss ends the run. Nothing else differs between levels yet, so the
-monster mix and the kit are the same on each. `*run-depth*` is the level the player is on, from 1,
+`src/boss.lisp`), whose boss ends the run. The kit is the same on each, but the monsters get
+harder going down, by keys in each entry (none are flat stat multipliers):
+
+- built into the level (`level-settings` sets their variables for the generator, so a save keeps
+  them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre,
+  wraith or riftwalker on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
+  0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
+- asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
+  `*sight-range*` and `*hearing-range*` in `sees-player-p`, `:alert` the hunt's `alert-time`,
+  `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
+  abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+
+Pickups stay budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,
 and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
 try at level 1 being the run seed itself, so `*level-seed*` still reproduces a level 1 and a whole
 run. A reset on a generated level rebuilds the same level, since the run keeps its seed; a new one
@@ -2107,7 +2257,9 @@ to walk the stair, stand at the `descent` connector in `*level-doorways*` and ho
 
 Over seeds 1 to 200 at each size, every exit fit on the first seed and could be reached, and the
 rooms always reached their target (16.1, 19.1, 22.1 on average; 16 to 18 at the lowest size, 22 to 24
-at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run;
+at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run
+(an older count: over run seeds 1 to 20, `*creatures*` held 33.0, 42.3 and 54.3 after the depth
+scaling, against 31.9, 40.3 and 48.9 before it, with 10% elites on level 2 and 19% on level 3);
 pickups 13.2, 15.7, 18.3. A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
 levels 1 and 2 the walk to the exit is 136 m on average against 143 m for the level's longest walk,
 with a median at 99.6% of it and the lowest tenth under 81%: blocks from the start are a good stand-in.

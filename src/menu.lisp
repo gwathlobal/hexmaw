@@ -11,6 +11,9 @@
 (defparameter *menu-width* 320 "Width of the button column, in UI units (pixels at 1280×720).")
 (defparameter *menu-row-height* 48)
 (defparameter *menu-row-gap* 8)
+(defparameter *menu-slack* 10
+  "UI units of room a menu's column gets past its rows and gaps, for text that comes out a
+pixel or few taller than its row.")
 
 (define-shader-pass menu-ui (trial-alloy:base-ui) ())
 
@@ -172,6 +175,60 @@ lower middle of its splash clear.")
 (defmethod presentations::compute-sizing-strategy ((renderer presentations:default-look-and-feel) (toggle menu-toggle))
   presentations::*fit-to-all-shapes*)
 
+(defparameter *menu-slider-fill-color* (chroma:color 0.46 0.30 0.13 0.95))
+(defparameter *menu-slider-step* 0.05 "What a slider moves by on a key or a wheel notch, of its 0 to 1.")
+
+(defclass menu-slider (menu-focusable alloy:ranged-slider)
+  ((text :initarg :text :initform "" :accessor alloy:text))
+  (:default-initargs :range '(0.0 . 1.0) :step *menu-slider-step* :grid *menu-slider-step*)
+  (:documentation "A row the size of a button that is a slider from 0 to 1: filled from the left
+as far as its value, its label at the left and the value as a percentage at the right. A click
+or drag anywhere on it sets the value, and left and right move it while it has the focus."))
+
+(presentations:define-realization (presentations:default-look-and-feel menu-slider)
+  ((:background simple:rectangle)
+   (alloy:margins)
+   :pattern *menu-button-color*)
+  ((:fill simple:rectangle)
+   (alloy:extent 0 0 0 (alloy:ph))
+   :pattern *menu-slider-fill-color*)
+  ((:border simple:rectangle)
+   (alloy:margins)
+   :line-width (alloy:un 2)
+   :pattern *menu-border-color*)
+  ((:label simple:text)
+   (alloy:margins 16 1 1 1)
+   (alloy:text alloy:renderable)
+   :pattern *menu-text-color*
+   :size (alloy:un 20)
+   :halign :start :valign :middle)
+  ((:value simple:text)
+   (alloy:margins 1 1 16 1)
+   ""
+   :pattern *menu-text-color*
+   :size (alloy:un 20)
+   :halign :end :valign :middle))
+
+(presentations:define-update (presentations:default-look-and-feel menu-slider)
+  (:background
+   :pattern (if (or alloy:focus alloy:hovered-p) *menu-button-hover-color* *menu-button-color*))
+  (:fill
+   :bounds (alloy:extent 0 0 (alloy:pw (alloy:slider-unit alloy:renderable)) (alloy:ph))
+   :pattern *menu-slider-fill-color*)
+  (:border
+   :pattern *menu-border-color*
+   :hidden-p NIL)
+  (:label
+   :text (alloy:text alloy:renderable)
+   :pattern *menu-text-color*)
+  (:value
+   :text (format NIL "~d%" (round (* 100 (alloy:slider-unit alloy:renderable))))
+   :pattern *menu-text-color*))
+
+;; A slider sizes itself to its border; this one fills its row as a button does.
+(defmethod presentations::compute-sizing-strategy ((renderer presentations:default-look-and-feel) (slider menu-slider))
+  presentations::*fit-to-all-shapes*)
+
 (defparameter *menu-stat-height* 30 "Height of a stat row (MENU-STAT), in UI units.")
 
 (defclass menu-stat (alloy:label)
@@ -219,8 +276,9 @@ lower middle of its splash clear.")
   (:method ((panel menu-panel)) *menu-width*))
 (defgeneric panel-buttons (panel)
   (:documentation "A list of rows, each (LABEL ACTION), a button: ACTION is a function name,
-called on the next tick after a click; or (LABEL :TOGGLE VARIABLE), a checkbox that sets the
-special variable VARIABLE to T or NIL as it is clicked."))
+called on the next tick after a click; (LABEL :TOGGLE VARIABLE), a checkbox that sets the
+special variable VARIABLE to T or NIL as it is clicked; or (LABEL :SLIDER VARIABLE), a slider
+(MENU-SLIDER) that sets VARIABLE from 0.0 to 1.0 as it moves."))
 (defgeneric panel-lines (panel)
   (:documentation "A list of (LABEL VALUE) strings, rows of text (MENU-STAT) between PANEL's
 title and its buttons.")
@@ -232,12 +290,17 @@ title and its buttons.")
          (rows (+ 1 (length buttons) (if lines 1 0)))
          (lines-height (* (length lines) *menu-stat-height*))
          (splash (panel-splash panel))
+         ;; The column's height. Every row has half a gap above it and below it (the column's
+         ;; cell margins), so a gap per row; and the title's text and the stats' column come
+         ;; out a few pixels taller than their rows. Too short, the last button hangs out of
+         ;; the bottom of the column, and Alloy never sends a click on that strip to it.
          (backdrop (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
                                   :col-sizes `(T ,(panel-width panel) T)
                                   :row-sizes `(,(panel-top panel)
                                                ,(+ (* (- rows (if lines 1 0)) *menu-row-height*)
                                                    lines-height
-                                                   (* (1- rows) *menu-row-gap*))
+                                                   (* rows *menu-row-gap*)
+                                                   *menu-slack*)
                                                T)
                                   (when splash (list :splash splash))))
          (column (make-instance 'alloy:vertical-linear-layout
@@ -261,15 +324,17 @@ title and its buttons.")
           do (let ((label label)
                    (action action)
                    (variable variable))
-               (if (eq action :toggle)
-                   (alloy:represent-with 'menu-toggle
-                                         (make-instance 'alloy:place-data
-                                                        :getter (lambda () (symbol-value variable))
-                                                        :setter (lambda (value) (setf (symbol-value variable) value)))
-                                         :text label :layout-parent column :focus-parent focus)
-                   (let ((button (alloy:represent label 'menu-button :layout-parent column :focus-parent focus)))
-                     (alloy:on (alloy:activate button) ()
-                       (queue-menu-action action))))))
+               (case action
+                 ((:toggle :slider)
+                  (alloy:represent-with (if (eq action :toggle) 'menu-toggle 'menu-slider)
+                                        (make-instance 'alloy:place-data
+                                                       :getter (lambda () (symbol-value variable))
+                                                       :setter (lambda (value) (setf (symbol-value variable) value)))
+                                        :text label :layout-parent column :focus-parent focus))
+                 (T
+                  (let ((button (alloy:represent label 'menu-button :layout-parent column :focus-parent focus)))
+                    (alloy:on (alloy:activate button) ()
+                      (queue-menu-action action)))))))
     (alloy:finish-structure panel backdrop focus)))
 
 (defparameter *save-slots* '(1 2 3 :quick) "The slots the menus offer (save.lisp), :QUICK for F5 and F9.")
@@ -368,7 +433,9 @@ victory screens share."
 (defmethod panel-splash ((panel settings-menu)) (when (eq *game-state* :title) "title"))
 (defmethod panel-top ((panel settings-menu)) (if (eq *game-state* :title) *title-menu-top* T))
 (defmethod panel-buttons ((panel settings-menu))
-  `(("Show FPS" :toggle *show-fps*)
+  `(("Music volume" :slider *music-volume*)
+    ("Sound volume" :slider *sound-volume*)
+    ("Show FPS" :toggle *show-fps*)
     ,@(when *debug-version* '(("Debug minimap" :toggle *map-debug*)))
     ("Back" close-settings)))
 
@@ -565,7 +632,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
     (save-game :quick)))
 
 (defun quickload ()
-  (when (and (member *game-state* '(:title :playing :paused :dead)) (slot-used-p :quick))
+  (when (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
     (load-game :quick)))
 
 (defun reset-run ()

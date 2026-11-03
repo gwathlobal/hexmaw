@@ -34,7 +34,7 @@ lintel before it reaches it.")
    (climb-speed :initarg :climb-speed :initform 1.5 :accessor climb-speed
                 :documentation "Metres per second it climbs back to its hover.")
    (dive-speed :initarg :dive-speed :initform 9.0 :accessor dive-speed :documentation "Metres per second.")
-   (dive-windup :initarg :dive-windup :initform 0.7 :accessor dive-windup
+   (dive-windup :initarg :dive-windup :initform 0.5 :accessor dive-windup
                 :documentation "Seconds it hangs before a dive: the warning.")
    (dive-rise :initarg :dive-rise :initform 0.4 :accessor dive-rise
               :documentation "Metres it rises during the wind-up.")
@@ -295,11 +295,11 @@ length, against a wall or a body, or on the strike."
    (attack-reach :initform 0.3)
    (attack-range :initform 6.0)
    (keep-away :initform 2.5)
-   (attack-pause :initform 1.0)
+   (attack-pause :initform 0.7)
    (walk-speed :initform 1.6)
    (chase-speed :initform 3.0)
    (wander-radius :initform 5.0)
    (gibs :initform '((:flesh 0 0 1 2 4 5 6 7 7)))
    (gib-scale :initform 1.1)
-   (pain-chance :initform 50)
+   (pain-chance :initform 25)
    (max-health :initform 20)))
