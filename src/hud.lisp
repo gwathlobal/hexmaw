@@ -173,10 +173,16 @@ void main(){
 (defparameter *health-flash-color* (vec4 0.75 0.7 0.15 0.25) "RGB and peak opacity of a health pickup's flash.")
 (defparameter *mana-flash-color* (vec4 0.15 0.35 1.0 0.25) "RGB and peak opacity of a mana pickup's flash.")
 
+(defparameter *rift-flash-color* (vec4 0.55 0.65 1.0 0.45)
+  "RGB and peak opacity of the flash when a riftwalker's rift moves the player (riftwalker.lisp).")
+
 (define-shader-entity restore-flash (pain-flash) ())
 
 (defmethod flash-color ((flash restore-flash))
-  (if (and *player* (eq :mana (restored *player*))) *mana-flash-color* *health-flash-color*))
+  (case (and *player* (restored *player*))
+    (:mana *mana-flash-color*)
+    (:rift *rift-flash-color*)
+    (T *health-flash-color*)))
 
 ;;; Under water: the whole view, the hands with it, turned blue. The colour multiplies what
 ;;; is drawn, so the darks stay dark. Drawn after the water's see-through surface (LATE-RANK),

@@ -417,7 +417,7 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
       (corner-cut (< 0 (vx d)) (< 0 (vz d))))))
 
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1)
-                             ("gale-wraith" 1))
+                             ("gale-wraith" 1) ("riftwalker" 1))
   "What a block's spawn_any picks from, each monster with its weight. A level of the run sets
 its own (*RUN-LEVELS*' :POOL).")
 

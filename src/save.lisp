@@ -75,6 +75,12 @@
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
 
+(defmethod saved-slots append ((riftwalker riftwalker))
+  '(blink-cooldown blink-timer pounce call-target call-point))
+
+(defmethod saved-slots append ((sign rift-sign))
+  '(caster centre))
+
 (defmethod saved-slots append ((sigil summon-sigil))
   '(caster centre burst))
 
@@ -89,7 +95,7 @@
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing projectile-velocity submerged))
+  '(spell caster homing projectile-velocity submerged evade-asked))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))

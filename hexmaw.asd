@@ -32,6 +32,7 @@
                (:file "wraith")
                (:file "boss")
                (:file "elite")
+               (:file "riftwalker")
                (:file "pickups")
                (:file "hud")
                (:file "hands")
