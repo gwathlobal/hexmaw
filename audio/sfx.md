@@ -70,7 +70,7 @@ First-person unless marked.
 | winded | 3 | 1P | 1.5 | 2 | `update-stamina` player.lisp:448, `winded` set |
 | splash-in | 2 | 1P | 0.8 | 2 | `(setf (swimming player))` player.lisp:521, NIL to T |
 | splash-out | 2 | 1P | 0.8 | 2 | `(setf (swimming player))` player.lisp:521, T to NIL |
-| swim-stroke | 3 | 1P | 0.6 | 3 | `swim` player.lisp:347, throttled |
+| swim-stroke | 3 | 1P | 1.2 | 3 | `swim` player.lisp:347, throttled |
 | climb-out | 3 | 1P | 0.6 | 2 | player.lisp:391, `climbing` set |
 | underwater | 2 | 1P L | 4 | 2 | `*eye-underwater*` edge, `place-camera` player.lisp:325 |
 | surface-gasp | 3 | 1P | 0.8 | 2 | `update-breath` player.lisp:413, surfacing with breath low |

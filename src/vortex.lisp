@@ -18,6 +18,8 @@
 ;;; Each actor runs all this in its own tick, so its camera can't lag the vortex, and
 ;;; heavier ones (KNOCKBACK-SCALE) are dragged and thrown less.
 
+(defparameter *tornado-volume* 1.5
+  "How loud its roar plays: over 1, since it is heard from across a room as it roams.")
 (defparameter *vortex-pull-radius* 6.0 "Metres from the centre line that a vortex drags things from.")
 (defparameter *vortex-pull-speed* 5.5
   "Speed in m/s it drags something at the edge of its catch, falling to nothing at the pull radius.")
@@ -361,7 +363,7 @@ turns aside. It settles to the floor and notes the ceiling."
         (loc (location spell-vortex))
         (funnel (vortex-funnel spell-vortex)))
     (setf (vx loc) (vx c) (vy loc) (+ (vy c) 1.0) (vz loc) (vz c))
-    (move-loop (vortex-sound spell-vortex) loc (vortex-strength spell-vortex))
+    (move-loop (vortex-sound spell-vortex) loc (* *tornado-volume* (vortex-strength spell-vortex)))
     (when funnel
       (setf (funnel-strength funnel) (vortex-strength spell-vortex)
             (funnel-height funnel) (min 9.0 (max 2.0 (- (vortex-ceiling spell-vortex) (vy c))))))))
