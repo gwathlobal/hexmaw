@@ -21,12 +21,15 @@
 
 (defparameter *sfx-voices* 3 "Voices for each file of a one-shot: how many copies may overlap.")
 (defparameter *loop-voices* 6 "Voices for each loop clip: how many may sound at once.")
-(defparameter *sound-min-distance* 2.0 "Metres within which a positional sound is at full volume.")
-(defparameter *sound-max-distance* 40.0 "Metres beyond which a positional sound is silent.")
-(defparameter *sound-rolloff* 1.0 "How fast a positional sound falls off between the two.")
-(defparameter *clip-min-distances* '(:tornado 8.0 :ogre-land 6.0 :ogre-leap 8.0)
+(defparameter *sound-min-distance* 4.0 "Metres within which a positional sound is at full volume.")
+(defparameter *sound-max-distance* 50.0
+  "Metres beyond which a positional sound gets no quieter (the space mixer clamps the distance).")
+(defparameter *sound-rolloff* 0.75
+  "How fast a positional sound fades past *SOUND-MIN-DISTANCE*: its volume is (distance / min
+distance) to the minus this, so at 0.75 it loses 4.5 dB a doubling of distance (1 would be 6).")
+(defparameter *clip-min-distances* '(:tornado 12.0 :ogre-land 10.0 :ogre-leap 12.0 :step-heavy 8.0)
   "Positional clips heard at full volume further off than *SOUND-MIN-DISTANCE*: the big ones.
-Read as a voice is connected.")
+Read as a voice is connected (RETUNE-SOUNDS for those connected already).")
 
 (defclass sfx ()
   ((name :initarg :name :reader sfx-name)
@@ -303,9 +306,30 @@ next. Allocates nothing."
       (harmony:connect hvoice T (harmony:segment (if (sfx-space-p (voice-sfx voice)) :effect :speech)
                                                  harmony:*server*)
                        T)
-      (let ((reach (getf *clip-min-distances* (sfx-name (voice-sfx voice)))))
-        (when (and reach (sfx-space-p (voice-sfx voice)))
-          (setf (mixed:min-distance hvoice) (float reach 0f0)))))))
+      (tune-voice voice))))
+
+(defun tune-voice (voice)
+  "Give a connected positional VOICE its distances: *SOUND-MIN-DISTANCE* or its clip's own
+(*CLIP-MIN-DISTANCES*), *SOUND-MAX-DISTANCE* and *SOUND-ROLLOFF*. In the mixing thread."
+  (when (sfx-space-p (voice-sfx voice))
+    (let ((hvoice (sfx-voice-voice voice)))
+      (setf (mixed:min-distance hvoice)
+            (float (getf *clip-min-distances* (sfx-name (voice-sfx voice)) *sound-min-distance*) 0f0)
+            (mixed:max-distance hvoice) (float *sound-max-distance* 0f0)
+            (mixed:rolloff hvoice) (float *sound-rolloff* 0f0)))))
+
+(defun retune-sounds ()
+  "Give every connected voice the distances as they are now, after changing them."
+  (harmony:call-in-mixing-context
+   (lambda ()
+     (handler-case
+         (loop for sfx being the hash-values of *sounds*
+               when (typep sfx 'sfx)
+                 do (loop for voice across (sfx-voices sfx)
+                          when (harmony:chain (sfx-voice-voice voice))
+                            do (tune-voice voice)))
+       (error (e) (setf *sound-error* e))))
+   harmony:*server* :synchronize NIL))
 
 (defvar *sound-frame-queued* NIL
   "The SOUND-CLOCK when a SOUND-FRAME was queued, while it waits in Harmony's mixing queue.")

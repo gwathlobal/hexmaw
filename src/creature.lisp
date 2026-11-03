@@ -483,7 +483,7 @@ DEFINE-CREATURE-SOUNDS gives a class its own.")
   (let ((clip (creature-sound creature event)))
     (when clip (play-sound clip (location creature) volume))))
 
-(defparameter *creature-step-volume* 0.7)
+(defparameter *creature-step-volume* 0.9)
 
 (defun creature-steps (creature)
   "A footstep (its :STEP clip) every two walk frames, from the distance walked: two to a cycle."
