@@ -211,7 +211,8 @@ Death and victory screens have their music; F12 needs nothing.
 
 `audio/sfx-picks.txt` says which takes each clip plays (take 1 when it has no line), and
 `tools/make_sfx.py` turns them into `data/sfx/` (mono for P clips, Ogg, one loudness) and its
-`index.lisp`; `src/sound.lisp` plays them. Every tier 1 clip is hooked. Where the hooks differ
+`index.lisp`; `src/sound.lisp` plays them. `tools/sfx_picker.py` is a page to choose takes on,
+swapping each into the running game. Every tier 1 clip is hooked. Where the hooks differ
 from the tables above:
 
 - A creature's clips are its class's `define-creature-sounds` (a boss shares its kind's):

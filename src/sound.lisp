@@ -35,7 +35,9 @@
    (voices :initform (make-array 0 :adjustable T :fill-pointer 0) :reader sfx-voices
            :documentation "SFX-VOICEs: for a one-shot *SFX-VOICES* per file, file by file.")
    (turn :initform 0 :accessor sfx-turn
-         :documentation "The variant to play next, as an index into FILES.")))
+         :documentation "The variant to play next, as an index into FILES.")
+   (freed :initform NIL :accessor sfx-freed
+          :documentation "T once RELOAD-SOUND has replaced it: requests still queued are dropped.")))
 
 (defclass sfx-voice ()
   ((voice :initarg :voice :reader sfx-voice-voice :documentation "The Harmony voice.")
@@ -119,6 +121,65 @@ enter the director."
               (setf (gethash key *sounds*) sfx))))))
     (enter (make-instance 'sound-director) scene)))
 
+(defun free-voices (voices)
+  "Free VOICES in the mixing thread, which may still be playing them."
+  (when voices
+    (harmony:with-server (harmony:*server* :synchronize T)
+      (dolist (voice voices)
+        (mixed:free (sfx-voice-voice voice))))))
+
+(defun reload-sound (name)
+  "Make clip NAME afresh from data/sfx/index.lisp, as tools/make_sfx.py just wrote it, while
+the game runs (tools/sfx_picker.py's swap). Its old voices are freed, cut off if playing; a
+loop held then falls silent until its holder starts it again. Run it in the game thread.
+Returns the new clip, or NIL if the index no longer has it."
+  (let* ((key (sound-key name))
+         (old (find-sound key))
+         (entry (find key (read-sound-index) :key (lambda (e) (sound-key (getf e :name))))))
+    (when old
+      (setf (sfx-freed old) T)
+      (remhash key *sounds*)
+      (setf *loop-voice-list* (set-difference *loop-voice-list* (coerce (sfx-voices old) 'list)))
+      (free-voices (coerce (sfx-voices old) 'list)))
+    (when entry
+      (destructuring-bind (&key name files seconds space loop) entry
+        (declare (ignore name))
+        (let ((sfx (make-instance 'sfx :name key :files files :seconds seconds :space space :loop loop)))
+          (loop for file in files
+                for s in seconds
+                do (dotimes (i (if loop *loop-voices* *sfx-voices*))
+                     (let ((voice (make-sound-voice sfx file s)))
+                       (vector-push-extend voice (sfx-voices sfx))
+                       (when loop (push voice *loop-voice-list*)))))
+          (setf (gethash key *sounds*) sfx))))))
+
+(defvar *auditions* () "Loops AUDITION-SOUND started, with when to stop them.")
+
+(defun audition-sound (name &optional (seconds 2.0))
+  "Play clip NAME for the picker: a positional one 3 m in front of the player, a loop there
+for SECONDS. Run it in the game thread."
+  (let* ((sfx (find-sound (sound-key name)))
+         (player *player*)
+         (at (if player
+                 (let ((yaw (vy (rotation player))) (eye (location player)))
+                   (vec (+ (vx eye) (* 3 (sin yaw))) (vy eye) (- (vz eye) (* 3 (cos yaw)))))
+                 (vec 0 0 0))))
+    (cond ((null sfx) NIL)
+          ((sfx-loop-p sfx)
+           (let ((voice (start-loop (sfx-name sfx) at)))
+             (when voice
+               (push (cons voice (+ *sound-clock* seconds)) *auditions*))
+             (and voice T)))
+          (T (and (play-sound (sfx-name sfx) at) T)))))
+
+(defun end-auditions ()
+  (when *auditions*
+    (setf *auditions* (delete-if (lambda (a)
+                                   (when (<= (cdr a) *sound-clock*)
+                                     (stop-loop (car a))
+                                     T))
+                                 *auditions*))))
+
 (defun reload-sounds ()
   "Free every voice and forget the clips, so the next scene build reads data/sfx/ afresh
 (after tools/make_sfx.py). Run it, then tools/hd reset."
@@ -126,9 +187,7 @@ enter the director."
                       when (typep sfx 'sfx) append (coerce (sfx-voices sfx) 'list))))
     (clrhash *sounds*)
     (setf *loop-voice-list* () *sound-requests* ())
-    (harmony:with-server (harmony:*server* :synchronize T)
-      (dolist (voice voices)
-        (mixed:free (sfx-voice-voice voice))))
+    (free-voices voices)
     (length voices)))
 
 ;;; Playing
@@ -220,6 +279,7 @@ asked for, and every loop's state."
               (mixed:up space) *listener-up*)
         (loop for voice = (sb-ext:atomic-pop (symbol-value '*sound-requests*))
               while voice
+              unless (sfx-freed (voice-sfx voice))
               do (let ((hvoice (sfx-voice-voice voice)))
                    ;; Still playing (all its voices were busy): from the top.
                    (when (harmony:chain hvoice)
@@ -264,6 +324,7 @@ asked for, and every loop's state."
 (define-handler (sound-director tick) (dt)
   (when harmony:*server*
     (incf *sound-clock* dt)
+    (end-auditions)
     (update-listener)
     ;; Loops stop with the world, but not for a hit-stop's blink.
     (setf *loops-paused* (not (eq *game-state* :playing)))

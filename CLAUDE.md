@@ -1296,6 +1296,16 @@ to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in
 `data/sfx/index.lisp`. Then `tools/hd '(reload-sounds)'` and `tools/hd reset`. Generated takes
 often clip: pick one that doesn't.
 
+The picker does all that from a page, with the game running: `tools/sfx_picker.py` (or the
+`sfx-picker` config in `.claude/launch.json`) serves http://127.0.0.1:8765/, every clip of
+`audio/sfx.md` with its takes to hear in the browser (marked when they clip or are quiet).
+**Use** on a take, **+**/**−** for variants or the gain buttons rewrite that clip's line in
+`audio/sfx-picks.txt`, run `make_sfx.py` on it and have the game swap it in at once
+(`reload-sound`, which frees the clip's old voices in the mixing thread and makes new ones,
+no reset) and play it 3 m in front of the player (`audition-sound`; a loop for 2 s). Switch as
+often as you like. It talks to the game `tools/hd` would (`.eval-port`). Its Ogg files differ
+byte for byte each run (Vorbis stream serials), the sound not.
+
 Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
 minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro
 or ending (`music-explore-1` is `music-explore-loop.txt`), which keeps the loop easy to find, and
