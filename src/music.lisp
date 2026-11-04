@@ -2,7 +2,7 @@
 
 ;;; Music, through Harmony (trial-harmony, set up by MAIN). In play the MUSIC-DIRECTOR,
 ;;; entered by setup-scene, plays the level's playlist (MUSIC-PLAYLIST: exploration only in
-;;; the settlement, combat only on a level with the boss's arena, both elsewhere) at random,
+;;; the settlement, combat only on a run's level with the boss's arena, both elsewhere) at random,
 ;;; one track at a time, crossfading to another every *MUSIC-TRACK-TIME* of play (never the
 ;;; one playing); the main menu, the death screen and the victory screen have tracks of
 ;;; their own (*SCREEN-MUSIC*), which start from the top whenever their screen comes up. MUSIC-WANTED
@@ -52,9 +52,10 @@
 
 (defun music-playlist ()
   "The tracks play draws from on this level: no combat music in the settlement, and no
-exploration music on a level with the boss's arena."
+exploration music on a run's level with the boss's arena (the debug level's arena plays
+everything)."
   (cond (*settlement* (getf *music-moods* :explore))
-        (*arena* (getf *music-moods* :combat))
+        ((and *arena* (eq *level* :generated)) (getf *music-moods* :combat))
         (T (loop for (nil tracks) on *music-moods* by #'cddr append tracks))))
 
 (defparameter *screen-music*
