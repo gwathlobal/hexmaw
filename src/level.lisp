@@ -110,37 +110,43 @@ of :FACTION and :CONDITION when a save gives them, so its town is placed as it w
                           (level-settings *run-depth*))))
 
 (defun level-needs-rebuilding-p ()
-  "True if the level just built must have a way off it, or the boss's arena, and the
-player can't get to one; or if it is the settlement's and its wing came out too small."
-  (and (eq *level* :generated)
-       (not *pending-load*)
-       (or (and (run-level-property *run-depth* :exit)
-                (not (level-goal-reached-p)))
-           (let ((wing (run-level-property *run-depth* :min-wing)))
-             (and wing (< *last-wing-rooms* wing))))))
+  "Why the level just built won't do, or NIL: it must have a way off it, or the boss's arena,
+and the player can't get to one; it is the settlement's and its wing came out too small; or it
+must have an altar (:ALTAR-CHANCE 1) and has none the player can get to."
+  (when (and (eq *level* :generated) (not *pending-load*))
+    (let ((wing (run-level-property *run-depth* :min-wing))
+          (altar (run-level-property *run-depth* :altar-chance)))
+      (cond ((and (run-level-property *run-depth* :exit) (not (level-goal-reached-p)))
+             "has no exit the player can reach")
+            ((and wing (< *last-wing-rooms* wing))
+             "has too small a wing")
+            ((and altar (<= 1 altar) (not (altar-reached-p)))
+             "has no altar the player can reach")))))
 
 (defun build-level (container)
   (let ((*block-memo* (make-hash-table :test 'equal)))
     (loop for attempt from 0
-          do (clear-level)
-             (with-block-batches (container)
-               (ecase *level*
-                 (:test (build-test-level container))
-                 (:gallery (build-kit-gallery container))
-                 (:block (build-check-block container))
-                 (:generated (build-generated-level container attempt))))
-             (index-solids)
-             ;; Last, once every solid, room and portal is in.
-             (link-rooms)
-             (build-nav-grid)
-          while (level-needs-rebuilding-p)
+          for problem = (progn
+                          (clear-level)
+                          (with-block-batches (container)
+                            (ecase *level*
+                              (:test (build-test-level container))
+                              (:gallery (build-kit-gallery container))
+                              (:block (build-check-block container))
+                              (:generated (build-generated-level container attempt))))
+                          (index-solids)
+                          ;; Last, once every solid, room and portal is in.
+                          (link-rooms)
+                          (build-nav-grid)
+                          (level-needs-rebuilding-p))
+          while problem
           do (cond ((< (1+ attempt) *max-level-attempts*)
-                    (v:warn :hexmaw "Level ~d has no exit the player can reach~:[~;, or too small a wing~]; trying another seed."
-                            *last-level-seed* *settlement*)
+                    (v:warn :hexmaw "Level ~d ~a; trying another seed." *last-level-seed* problem)
                     ;; Nothing but this level is in the scene yet.
                     (clear container))
                    (T
-                    (v:warn :hexmaw "No level with an exit in ~d seeds; keeping level ~d." *max-level-attempts* *last-level-seed*)
+                    (v:warn :hexmaw "No level that will do in ~d seeds; keeping level ~d, which ~a."
+                            *max-level-attempts* *last-level-seed* problem)
                     (return))))
     ;; Before the checks, which count the packs too.
     (spread-packs container *last-level-seed*)
