@@ -93,7 +93,8 @@ they did after the save.")
 (defvar *game-state* :title
   "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING,
 :PAUSED, :MAP (the automap, map-view.lisp), :INVENTORY (the inventory panel, inventory.lisp)
-or :DEAD (the player fell on a generated level, PLAYER-DIES, then the death screen). Menus
+or :DEAD (the player fell on a generated level, PLAYER-DIES, then the death screen), :VICTORY,
+or :TALK (talking to one of the townsfolk, dialogue.lisp). Menus
 (menu.lisp) change it; anything but :PLAYING
 freezes the world.")
 
@@ -336,7 +337,11 @@ nothing else meanwhile, and plays its death backwards.")
 empowered form (boss.lisp). Its SPRITE-HEIGHT is already scaled.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
-   (base-scaling :reader base-scaling)))
+   (base-scaling :reader base-scaling)
+   (foe :initform NIL :accessor foe
+        :documentation "A creature it fights rather than the player (FIGHT-FOE): a raider's guard, a
+guard's raider. Hunting the player comes first.")
+   (foe-attack :initform NIL :accessor foe-attack :documentation "True while its attack is at its FOE.")))
 
 (defmethod initialize-instance :after ((creature creature) &key)
   (setf (health creature) (max-health creature))
@@ -471,10 +476,28 @@ summoned mid-game, or a boss (boss.lisp).")
 before its arena is sealed, boss.lisp). A hit only flashes it.")
   (:method ((creature creature)) NIL))
 
-(defun hurt (creature amount &key from (pain-bonus 0))
+(defgeneric townsfolk-p (creature)
+  (:documentation "True if CREATURE is one of the settlement's townsfolk (townsfolk.lisp).")
+  (:method (creature) (declare (ignore creature)) NIL))
+
+(defgeneric harmed (creature amount by)
+  (:documentation "CREATURE has just lost AMOUNT health to BY: the player, a creature, or NIL
+for nothing in particular (lava, water). Townsfolk report it to the watch (townsfolk.lisp); a
+monster struck by one of them fights back (FIGHT-FOE).")
+  (:method ((creature creature) amount by)
+    (declare (ignore amount))
+    (when (and (typep by 'creature) (townsfolk-p by) (not (townsfolk-p creature)) (not (foe creature)))
+      (setf (foe creature) by))))
+
+(defgeneric creature-died (creature by)
+  (:documentation "CREATURE has just died, killed by BY, as for HARMED: the purse takes its
+coin (pickups.lisp), the watch notes a murder (townsfolk.lisp).")
+  (:method ((creature creature) by) (declare (ignore by))))
+
+(defun hurt (creature amount &key from (pain-bonus 0) by)
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
-the blood sprays away from. It flinches and breaks off what it's doing on a pain roll,
-its PAIN-CHANCE plus PAIN-BONUS percent."
+the blood sprays away from, by BY (as for HARMED). It flinches and breaks off what it's
+doing on a pain roll, its PAIN-CHANCE plus PAIN-BONUS percent."
   (when (and (dormant-p creature) (not (dead creature)))
     (setf (flash creature) *flash-time*)
     (return-from hurt))
@@ -497,26 +520,29 @@ its PAIN-CHANCE plus PAIN-BONUS percent."
              (tear-apart creature :from from))
             ((bleeds creature)
              (bleed-out creature)))
-      (setf (dead creature) 0.0))))
+      (setf (dead creature) 0.0)
+      (creature-died creature by))
+    (harmed creature amount by)))
 
 (defmethod hit-surface ((creature creature) speed x y z &key (threshold *impact-speed*) by)
-  (declare (ignore by))
   (when (< threshold speed)
     (let ((loc (location creature)))
       ;; Struck from the side away from what it hit, so the blood sprays onto it.
-      (hurt creature (impact-damage speed threshold)
+      (hurt creature (impact-damage speed threshold) :by by
             :from (vec (- (vx loc) x) (- (+ (vy loc) (* 0.5 (sprite-height creature))) y) (- (vz loc) z))))))
 
-(defun burn (creature amount)
-  "Take AMOUNT health from CREATURE standing in lava or drowning: a flash and it notices, but no
-flinch, blood or hit-stop, which would freeze the game every burn."
+(defun burn (creature amount &key by)
+  "Take AMOUNT health from CREATURE standing in lava or drowning, or whirled by BY's tornado:
+a flash and it notices, but no flinch, blood or hit-stop, which would freeze the game every burn."
   (unless (or (dead creature) (dormant-p creature))
     (decf (health creature) amount)
     (setf (flash creature) *flash-time*
           (alert creature) *alert-time*)
     (when (<= (health creature) 0)
       (stop-walking creature)
-      (setf (dead creature) 0.0))))
+      (setf (dead creature) 0.0)
+      (creature-died creature by))
+    (harmed creature amount by)))
 
 (defun escape-liquid (creature)
   "Set CREATURE, standing in lava or afloat in deep water, walking to the nearest dry cell.
@@ -639,8 +665,14 @@ speed onto it as momentum, so it doesn't stall at the edge."
                 (vz m) (float (* speed (- (cos yaw))) 0f0)))))
     (setf (footing creature) footing)))
 
+(defgeneric calm-p (creature)
+  (:documentation "True while CREATURE, though it could fight, doesn't: a townsperson nobody
+has provoked (townsfolk.lisp). It wanders and never notices the player.")
+  (:method ((creature creature)) NIL))
+
 (defun attacker-p (creature)
-  (or (attack-damage creature) (attack-spell creature)))
+  (and (or (attack-damage creature) (attack-spell creature))
+       (not (calm-p creature))))
 
 (defun hunting-p (creature)
   (and (attacker-p creature) (< 0 (alert creature))))
@@ -1059,7 +1091,8 @@ another; with none, it waits off."
   (setf (brain creature) :attacking
         (path creature) ()
         (attack-time creature) 0.0
-        (attack-pending creature) T))
+        (attack-pending creature) T
+        (foe-attack creature) NIL))
 
 (defun chase (creature)
   "Set off along a fresh path toward the player."
@@ -1277,10 +1310,95 @@ strike the player if still in reach and in front of it.")
 flyer's dive.")
   (:method ((creature creature) dt) (attack creature dt)))
 
+;;; Fighting a foe: a creature set against another creature (the settlement's raids and its
+;;; watch, townsfolk.lisp) walks to it and attacks it with its own blow or spell, the
+;;; minimum the rest of the hunt's machinery, which is all about the player, needs: no attack
+;;; spots, flanks or lunges. Only plain fighters take a foe (*FOE-CLASSES*' kinds).
+
+(defparameter *foe-max-walk* 60.0 "Metres the walk to a foe may be.")
+
+(defun fighter-p (creature)
+  "True if CREATURE has an attack at all, calm or not."
+  (or (attack-damage creature) (attack-spell creature)))
+
+(defun foe-within-p (creature foe reach)
+  "True if FOE's body is within REACH metres of CREATURE's, and level with it."
+  (let* ((a (location creature)) (b (location foe))
+         (dx (- (vx b) (vx a))) (dz (- (vz b) (vz a)))
+         (r (+ (body-radius creature) (body-radius foe) reach)))
+    (and (< (+ (* dx dx) (* dz dz)) (* r r))
+         (< (abs (- (vy a) (vy b))) (max (sprite-height creature) (sprite-height foe))))))
+
+(defun face-foe (creature)
+  (let ((loc (location creature)) (at (location (foe creature))))
+    (turn-to creature (atan (- (vx at) (vx loc)) (- (vz loc) (vz at))) 1.0)))
+
+(defun foe-in-range-p (creature foe)
+  (if (attack-spell creature)
+      (and (foe-within-p creature foe (attack-range creature))
+           (clear-path-p (location creature) (location foe) 1.0))
+      (foe-within-p creature foe (* *attack-start-reach* (attack-reach creature)))))
+
+(defun fight-foe (creature dt)
+  "Walk to CREATURE's foe and attack it; forget it once it is dead."
+  (let ((foe (foe creature)))
+    (when (or (dead foe) (not (fighter-p creature)) (dead creature))
+      (setf (foe creature) NIL
+            (foe-attack creature) NIL)
+      (when (eq (brain creature) :walking)
+        (stop-walking creature 0.5))
+      (return-from fight-foe))
+    (case (brain creature)
+      (:attacking (attack-step creature dt))
+      (T
+       (cond ((foe-in-range-p creature foe)
+              (face-foe creature)
+              (setf (brain creature) :attacking
+                    (path creature) ()
+                    (attack-time creature) 0.0
+                    (attack-pending creature) T
+                    (foe-attack creature) T))
+             (T
+              (when (<= (decf (replan-timer creature) dt) 0)
+                (setf (replan-timer creature) *chase-replan*)
+                (let ((path (nav-path-to (ground-point creature) (location foe) (body-radius creature)
+                                         (sprite-height creature) (step-height creature) :max-walk *foe-max-walk*)))
+                  (if path
+                      (setf (path creature) path (brain creature) :walking)
+                      (setf (brain creature) :idle))))
+              (when (eq (brain creature) :walking)
+                (walk-path creature dt))))))))
+
+(defmethod lunge-speed :around ((creature creature))
+  (unless (foe-attack creature) (call-next-method)))
+
+(defmethod face-attack-target :around ((creature creature) dt)
+  (if (and (foe-attack creature) (foe creature))
+      (face-foe creature)
+      (call-next-method)))
+
+(defmethod release-attack :around ((creature creature))
+  (let ((foe (foe creature)))
+    (cond ((not (foe-attack creature)) (call-next-method))
+          ((or (null foe) (dead foe)))
+          ((attack-spell creature)
+           (let* ((loc (location creature))
+                  (origin (vec (vx loc) (+ (vy loc) (cast-height creature)) (vz loc)))
+                  (at (location foe))
+                  (aim (v- (vec (vx at) (+ (vy at) (* 0.6 (sprite-height foe))) (vz at)) origin)))
+             (when (< 1f-4 (vlength aim))
+               (cast-spell (find-spell (attack-spell creature)) origin (nvunit aim) (container creature)
+                           :caster creature))))
+          ((foe-within-p creature foe (+ 0.3 (attack-reach creature)))
+           (hurt foe (roll (attack-damage creature)) :from (location creature) :by creature)
+           (push-creature foe (v- (location foe) (location creature)) 3.0)))))
+
 (defun think (creature dt)
-  "Hunt the player while alert, wander otherwise."
+  "Hunt the player while alert, fight a foe (FIGHT-FOE) if it has one, wander otherwise."
   (when (attacker-p creature)
     (notice-player creature dt))
+  (when (and (foe creature) (not (hunting-p creature)))
+    (return-from think (fight-foe creature dt)))
   (let ((hunting (hunting-p creature)))
     (ecase (brain creature)
       (:attacking

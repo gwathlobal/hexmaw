@@ -66,26 +66,38 @@ upstairs."
         (fill-pointer *pickup-spots*) 0
         (fill-pointer *pickups*) 0
         (fill-pointer *level-exits*) 0
+        (fill-pointer *level-zones*) 0
         *level-doorways* ()
-        *arena* NIL)
+        *arena* NIL
+        *settlement* NIL)
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0))
+
+(defun generate-run-level (container depth seed settings &key settlement (entry (nth (1- depth) (run-levels))))
+  "Level DEPTH of the run from SEED and the generator SETTINGS (an alist), as ENTRY (of
+RUN-LEVELS) says. The settlement's level makes its SETTLEMENT first, from SETTLEMENT's plist
+of :FACTION and :CONDITION when a save gives them, so its town is placed as it was."
+  (progv (mapcar #'car settings) (mapcar #'cdr settings)
+    (let ((core (getf entry :core)))
+      (when core
+        (setf *settlement* (apply #'make-settlement seed depth settlement)))
+      (generate-level container :seed seed :core core :exit (getf entry :exit)))))
 
 (defun build-generated-level (container attempt)
   "The level of the run at *RUN-DEPTH*, or the saved one being loaded."
   (if *pending-load*
       (generate-saved-level container *pending-load*)
-      (let ((settings (level-settings *run-depth*)))
-        (progv (mapcar #'car settings) (mapcar #'cdr settings)
-          (generate-level container :seed (level-seed (current-run-seed) *run-depth* attempt)
-                                    :exit (run-level-property *run-depth* :exit))))))
+      (generate-run-level container *run-depth* (level-seed (current-run-seed) *run-depth* attempt)
+                          (level-settings *run-depth*))))
 
 (defun level-needs-rebuilding-p ()
   "True if the level just built must have a way off it, or the boss's arena, and the
-player can't get to one."
+player can't get to one; or if it is the settlement's and its wing came out too small."
   (and (eq *level* :generated)
        (not *pending-load*)
-       (run-level-property *run-depth* :exit)
-       (not (level-goal-reached-p))))
+       (or (and (run-level-property *run-depth* :exit)
+                (not (level-goal-reached-p)))
+           (let ((wing (run-level-property *run-depth* :min-wing)))
+             (and wing (< *last-wing-rooms* wing))))))
 
 (defun build-level (container)
   (let ((*block-memo* (make-hash-table :test 'equal)))
@@ -103,7 +115,8 @@ player can't get to one."
              (build-nav-grid)
           while (level-needs-rebuilding-p)
           do (cond ((< (1+ attempt) *max-level-attempts*)
-                    (v:warn :hexmaw "Level ~d has no exit the player can reach; trying another seed." *last-level-seed*)
+                    (v:warn :hexmaw "Level ~d has no exit the player can reach~:[~;, or too small a wing~]; trying another seed."
+                            *last-level-seed* *settlement*)
                     ;; Nothing but this level is in the scene yet.
                     (clear container))
                    (T

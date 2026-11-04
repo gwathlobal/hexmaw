@@ -102,10 +102,14 @@ horizontal part counts."))
 delivered by SOURCE.")
   (:method (source) NIL))
 
+(defgeneric effect-caster (source)
+  (:documentation "Who cast the spell SOURCE delivers: the player, a creature, or NIL.")
+  (:method (source) (declare (ignore source)) NIL))
+
 (defmethod apply-effect ((kind (eql :damage)) effect (target creature) source)
   ;; Blood sprays away from where it struck from.
   (hurt target (roll (effect-magnitude effect)) :from (effect-origin source)
-                :pain-bonus (spell-pain-bonus (spell source))))
+                :pain-bonus (spell-pain-bonus (spell source)) :by (effect-caster source)))
 
 (defmethod apply-effect ((kind (eql :knockback)) effect (target creature) source)
   (push-creature target (effect-direction source target) (float (roll (effect-magnitude effect)) 0f0)))
@@ -133,6 +137,8 @@ turns it aside ends it.")
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
 and bursts only on entering one from outside.")))
+
+(defmethod effect-caster ((source spell-projectile)) (caster source))
 
 ;; It strikes from behind itself, along its flight, and pushes along it.
 (defmethod effect-origin ((source spell-projectile))
@@ -467,6 +473,7 @@ void main(){
   (incf (vy (location circle)) 0.01))
 
 (defmethod effect-origin ((source spell-circle)) (centre source))
+(defmethod effect-caster ((source spell-circle)) (caster source))
 
 (defmethod effect-direction ((source spell-circle) target)
   (v- (if (typep target 'creature) (location target) (feet target)) (centre source)))

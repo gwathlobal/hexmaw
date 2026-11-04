@@ -317,7 +317,7 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
                (when damage
                  (let ((amount (round (* f (roll damage)))))
                    (when (<= 1 amount)
-                     (hurt c amount :from centre))))
+                     (hurt c amount :from centre :by ogre))))
                (let ((away (v- (location c) centre)))
                  (when (< (+ (expt (vx away) 2) (expt (vz away) 2)) 1f-4)
                    (setf (vx away) (sin (facing ogre)) (vz away) (- (cos (facing ogre)))))

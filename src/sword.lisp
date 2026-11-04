@@ -180,6 +180,11 @@ is over."
 (defun swing-target (player &optional (reach *sword-reach*) (arc *sword-arc*))
   "The nearest live creature the swing reaches: its body within REACH, inside ARC
 either side of where the player faces, level with the player, and not behind a wall."
+  (looked-at-creature player reach arc))
+
+(defun looked-at-creature (player reach arc &key test dead)
+  "As SWING-TARGET: the nearest live creature within REACH and ARC. TEST, if given, must also
+be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
   (let* ((feet (feet player))
          (yaw (vy (rotation player)))
          (fx (sin yaw))
@@ -192,7 +197,8 @@ either side of where the player faces, level with the player, and not behind a w
           for dz = (- (vz loc) (vz feet))
           for distance = (sqrt (+ (* dx dx) (* dz dz)))
           for r = (body-radius c)
-          when (and (not (dead c))
+          when (and (or dead (not (dead c)))
+                    (or (null test) (funcall test c))
                     (< distance (+ reach r))
                     (< (vy loc) (+ (vy feet) *player-height*))
                     (< (vy feet) (+ (vy loc) (sprite-height c)))
@@ -209,7 +215,7 @@ either side of where the player faces, level with the player, and not behind a w
   (let* ((weapon (weapon player))
          (target (swing-target player (swing-reach weapon) (swing-arc weapon))))
     (when target
-      (hurt target (roll (swing-damage weapon)) :from (feet player)
+      (hurt target (roll (swing-damage weapon)) :from (feet player) :by player
                                                 :pain-bonus (swing-pain-bonus weapon))
       (push-creature target (v- (location target) (feet player))
                      (float (swing-knockback weapon) 0f0)))))
@@ -228,7 +234,7 @@ winding up an attack and not already poised from a bash."
            (let* ((poised (< 0.0 (bash-poise target)))
                   (bonus (if (and (not poised) (winding-up-p target)) *bash-pain-bonus* -100)))
              (setf (bash-poise target) *bash-poise-time*)
-             (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus bonus)
+             (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus bonus :by player)
              (push-creature target (v- (location target) (feet player))
                             (float (* *bash-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0)))))))
 

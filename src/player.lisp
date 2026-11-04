@@ -135,7 +135,15 @@ blow knocked it aside (BREAK-GUARD).")
    (killed-by :initform NIL :accessor killed-by
               :documentation "What killed the player: a creature's type, :LAVA or :DROWNING.")
    (death-time :initform 0.0 :accessor death-time
-               :documentation "Seconds since the player died (*GAME-STATE* :DEAD).")))
+               :documentation "Seconds since the player died (*GAME-STATE* :DEAD).")
+   (gold :initform 0 :accessor gold :documentation "Coin, from pickups and kills, spent in the settlement.")
+   (reputation :initform () :accessor reputation
+               :documentation "Standing with each faction (*FACTIONS*), a plist from -100 to 100.")
+   (max-health :initform *player-max-health* :accessor max-health :documentation "Raised by the trainer.")
+   (max-mana :initform *max-mana* :accessor max-mana)
+   (max-stamina :initform *max-stamina* :accessor max-stamina)
+   (blessed :initform 0.0 :accessor blessed
+            :documentation "Seconds of play the priest's blessing has left (BLESSING-SCALE).")))
 
 ;; Trial's camera has no roll; the player's view rolls as it falls dead (FALL-DEAD).
 (defmethod project-view ((camera player))
@@ -172,6 +180,9 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
       (setf (cast-timer player) *cast-cooldown*
             (cast-time player) 0.0
             (pending-spell player) spell)
+      ;; The Ashen Temple's rule: no spell within the town's walls (settlement.lisp).
+      (when (and *settlement* (eq (faction-property :rule) :no-casting) (in-settlement-p (feet player)))
+        (report-crime :rule))
       T)))
 
 (defun release-spell (player)
@@ -199,6 +210,8 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
 (define-handler (player key-press) (key)
   (case key
     (:f12 (screenshot))
+    (:e (when (eq *game-state* :playing)
+          (player-interact player)))
     (T (when (eq *game-state* :playing)
          (select-weapon player key)))))
 
@@ -449,7 +462,7 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
       (when (<= (decf (stamina player) (* *run-stamina* dt)) 0.0)
         (setf (stamina player) 0.0
               (winded player) T))
-      (setf (stamina player) (min *max-stamina* (+ (stamina player) (* *stamina-regen* dt)))))
+      (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt)))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
     (setf (winded player) NIL)))
 
@@ -481,6 +494,7 @@ and not the last step of the stair.")
     (place-camera player)
     (return))
   (incf (run-time player) dt)
+  (setf (blessed player) (max 0.0 (- (blessed player) dt)))
   (setf (cast-timer player) (max 0.0 (- (cast-timer player) dt))
         (pain player) (max 0.0 (- (pain player) dt))
         (restore-flash player) (max 0.0 (- (restore-flash player) dt))
@@ -708,6 +722,8 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
                  (setf (stamina player) 0.0
                        blocked NIL)
                  (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
+      ;; The priest's blessing (dialogue.lisp).
+      (setf amount (max 1 (round (* amount (blessing-scale player)))))
       (incf (damage-taken player) (min amount (health player)))
       (decf (health player) amount)
       (setf (pain player) *pain-time*)

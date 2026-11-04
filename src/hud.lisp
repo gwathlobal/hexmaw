@@ -175,8 +175,13 @@ void main(){
 
 (define-shader-entity restore-flash (pain-flash) ())
 
+(defparameter *gold-flash-color* (vec4 0.9 0.65 0.1 0.18) "RGB and peak opacity of gold's flash.")
+
 (defmethod flash-color ((flash restore-flash))
-  (if (and *player* (eq :mana (restored *player*))) *mana-flash-color* *health-flash-color*))
+  (case (and *player* (restored *player*))
+    (:mana *mana-flash-color*)
+    (:gold *gold-flash-color*)
+    (T *health-flash-color*)))
 
 ;;; Under water: the whole view, the hands with it, turned blue. The colour multiplies what
 ;;; is drawn, so the darks stay dark. Drawn after the water's see-through surface (LATE-RANK),
@@ -283,7 +288,50 @@ void main(){
   (and (eq *game-state* :playing) (< 0.0 *level-banner-left*)))
 
 (defun level-banner-text ()
-  (format NIL "Level ~d of ~d" *run-depth* (run-length)))
+  "\"Level 2 of 4\", and in the settlement its name and who holds it: \", held by the Deepwardens\"."
+  (let ((s *settlement*))
+    (format NIL "Level ~d of ~d~@[: ~a~]~@[, ~a~]" *run-depth* (run-length)
+            (and s (settlement-name s))
+            (and s (format NIL "~:[held~;once held~] by ~a"
+                           (eq (settlement-condition s) :sacked) (faction-property :name s))))))
+
+;;; The message line: a short note to the player in the middle of the screen (HUD-SAY), such
+;;; as what was found or what the watch warns of, for *HUD-MESSAGE-TIME* seconds of play. And
+;;; the prompt for what E does with what the player looks at (INTERACT-TARGET, townsfolk.lisp).
+
+(defparameter *hud-message-time* 3.0 "Seconds of play a message stays up.")
+(defvar *hud-message* "" "The message on the screen, a new string each time it changes.")
+(defvar *hud-message-left* 0.0 "Seconds of play left of the message.")
+
+(defun hud-say (format-control &rest args)
+  "Put a message on the screen: FORMAT-CONTROL and ARGS, as for FORMAT."
+  (setf *hud-message* (apply #'format NIL format-control args)
+        *hud-message-left* *hud-message-time*))
+
+;;; Arriving: the banner names the town and its faction (LEVEL-BANNER-TEXT, above), and the
+;;; message line says the watch's rule, so the player knows it before they can break it.
+
+(defparameter *arrival-message-time* 7.0 "Seconds of play the rule stays up on arriving in the settlement.")
+
+(defun announce-settlement ()
+  "On arriving at a level, put the watch's rule, or that there is no watch, on the message line
+for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left there."
+  (let ((s *settlement*))
+    (cond ((null s) (setf *hud-message-left* 0.0))
+          (T (if (eq (settlement-condition s) :sacked)
+                 (hud-say "The watch of ~a is dead. The undercroft holds the streets." (faction-property :name s))
+                 (hud-say "The watch of ~a: ~a" (faction-property :name s) (faction-property :rule-text s)))
+             (setf *hud-message-left* *arrival-message-time*)))))
+
+(define-shader-entity hud-message (hud-text) ())
+
+(defmethod hud-shown-p ((message hud-message))
+  (and (eq *game-state* :playing) (< 0.0 *hud-message-left*)))
+
+(define-shader-entity interact-prompt (hud-text) ())
+
+(defmethod hud-shown-p ((prompt interact-prompt))
+  (and (eq *game-state* :playing) *interact-prompt* T))
 
 ;;; The boss bar: the boss's title, its health and its powers, across the top of the screen
 ;;; from the moment the arena's gate drops until it dies (boss.lisp).
@@ -314,6 +362,13 @@ void main(){
 (defclass hud (entity listener)
   ((name :initform :hud)
    (level-banner :initform (make-hud-text (level-banner-text) 'level-banner) :reader level-banner)
+   (message-line :initform (make-hud-text "" 'hud-message) :reader message-line)
+   (prompt-line :initform (make-hud-text "" 'interact-prompt) :reader prompt-line)
+   (gold-text :initform (make-hud-text) :reader gold-text)
+   (shown-gold :initform NIL :accessor shown-gold)
+   (bless-text :initform (make-hud-text "") :reader bless-text
+               :documentation "The priest's blessing and the time it has left, over the purse.")
+   (shown-bless :initform NIL :accessor shown-bless :documentation "The seconds BLESS-TEXT shows.")
    (health-label :initform (make-hud-text "HP") :reader health-label)
    (health-bar :initform (make-instance 'hud-bar :fill-color *health-bar-color*) :reader health-bar)
    (health-text :initform (make-hud-text) :reader health-text)
@@ -347,7 +402,7 @@ void main(){
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
-        (level-banner hud)
+        (level-banner hud) (message-line hud) (prompt-line hud) (gold-text hud) (bless-text hud)
         (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
         (fps-display hud)))
 
@@ -387,6 +442,15 @@ numbers; breath has none."
   (place (level-banner hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (level-banner hud))))))
          (round (* 0.75 (height *context*))))
+  (place (message-line hud)
+         (round (- (/ (width *context*) 2) (* 4.5 (length (text (message-line hud))))))
+         (round (* 0.3 (height *context*))))
+  (place (prompt-line hud)
+         (round (- (/ (width *context*) 2) (* 4.5 (length (text (prompt-line hud))))))
+         (round (* 0.4 (height *context*))))
+  ;; The purse, against the bottom-right corner.
+  (place (gold-text hud) (- (width *context*) *hud-margin* (* 9 (length (text (gold-text hud))))) (hud-row-y 0))
+  (place (bless-text hud) (- (width *context*) *hud-margin* (* 9 (length (text (bless-text hud))))) (hud-row-y 1))
   ;; The boss bar, centred across the top: the title, the bar, the powers under it.
   (let* ((w (width *context*))
          (title-y (- (height *context*) *boss-bar-top* +glyph-height+))
@@ -412,7 +476,13 @@ numbers; breath has none."
 
 (define-handler (hud tick) (dt)
   (when (eq *game-state* :playing)
-    (setf *level-banner-left* (max 0.0 (- *level-banner-left* dt))))
+    (setf *level-banner-left* (max 0.0 (- *level-banner-left* dt))
+          *hud-message-left* (max 0.0 (- *hud-message-left* dt))))
+  ;; Both strings are new each time they change, so EQ tells.
+  (unless (eq *hud-message* (text (message-line hud)))
+    (setf (text (message-line hud)) *hud-message*))
+  (when (and *interact-prompt* (not (eq *interact-prompt* (text (prompt-line hud)))))
+    (setf (text (prompt-line hud)) *interact-prompt*))
   (let ((boss (shown-boss)))
     (when boss
       (setf (fill-fraction (boss-bar hud)) (/ (float (max 0 (health boss))) (max-health boss)))
@@ -428,18 +498,31 @@ numbers; breath has none."
           (sp (floor (stamina *player*))))
       (setf (strength (pain-flash hud)) (/ (pain *player*) *pain-time*)
             (strength (restore-flash hud)) (/ (restore-flash *player*) *restore-flash-time*)
-            (fill-fraction (health-bar hud)) (/ (float hp) *player-max-health*)
-            (fill-fraction (mana-bar hud)) (/ (mana *player*) *max-mana*)
-            (fill-fraction (stamina-bar hud)) (/ (stamina *player*) *max-stamina*)
+            (fill-fraction (health-bar hud)) (/ (float hp) (max-health *player*))
+            (fill-fraction (mana-bar hud)) (/ (mana *player*) (max-mana *player*))
+            (fill-fraction (stamina-bar hud)) (/ (stamina *player*) (max-stamina *player*))
             (fill-fraction (breath-bar hud)) (/ (breath *player*) *breath-time*))
-      ;; Re-uploading text costs a buffer update, so only when the number changes.
-      (unless (eql hp (shown-health hud))
-        (setf (shown-health hud) hp
-              (text (health-text hud)) (format NIL "~d/~d" hp *player-max-health*)))
-      (unless (eql mp (shown-mana hud))
-        (setf (shown-mana hud) mp
-              (text (mana-text hud)) (format NIL "~d/~d" mp (floor *max-mana*))))
-      (unless (eql sp (shown-stamina hud))
-        (setf (shown-stamina hud) sp
-              (text (stamina-text hud)) (format NIL "~d/~d" sp (floor *max-stamina*))))))
+      ;; Re-uploading text costs a buffer update, so only when a number changes: each is
+      ;; kept with its maximum (the trainer raises them) as one integer.
+      (let ((max-hp (max-health *player*)) (max-mp (floor (max-mana *player*))) (max-sp (floor (max-stamina *player*))))
+        (unless (eql (+ hp (* 100000 max-hp)) (shown-health hud))
+          (setf (shown-health hud) (+ hp (* 100000 max-hp))
+                (text (health-text hud)) (format NIL "~d/~d" hp max-hp)))
+        (unless (eql (+ mp (* 100000 max-mp)) (shown-mana hud))
+          (setf (shown-mana hud) (+ mp (* 100000 max-mp))
+                (text (mana-text hud)) (format NIL "~d/~d" mp max-mp)))
+        (unless (eql (+ sp (* 100000 max-sp)) (shown-stamina hud))
+          (setf (shown-stamina hud) (+ sp (* 100000 max-sp))
+                (text (stamina-text hud)) (format NIL "~d/~d" sp max-sp))))
+      (unless (eql (gold *player*) (shown-gold hud))
+        (setf (shown-gold hud) (gold *player*)
+              (text (gold-text hud)) (format NIL "~d gold" (gold *player*))))
+      ;; A whole second up, so the countdown never shows 0:00 while it still holds.
+      (let ((left (ceiling (blessed *player*))))
+        (unless (eql left (shown-bless hud))
+          (setf (shown-bless hud) left
+                (text (bless-text hud)) (if (plusp left)
+                                            (multiple-value-bind (m sec) (floor left 60)
+                                              (format NIL "Blessed ~d:~2,'0d" m sec))
+                                            ""))))))
   (layout-hud hud))
