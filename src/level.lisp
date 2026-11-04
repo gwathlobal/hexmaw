@@ -141,10 +141,10 @@ player can't get to one; or if it is the settlement's and its wing came out too 
                    (T
                     (v:warn :hexmaw "No level with an exit in ~d seeds; keeping level ~d." *max-level-attempts* *last-level-seed*)
                     (return))))
-    (check-reachable)
-    (when (eq *level* :generated)
-      (check-ice-joins))
-    (place-pickups container)))
+    (let ((stranded (nth-value 1 (check-reachable))))
+      (when (eq *level* :generated)
+        (check-ice-joins))
+      (place-pickups container :guards (remove-if-not #'hoard-guard-p stranded)))))
 
 (defun build-boss-wing (container)
   "South of the hall, a corridor to the arena (arena.txt) and a boss in it, of a random kind

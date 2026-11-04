@@ -437,8 +437,9 @@ placed before it moves: a save's taken pickups name their places."
                      (setf spots (remove spot spots))
                      (push (getf spot :block) used))))))))
 
-(defun place-pickups (container)
-  "Put the level's pickups in. Last in BUILD-LEVEL: it asks the nav grid who can reach what."
+(defun place-pickups (container &key guards)
+  "Put the level's pickups in. Last in BUILD-LEVEL: it asks the nav grid who can reach what.
+GUARDS are the stranded ogres, each of which gets a hoard (PLACE-HOARDS, loot.lisp)."
   (case *level*
     ;; The settlement's relic before the glyphs, which would take its wing's last spots.
     ;; Leaving spots for the glyphs, which no other level has, and the settlement's relic: the
@@ -451,7 +452,9 @@ placed before it moves: a save's taken pickups name their places."
      (place-loot container)
      ;; Gold before dust: dust's piles grow to fill fewer spots, gold's can't.
      (place-gold container)
-     (place-dust container))
+     (place-dust container)
+     ;; Last, so every other pickup keeps its place in *PICKUPS*.
+     (place-hoards container guards))
     (:gallery (fill-pickup-spots container))))
 
 ;;; Coin from kills: straight into the purse, nothing to pick up.
