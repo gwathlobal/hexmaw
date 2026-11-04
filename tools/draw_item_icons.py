@@ -5,7 +5,8 @@ tools/slice_frames.py writes, so the game reads it like any other animation stri
   tools/draw_item_icons.py data/sprites/icons/items
 
 writes items.png (frames left to right, 2 px transparent gaps) and items.lisp. Frames, in
-order: the health potion, the mana potion. Each is SIZE art pixels square, the weapon icons'
+order: the health potion, the mana potion, arcane dust (a glittering violet heap), gold (a
+pile of coins) and the quest-giver's reliquary. Each is SIZE art pixels square, the weapon icons'
 size, drawn pixel by pixel in the palette of the potion's pickup sprite, then outlined in
 near-black so it reads on any background. The game draws a stack's count over the bottom-right
 corner and the quickslot's key over the top-left, so the bottle keeps to the middle.
@@ -58,6 +59,76 @@ def potion(light, mid, dark, deep):
     return px
 
 
+def dust():
+    """A low heap of violet powder, lit from the upper left, flecked with bright grains."""
+    px = {}
+    light, mid, dark, deep = (226, 196, 255, 255), (164, 110, 240, 255), (106, 56, 186, 255), (62, 26, 120, 255)
+    for y in range(8, 18):
+        half = round((y - 7) * 0.85) + 1
+        for x in range(10 - half, 10 + half):
+            shade = (x - 10) * 0.4 + (y - 12) * 0.6
+            px[(x, y)] = light if shade < -1.5 else mid if shade < 1.0 else dark if shade < 3.0 else deep
+    for x, y in ((8, 10), (12, 12), (6, 15), (10, 14), (14, 16), (9, 9)):
+        px[(x, y)] = (255, 255, 255, 255)
+    for x, y in ((2, 17), (17, 17), (4, 16)):
+        px[(x, y)] = mid
+    return px
+
+
+def gold():
+    """A short stack of coins seen edge-on, and one coin face-on beside it, gold lit from the
+    upper left."""
+    px = {}
+    light, mid, dark = (255, 236, 140, 255), (226, 180, 50, 255), (150, 104, 20, 255)
+    # The stack: each coin an ellipse's top face over a dark rim, one on another.
+    for i, cy in enumerate((16, 14, 12, 10)):
+        cx = 7 + (i % 2)
+        for x in range(cx - 4, cx + 5):
+            px[(x, cy + 1)] = dark
+            px[(x, cy)] = mid
+        for x in range(cx - 3, cx + 4):
+            px[(x, cy - 1)] = light if x < cx else mid
+    # The face-on coin: a disc with a darker rim and a struck centre.
+    for y in range(9, 18):
+        for x in range(11, 19):
+            d = ((x - 14.5) ** 2 + (y - 13) ** 2) ** 0.5
+            if d <= 3.9:
+                px[(x, y)] = dark if d > 3.0 else (light if x + y < 27 else mid)
+    px[(14, 13)] = dark
+    px[(15, 13)] = dark
+    return px
+
+
+def relic():
+    """The quest-giver's reliquary (its pickup, sprites/pickups/relic): a little gabled shrine of
+    gilded wood with a cross on its ridge and red cloth behind its front, on two feet."""
+    px = {}
+    light, mid, dark, deep = (240, 196, 110, 255), (196, 140, 64, 255), (130, 84, 36, 255), (78, 46, 20, 255)
+    red, red_dark = (196, 40, 32, 255), (120, 20, 18, 255)
+    # The cross on the ridge.
+    for y in range(1, 5):
+        px[(10, y)] = light if y < 3 else mid
+    px[(9, 2)] = light
+    px[(11, 2)] = mid
+    # The gable roof, lit on its left slope.
+    for y in range(5, 9):
+        half = (y - 4) * 2 + 1
+        for x in range(10 - half, 11 + half):
+            px[(x, y)] = light if x < 10 else mid if x < 10 + half - 1 else dark
+    # The box: a gilded frame round a red panel, split by a post.
+    for y in range(9, 17):
+        for x in range(3, 18):
+            frame = x in (3, 4, 16, 17) or y in (9, 16) or x == 10
+            px[(x, y)] = (light if x == 3 else dark if x == 17 else mid) if frame else \
+                (red if y < 13 else red_dark)
+    for x in range(3, 18):
+        px[(x, 16)] = deep
+    # The feet.
+    for x in (4, 5, 15, 16):
+        px[(x, 17)] = dark
+    return px
+
+
 def outlined(px):
     out = dict(px)
     for (x, y) in px:
@@ -73,6 +144,9 @@ def main():
     icons = [
         potion((244, 70, 54, 255), (206, 20, 16, 255), (150, 8, 10, 255), (98, 4, 8, 255)),
         potion((84, 150, 250, 255), (26, 76, 214, 255), (14, 44, 156, 255), (8, 24, 100, 255)),
+        dust(),
+        gold(),
+        relic(),
     ]
     strip = Image.new("RGBA", (len(icons) * SIZE + (len(icons) - 1) * GAP, SIZE), (0, 0, 0, 0))
     for i, icon in enumerate(icons):

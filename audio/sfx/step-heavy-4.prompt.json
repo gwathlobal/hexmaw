@@ -1,0 +1,21 @@
+{
+  "prompt": "A single loud, heavy footstep of a huge ogre on a stone floor: a bare foot slamming down hard, a solid stomp with a crunch of grit and pebbles under it, close and up front. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-step-heavy.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.6,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793725725,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.6,
+    0.6,
+    0.6
+  ]
+}

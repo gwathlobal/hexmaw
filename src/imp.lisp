@@ -101,12 +101,15 @@ floor: the player sees it happen, and the level's pickups don't drain away out o
    ;; chunk, two chunks, two scraps.
    (gibs :initform '((:imp (:head 0) 3) (:flesh 0 0 1 1 2 4 5 6 6 7 7)))
    (attack-damage :initform '(6 10))
+   ;; A quick swipe: wind-up, lunge, strike, recover, darting in through the first two.
+   (attack-frame-times :initform '(0.25 0.1 0.2 0.3))
    ;; Short: it springs away after the blow and comes in again from elsewhere.
-   (attack-pause :initform 0.35)
-   (chase-speed :initform 2.6)
+   (attack-pause :initform 0.3)
+   (lunge-speed :initform 3.5)
+   (chase-speed :initform 3.4)
    ;; Quick and small: it darts round a raised shield.
    (flanks :initform T)
-   (pain-chance :initform 60)
+   (pain-chance :initform 30)
    (max-health :initform 30)
    (downed :initform 0.0 :accessor downed :documentation "Seconds left lying knocked out of a pounce.")
    (knocked :initform NIL :accessor knocked
@@ -121,6 +124,11 @@ floor: the player sees it happen, and the level's pickups don't drain away out o
    (stolen :initform NIL :accessor stolen :documentation "The kind of pickup it carries off, or NIL.")
    (steal-target :initform NIL :accessor steal-target :documentation "The pickup it walks to take, or NIL.")
    (loot-sprite :initform NIL :accessor loot-sprite :documentation "What it shows over its head while it carries loot.")))
+
+;; The pounce's crouch (:LEAP, TRY-LEAP) is the claw's wind-up; the shriek is its alert cry.
+(define-creature-sounds imp
+  :alert :imp-alert :pain :imp-pain :death :imp-death :windup :imp-claw :leap :imp-claw
+  :shriek :imp-alert :step :step-light)
 
 (defgeneric skittish-p (imp)
   (:documentation "True if IMP breaks, runs, springs back and steals: an imp, but not a boss of its kind.")
@@ -140,7 +148,7 @@ floor: the player sees it happen, and the level's pickups don't drain away out o
 (defmethod leap-recover-time ((imp imp)) *pounce-recover*)
 (defmethod leap-cooldown-time ((imp imp)) *pounce-cooldown*)
 
-(defun pounce (imp)
+(defun start-pounce (imp)
   "Start a pounce at the player if IMP may: true if it did."
   (when (try-leap imp)
     (setf (pounce-struck imp) NIL
@@ -219,6 +227,7 @@ leap: no KNOCKBACK-SCALE."
           (fleeing imp) (+ *shriek-time* *imp-flee-time*)
           (cornered imp) 0.0
           (slot-yaw imp) NIL)
+    (creature-noise imp :shriek)
     (stop-walking imp *shriek-time*)))
 
 (defun raise-alarm (imp)
@@ -236,8 +245,8 @@ leap: no KNOCKBACK-SCALE."
                        (replan-timer c) 0.0))
                (setf (alert c) (max (alert c) *shriek-alert-time*)))))
 
-(defmethod creature-hurt ((imp imp) amount)
-  (declare (ignore amount))
+(defmethod react-to-hit ((imp imp))
+  (call-next-method)
   (when (skittish-p imp)
     (when (airborne imp)
       (knock-down imp))
@@ -325,7 +334,7 @@ that comes no nearer them than it is now. NIL if there is none."
 (defun try-steal (imp)
   "Maybe snatch one of the player's items, the claw having landed. True if it did."
   (when (and (not (stolen imp)) (< (random 100 *roll-random*) *imp-steal-chance*))
-    (let ((item (take-item *player*)))
+    (let ((item (steal-item *player*)))
       (when item
         (setf (stolen imp) (item-pickup-kind item)
               (fleeing imp) *thief-flee-time*
@@ -368,7 +377,8 @@ that comes no nearer them than it is now. NIL if there is none."
   (unless (and (skittish-p imp) (not (stolen imp)) (seek-loot imp))
     (call-next-method)))
 
-(defmethod creature-died ((imp imp))
+(defmethod creature-died :after ((imp imp) by)
+  (declare (ignore by))
   (when (stolen imp)
     (let* ((loc (location imp))
            (floor (or (and *nav-grid* (nav-floor-at (vx loc) (+ (vy loc) 0.1) (vz loc))) (vy loc))))
@@ -400,7 +410,7 @@ that comes no nearer them than it is now. NIL if there is none."
            (and (stolen imp) (<= (cornered imp) 0)))))
 
 (defmethod special-attack ((imp imp))
-  (cond ((not (skittish-p imp)) (pounce imp))
+  (cond ((not (skittish-p imp)) (start-pounce imp))
         ((< 0 (downed imp)) (stop-walking imp (downed imp)) T)
         ((< 0 (shriek imp)) (stop-walking imp (shriek imp)) T)
         ((< 0 (fleeing imp)) (keep-fleeing imp))
@@ -412,7 +422,7 @@ that comes no nearer them than it is now. NIL if there is none."
                (T
                 (stop-walking imp 0.4)
                 T)))
-        (T (pounce imp))))
+        (T (start-pounce imp))))
 
 ;; Hit and run: the claw, then a spring back out of reach, and another spot to come in from.
 (defmethod release-attack ((imp imp))

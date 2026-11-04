@@ -1,0 +1,21 @@
+{
+  "prompt": "Magic power summoned into the hands: a short shimmering magical swell rising to a soft sparkling chime, a classic fantasy spell-ready sound. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-draw-magic.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.7,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793708953,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.68,
+    0.68,
+    0.68
+  ]
+}

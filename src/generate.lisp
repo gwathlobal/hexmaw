@@ -66,6 +66,8 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
 
 (defun generator-roll (limit) (random limit *generator-random*))
 
+(defparameter *altar-block* "shrine-altar" "The block a generated level's spellforge altar stands in (forge.lisp).")
+
 (defun weighted-order (names)
   "NAMES in a random order, the heavier (BLOCK-WEIGHT) more likely first."
   (let ((left (copy-list names)) (out ()))
@@ -163,14 +165,28 @@ Returns the pairs."
 
 (defvar *level-networks* () "The last generated level's networks: its rivers and high quarters.")
 
+(defun room-block-p (name)
+  "True if block NAME counts as a room for the generator: a room, or a town, which its gates lead out of."
+  (intersection '(:room :town) (block-tags name)))
+
+(defun block-arrival (name at turns)
+  "Where the player arrives in block NAME placed at AT, turned TURNS: its first ARRIVE
+empty, or its origin."
+  (let ((p (first (getf (find-block name) :arrivals))))
+    (if p (nv+ (turn-point p turns) at) (vcopy at))))
+
 (defun generate-level (container &key (seed (or *level-seed* (random most-positive-fixnum (make-random-state T))))
-                                      (rooms *generator-rooms*) exit)
+                                      (rooms *generator-rooms*) exit core altar-chance)
   "Grow a level from SEED, aiming for ROOMS rooms. EXIT names a block to put on the open
 doorway furthest from the start once it has grown, or is a list of them, tried in order.
-Returns the seed and whether EXIT went in."
+CORE names the block to grow from in place of a start block, with its monsters and townsfolk,
+the player arriving at its ARRIVE point: the settlement's town, whose gates are its doorways.
+After it, with ALTAR-CHANCE (0 to 1, or NIL), the spellforge's altar room goes on a doorway
+part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
   (setf *last-level-seed* seed)
   (let* ((*generator-random* (sb-ext:seed-random-state seed))
          (*block-random* *generator-random*)
+         (*elite-random* (sb-ext:seed-random-state (logxor seed #xE117E)))
          (*spawn-clearance* NIL)
          (kit (or *generator-blocks* (remove-if-not #'block-tags (kit-blocks))))
          (cells (setf *level-cells* (make-hash-table :test 'equal)))
@@ -194,8 +210,8 @@ Returns the seed and whether EXIT went in."
                (when (door-network door) (push :plug (network-ends (door-network door)))))
              (place (name at turns run &key (spawns T) joined network (depth 0))
                (dolist (cell (block-cells name at turns)) (setf (gethash cell cells) name))
-               (when (member :room (block-tags name)) (incf placed-rooms))
-               (let ((run (if (member :room (block-tags name)) 0 (1+ run)))
+               (when (room-block-p name) (incf placed-rooms))
+               (let ((run (if (room-block-p name) 0 (1+ run)))
                      (connectors (place-block name container :at at :turns turns :spawns spawns)))
                  ;; A network's block joins the network it was reached by, or starts one.
                  (let ((family (some (lambda (c) (kind-network (connector-kind c))) connectors)))
@@ -282,7 +298,7 @@ Returns the seed and whether EXIT went in."
                      (attach door (allowed door (append first then))))))
              (corridor-door-p (door)
                ;; True if DOOR leads on from a corridor or stair, so a plug there is a stub.
-               (not (member :room (block-tags (connector-block (door-connector door))))))
+               (not (room-block-p (connector-block (door-connector door)))))
              (finish (door)
                ;; End DOOR's corridor in a room. Few rooms take a narrow doorway, and a stair has
                ;; to arrive somewhere, so when none fits those take one more corridor piece,
@@ -299,15 +315,17 @@ Returns the seed and whether EXIT went in."
                  (if open
                      (nth (generator-roll (length open)) open)
                      (nth (generator-roll (length frontier)) frontier)))))
-      ;; The start, lined up so its walls fall on the grid.
-      (let* ((start (or (first (weighted-order (tagged :start))) (error "No block is tagged start.")))
+      ;; The start, lined up so its walls fall on the grid. A core keeps its own monsters,
+      ;; so the clearance round the arrival is set before it is placed.
+      (let* ((start (or core (first (weighted-order (tagged :start))) (error "No block is tagged start.")))
              (low (block-world-bounds start (vec 0 0 0) 0))
              (at (vec (mod (- (vx low)) hexmaw.blueprint:*cell-size*) 0
-                      (mod (- (vz low)) hexmaw.blueprint:*cell-size*))))
-        (place start at 0 0 :spawns NIL)
-        (setf *spawn-clearance* (cons (vcopy at) *start-clearance*))
-        (v<- *spawn-point* at)
-        (when *player* (v<- (feet *player*) at)))
+                      (mod (- (vz low)) hexmaw.blueprint:*cell-size*)))
+             (arrival (if core (block-arrival start at 0) (vcopy at))))
+        (setf *spawn-clearance* (cons (vcopy arrival) *start-clearance*))
+        (place start at 0 0 :spawns (and core T))
+        (v<- *spawn-point* arrival)
+        (when *player* (v<- (feet *player*) arrival)))
       ;; Grow, then finish what is open. A corridor that no room fits leaves the level short
       ;; of its rooms, so growth goes on from the rooms' doorways until it has them.
       (let ((attempts *generator-attempts*) (tried ()))
@@ -343,13 +361,21 @@ Returns the seed and whether EXIT went in."
       (when exit
         (setf exit-placed (loop for d in (stable-sort (copy-list frontier) #'> :key #'door-depth)
                                 thereis (attach d (allowed d (uiop:ensure-list exit))))))
+      ;; Last, so the rest of the level is the same whether it rolls one or not.
+      (when (and altar-chance (< (generator-roll 1.0) altar-chance))
+        (let* ((deepest (reduce #'max frontier :key #'door-depth :initial-value 0))
+               (middle (remove-if-not (lambda (d) (<= (* 0.3 deepest) (door-depth d) (* 0.7 deepest))) frontier))
+               (placed (loop for d in (append (shuffle middle) (shuffle (set-difference frontier middle)))
+                             thereis (attach d (allowed d (list *altar-block*))))))
+          (v:info :hexmaw "Generated level ~d: ~:[no room for the altar~;an altar~]." seed placed)))
       (dolist (d frontier) (shut d))
       (dolist (c shut) (seal-connector container c))
       ;; Every doorway left open should meet another.
       (dolist (c doors)
         (unless (or (member c shut) (find-if (lambda (o) (facing-p c o)) doors))
           (v:warn :hexmaw "Generated level ~d: ~a opens onto nothing." seed c)))
-      (setf *level-networks* (reverse networks))
+      (setf *level-networks* (reverse networks)
+            *last-wing-rooms* (- placed-rooms (if core 1 0)))
       (v:info :hexmaw "Generated level ~d: ~d rooms, ~d cells~{, a ~(~a~) network of ~d block~:p (target ~d) ending ~{~(~a~)~^, ~}~}."
               seed placed-rooms (hash-table-count cells)
               (loop for n in *level-networks*
@@ -358,7 +384,7 @@ Returns the seed and whether EXIT went in."
 
 (defun level-map (&optional (stream *standard-output*))
   "Print the generated level's cells, a storey at a time, north up: each cell is the first
-letter of its block's name, upper case for rooms, ~ for a river's blocks, ^ for a high
+letter of its block's name, upper case for rooms, @ for the settlement's town, ~ for a river's blocks, ^ for a high
 quarter's, = for a flooded run's and - for a canal's."
   (let ((keys (loop for k being the hash-keys of *level-cells* collect k)))
     (when keys
@@ -368,6 +394,7 @@ quarter's, = for a flooded run's and - for a canal's."
                      do (loop for i from (reduce #'min keys :key #'first) to (reduce #'max keys :key #'first)
                               for name = (gethash (list i j k) *level-cells*)
                               do (write-char (cond ((null name) #\.)
+                                                   ((member :town (block-tags name)) #\@)
                                                    ((eq (block-network name) :river) #\~)
                                                    ((eq (block-network name) :high) #\^)
                                                    ((eq (block-network name) :flooded) #\=)

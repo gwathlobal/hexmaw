@@ -35,7 +35,7 @@
 (defparameter *leap-gravity* 15.0 "Acceleration, in m/s², along a leap's arc and of a fall.")
 (defparameter *leap-max-speed* 16.0 "Fastest, in m/s across, it flies: a low ceiling limits how far it leaps.")
 (defparameter *leap-sample* 0.25 "Metres between the points of an arc that are checked against solids.")
-(defparameter *leap-windup* 0.6 "Seconds it crouches before it leaps.")
+(defparameter *leap-windup* 0.45 "Seconds it crouches before it leaps.")
 (defparameter *leap-recover* 1.2 "Seconds it stands after landing.")
 (defparameter *leap-cooldown* 6.0 "Seconds from one leap to the next.")
 (defparameter *leap-hit-stop* 0.12 "Hit-stop on landing.")
@@ -127,20 +127,25 @@ List it before CREATURE or a subclass in the superclasses."))
    (attack-reach :initform 1.0)
    (attack-arc :initform 0.9)
    ;; Wind-up overhead, swing, the maul in the floor (the blow lands), recover.
-   (attack-frame-times :initform '(0.7 0.15 0.2 0.5))
-   (attack-pause :initform 1.0)
+   (attack-frame-times :initform '(0.5 0.12 0.2 0.45))
+   (attack-pause :initform 0.7)
+   (lunge-speed :initform 2.5)
    ;; The maul knocks a raised shield aside; its shockwave comes up through the floor,
    ;; under it (QUAKE).
    (guard-break :initform 1.2)
    (walk-speed :initform 0.8)
-   (chase-speed :initform 1.6)
+   (chase-speed :initform 2.0)
    (wander-radius :initform 2.0)
    (gibs :initform '((:flesh 0 0 1 1 2 3 4 5 5 6 6 7 7)))
    (gib-scale :initform 1.8)
    (gib-overkill :initform 0.12)
    ;; Its bulk shrugs off most blows, nearly as the knight's plate does.
-   (pain-chance :initform 17)
+   (pain-chance :initform 9)
    (max-health :initform 120)))
+
+;; Its slam sounds where the maul lands (RELEASE-ATTACK), its landing as it quakes (LAND-LEAP).
+(define-creature-sounds ogre
+  :alert :ogre-alert :pain :ogre-pain :death :ogre-death :leap :ogre-leap :step :step-heavy)
 
 (defmethod stage :after ((leaper leaper) (area staging-area))
   (when (leap-animation leaper)
@@ -272,6 +277,8 @@ true if there is a landing cell and an arc OGRE's body fits."
              (plan-leap leaper))
     (setf (attack-kind leaper) :leap)
     (start-attack leaper)
+    ;; As it crouches, not as it leaves: the roar is the warning.
+    (creature-noise leaper :leap)
     T))
 
 (defmethod special-attack ((ogre ogre))
@@ -286,7 +293,7 @@ true if there is a landing cell and an arc OGRE's body fits."
     (v<- from (location ogre))
     (setf (airborne ogre) T
           (leap-time ogre) 0.0
-          (leap-cooldown ogre) (leap-cooldown-time ogre)
+          (leap-cooldown ogre) (* (leap-cooldown-time ogre) (depth-scale :cooldown))
           (leap-duration ogre) (float (arc-time (vy from) (vy to) (leap-apex ogre) (leap-gravity ogre)) 0f0))
     (turn-to ogre (atan (- (vx to) (vx from)) (- (vz from) (vz to))) 100.0)
     (setf *leap-peak* (vy from))
@@ -315,6 +322,7 @@ true if there is a landing cell and an arc OGRE's body fits."
     (when hit
       (hurt-player *player* (roll (attack-damage ogre)) loc :shove *slam-shove* :lift *slam-lift*
                    :guard-break (guard-break ogre) :by ogre))
+    (play-sound :ogre-slam impact)
     (quake ogre impact *slam-quake-radius* NIL *slam-quake-shove*
            (unless hit *slam-quake-shove*) *slam-quake-lift*)
     (kick-dust impact 0.0 1 (container ogre))))
@@ -339,7 +347,7 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
                (when damage
                  (let ((amount (round (* f (roll damage)))))
                    (when (<= 1 amount)
-                     (hurt c amount :from centre))))
+                     (hurt c amount :from centre :by ogre))))
                (let ((away (v- (location c) centre)))
                  (when (< (+ (expt (vx away) 2) (expt (vz away) 2)) 1f-4)
                    (setf (vx away) (sin (facing ogre)) (vz away) (- (cos (facing ogre)))))
@@ -378,6 +386,7 @@ short: the ogre's quake, by default.")
     (let ((at (location ogre)))
       (setf (recover ogre) (leap-recover-time ogre))
       (stop-walking ogre (leap-recover-time ogre))
+      (play-sound :ogre-land at)
       (quake ogre at *quake-radius* *quake-damage* *quake-shove* *quake-player-shove* *quake-player-lift*
              :inner (body-radius ogre))
       (kick-dust at (* 0.6 *quake-radius*) *ogre-dust-puffs* (container ogre))

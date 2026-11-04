@@ -1,0 +1,21 @@
+Pixel-art character turnaround sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game, where characters are drawn as sprites seen from several camera angles: a TOWNSMAN, a labourer of a grim walled settlement deep underground.
+
+REFERENCE IMAGES, in the order attached:
+1. The townsman, seen from the front. It is the character design: copy it exactly, the same man, clothes and colours, only turned for each view.
+2. and 3. Turnaround sheets of two monsters from the same game (a red imp, a hooded acolyte). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs.
+
+THE TOWNSMAN (as in reference 1)
+- A tired, thin labourer of average height, unshaven, a weary face.
+- A rough brown cloth cap; a patched, worn brown tunic with rolled sleeves, belted with a knotted rope; patched brown trousers, the shins wrapped in cloth bindings; scuffed leather shoes.
+- A thick coil of hemp ROPE slung over his RIGHT shoulder, his right hand holding it there. The left arm hangs at his side.
+- The rope stays on the right shoulder in every view, so it is on the opposite side of the body in the front and back views.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).
+- In the front three-quarter, side and rear three-quarter views the figure faces IMAGE-LEFT.
+- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders or effects outside the figure.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

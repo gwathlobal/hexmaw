@@ -52,6 +52,9 @@ the sprite, which turns to face the camera, doesn't sink into the wall seen from
    (located :initform NIL :accessor located
             :documentation "True once ROOM-A and ROOM-B are found; a lamp with a source is found again every frame.")))
 
+(defvar *torch-points* (make-array 0 :adjustable T :fill-pointer T)
+  "Where each torch's flame burns, for its crackle (UPDATE-AMBIENCE). CLEAR-LEVEL empties it.")
+
 (defvar *lamps* (make-array 0 :adjustable T :fill-pointer T)
   "Every light in the level. BUILD-LEVEL empties it.")
 
@@ -113,8 +116,10 @@ within *TORCH-WALL-REACH*, if there is one."
            (base (/ (getf atlas :overlay-bottom) (getf atlas :cell-height)))
            (torch (make-instance 'torch :animation animation
                                         :location (vec x (+ y (* (- base 0.5) *torch-size*)) z))))
-      (add-lamp (vec x (+ y (* 0.5 base *torch-size*)) z) *torch-color* *torch-radius*
-                :flicker *torch-flicker*)
+      (vector-push-extend
+       (location (add-lamp (vec x (+ y (* 0.5 base *torch-size*)) z) *torch-color* *torch-radius*
+                           :flicker *torch-flicker*))
+       *torch-points*)
       (enter torch container)
       torch)))
 

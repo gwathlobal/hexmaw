@@ -1,0 +1,19 @@
+{
+  "prompt": "A quill scratching briefly on parchment, then a soft low bell tone. Retro 1990s fantasy game menu sound, short and clean, dry, no music.",
+  "prompt_file": "audio/prompts/sfx-game-saved.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 1.0,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1793714218,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    1.0,
+    1.0
+  ]
+}

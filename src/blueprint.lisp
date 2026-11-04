@@ -150,6 +150,28 @@ pool stands this far out of the water, within a step.")
   "A height above the storey's floor, or :TOP for the storey's top."
   (if (string-equal word "top") :top (parse-number word line)))
 
+(defparameter *npc-conditions* '("thriving" "besieged" "sacked")
+  "The conditions a settlement may be in, which an npc or spawn may be limited to.")
+
+(defun parse-conditions (words line)
+  "WORDS as a list of (CONDITION PERCENT): \"sacked:50\" is there half the time when sacked."
+  (loop for word in words
+        collect (let* ((colon (position #\: word))
+                       (name (string-downcase (subseq word 0 colon)))
+                       (percent (if colon (parse-number (subseq word (1+ colon)) line) 100)))
+                  (unless (member name *npc-conditions* :test #'string=)
+                    (fail line NIL "No settlement condition ~s; there are ~{~a~^, ~}." name *npc-conditions*))
+                  (unless (<= 0 percent 100)
+                    (fail line NIL "A condition's chance is a percent, 0 to 100, not ~a." percent))
+                  (list name (round percent)))))
+
+(defun conditions-name (conditions)
+  "CONDITIONS as they stand in an empty's name: thriving+sacked50, or all for none."
+  (if conditions
+      (format NIL "~{~a~^+~}" (loop for (name percent) in conditions
+                                     collect (if (= percent 100) name (format NIL "~a~d" name percent))))
+      "all"))
+
 (defun parse-action (words line)
   (destructuring-bind (op &rest args) words
     (flet ((arg (n) (or (nth n args) (fail line NIL "~a needs more arguments." op))))
@@ -201,18 +223,30 @@ pool stands this far out of the water, within a step.")
             ((string-equal op "torch")
              (list :torch (if args (parse-number (first args) line) *torch-height*)))
             ((string-equal op "spawn")
-             (let ((skip (if (third args) (parse-number (third args) line) 0)))
+             ;; spawn MONSTER [FACING] [SKIP] [when:COND|COND]
+             (let* ((when (find-if (lambda (w) (and (< 5 (length w)) (string-equal "when:" w :end2 5))) args))
+                    (args (remove when args))
+                    (skip (if (third args) (parse-number (third args) line) 0)))
                (unless (<= 0 skip 100)
                  (fail line NIL "A spawn's chance of no monster is a percent, 0 to 100, not ~a." skip))
                (list :spawn (string-downcase (arg 0))
                      (if (second args) (parse-direction (second args) line) :south)
-                     (round skip))))
+                     (round skip)
+                     (when when (parse-conditions (uiop:split-string (subseq when 5) :separator "|") line)))))
+            ((string-equal op "npc")
+             ;; npc ROLE [FACING] [COND[:PCT] ...]: a townsperson (townsfolk.lisp), only under
+             ;; those conditions of the settlement, each with a percent chance of being there.
+             (let ((facing (if (second args) (parse-direction (second args) line) :south)))
+               (list :npc (string-downcase (arg 0)) facing (parse-conditions (cddr args) line))))
+            ((string-equal op "zone") (list :zone (string-downcase (arg 0))))
+            ((string-equal op "arrive") (list :arrive))
             ((string-equal op "pickup")
              (let ((tier (or (first args) "floor")))
                (unless (member tier '("floor" "reward") :test #'string-equal)
                  (fail line NIL "A pickup spot is floor or reward, not ~s." tier))
                (list :pickup (string-downcase tier))))
             ((string-equal op "exit") (list :exit))
+            ((string-equal op "altar") (list :altar))
             (T (fail line NIL "Unknown action ~s." op))))))
 
 (defun parse-legend-line (blueprint string line)
@@ -656,7 +690,7 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                          (nth-value 1 (col-span blueprint c1)) y1
                                          (nth-value 1 (row-span blueprint r1))))))
                        spans)
-              ;; Stairs, spawns, pickup spots, exits and torches, one per region or cell.
+              ;; Stairs, spawns, pickup spots, exits, altars and torches, one per region or cell.
               (let ((done (make-hash-table :test 'equal)))
                 (dotimes (r nr)
                   (dotimes (c nc)
@@ -666,8 +700,12 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                            (spawn (action :spawn actions))
                            (pickup (action :pickup actions))
                            (exit (action :exit actions))
+                           (npc (action :npc actions))
+                           (zone (action :zone actions))
+                           (arrive (action :arrive actions))
+                           (altar (action :altar actions))
                            (torch (action :torch actions)))
-                      (when (and (or stairs spawn pickup exit) (not (gethash (list r c) done)))
+                      (when (and (or stairs spawn pickup exit npc zone arrive altar) (not (gethash (list r c) done)))
                         (let ((cells (region rows r c)))
                           (dolist (cell cells) (setf (gethash cell done) T))
                           (multiple-value-bind (r0 c0 r1 c1) (region-bounds cells)
@@ -692,7 +730,9 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                               (when spawn
                                 (let ((y (reduce #'max (remove :box actions :key #'first :test-not #'eq)
                                                  :key (lambda (a) (height (third a))) :initial-value base)))
-                                  (push (list (format NIL "spawn_~:[~*~;skip~d_~]~a" (plusp (fourth spawn)) (fourth spawn)
+                                  (push (list (format NIL "spawn_~:[~*~;when-~a_~]~:[~*~;skip~d_~]~a"
+                                                      (fifth spawn) (conditions-name (fifth spawn))
+                                                      (plusp (fourth spawn)) (fourth spawn)
                                                       (second spawn))
                                               (list (/ (+ x0 x1) 2) y (/ (+ z0 z1) 2))
                                               (facing-rotation (third spawn)))
@@ -709,7 +749,33 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                               (when exit
                                 (push (list (format NIL "exit_~d" (incf (gethash "exit" counts 0)))
                                             (list (/ (+ x0 x1) 2) base (/ (+ z0 z1) 2)) NIL)
-                                      empties))))))
+                                      empties))
+                              (when arrive
+                                (push (list (format NIL "arrive_~d" (incf (gethash "arrive" counts 0)))
+                                            (list (/ (+ x0 x1) 2) base (/ (+ z0 z1) 2)) NIL)
+                                      empties))
+                              (when npc
+                                ;; Standing on any box in the cell, as a spawn does.
+                                (let ((y (reduce #'max (remove :box actions :key #'first :test-not #'eq)
+                                                 :key (lambda (a) (height (third a))) :initial-value base)))
+                                  (push (list (format NIL "npc_~a_~a" (conditions-name (fourth npc)) (second npc))
+                                              (list (/ (+ x0 x1) 2) y (/ (+ z0 z1) 2))
+                                              (facing-rotation (third npc)))
+                                        empties)))
+                              (when zone
+                                ;; The region's bounding box, the storey's height, as two corners.
+                                (let ((n (incf (gethash "zone" counts 0))))
+                                  (push (list (format NIL "zone_~a_~d_lo" (second zone) n) (list x0 base z0) NIL) empties)
+                                  (push (list (format NIL "zone_~a_~d_hi" (second zone) n)
+                                              (list x1 (+ base *storey-height*) z1) NIL)
+                                        empties)))
+                              (when altar
+                                ;; On top of the box it stands on, if any: the spellforge's (forge.lisp).
+                                (let ((y (reduce #'max (remove :box actions :key #'first :test-not #'eq)
+                                                 :key (lambda (a) (height (third a))) :initial-value base)))
+                                  (push (list (format NIL "altar_~d" (incf (gethash "altar" counts 0)))
+                                              (list (/ (+ x0 x1) 2) y (/ (+ z0 z1) 2)) NIL)
+                                        empties)))))))
                       (when torch
                         (multiple-value-bind (x z) (cell-centre r c)
                           (cond ((= r 0) (setf z (+ (nth-value 1 (row-span blueprint 0)) *torch-inset*)))
@@ -864,7 +930,8 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
 (defun mirror-action (a)
   (case (first a)
     (:stairs (list* :stairs (mirror-direction (second a)) (cddr a)))
-    (:spawn (list :spawn (second a) (mirror-direction (third a)) (fourth a)))
+    (:spawn (list :spawn (second a) (mirror-direction (third a)) (fourth a) (fifth a)))
+    (:npc (list :npc (second a) (mirror-direction (third a)) (fourth a)))
     (:diagonal (list :diagonal (second a) (if (char= (third a) #\/) #\\ #\/) (fourth a) (fifth a)
                      (case (sixth a) (:ne :nw) (:nw :ne) (:se :sw) (:sw :se))))
     (T a)))

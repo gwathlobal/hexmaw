@@ -208,6 +208,7 @@ direction DX DZ (any way when it is 0 0), a BACK fraction of them the other way.
   "Spray blood from CREATURE's wound, struck for AMOUNT from point FROM: away from FROM,
 some of it back toward it. Without FROM the blow comes from the player. The wound drips
 for a while after."
+  (play-sound :flesh-wet (location creature))
   (let* ((loc (location creature))
          (from (or from (and *player* (feet *player*))))
          (dx (if from (- (vx loc) (vx from)) 0.0))
@@ -559,6 +560,7 @@ vanishes and its gibs fly. Its wound stops dripping, since nothing of it is left
   (unless (gibbed creature)
     (setf (gibbed creature) T
           (bleeding creature) 0f0)
+    (play-sound (if (bleeds creature) :gib-burst :bone-shatter) (location creature))
     (burst-gibs creature from)))
 
 (defun dissolve-oldest-gib (pool)
@@ -580,6 +582,18 @@ vanishes and its gibs fly. Its wound stops dripping, since nothing of it is left
   (incf (gib-count pool))
   (loop while (and (< *max-gibs* (gib-count pool))
                    (dissolve-oldest-gib pool))))
+
+(defparameter *gib-bounce-sound-speed* 3.0 "Metres per second a gib must strike at to be heard.")
+(defparameter *gib-bounce-gap* 0.3 "Seconds from one gib's bounce sound to the next: a burst lands many at once.")
+(defparameter *gib-bounce-volume* 0.5)
+(defvar *last-gib-bounce* -1.0 "The SOUND-CLOCK at the last gib's bounce sound.")
+(defvar *gib-sound-at* (vec3) "Scratch: where a gib bounced.")
+
+(defun gib-bounce-sound (x y z)
+  (when (< *gib-bounce-gap* (abs (- *sound-clock* *last-gib-bounce*)))
+    (setf *last-gib-bounce* *sound-clock*
+          (vx *gib-sound-at*) x (vy *gib-sound-at*) y (vz *gib-sound-at*) z)
+    (play-sound :gib-bounce *gib-sound-at* *gib-bounce-volume*)))
 
 (defun step-gib (pool i dt keep fall)
   "Fly gib I of POOL for DT seconds, slowed by KEEP and pulled down by FALL: it drips,
@@ -634,6 +648,8 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
                         (cond ((and floor-p (< into *gib-rest-speed*))
                                (rest-gib pool i))
                               (T
+                               (when (< *gib-bounce-sound-speed* into)
+                                 (gib-bounce-sound (aref p b) (aref p (+ b 1)) (aref p (+ b 2))))
                                (setf (aref v (+ b axis)) (* (if high into (- into)) *gib-bounce*))
                                (incf (aref p (+ b axis)) out)
                                (when floor-p

@@ -1,0 +1,1 @@
+VIEW: front, as in the first cell of reference 1 and in reference 2. The figure faces the viewer squarely in every cell.

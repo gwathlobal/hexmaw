@@ -1,0 +1,19 @@
+{
+  "prompt": "A person climbing out of water: water pouring and dripping off them onto stone. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-splash-out.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.8,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1793714028,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    0.8,
+    0.8
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "prompt": "A small crack in the air flying slowly: a hollow, glassy, warbling hum with a faint shimmering whistle, steady and even, no wind-up and no fade. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-rift-flight.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": true,
+  "duration_seconds": 2.0,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1793747691,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    2.25,
+    2.25
+  ]
+}

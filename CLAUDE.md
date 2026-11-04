@@ -285,9 +285,11 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 15, ogre 17, skeleton 40, acolyte and harpy 50, imp 60, necromancer 70) plus the weapon's
+  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
-  `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
+  `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
+  whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`,
+  not on ice) it neither walks nor lunges, so a hunter doesn't walk straight back through a push. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
   is the ranged one (`attack-spell`), with a cast, flinch and death but no walk: it glides
   in the standing pose, its robe hiding its feet. Its death burns, so it has a `death-glow`:
@@ -503,9 +505,28 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   tools/draw_blood.py data/sprites/blood/blood --gibs imp=art/gibs/strips/imp --gibs flesh=art/gibs/strips/flesh --gibs bones=art/gibs/strips/bones
   ```
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
-  projectile delivery, the player's `bolt`, the acolyte's `cinder` and the necromancer's
-  `grave-skull` and `grave-spikes`. A new effect kind is a method on `apply-effect`, for a
-  `creature` target and (in player.lisp, loaded later) a `player` one; where the effect came
+  projectile delivery, the player's `bolt` and `heal`, the acolyte's `cinder` and the necromancer's
+  `grave-skull` and `grave-spikes`. An effect has a kind, a magnitude range, a duration, an area, a
+  target type (`:self`, the caster; `:target`, what the delivery hits) and, for damage, an
+  `element`. `*effect-kinds*` says what each kind the spellforge offers is (its base cost, how its
+  duration counts: `:instant`, `:over-time` (magnitude per second) or `:status`, who it may strike,
+  and the forge's caps); `effect-cost` is base (by element for damage, `*element-costs*`) times the
+  average magnitude, times the duration's factor, times 1 + area, times `*touch-cost-scale*` for a
+  touch spell. The bolt is 14 (fire 7-9 and knockback 3-4, "Fire Bolt" by its `:title`; `spell-title`),
+  heal 17 (14-20), and the creatures' spells cost what they did. The player's starting spells must be
+  ones the forge makes, ranges, cost, flight and all (`forgeable-p` and `check-starting-spells`,
+  forge.lisp, which warns as it loads: a forged range is `*magnitude-spread*` of its top up to it, and
+  damage always has an element). An effect with an area
+  bursts where its spell strikes (`burst-spell`, over `burst-victims` in magic.lisp: every body
+  within it with a clear line, but the caster and those it spares), the impact drawn that much
+  bigger (`play-impact`, `*burst-size*`); a strike without a projectile (a touch, an enchanted
+  blow) goes through `strike-with-spell` and a `strike` source. A spell the player forged isn't in
+  `*spells*`: `spell-spec` and `spec-spell` turn one into plain data and back (a save keeps it so),
+  and its look is its element's or first effect's (`*spell-looks*`: the bolt's frames recoloured
+  into `data/sprites/spells/` by `tools/recolor_hue.py ... --from 30 --reach 60 --hue H --spread
+  0.5`; frost 200, shock 58 with `--spread 0.25`, drain 345, heal 110, arcane 285), each preloaded
+  by `preload-spells`. A new effect kind is a method on `apply-effect`, for a
+  `creature` target and (in player.lisp or magic.lisp, loaded later) a `player` one; where the effect came
   from and which way it pushes are `effect-origin` and `effect-direction` of its source (the
   projectile, or the circle), and `effect-unblockable-p` whether the player's shield counts
   (the circle's comes up from the floor). A projectile hits any live creature or the player except its
@@ -592,8 +613,41 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   at a time. Otherwise it throws `gust`s: a `:gust` effect throws the player, toward its tornado
   if one is near, and with lift, since a shove on the floor dies at once. It has no walk.
   `casting-tempest-p` is a generic, so a boss's tornado cast keeps its sign up too.
-- `src/boss.lisp`: the boss at the end of a run, in the `arena` block level 3 ends in. It is an
-  empowered form of one of the seven monsters (`*boss-kinds*`: kind, class such as `imp-boss`
+- `src/riftwalker.lisp` (after boss.lisp, whose `free-spot` and `same-arena-side-p` it uses): the
+  `riftwalker`, a masked assassin, an `ability-user` and a melee hunter (`ranged-p` is true only
+  while a cast of its runs, so the cast turns after the player as a caster's does) that flanks.
+  Its stab is its only damage. Its other abilities move things, chosen in `special-attack`:
+  `:call` (cd 14 s) brings the live ally nearest it (within `*call-reach*`, at least
+  `*call-min-distance*` from the player, no boss) to stand to the player's front quarter on the
+  side away from the riftwalker (`call-spot`), a 1 s cast
+  marked by a `rift-sign` on the floor (`tools/draw_rift_sign.py data/sprites/rift`) that a flinch
+  breaks; `:push` (cd 12 s) with the player on top of it while it is under half health or their
+  shield is up; else `:pull` (cd 8, 6 to 16 m) or `:swap` (cd 10, 5 to 14 m), 50/50 when both are
+  ready. The three are projectiles at 10 m/s (`rift-pull` violet, `rift-swap` gold, `rift-push`
+  cyan by their light), with effects `:teleport-to`, `:swap` and `:teleport-away`. They pass
+  through every creature (`spares-p`): a rift that struck the ally it had just called stood in
+  its line swapped the two. A sidestep dodges them and a raised shield facing them stops them
+  (`rift-stopped-p`); a knight's shield sends one back as its own, which moves whatever it then
+  strikes (the effects are methods on `apply-effect` for any target). A pull puts the target in front of the caster (`spot-around`), turned to it, and
+  the stab follows; a swap trades places, the player keeping their facing, and `*pounce-delay*`
+  later it blinks in right behind them (`pounce`); a push sends the target to `spot-away`, a dry
+  cell `*rift-away-walk*` (10 to 25 m) of walking off and within `*rift-away-within*`
+  (`nav-reachable-spot`'s `:test`), so the way back is always on foot. Every destination keeps to
+  its side of the arena's walls. **Blink**: every `*blink-interval*` (4 to 8 s) of hunting it steps
+  through a rift to a random spot `*blink-range*` (3 to 6 m) off in sight of the player
+  (`blink-spot`), and, past `*blink-cooldown*`, `*blink-dodge-chance*` (35%) after a hit it lives
+  through (`react-to-hit`, a generic `hurt` asks) and `*blink-evade-chance*` (50%) when the
+  player's projectile is about to reach it (`evade-projectile`, asked once per projectile from its
+  tick, `*evade-look-ahead*` ahead, spells.lisp). Moving goes through `teleport-actor` (the
+  player's is `teleport-player`, player.lisp: stopped, out of a vortex, the eye snapped, the view
+  flashing `*rift-flash-color*`) and `rift-move`, a `rift-flash` at both ends. Rolls use
+  `*roll-random*`. As a boss it is the Rift Lord (`riftwalker-boss`, defined here), denied the
+  boss's `:blink`, and an elite as `elite-riftwalker`. It spawns from level 2 of a run on (weight 1,
+  then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
+  `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
+  riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
+- `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
+  empowered form of one of the eight monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
   likely, with three powers (`boss-powers`): two from the start, the third when it enrages at
   `*boss-enrage-at*` (half) health (`active-powers`). `make-boss`, from a `spawn boss` in a
@@ -602,12 +656,13 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   :blink :haste)`, forces them for testing (a `defparameter`: reloading boss.lisp clears it, so set
   it again after). Empowered: drawn `scale` times bigger (`size-scale` on
   `creature`, which every strip's `:size` is multiplied by), about 3 m, `*boss-health*` (500),
-  `*boss-pain-chance*`, melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
+  `*boss-pain-chance*` (1, the weapon's bonus still added), melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
   never gibbed, flyers hovering `*boss-hover*` so the sword reaches them, step `*nav-tall-lift*`
   since it is taller than `*nav-clearance-height*`. No vortex pulls or catches it (`vortex-proof-p`).
-  It glows: a class fragment shader on `boss` multiplies it by `*boss-shade*` and draws a pulsing
-  rim in `*boss-glow-color*` on every opaque texel beside a see-through one (on the boss's program
-  only), with a lamp of its own. Warded shows as an arc of violet `aurora` on the floor round its
+  It glows: `rim-glow`, a shader mixin the boss and elites (`src/elite.lisp`) share, multiplies it
+  by its `rim-shade` (the boss's `*boss-shade*`) and draws a pulsing rim on every opaque texel
+  beside a see-through one (on that class's program only), in `*boss-glow-color*`, with a lamp of
+  its own (`light-rim`). Warded shows as an arc of violet `aurora` on the floor round its
   front (`update-ward`, `*ward-colors*`), over exactly the sector its reflection covers
   (`ward-arc`: the billboard views `shield-views` covers, a quarter of pi each, so 135°), turning
   with its facing. Powers are
@@ -627,7 +682,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   | `:shockwave` | a 0.9 s crouch, then `quake` round itself out to `*boss-quake-radius*` | flyers |
   | `:tornado` | the wraith's cast, sign and tornado; one up at a time | gale wraith |
   | `:summon` | 2 of its kind at normal size (3 enraged), `summoned`, while fewer than `*boss-max-minions*` live: a `summon-sigil` draws itself in on the floor at each spot through the 1.1 s cast (`begin-summon`, `summon-spots`), and at the release flame bursts up from each (an `aurora` in `*sigil-flame-colors*`) and a minion rises out of it; a broken cast takes its sigils with it | |
-  | `:blink` | a ranged kind 9 m off a close player, a melee kind behind a far one | |
+  | `:blink` | a ranged kind 9 m off a close player, a melee kind behind a far one | riftwalker |
   | `:warded` (passive) | its front turns spells back (`shield-views`) | knight |
   | `:haste` (passive) | walk and attacks × `*haste-speed*` | |
 
@@ -651,10 +706,102 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   its title, health with a mark at half, and its powers, from the seal until it dies.
   `tools/hd status` shows the arena and boss. The debug level has an arena of its own down a
   corridor south of the hall (see `src/level.lisp`). `(start-boss-fight)` (the main menu's Boss fight in a
-  debug version) starts a run on level 3 with the player outside the arena's doorway and every
+  debug version) starts a run on its last level with the player outside the arena's doorway and every
   other monster taken out of the level; a save made there doesn't load (its monsters don't match),
-  so test saves on `(progn (start-level :generated) (setf *run-depth* 3))`. To enrage it,
+  so test saves on `(progn (start-level :generated) (setf *run-depth* (run-length)))`. To enrage it,
   `(game (hurt (arena-boss *arena*) 255))`.
+- `src/settlement.lisp`: the settlement, a level of its own once a run (see "The settlement"
+  below): the `settlement` class (`*settlement*`, defined in run.lisp, NIL on any other level),
+  `*factions*`, `*conditions*`, prices (`price`, `*base-prices*`) and reputation
+  (`faction-reputation`, `adjust-reputation`).
+- `src/townsfolk.lisp`: the townsfolk, the E key (`interact-target`, `interact`), the watch's
+  crimes (`report-crime`), sacking (`sack-town`) and the `settlement-director`. See "The settlement".
+- `src/dialogue.lisp`: talking to the townsfolk (`dialogue-panel`, `*game-state*` `:talk`) and
+  what they offer: the shop, the priest, the trainer, fines and bribes, and the quest. See "The settlement".
+- `src/magic.lisp`: what the forge's effects do, and statuses. An effect with a duration leaves a
+  `status` on an actor (the `afflicted` mixin, creature.lisp, on creatures and the player; `afflict`):
+  damage or health a second (`:damage`, `:heal`, dealt every `*status-tick*` through `burn` or
+  `hurt-player ... :shove NIL`, `status-blow`), a `:slow` (percent, `slow-factor` in `walking-speed`
+  and the player's walk, at most down to `*slowest*`), a `:ward` (points `hurt-player` takes off a
+  blow after the shield, `absorb-ward`). One of each kind; a second keeps the stronger and the longer.
+  `update-statuses` runs in each actor's tick and allocates nothing. A creature takes on its
+  status's element colour (`status-tint`, `*element-tints*`). Elements: frost also chills
+  (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` halves an element for a
+  class (acolyte fire, skeleton frost, gale wraith shock). Drain heals its caster `*drain-share*` of
+  what it took. Statuses are `saved-slots` (`(:status ...)` in a save). A status keeps its
+  `duration`, the time it was put on or last renewed for (`afflict` resets it when a re-cast lasts
+  longer than what is left), for the HUD's time bar. Damage over time shows on a creature as a
+  `status-aura` (its `status-aura` slot, on `afflicted`): its element's loop of small pieces scattered
+  over and round the body (`*status-auras*`: burn, wisps of flame and embers, with a flickering
+  orange lamp; frost, snowflakes and ice crystals drifting off it, no lamp; shock, crackling arcs, a
+  dim blue-white lamp; and for healing over time, `:heal`, green pluses rising off it with a faint
+  green lamp, though no creature heals itself so yet, in a slot of its own, `heal-aura`, so a creature
+  under both shows both, the heal's a little further back, `*heal-aura-pull*`, so they never
+  flicker; `aura-key`, `sync-aura`), an effect sprite standing at `*aura-rise*` of the body, its height the
+  entry's SIZE times the body's (fire 1.25 and frost 1.15, so they reach past its outline: wisps on
+  a red imp were lost in it; shock 0.85), drawn in proportion (stretched, the pixel art smeared), so
+  a boss burns bigger, and pulled `*aura-pull*` toward the camera so it draws in front of the
+  billboard. The colour tint (`status-tint`) is left to the slow and the frost chill. The creature's tick
+  spawns and ends it (`update-status-aura`): gone when the status runs out or the creature dies.
+  A save leaves it out (`level-effects`), and it comes back from the status; `preload-status-auras`
+  stages the strips. The frost chill keeps its tint only. To look at one:
+  `(game (afflict (aref *creatures* 0) :damage 1 8.0 :element :fire :caster *player*))`.
+- `src/forge.lisp`: the spellforge, used at an altar (`add-altar`, pickups.lisp; `near-altar-p`, within
+  `*altar-reach*` across and `*altar-height*` of its top; the HUD's prompt line says "[E] Spellforge"
+  there, the altar being one of E's targets, `interact-target`, townsfolk.lisp). E opens it (`open-forge`, `*game-state*`
+  `:forge`, frozen; Esc or Leave closes it; `*forge-anywhere*` opens it anywhere in a debug version).
+  Making costs arcane dust (an item, `:dust`): a spell `*dust-per-mana*` (1) a point of its mana per
+  cast (`spell-dust`), an enchantment `*enchant-dust-scale*` (3) a point of its mana per blow
+  (`enchant-dust`); destroying one gives back `*dust-refund*` (0.5) of that (`refund-dust`). Two tabs
+  (`*forge-tab*`, `forge-tab`): **Spells** lists "New spell" and every rune in the bag (`player-runes`,
+  `*forge-list-rows*` a page, `forge-page`), **Enchant** the weapons carried (`carried-weapons`: every
+  sword and spear in the bag, each a stack, its sink, and the shield, `:shield`, with a sword;
+  `weapon-sink-p`, `sink-weapon`, `(setf sink-spell)`; `(forge-select :sword)` from the REPL takes the
+  first sword). The forge is on one of them (`*forge-sink*`,
+  `forge-select`): a new spell or a plain weapon has a draft to make (`*forge-draft*`, kept per sink in
+  `*forge-drafts*` while the forge is left: a `forge-draft` of a delivery and `effect-draft`s), made by
+  `forge-make` into a rune in the bag on the first free key (`give-rune`) or the weapon's enchantment;
+  a rune or an enchanted weapon is only shown (`shown-spell-lines`) with Unweave or Disenchant
+  (`forge-destroy`, two clicks: the first arms it, `*forge-armed*`). Nothing is changed in place: make
+  another, or destroy it; spells are limited only by free bag cells. Effects and elements are those the
+  player knows (`known-effects`: `*starting-effects*`, damage, heal, knockback and fire, plus what glyphs
+  taught; `:area` unlocks area), and of those only the ones that land where the draft does (`draft-kinds`): a
+  spell cast on yourself takes heal and ward, a projectile, a touch or a weapon damage, knockback, slow
+  and drain. Changing the delivery turns the effects that no longer fit into the first kind that does
+  (`fit-effects`). A run starts knowing only fire, so with one element (or one kind for the delivery)
+  known, the Element or Effect button doesn't change it but says so in the note, naming the glyphs
+  that teach the rest (`forge-cycle-element`, `forge-cycle-kind`). `draft-problem` says why a draft can't be made (self delivery with something to
+  strike, a delivery with nothing to, more than `*max-mana*`, a weapon's more than
+  `*max-enchant-effects*` or `*max-enchant-cost*` a blow, too little dust, a full bag). A draft's name
+  is made from its effects (`draft-name`, "Frost Burst"). The screen is `forge-panel`, a `menu-panel`
+  that lays itself out (`build-panel`, menu.lisp): the tabs and sinks down the left, labels cut to
+  `*forge-label-width*` (`fit-label`), each a `forge-choice` (a `menu-button` that draws the chosen
+  one with a gold border, a warm fill and a gold label, `*forge-selected-color*` and the rest, apart
+  from the hover's orange), the work on the right, its sliders `forge-slider`s (a
+  `menu-slider` with its own range and value text), under each effect its explanation (`effect-about`,
+built from the parameters: the kind's rule, the element's quirk, who resists it from
+`*element-resistances*`, what time and area change; a `forge-about`, smaller and dimmer), and its
+text `forge-note`s, which wrap (Alloy's
+  `:wrap`) in rows as tall as `note-lines` guesses. A structural command bumps `*forge-revision*` and
+  the menu controller remakes the panel (`panel-stale-p`); a slider only changes the draft and the
+  readout and note (`alloy:value-data`s the panel keeps). From the REPL: `(game (setf
+  *forge-anywhere* t) (open-forge))`, then `(forge-tab :enchant)`, `(forge-select :sword)`,
+  `(forge-make)`, `(forge-destroy)` twice.
+- `src/elite.lisp`: elites, a deeper level's stronger monsters. A spawn on a generated level is
+  one with the level's `*elite-chance*` (`:elite-chance` in `*run-levels*`): `elite-roll`, from
+  `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
+  every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
+  its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `elite-riftwalker`
+  in riftwalker.lisp, `*elite-kinds*`):
+  `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
+  `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
+  kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
+  none of them the boss's orange. Its one trait (`elite-trait`): `:haste` (cyan, walk and attacks ×
+  `*elite-haste*`), `:warded` (violet, its front turns spells back, `shield-views`; never the
+  knight's) or `:tough` (bone-white, half the pain chance and the knockback). Summoned and raised
+  creatures and the boss never are. A save needn't keep the trait: the rebuild draws it again.
+  `*elite-override*` (`:all`, or a trait) makes every block spawn an elite, on any level (on the test
+  level, the blocks attached to it: the shrine and the pool). `tools/hd status` shows `elite:<trait>`.
 - `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the
   amounts: `:herbs` +15 health and `:shard` +28 mana (2 bolts) restore at once; at full one stays
   where it is, below full it is taken and any excess lost (`restore-resource`). `:health-potion`
@@ -681,24 +828,111 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   third 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
-- `src/inventory.lisp`: the inventory, the quickslot and the panel. `*item-kinds*` says what an item
-  is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a stack, 5); a
-  pickup's `:amount` must match its item's, since a level's budget counts it. A stack is a list `(kind
-  count)`, a slot is a cell's index in the player's `inventory` (`*inventory-size*`, 20) or `:quick`
-  (`slot-stack`). Both are `saved-slots`, and `reset-player` empties them. `give-item` puts a
-  found item in the quickslot if it holds that kind, then a stack of it in the bag, then the
-  quickslot if empty, then an empty cell. Q (`use-quickslot`) drinks one, not at full; when the
-  stack runs out the first bag stack of that kind moves in (`refill-quickslot`), and with none
-  the quickslot keeps the kind with a count of 0, dimmed, so the next one found goes back in. I
-  opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. A left
-  drag moves a stack (`move-stack`): into an empty cell, onto its own kind (merging up to the
-  limit), swapping with another kind; dropped on nothing it goes back, and a dimmed quickslot
-  forgets its kind. The stack stays in its slot until the drop. Parts of the panel are `inventory-part`s
-  (`hud-shown-p` only in `:inventory`) with a `late-rank`, so its see-through back never covers
-  world drawn after it. The quickslot has a row of its own above the weapon bar (`quick-position`), the panel
-  right above it (`panel-box`). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`. To
-  try it: `(game (give-item *player* :health-potion))` and `(game (open-inventory))`; `tools/hd
-  status` shows the quickslot and bag.
+  **Glyphs** are pickup kinds with `:teaches` (`:glyph-frost` .. `:glyph-area`): touched, they teach
+  the player an effect for the forge (`learn-glyph`: `known-effects`, a gold flash, a message), and
+  one already known stays. Each level of a run has `*glyphs-per-level*` (2), the run's six shuffled by
+  the run seed alone (`run-glyphs`), so the first three levels teach them all and the last has none,
+  placed after the other pickups (`place-glyphs`, from a random state of their own) on free spots, a
+  reward spot first, so the other pickups keep their places. `scatter-pickups` leaves them their spots
+  (`:reserve`, the level's glyphs and loot, `src/loot.lisp`, and the settlement's relic): the settlement's small wing ran out and
+  lost a glyph for the run. The town's shopkeeper sells the ones the player doesn't know (see "The
+  settlement"). The test level has one of each along the hall's south wall, west of the pickups. **Arcane dust**
+  (`:dust`, an `:item` with `:count`: the pile's `pickup-count`) is placed last (`place-dust`, from a
+  random state of its own, on spots `free-pickup-spots` leaves) until a generated level holds
+  `*dust-per-monster*` (2) for each monster (`monster-p`: not the townsfolk), in piles of `*dust-pile*`
+  (8 to 20; bigger where few spots are left, so a level gets its whole budget while it has a spot:
+  about 60 to 120, three to six spells). Sprites:
+  `tools/draw_glyphs.py data/sprites/pickups` (a rune tablet per glyph, and `altar-sigil`).
+  **Altars**: `add-altar` notes a point in `*level-altars*` (blocks.lisp; a blueprint's `altar`) and
+  hangs an `altar-sigil` over it with a lamp; `reset-run` keeps it. The test level has one on a dais
+  in the hall's north-west corner.
+- `src/loot.lisp`: found weapons and runes. A run starts with the sword, the fire bolt and heal; the
+  rest is loot. Each level's `:loot` (`*run-levels*`, run.lisp; `loot-property`, which takes the
+  settlement's own `(:weapons 0 :runes 1)` before the level it borrows the rest from) gives its
+  `:weapons` (level 1 a plain spear, `:first-weapon`) and `:runes`. A weapon is a sword or spear with
+  the usual stats; only its enchantment varies: `:enchant-chance` (0, 0.5, 0.8) of one costing
+  `:enchant-cost` a blow (2-3 on level 2, 3-6 on level 3) with up to `:enchant-effects`
+  (`loot-enchantment`). A rune (`make-loot-rune`) is a generated spell made as the forge makes one,
+  from a `forge-draft` (`loot-rune-draft`: a delivery from `*loot-deliveries*`, kinds from
+  `*loot-strike-kinds*` or `*loot-self-kinds*`, up to `:rune-effects`, elements, times
+  (`*loot-durations*`) and, with `:area-chance`, a burst), its magnitudes sized by bisection
+  (`size-draft`) to a cost in `:rune-mana` (10-18, 16-28, 24-40), drawn again while `draft-fault`
+  (forge.lisp, the forge's checks without the dust and bag) refuses it or it falls more than
+  `*rune-mana-slack*` short. Or it is one of `*loot-spells*` (the tornado, `tempest`), which the forge
+  can't make: once a run at most, on the first level whose `:authored-chance` (0.35, 0.5) roll from the
+  run seed comes up (`authored-loot`); 13 of run seeds 1 to 15 had it. `place-loot` (after the glyphs,
+  before gold and dust; `scatter-pickups` reserves the spots, `loot-count`) stands each as a
+  `loot-pickup` (its `loot-stack`, given as a copy so a reset hands out the same) on a reward spot
+  first, from a random state of the level's seed, so a load builds the same items; taken, it goes
+  into the bag on the next free key with "Found a sword: Frost Edge, on key 4." Its sprite is
+  `loot-sword`, `loot-spear` or `loot-rune-<look>` by its spell's look (`tools/draw_loot.py
+  data/sprites/pickups`). An enchanted weapon's pickup has the outline it has in hand: `loot-pickup` is a `rim-glow`
+  (boss.lisp), its rim in the enchantment's colour, pulsing as the weapon's in hand (never dimmed). A
+  rune's stone shows its look, not its first effect as its icon does. The debug level has
+  a spear, an enchanted sword and two runes east of the dust (`place-test-loot`, from seed 7 and the
+  last level's `:loot`). `tools/hd status` shows an enchanted weapon as `sword[frost-edge]`.
+- `src/inventory.lisp`: the inventory, the hotbar, the quickslot and the panel. `*item-kinds*` says
+  what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
+  stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
+  5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, nothing uses it yet) 999.
+  Weapons and spells are items too: `:sword` and `:spear` (`:weapon`, what they put in hand), a stack
+  `(:sword 1 enchantment)` (`stack-enchantment`, each weapon its own; `(:sword 1)` is plain), and
+  `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
+  tag for a spell reference); none of them stack. `give-stack` puts one in the first free cell, bound
+  to the first free key (`give-rune` makes a rune's). A stack is a list `(kind count)`. **The bag holds
+  every item** (the player's `inventory`, `*inventory-size*`, 20 cells); the hotbar and the quickslot
+  only point into it, so binding a key frees no room: a hotbar slot (`*hotbar-slots*`, `:hot-1` ..
+  `:hot-9`, the player's `hotbar`, `*hotbar-size*` long) holds a stack in the bag (`eq`), the quickslot
+  a potion kind. A slot is a cell's index, a hotbar slot or `:quick` (`slot-stack`, which shows the
+  quickslot as `*quick-view*`, its kind and the bag's total of it, `kind-total`). A drag
+  (`move-stack`): between bag cells it moves, merges or swaps, and the keys bound to the stack follow;
+  a bag weapon or rune onto a hotbar slot binds that key (`bind-stack`, off any other), a potion onto
+  Q binds Q; two hotbar slots swap; a hotbar slot or Q dropped anywhere else is unbound. A stack that
+  leaves the bag is unbound (`prune-bindings`, from `sync-wanted` every tick, and `destroy-stack`).
+  Bag cells mark the key bound to their stack. A run starts with `give-starting-kit` (player.lisp's
+  `initialize-instance`, `reset-player`): `*starting-hotbar*`'s items in the first cells, bound to
+  keys 1 to 3 (sword, fire bolt, heal), slot `*starting-slot*` (the sword) in hand; the rest is found
+  (`src/loot.lisp`). The debug level starts with `*debug-starting-hotbar*` instead, keys 1 to 5
+  (sword, bolt, spear, tempest, heal), so the recipes below that use keys 3 and 4 work there. The hotbar draws in
+  rows of `*hotbar-columns*` (5) over the bars (`hot-position`; in one row of nine the hands covered the
+  last), each slot with its key, the one asked for framed in gold, the others' icons dimmed in play, an
+  enchanted weapon's border in its spell's colour. A rune's icon is its spell's look's (`stack-icon`:
+  weapons and runes from the weapon icons, sword.lisp, `swap-animation` when the strip changes). A save
+  and the stairs keep the hotbar as bag cells (`hotbar-cells`, an accessor in `saved-slots` after
+  `inventory`), and `migrate-bindings` brings an older save's held stacks into the bag. `give-item
+  player kind count` puts items onto their stacks, then into empty cells (how many went in), and binds
+  an unbound Q to the first potion; `take-item` takes from the smallest stacks. Q (`use-quickslot`)
+  drinks one of its kind from the smallest stack, not at full; at none it stays bound, dimmed, and
+  shows 0. The mouse wheel in play (`cycle-quickslot`) binds Q to the next potion kind the bag holds. I
+  opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. Parts of the
+  panel are `inventory-part`s (`hud-shown-p` only in `:inventory`) with a `late-rank`, so its
+  see-through back never covers world drawn after it. The quickslot has a row of its own above the
+  hotbar (`quick-position`), the spell in hand right of it (`spell-label`), the panel right above it
+  (`panel-box`). The hint (`*inventory-hint*`) is wrapped to the panel's width (`hint-lines`, up to three
+  `panel-hints`; `panel-box` grows to hold them) and goes blank while the pointer is on a stack, and a
+  tooltip beside it (`update-tooltip`, up and right of the pointer, kept on screen; not while dragging)
+  gives it in detail, one line each in `stack-details`, wrapped to `*tooltip-width*` (`wrap-text`,
+  hud.lisp) up to `*tooltip-lines*`: a rune's delivery, cost and every effect (`spell-lines`,
+  `effect-lines`: magnitude, time, area, an element's chill or stagger); a weapon's damage, reach,
+  swing time and its enchantment (`enchantment-lines`; the sword's shield too); a potion's restore,
+  this stack and the bag's total; dust's and gold's use (`:about`). Its parts are `tooltip-part`s with
+  the highest `late-rank`s, at depths in front of the hotbar's and quickslot's labels (which sit at
+  -0.08 for it). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`
+  (potions, dust, gold, the reliquary). To try it: `(game (give-item *player* :health-potion 3))` and `(game
+  (open-inventory))`; `tools/hd status` shows the hotbar (the slot asked for starred), the quickslot
+  and the bag.
+- `src/status-icons.lisp` (after inventory.lisp, whose cell size it shares): the player's statuses
+  as a row of icons in the top-left corner, under the frame counter while it shows. One cell per
+  status in `*status-order*` (damage, slow, heal, ward; one of each kind at most, so four cells,
+  and a fifth, `:bless`, for the priest's blessing, which isn't a status but shows as one, from
+  the player's `blessed` over `*bless-time*`; the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
+  (`*status-colors*`, by element for damage), its icon (`*status-icon-frames*`, a frame of
+  `data/sprites/icons/statuses`, drawn by `tools/draw_status_icons.py data/sprites/icons/statuses`:
+  burn, frost, shock, regen, slow, ward, bless), the seconds left (a ward's points instead, which run out
+  first) over the bottom-right corner, re-uploaded only when they change, and a bar along the
+  bottom for `left` over `duration`. In its last `*status-warn-time*` (3 s) the icon blinks. An
+  instant heal or ward-less spell leaves no status and so no icon; its flash is the feedback.
+  To look at them: `(game (afflict *player* :ward 12 20.0) (afflict *player* :slow 30 6.0))`.
 - `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
   breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
@@ -708,9 +942,19 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `hud-shown-p` decides whether an element draws (by default, not on the main menu). The
   frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
   on every screen, counting frames in its render and updating every `*fps-interval*`.
+  Right of the quickslot: the spell in hand (`spell-label`, inventory.lisp). The hands, like the
+  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). The purse
+  (`gold-text`) is in the lower-right corner.
+  `show-message` puts a line across the view for `*message-time*` (a glyph's, a gold find, the
+  watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
+  what the player looks at or stands at (`prompt-line`; a new string only when it changes, so the
+  tick tells by EQ). A pickup of a
+  counted item (dust's pile) puts "+25 arcane dust" just above
+  the crosshair for `*pickup-note-time*` (`note-pickup`, the `pickup-banner`; the item's `:note`,
+  else its name), pickups of one kind in quick succession adding up.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
-  (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
+  (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:talk`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
@@ -725,8 +969,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   eye to `*death-eye-height*`, rolls the view (`*death-roll*`, the player's `project-view`) and
   sinks the weapons. After `*death-panel-delay*` the `death-screen` comes up with the mouse
   released: `death-stats` (killed by, time survived, monsters slain, areas explored, damage
-  taken, the seed) and a button back to the main menu. Esc does nothing there, F5 is refused and
-  F9 still quickloads. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
+  taken, the seed) and a button back to the main menu. Esc, F5 and F9 do nothing there: death
+  ends the run, with no quickload back into it. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
   `:drowning`, `:tornado`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
   Killing the boss sets `:victory` (`win-run`, boss.lisp) and the `victory-screen` comes up:
   `victory-stats` (the boss slain, then `run-stat-lines`, the rows it shares with the death
@@ -790,15 +1034,73 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   to the `:effect` mixer, a space mixer, does it).
   To watch it, `(levels (node :music-director (scene +main+)))`, `(current ...)` and `(wanted ...)`. See "Sound and
   music".
+- `src/sound.lisp`: sound effects, through Harmony like the music. `audio/sfx.md` lists every
+  sound the game needs and where its hook goes. `(play-sound :clip at)` plays a one-shot at a
+  vec (positional clips; without AT, at the listener) or unplaced (first-person clips);
+  `start-loop` holds a loop's voice, `move-loop` moves it each tick (allocating nothing) and
+  `stop-loop` gives it back, returning NIL for the holder's slot: a projectile, circle, vortex,
+  sign or channel keeps its loop in a slot and stops it in its `leave :after`. Clips are
+  keywords from `data/sfx/index.lisp`; a clip not made yet plays nothing. Each clip keeps
+  voices of its own (Trial's sound assets play one copy at a time): `*sfx-voices*` per file,
+  taken in turn, the oldest cut short when all are busy, and `*loop-voices*` per loop, made
+  once by `add-sounds` (from `setup-scene`) and kept in `*sounds*` across rebuilds;
+  `(reload-sounds)` then a reset picks up re-made files. **The game thread never touches a
+  voice's connection**: `play-sound` pushes a request, and the `sound-director`'s tick hands
+  Harmony's mixing thread one function, `sound-frame`, that starts them, moves the listener
+  (`*listener-location*`, the player's eye) and the loops, and pauses the loops whenever
+  `*game-state*` isn't `:playing` (not under hit-stop). Harmony's queue holds 64 jobs, and an
+  error in its thread stops all sound for good, so `sound-frame` keeps its errors in
+  `*sound-error*`. The space mixer's axes are the other hand to the game's, so `copy-into`
+  mirrors Z (checked by recording: a sound on the player's left plays in the left channel);
+  a positional sound is at full volume within `*sound-min-distance*` (4 m) and then fades as
+  (distance / min)^-`*sound-rolloff*` (0.75: 4.5 dB a doubling; at 1 and 2 m, as it was, sounds
+  were barely heard across a room), no quieter past `*sound-max-distance*` (50 m). A big sound keeps
+  full volume further out (`*clip-min-distances*`: the tornado and the ogre's leap roar 12 m, its
+  landing 10, its footsteps 8). `tune-voice` sets them on a voice as it connects;
+  `(game (retune-sounds))` re-tunes those connected already after a change.
+  A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
+  a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
+  `hold-loop`, called every tick, keeps a holder's loop in a slot while it is wanted (the
+  player's slide on ice, the water and the wind, a creature floundering, the boss's ward).
+  The player's footsteps and strokes are `body-sounds` (player.lisp); the torches', lava's and
+  water's loops and the room tone are `update-ambience` (liquids.lisp, `*ambient-sources*`),
+  holding `ambient-voice`s on the nearest few sources. `audio/sfx.md` says where each clip
+  plays and how the hooks differ from its tables.
+  To hear one: `tools/hd '(game (play-sound :imp-pain (v+ (location *player*) (vec -3 0 0))))'`.
+  To find which sound misbehaves, `tools/hd '(game (mute :ambience))'` silences a clip or a group of
+  `*sound-groups*` (`:music`, `:effects` for every clip), loops already playing too, and `(unmute)`
+  brings everything back.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
   whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
-  to `*cast-release*`.
-- `src/sword.lisp`: the sword and weapon switching. The player holds one weapon (`*weapons*`:
-  1 the sword, 2 the casting hands, 3 the spear, 4 the tornado, cast by the same hands with their
-  fire recoloured: `hands`' `hand-weapon`, `data/sprites/hands/storm`, from
-  `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/storm`); switching lowers one off screen and raises the next.
+  to `*cast-release*`. Their fire takes the look of the spell in them (`*hand-looks*`, by
+  `spell-look`: a tornado's `:storm`, else its effects'), one strip per look, each the fire strip
+  recoloured, `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/<look> --hue H`
+  (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295); `add-hands`
+  preloads them all, since `swap-animation` changes the strip mid-game. The recipes (the hotbar's
+  defaults) work as before: `(select-weapon *player* :1)` is hotbar key 1, the sword at the start.
+- `src/sword.lisp` also has **enchantments**: a weapon's spell (a sword's or spear's its own stack's,
+  `stack-enchantment`, so two swords differ; the shield's in the player's `enchantments` plist under
+  `:shield`; `weapon-spell` asks for the one in hand, `held-weapon-stack`; made at the forge or found,
+  `src/loot.lisp`; `migrate-enchantments` moves an older save's `:sword`/`:spear` entries onto the
+  bag's first such weapon, after a load and the stairs) goes with every blow of it that lands
+  (`enchant-strike`, from `swing-hit` and the bash), for `enchant-cost` mana (`*enchant-cost-scale*`
+  of the spell's cost) out of the pool; with too little left the blow is plain, and a miss costs
+  nothing. Its self effects land on the player. The weapon's border on the hotbar and in the bag takes
+  the spell's colour, dimmed while mana can't pay (`weapon-enchantment`, `spell-tint`), and so does its
+  sprite on screen: `sword` (and so the spear and the shield) is a `rim-glow` (boss.lisp), whose rim
+  `rim-weapon`'s enchantment colours each tick, pulsing on `*light-clock*` (`*weapon-rim-strength*`,
+  `*weapon-rim-pulse*`) and dimmed by `*enchant-dim*`; `*weapon-rim-width*` (2 texels, `rim-width`)
+  since the weapons' art is fine-grained. The shield's rim is the shield's own enchantment.
+- `src/sword.lisp`: the sword and weapon switching. The player holds one weapon: whatever the hotbar
+  slot asked for holds (`wanted-slot`; keys 1 to 9, `select-slot`, or `select-weapon` with the key
+  `:1` .. `:9`): the sword, the spear, or the casting hands with a rune's spell (`weapon` `:hands`,
+  `held-spell`), or nothing for an empty slot. `sync-wanted` (every tick of `update-weapons`) reads
+  `wanted-weapon` and `wanted-spell` off the slot, so a drag in the inventory changes what is in hand:
+  a weapon or rune dragged off the slot leaves the player empty-handed. Switching lowers one off
+  screen and raises the next, from one spell to another too; `settle-held` takes it in hand at once
+  (after a load, the stairs or a reset).
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
   so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
   blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
@@ -807,15 +1109,17 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (`swing-frame-times`, `swing-hit-frame`, `swing-reach`, `swing-arc`, `swing-damage`,
   `swing-knockback`, `swing-pain-bonus`), and generics on the sprite which weapon it draws
   for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
-  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon, the mouse wheel cycles
-  (`cycle-weapon`). The weapon slots above the HP bar (`weapon-bar`) show one icon per
-  weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
-  frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
-  `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
+  `weapon-aim`, NIL to keep it against the bottom-right corner). The mouse wheel is the
+  quickslot's (inventory.lisp). Weapon and rune icons are frames of `data/sprites/icons/weapons.png`
+  (`*weapon-icons*`; a rune's by its spell's first effect, `spell-icon-key` into `*spell-icons*`:
+  damage by element, a flame, a snowflake, a lightning bolt; drain a drop of blood, heal a cross, ward a
+  shield, slow an hourglass, knockback a shockwave; a vortex the tornado), drawn by
+  `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon or effect kind needs a frame
+  there.
   The left hand holds a shield, a sprite of its own (`shield`, a subclass of `sword`) against
   the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
   off on screens whose whole-number scale shows fewer art pixels across. It drops and sways
-  with the sword. Both draw at `*weapon-depth*`, behind the bars, the weapon slots and the
+  with the sword. Both draw at `*weapon-depth*`, behind the bars, the hotbar and the
   pain flash. Holding the right button raises the shield over `*block-raise-time*`
   (`block-raise`, 0 to 1; not during a swing, and it comes down before a weapon switch);
   fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
@@ -846,7 +1150,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   middle rather than against the right edge, so the thrust goes where the player looks on any
   screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
   (`art/spear/spear-frames.txt` says how).
-- `src/player.lisp`: first-person controller and box collision. Mana doesn't regenerate:
+- `src/player.lisp`: first-person controller and box collision. Walking backward keeps
+  `*backpedal-scale*` (0.75) of the speed. Mana doesn't regenerate:
   only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
   `*stamina-regen*` except while running, which costs `*run-stamina*` a second, on foot or
   swimming with Shift (`update-stamina`); running it empty leaves the player `winded`, walking,
@@ -866,8 +1171,11 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. Its hall has one of each monster, two imps (a pack: the second is spawned
-  after the ogre, so the others keep their places in `*creatures*`), and, along its south wall, one of each pickup.
+  pool's others plugged. Its hall is empty of monsters unless `*debug-hall-monsters*` is on (then one of each,
+  `debug-spawn`, and a second imp beside the first, spawned after the ogre so the others keep their
+  places in `*creatures*`: a pack), and has along its south wall one of each pickup and a pile of 60 arcane dust;
+  `*debug-level-monsters*` (a list of kinds, NIL for all) keeps only those in the hall and leaves out
+  the annex's imp, the blocks' monsters and the boss.
   A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
   and a boss of a random kind with random powers, a new one at every build (`tools/hd reset`);
   `*boss-override*` fixes them. To try a block with one kind only,
@@ -991,8 +1299,11 @@ costs a few milliseconds in an open hall, so keep the limit no longer than level
 `attack-reach` it stops and attacks: the frames run on `attack-frame-times` (it turns to
 follow the player through the first), and on `attack-hit-frame` the blow lands if the player
 is still within `attack-reach`, inside `attack-arc` and not behind a wall (`hurt-player`:
-damage, a shove, the pain flash, hit-stop). Backing off during the wind-up dodges it, and a
-hit breaks the attack off. Then it stands `attack-pause` and hunts on.
+damage, a shove, the pain flash, hit-stop). Until the blow lands it lunges: steps in along
+its facing at `lunge-speed` (imp 3.5 m/s, skeleton and knight 3, ogre 2.5; not a boss's power)
+until within `*lunge-stop*` of its reach, so backing off at a walk doesn't escape it; running
+back does, and so does a sidestep from a slow turner once its facing is set (the imp turns at
+once, so it follows a sidestep through its wind-up). A hit breaks the attack off. Then it stands `attack-pause` and hunts on.
 
 A creature that `flanks` (the imp, the skeleton) doesn't attack into a raised shield: within
 `*flank-range*` and in front of it (`shield-facing-p`, the shield's arc plus `*flank-margin*`)
@@ -1024,7 +1335,7 @@ with the player's); in the 3 m corridor it flies at 1.1 m, in reach. Bolts reach
 
 It hunts as a caster does (`ranged-p`, `hunt-from-range`: back off within `keep-away`, attack
 within `attack-range` with a clear line), but its attack is a dive (`attack-step`): it hangs
-and rises `dive-rise` for `dive-windup` (0.7 s, the warning), then flies a straight line at
+and rises `dive-rise` for `dive-windup` (0.5 s, the warning), then flies a straight line at
 `dive-speed` toward the player's head (`strike-height` above the feet) as it was when the dive
 left, `dive-overshoot` beyond, skimming the floor. The talons strike once, `attack-damage`, if
 the player comes within `attack-reach`; a sidestep makes it miss. It then stands
@@ -1083,19 +1394,19 @@ The `imp` (imp.lisp) is the monster met most (`*spawn-pool*` weight 3), small, q
 Every trick has a tell and an answer. `skittish-p` is NIL for an imp boss, which keeps only the
 pounce.
 
-- **Pounce** (`special-attack`, `pounce`): from `*pounce-min*` to `*pounce-max*` (3 to 7 m) it
+- **Pounce** (`special-attack`, `start-pounce`): from `*pounce-min*` to `*pounce-max*` (3 to 7 m) it
   crouches `*pounce-windup*` (0.45 s, attack frame 0) and leaps, the leaper's arc with the imp's
   numbers (0.7 m up under `*pounce-gravity*` 22: 0.5 s for 5 m), every `*pounce-cooldown*` (5 s).
   Coming within `*pounce-reach*` of the player in the air it claws (`pounce-strike`, from its
   `keep-height :after`: `*pounce-damage-scale*` of its claw) and bounces off. The raised shield takes
   the claw and throws it down (`knocked`, then `downed` for `*imp-downed-time*`, the flinch's stagger
   frame pressed flat), and so does any blow that lands while it flies (`knock-down`, from
-  `creature-hurt`). A bash in the crouch interrupts it like any wind-up. `hurt-player` returns
+  `react-to-hit`). A bash in the crouch interrupts it like any wind-up. `hurt-player` returns
   whether the shield took the blow.
 - **Hit and run** (`release-attack`): after every claw it springs back `*imp-spring-speed*`
   (6 m/s, about 1.3 m) on its `momentum`, `*imp-spring-angle*` to one side, and gives up its spot
   (`ban-slot`), so it comes in again from elsewhere. Its `attack-pause` is 0.35 s.
-- **Morale** (`courage`, `test-courage`, from `creature-hurt` and a packmate's `creature-died`): its
+- **Morale** (`courage`, `test-courage`, from `react-to-hit` and a packmate's `creature-died`): its
   share of health plus `*imp-pack-courage*` (0.3) a live imp within `*imp-pack-radius*` (8 m).
   Below `*imp-break-courage*` (0.5), once a life (`shrieked`), it stands `*shriek-time*` throbbing
   pale (attack frame 1), then `raise-alarm`: every creature that fights within `*shriek-range*`
@@ -1105,8 +1416,8 @@ pounce.
   `*flee-safe-distance*` it stands and watches. With nowhere to go it fights (`cornered`). A lone
   imp breaks below half health; one with a packmate below a fifth, or when the mate dies.
 - **Thief**: a claw that lands unblocked, with `*imp-steal-chance*` (35 percent, on
-  `*roll-random*`), takes one item (`take-item`, inventory.lisp: the quickslot first) and the view
-  flashes `*stolen-flash-color*`; a wandering imp goes for a pickup within `*thief-sniff-range*`
+  `*roll-random*`), takes one potion (`steal-item`, inventory.lisp: of the quickslot's kind first) and the view
+  flashes `*stolen-flash-color*`; a wandering imp goes for a pickup of `*stealable-kinds*` (herbs, shards, potions) within `*thief-sniff-range*`
   (`wander`, `seek-loot`, `reach-loot`) and takes it (`taken`), but only with the player within
   `*thief-witness-range*` (15 m) on its storey: left to wander unseen, 13 of a level's imps had
   carried off its pickups in three minutes. `stolen` is the pickup kind it
@@ -1120,7 +1431,7 @@ pounce.
   (`*imp-pack-three*`), `*pack-spacing*` to their sides (`pack-spot`), drawn from the level's seed by
   a state of its own, so layouts and saves stay put.
 
-To try it on the test level (the hall imp is `(aref *creatures* 0)`, its packmate `(aref *creatures* 7)`): stand 5 m
+To try it on the test level (with `*debug-hall-monsters*` on, the hall imp is `(aref *creatures* 0)`, its packmate `(aref *creatures* 8)`): stand 5 m
 off and `(setf (alert imp) 10.0 (idle-timer imp) 0.0)` for a pounce (`*leap-debug*` logs it), with
 `(setf (block-held *player*) t)` to see it thrown down; `(hurt imp 18)` on a lone one for the
 shriek and flight; `(setf *imp-steal-chance* 100)` and `(give-item *player* :health-potion)` for a
@@ -1318,6 +1629,39 @@ second), each writing a `.prompt.json` beside its output like `gen_image.py`. Bo
 (the API's PCM is stereo) or `.mp3`. Sources and prompts live under `audio/` (`audio/prompts/`,
 `audio/sfx/`, `audio/music/`), as `art/` holds the pictures; what the game plays goes in `data/`.
 
+`audio/sfx.md` lists every sound effect the game needs: the moment, the code where it starts,
+its clip (prompt `audio/prompts/sfx-<clip>.txt`, ending in a shared style line), duration, takes,
+whether it loops and whether it is positional (a mono file on the `:effect` space mixer) or
+first-person. Work from it and keep it current.
+
+Sound effects: each clip's takes are `audio/sfx/<clip>-<n>.wav` (`tools/gen_sfx.py`, with the
+duration, takes and `--loop` from `audio/sfx.md`), gitignored like the music's. The chosen take
+of each goes in `audio/sfx-picks.txt` (`imp-pain 2`; several takes are variants played in
+turn, `gain=-3` evens one out, `even` flattens a loop that swells and fades within itself,
+`lowcut=120` rolls off the sub-bass of a heavy thud before leveling, which otherwise counts it and
+leaves the part speakers play tiny; take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
+levels (the loudest 100 ms at -14 dBFS RMS, peaks under -1 through make_loop.py's limiter),
+downmixes positional clips to mono (the `:effect` space mixer takes only mono) and encodes them
+to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in
+`data/sfx/index.lisp`. Then `tools/hd '(reload-sounds)'` and `tools/hd reset`. Generated takes
+often clip: pick one that doesn't. To try a clip again, rewrite its prompt and `gen_sfx.py ... --add`,
+which numbers the new takes on from the last (`<clip>-4.wav`, recorded in `<clip>-4.prompt.json`)
+and keeps the old ones; `--influence 0.5` keeps closer to the prompt than the default 0.3. A take
+borrowed from another clip is a copy under the next number with a `.prompt.json` saying where it
+came from (`cinder-flight-3.wav` is `bolt-flight-2.wav`). A clip taken out of `audio/sfx.md`
+leaves the index and `data/sfx/` at the next `make_sfx.py`.
+
+The picker does all that from a page, with the game running: `tools/sfx_picker.py` (or the
+`sfx-picker` config in `.claude/launch.json`) serves http://127.0.0.1:8765/, every clip of
+`audio/sfx.md` with its takes to hear in the browser (marked when they clip or are quiet).
+**Use** on a take, **+**/**−** for variants or the gain buttons rewrite that clip's line in
+`audio/sfx-picks.txt`, run `make_sfx.py` on it and have the game swap it in at once
+(`reload-sound`, which frees the clip's old voices in the mixing thread and makes new ones,
+no reset) and play it 3 m in front of the player (`audition-sound`; a loop for 2 s, even with the
+game paused). **▶ In game** converts and loads a clip the game doesn't have yet. Switch as
+often as you like. It talks to the game `tools/hd` would (`.eval-port`). Its Ogg files differ
+byte for byte each run (Vorbis stream serials), the sound not.
+
 Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
 minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro
 or ending (`music-explore-1` is `music-explore-loop.txt`), which keeps the loop easy to find, and
@@ -1384,7 +1728,7 @@ asked for 110, plays at about 160 (a tempo estimate from onset autocorrelation f
 
 Harmony picks a decoder by the file's extension, and quickloads its system when it isn't loaded;
 the binary has no Quicklisp, so each format the game plays is a dependency in the .asd
-(`cl-mixed-vorbis` for `.ogg`, `cl-mixed-wav` for `.wav`). A changed `main` class or new
+(`cl-mixed-vorbis` for `.ogg`; a `.wav` would need `cl-mixed-wav`, not there yet). A changed `main` class or new
 dependency needs a restart of `./run.sh`. In this version, `trial:seek` on a voice fails
 (`mixed:seek` takes no `:by`); seek its source by frames instead. A vorbis source's
 `frame-count` reads twice the real length, though it ends and loops where it should.
@@ -1751,6 +2095,56 @@ python3 tools/slice_frames.py art/wraith/death.png data/sprites/wraith --pixel 3
 Its strips need `--violet`: without it the slicer takes blue above green for a blend with the
 magenta background, so it keys out the violet rags, eyes and lightning and greys what's left.
 
+The riftwalker (a lean knife fighter in a low crouch, a close charcoal hood over a featureless
+mask of polished brass, wrappings of charcoal and deep indigo cracked with pale silver-blue light,
+a curved dagger in the right hand, a shard of light over the left palm) is
+`art/riftwalker/turnaround-2.png` (`art/prompts/riftwalker-turnaround.txt`, the imp's, acolyte's,
+knight's, necromancer's and wraith's sheets as style references), sliced at `--height 115` for its
+1.8 m. No view needed mirroring. Its walk, stab (wind-up, lunge, strike, recover), cast (the rift
+gathered in the left hand, held up as a jagged diamond, flung, recover: every rift and the call)
+and flinch are made with `tools/gen_monster_views.sh riftwalker <anim> ...`, and its front-only
+death (`riftwalker-death.txt`) cracks the mask and folds it face down beside the dagger. Its
+strips take `--violet` too, which keeps the indigo and the blue cracks the plain keying greys.
+
+```bash
+python3 tools/slice_turnaround.py art/riftwalker/turnaround-2.png data/sprites/riftwalker/turnaround --height 115 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk:20 stab:20 cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/riftwalker $a $(for v in $V; do echo art/riftwalker/${a%:*}-$v.png; done) --height 920 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
+python3 tools/slice_frames.py art/riftwalker/death.png data/sprites/riftwalker --pixel 3.54 --anchor bottom --filter box --violet death:8
+```
+
+Its rifts are one generated sheet, `art/spells/rift-orb.png` (`art/prompts/rift-orb.txt`, the bolt
+sheet as reference: a void diamond rimmed in cold light, then its burst into shards), whose blue
+flight is recoloured into the three rifts; the flash where something steps through is
+`art/spells/rift-flash.png` (`rift-flash.txt`, a crack as tall as a body tearing open and
+snapping shut). Both take `--cold`, which keeps the blues the usual keying takes for magenta
+spill. The orb sheet's bottom cyan line runs under its last row, where no separator bounds the
+cells, so the burst's last two frames keep a strip of it: the last command clears it.
+
+```bash
+python3 tools/slice_frames.py art/spells/rift-orb.png data/sprites/rift --pixel 10 --cold flight:5 burst:7
+for r in pull:285 swap:45 push:188; do tools/recolor_hue.py data/sprites/rift/flight data/sprites/rift/${r%:*} --from 230 --reach 50 --hue ${r#*:}; done; rm data/sprites/rift/flight.*
+python3 tools/slice_frames.py art/spells/rift-flash.png data/sprites/rift --pixel 6 --cold flash:6
+python3 -c "from PIL import Image; p='data/sprites/rift/burst.png'; im=Image.open(p).convert('RGBA'); im.putdata([(0,0,0,0) if a and r<90 and g>170 and b>170 and abs(g-b)<50 else (r,g,b,a) for r,g,b,a in im.getdata()]); im.save(p)"
+```
+
+The status auras (magic.lisp) are 8-frame loops in `data/sprites/status/`, each a generated 2 × 4
+sheet on magenta of small separate pieces over a body-sized area, the middle left open. Shock came
+first (`art/prompts/status-shock.txt`, the bolt sheet and the torch's flame sheet as references);
+it set the look, so fire (`status-burn.txt`, wisps of flame) and frost (`status-snow.txt`,
+snowflakes) take its sheet as their first reference, with the bolt sheet for fire's colours and the
+first frost try (`art/status/frost-1.png`, `-2`, rime round the body's outline, dropped) for
+frost's. Ice and lightning are keyed with `--cold` to keep their blues:
+
+```bash
+tools/gen_image.py art/status/burn.png --prompt-file art/prompts/status-burn.txt --ref art/status/shock-2.png --ref "Bolt Spell Sheet.webp" --size 1536x1024 -n 2
+tools/gen_image.py art/status/regen.png --prompt-file art/prompts/status-regen.txt --ref art/status/shock-2.png --ref art/status/snow-2.png --size 1536x1024 -n 2
+python3 tools/slice_frames.py art/status/regen-1.png data/sprites/status --pixel 5 --filter box regen:8
+python3 tools/slice_frames.py art/status/burn-1.png data/sprites/status --pixel 5 --filter box burn:8
+python3 tools/slice_frames.py art/status/snow-2.png data/sprites/status --pixel 5 --filter box --cold frost:8
+python3 tools/slice_frames.py art/status/shock-2.png data/sprites/status --pixel 5 --filter box --cold shock:8
+```
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -1778,6 +2172,8 @@ tools/recolor_hue.py data/sprites/pickups/flask data/sprites/pickups/mana-potion
 tools/gen_image.py art/pickups/herbs.png --prompt-file art/prompts/healing-herbs.txt --ref "Pixel Demon Character Turnaround.png" --ref art/pickups/sheet-2.png --size 1536x1024 -n 3
 python3 tools/slice_frames.py art/pickups/herbs-3.png data/sprites/pickups --pixel 12 --filter box --colors 32 --anchor bottom herbs:4
 tools/draw_item_icons.py data/sprites/icons/items
+tools/gen_image.py art/pickups/dust.png --prompt-file art/prompts/pickup-dust.txt --ref "Pixel Demon Character Turnaround.png" --ref art/pickups/sheet-2.png --size 1536x1024 -n 2
+python3 tools/slice_frames.py art/pickups/dust-2.png data/sprites/pickups --pixel 14 --filter box --anchor bottom --violet dust:4
 ```
 
 The arena's gate is one generated picture, an ornate iron portcullis flat-on with magenta in its
@@ -1956,15 +2352,16 @@ lava: a dry dip, under a step so it is walked through), `water [Y]` (deep water 
 cell's floor up to Y, `top` for the storey's top, by default `*water-surface*` (0.3 m) under
 the next storey's floor; never above the slab over the cell or a doorway's lintel; on the
 border only under a canal doorway's open channel), `torch Y`
-and `spawn MONSTER FACING [SKIP]`, where SKIP is a percent chance of no monster (every room
+and `spawn MONSTER FACING [SKIP] [when:COND|COND]`, where `when:` limits it to those settlement
+conditions (see "The settlement") and SKIP is a percent chance of no monster (every room
 has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has two kinds of
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre and gale wraith 1
-each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith and
+riftwalker 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
-own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
+own state; one float draw whatever the weights, so changing a pool never changes the layout). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
 is one monster at its centre, so `ii` centres one on a 1 m spot. `pickup floor` or `pickup
 reward` is a spot where a level may put a pickup, one per group like a spawn, on top of a `box` in
@@ -1974,7 +2371,9 @@ doorway; a reward spot holds a large one first and may take a jump (up to 1 m), 
 risk. `(check-kit)` reports one that can't be reached. No spots in flooded passages, streams or
 on `high-hall`'s perch, which the player can't jump to. `exit` is where the player leaves the
 level (`*level-exits*`, one per group like a spawn, on the storey's floor), which `(check-kit)`
-reports if no doorway reaches it. Characters with the same
+reports if no doorway reaches it. `altar` is a spellforge altar (`*level-altars*`, forge.lisp), one
+per group, on top of the `box` in its cells (`A box 0 0.9 dais, altar`; the town's blueprint uses it
+too). Characters with the same
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
 under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
@@ -2020,7 +2419,8 @@ and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
 and galleries `gallery`, `gallery-corner`, `gallery-steps` (climbs a storey) and
 `gallery-chasm` (4 m of lava, a 1.5 m ledge for the player), all 7 m wide.
-The run's ends, tagged so growth never picks them: `descent` (the way down) and `arena` (4 × 4
+The settlement's `town` (8 × 6 cells, two storeys; tagged `town`, never grown into; see "The
+settlement"). The run's ends, tagged so growth never picks them: `descent` (the way down) and `arena` (4 × 4
 cells, 9 m tall, one doorway on the south, four full-height pillars, the boss, `spawn boss`, at
 the north end, and a reward spot on a 0.8 m block in each corner by the door; see `src/boss.lisp`).
 The stone caves (`cave`, `grotto`, `cavern`, `cave-passage`, `cave-bend`, `cave-fork`,
@@ -2187,8 +2587,25 @@ A run is the generated levels of `*run-levels*` (`src/run.lisp`) one after anoth
 rooms. Each entry says how many rooms the generator aims for (over `*generator-rooms*`,
 `level-settings`) and which block it puts on the doorway furthest from the start (`:exit`, a name or
 a list tried in order): the `descent` on levels 1 and 2, the boss's `arena` on level 3 (see
-`src/boss.lisp`), whose boss ends the run. Nothing else differs between levels yet, so the
-monster mix and the kit are the same on each. `*run-depth*` is the level the player is on, from 1,
+`src/boss.lisp`), whose boss ends the run. `run-levels` puts the settlement's level
+(`*settlement-level*`) among them at depth 2 or 3, so a run is 4 levels and the ones from there on
+are a depth further down (see "The settlement"); everything that asks about a depth goes through
+`run-levels`, `run-length` and `run-level-property`. The settlement's level is as hard as the level
+after it, whose keys it takes. The kit is the same on each, but the monsters get
+harder going down, by keys in each entry (none are flat stat multipliers):
+
+- built into the level (`level-settings` sets their variables for the generator, so a save keeps
+  them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre,
+  wraith or riftwalker on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
+  0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
+- asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
+  `*sight-range*` and `*hearing-range*` in `sees-player-p`, `:alert` the hunt's `alert-time`,
+  `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
+  abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+
+Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
+budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,
 and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
 try at level 1 being the run seed itself, so `*level-seed*` still reproduces a level 1 and a whole
 run. A reset on a generated level rebuilds the same level, since the run keeps its seed; a new one
@@ -2197,7 +2614,11 @@ needs `(setf *run-seed* NIL)` first.
 The way down is the `descent` block (1 × 2 cells, two storeys: a doorway at the top, a flight down,
 a landing in front of a painted arch, its stair going on into the dark; see "Level textures"). It is tagged only `descent`, so growth never picks it; `generate-level`
 puts its `:exit` on the deepest doorway still open when growth stops, by blocks from the start
-(`door-depth`, since there is no nav grid yet), just before the rest are plugged. Then `build-level`
+(`door-depth`, since there is no nav grid yet), just before the rest are plugged. After it, with the level's
+`:altar-chance` (0.4), the `shrine-altar` (`*altar-block*`: a 2 × 2 sanctum, a spellforge altar on
+a 0.9 m slab, tagged only `altar`) goes on a doorway between 30% and 70% of the deepest depth. That
+roll is the generator's last draw, so a level that doesn't roll one is the level it was; over seeds 1
+to 20 on level 1, 10 had one. The town (another branch) has the run's own altar. Then `build-level`
 asks `level-goal-reached-p` (an exit, or else the arena's doorway, wading and swimming where they
 must). If the player can't get there it
 empties the scene (`clear`) and tries the next seed, up to `*max-level-attempts*`; a loaded level is
@@ -2208,7 +2629,8 @@ Standing on the landing (`at-level-exit-p`: within `*exit-reach*` across and `*e
 floor, which leaves out the stair's last step and the room next door) runs `descend`. It adds a
 `level-record` to the player's `level-records` (monsters, slain, blocks, explored, seed), keeps
 `carried-state` (`*carried-slots*`: **a new slot that should survive the stairs needs adding there**,
-as well as to `saved-slots`), and rebuilds through `load-level`; `setup-scene` lays that state over
+as well as to `saved-slots`; what the player knows, the hotbar, the slot in hand and the
+enchantments are there), and rebuilds through `load-level`; `setup-scene` lays that state over
 the fresh player. It is one-way: the old level goes with its scene, along with anything in flight. No
 key or clearing is needed. `run-totals` adds the records to the level in play, for the death screen.
 On arriving, `level-banner` (hud.lisp) says "Level 2 of 3" for `*level-banner-time*` seconds of play,
@@ -2218,8 +2640,11 @@ to walk the stair, stand at the `descent` connector in `*level-doorways*` and ho
 
 Over seeds 1 to 200 at each size, every exit fit on the first seed and could be reached, and the
 rooms always reached their target (16.1, 19.1, 22.1 on average; 16 to 18 at the lowest size, 22 to 24
-at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run;
-pickups 13.2, 15.7, 18.3. (These predate imp packs, which add a quarter or so.) A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
+at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run
+(an older count: over run seeds 1 to 20, `*creatures*` held 33.0, 42.3 and 54.3 after the depth
+scaling, against 31.9, 40.3 and 48.9 before it, with 10% elites on level 2 and 19% on level 3;
+all before imp packs, which add a quarter or so);
+pickups 13.2, 15.7, 18.3. A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
 levels 1 and 2 the walk to the exit is 136 m on average against 143 m for the level's longest walk,
 with a median at 99.6% of it and the lowest tenth under 81%: blocks from the start are a good stand-in.
 It can be close in a straight line (20 m away, but a 91 m walk). 6 of those 200 exits lie behind a
@@ -2228,19 +2653,24 @@ flooded run, so the only way there is a swim. Frames (seed 12345, 12 spots, froz
 Over run seeds 1 to 100, level 3's arena fit on the first seed every time and could be reached, the
 level building in 1.8 s on average through `reload-scene` (2.4 s at most). It can lie close to the
 start in a straight line (seed 27: 6.7 m, a storey up), so the boss's spawn ignores the start's
-clearance. Bosses: necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
+clearance. Bosses (before the riftwalker joined `*boss-kinds*`, which changed every seed's draw):
+necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
-down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
-hands, 3 for the spear and 4 for the tornado (or the mouse wheel to cycle them), left click to
-attack (swing, thrust, or cast the bolt or the tornado), right button held to raise the shield (sword only; a left
-click while it's up bashes), Q to drink from the quickslot, I for the inventory (drag items with
-the left button; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to quicksave
-and F9 to quickload (generated levels only), F12 for a screenshot.
+down; swim into a ledge at the surface to climb out), 1 to 9 for what the hotbar holds (at the
+start 1 the sword, 2 the fire bolt, 3 heal; whatever is found goes on the next free key), the mouse wheel to change the
+quickslot's potion, left click to attack (swing, thrust, or cast the spell in hand), right button
+held to raise the shield (sword only; a left click while it's up bashes), Q to drink from the
+quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, or a
+potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
+quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E to talk to the
+townsperson looked at (see "The settlement") or, at an altar, to open the spellforge (see
+`src/forge.lisp`).
 
-To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
+To test combat without the mouse (the hall's monsters below need
+`(setf *debug-hall-monsters* t)` and a fresh debug level): `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
 0.23 s in; stand within 2 m of the imp, facing it), and with `:3` thrusts the spear (0.24 s in, within 3.5 m); `(setf (block-raise *player*) 1.0)` under hit-stop
@@ -2265,4 +2695,163 @@ it. `(select-weapon *player* :4)` then `(player-attack *player*)` casts the play
 `(whirl *player*)` is the vortex holding them. Right after several level builds in a row, time
 runs fast for a few seconds as Trial's fixed step catches up, so a vortex's age is no measure then.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
-the wheel one notch down (next weapon).
+the wheel one notch down (the next kind into the quickslot).
+
+## The settlement
+
+Once a run, at depth 2 or 3 (`settlement-depth`, from the run's seed; `*settlement-depths*`), a
+level is grown from the town (`data/blueprints/town.txt`) instead of a start block: `generate-level`'s
+`:core`, placed first with its townsfolk and monsters, the player arriving at its `arrive` point.
+The town counts as a room for the generator (`room-block-p`), so its two gates (west and east)
+grow corridors into a small wing, the undercroft: `*settlement-level*` asks for 6 rooms, the town
+included, with no networks and crypts, cells and corridors only (`:settings`, laid over the level's
+generator settings by `level-settings`), and `level-needs-rebuilding-p` tries another seed when the
+wing has fewer than `:min-wing` rooms (`*last-wing-rooms*`). The way on is the town's own `exit`,
+at the back of the recess north of the plaza, before a painted `descent-arch`. Over run seeds 21 to
+32 the wing had 5 to 7 rooms and 10 to 19 monsters, and no level warned.
+
+`make-settlement` draws its faction, condition and name from the level's seed when it is built
+(`*settlement-override*`, as `'(:depth 1 :faction :deepwardens :condition :besieged)`, fixes them for
+testing; reloading run.lisp clears it). The faction (`*factions*`) decides the watch's rule, which
+crimes count, prices and whether its guards take bribes:
+
+| Faction | Rule | Crimes | Cheap | Bribable |
+| --- | --- | --- | --- | --- |
+| `:ashen-temple` | no spell cast in town (`player-cast`) | rule, assault, murder | healing, mana | no |
+| `:deepwardens` | no sword or spear drawn in the `market` and `temple` zones (`check-drawn-blade`) | rule, assault, murder | training | no |
+| `:free-company` | none | murder | goods (and a random extra in stock) | yes |
+
+The player learns it on arriving: the level banner names the town and who holds it ("Level 2 of 4:
+Cinderhold, held by the Deepwardens", `level-banner-text`), and the message line gives the watch's
+rule for `*arrival-message-time*` (`announce-settlement`, hud.lisp, from `setup-scene`), or, sacked,
+that the watch is dead. A guard's greeting names the faction too (its `*townsfolk-greetings*` are
+format strings), and its panel shows the rule.
+
+The condition (`*conditions*`, weights 3, 2, 1) decides who is there, through the blueprint's npc
+and spawn conditions (`condition-excluded-p`, which rolls whatever the condition, so a seed builds
+the same level): **thriving**, everyone; **besieged**, everyone but some commoners, and the wing
+raids the gates; **sacked**, no watch, a few survivors, each service there half the time, monsters
+from the pool in the streets and loot on the town's four `pickup` spots (`place-settlement-pickups`).
+
+**Townsfolk** (`townsfolk`, a creature: `commoner`, `shopkeeper`, `priest`, `trainer`,
+`quest-giver`, `guard`). Those who stand at their posts to be talked to (the shopkeeper, priest,
+trainer and quest-giver) are one front-facing picture each: a billboard whose atlas has one view
+shows it from every side. Those who walk about, the guard and the commoners (a `townsman` and a
+`townswoman`), have a monster's full set (`define-townsfolk-set`, `*townsfolk-sets*`, by sprite
+name): a turnaround, a walk, a flinch, a death to a corpse and, for the guard, a spear thrust, the
+guard's one set recoloured per faction (`guard-<faction>`). Guards step in armour, commoners lightly;
+none of them has a voice. They keep to their posts (`wander-radius` 0; a commoner 3 m, a guard 1.5)
+and while calm (`calm-p`, not `provoked`) never notice the player, even if they could fight
+(`attacker-p`). `place-npc` makes one from a blueprint's npc by role (`*roles*`: class and sprite,
+the guard's per faction), with a name and greeting from `*townsfolk-names*` and
+`*townsfolk-greetings*`. They aren't monsters (`monster-p`): no kill gold, not counted by
+`run-summary` or `scatter-pickups`.
+
+**E** (`player-interact`) uses what `interact-target` gives: the nearest `interactable-p`
+townsperson within `*interact-reach*` and `*interact-arc*` (`looked-at-creature`, the sword's
+test), else `:altar` at an altar (`near-altar-p`, forge.lisp), whose `interact` opens the
+spellforge; the director keeps `*interact-prompt*` ("[E] Talk to ...", "[E] Spellforge").
+Talking (`start-talk`) sets `*game-state*` `:talk` and puts up a `dialogue-panel`; Esc or Leave
+ends it (a guard asking a fine has no Leave, and Esc there refuses it, `escape-talk`). A click acts and sets `*menu-refresh*`, which makes the menu controller build the panel
+again (an Alloy panel lays itself out once). Services refuse while the watch is hostile or once the
+player has sacked the town (`refusing-p`):
+
+- **Shopkeeper**: buys and sells `*shop-goods*` (health and mana potions; the stock, 1 + depth of
+  each, is on the settlement), selling at `*sell-share*`. A page of its own (`*talk-page*` `:glyphs`,
+  `show-talk-page`) sells every glyph whose effect the player doesn't know (`shop-glyphs`, `buy-glyph`,
+  `price :glyph`, priced as goods): bought, it is learnt at once (`learn-glyph`), so it takes no room
+  and needs no stock. Dead, its stall can be searched (`loot-item`), for potions only.
+- **Priest**: heals and restores mana to full, a fee per point, and blesses (`blessed`, a player
+  slot: `*bless-time*` seconds of play in which blows do `*bless-scale*`, `blessing-scale` in
+  `hurt-player`; carried down the stairs). Its button says what it does, and while it lasts the
+  HUD shows it among the status icons (`src/status-icons.lisp`), a gold cross with the seconds left.
+- **Trainer**: raises the player's `max-health`, `max-mana` and `max-stamina` (player slots that
+  replaced the globals, which are now their starting values), `*training-steps*` at a time,
+  `*training-limit*` steps each, each dearer by `*training-step-cost*`.
+- **Quest-giver**: one quest into the wing, drawn the first time asked (`ensure-quest`): bring back
+  the relic (a `quest-pickup` on the wing's furthest free spot, placed before the glyphs so they
+  can't take the wing's last ones, hidden until the quest is taken; touched, it goes into the bag
+  as the `:relic` item, the reliquary, and the claim takes it back out),
+  a bounty on the wing's commonest monster (`bounty-target`, progress counted from the dead), or,
+  besieged, hold the gates through `*gate-raids*` raids. Claimed back in town for gold and
+  `*quest-reputation*`.
+
+`price` is `*base-prices*`, `*price-depth-step*` dearer per depth, by the faction's multiplier and
+`(1 - standing / 400)`. **Gold** (`gold`, a player slot) comes from `:gold` pickups, which
+`place-gold` scatters on the spots health, mana, the relic and the glyphs left (`*gold-per-monster*`,
+on at most `*gold-spot-share*` of them but one at least, since arcane dust comes after and its piles
+grow to fill fewer spots), in piles of `*gold-pile*` coins (`pickup-count`, as dust's; bigger where its
+share of spots is too few, so a level gets its whole budget: 200 to 370), and from
+kills (`*kill-gold*` by class, straight into the purse through `creature-died`), both
+`*gold-depth-step*` more per depth (`gold-scale`). **Reputation** (`reputation`, a plist by faction,
+-100 to 100) moves prices, greetings and the watch's patience (`*patient-reputation*`).
+
+**The watch** (`report-crime`): `hurt` and `burn` take `:by` (who struck, through `harmed` and
+`creature-died`), so a blow by the player at one of the townsfolk is an assault and a killing a
+murder (blows at one of them within `*assault-window*` of the last, a burn's ticks among them, are
+one assault: `last-assault`). Crimes weigh 1 (a broken rule), 2 (assault) and 3 (murder) toward `settlement-strikes`: from 1
+the watch warns (`hud-say`), from 2 it fines (`*fine-base*` a strike, by depth) and the nearest guard
+walks over to ask (`send-for-fine`; pay, refuse, or bribe the Free Company at `*bribe-share*`), and
+from 3, a murder, a refusal or `*fine-time*` unpaid, every guard turns on the player
+(`watch-turns-hostile`) until paid or bribed off (`calm-watch`; E on a hostile Free Company guard).
+The last guard dying sacks the town (`sack-town`): by the player, `*sack-reputation*` off and the
+trainer fights; by monsters, nothing worse.
+
+**Fighting a foe** (creature.lisp): a creature with a `foe` (a creature) and not hunting the player
+walks to it and attacks it with its own blow or spell (`fight-foe`; `release-attack` and
+`face-attack-target` have `:around` methods, and a foe attack never lunges). A monster struck by
+one of the townsfolk takes it as its foe, and a townsperson who can fight takes the monster that
+struck it. The `settlement-director` (on every level, for the prompt; the rest only in the
+settlement, at `*director-step*`) has free guards take on monsters up to something in town
+(`guards-watch`), and while besieged sends 2 or 3 of the wing's nearest `*raid-classes*` at the
+guards every `*raid-interval*` (`start-raid`, `run-siege`; `raids-held` counts the ones beaten off).
+Only plain fighters raid: a flyer's, caster-boss's or leaper's attack assumes the player.
+
+A save keeps the settlement's build (faction and condition, `:settlement :built`), its state
+(`saved-slots`: strikes, fine, stock, training, quest, raids, ...), the townsfolk's `provoked`,
+every creature's `foe`, and the level's entry in the run (`:level`), so a load builds the same town.
+To try it: `(progn (setf *settlement-override* (list :depth 1)) (game (start-game)))`, then
+`(game (start-talk (find-if (lambda (c) (typep c 'priest)) *creatures*)))`, `(game (setf (raid-timer
+*settlement*) 0.05))` for a raid, `(game (hurt <commoner> 3 :by *player*))` for the watch.
+`tools/hd status` shows the settlement.
+
+The town's plans are drawn by `tools/town_plan.py` (its quarters, townsfolk, spawns and loot spots;
+it rewrites the blueprint from `plan 0` on, the legend staying hand-written), and a passage in it
+must stay 1.5 m wide, as in caves: the barracks' beds once left 1 m gaps and stranded the guard
+between them. The temple's dais carries the Spellforge's altar (`a`, 0.7 m over the dais so E
+reaches it from the step in front, within `*altar-height*`), and E there opens the forge; using it
+is never a crime, the Ashen Temple's rule hooking `player-cast` only. The settlement's level has no
+altar room (`:altar-chance` NIL in `*settlement-level*`).
+
+The townsfolk are one generated lineup, `art/townsfolk/lineup-1.png` (`art/prompts/townsfolk-lineup.txt`,
+the imp's and acolyte's turnarounds as references), sliced at the monsters' 64 px per metre (each
+sprite's height is its cell's, `/ 64`); only the four who stand are used from it now. The walkers
+were made the monsters' way (see "Monster sprites") from their lineup cells (`art/<who>/design.png`,
+`<who>` being `guard`, `townsman`, `townswoman`): a turnaround (`art/prompts/<who>-turnaround.txt`,
+the design, the imp's and acolyte's turnarounds as references), its standing cells cut by
+`tools/cut_stands.py`, then `tools/gen_monster_views.sh <who> <anim> ...` for the walk, flinch and the
+guard's attack, and a front-only death. Sliced so the standing figure is 118 px (the townsman), 114
+(the townswoman) and 124 with the spear's tip (the guard, whose tabard is pure green until it is
+recoloured per faction: every strip, into `data/sprites/guard/<faction>/`). A strip's height in
+metres is its cells' over 64 (`strip-height`). The image service refused the townsman's flinch as
+"self-harm" while it said he clutched his middle. The relic is `art/relic/relic.png`
+(`art/prompts/relic.txt`), and the gold pile is drawn (`tools/draw_gold.py data/sprites/pickups/gold`):
+
+```bash
+python3 tools/slice_frames.py art/townsfolk/lineup-1.png data/sprites/townsfolk --pixel 3.9 --filter box --anchor bottom shopkeeper:1 priest:1 trainer:1 quest-giver:1 && rm data/sprites/townsfolk/{commoner-*,guard}.*
+tools/cut_stands.py art/guard/turnaround-2.png art/guard    # and townsman/turnaround-2, townswoman/turnaround-1
+python3 tools/slice_turnaround.py art/guard/turnaround-2.png data/sprites/guard/turnaround --height 124 --filter box
+python3 tools/slice_turnaround.py art/townsman/turnaround-2.png data/sprites/townsman/turnaround --height 118 --filter box
+python3 tools/slice_turnaround.py art/townswoman/turnaround-1.png data/sprites/townswoman/turnaround --height 114 --filter box
+V="front front-quarter side back-quarter back"
+for spec in guard:992:walk:20 guard:992:attack:20 guard:992:hurt:10 townsman:944:walk:20 townsman:944:hurt:10 townswoman:912:walk:20 townswoman:912:hurt:10; do IFS=: read who h a n <<< "$spec"; python3 tools/slice_views.py data/sprites/$who $a:$n $(for v in $V; do echo art/$who/$a-$v.png; done) --height $h --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
+python3 tools/slice_frames.py art/guard/death.png data/sprites/guard --pixel 3.5 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/townsman/death.png data/sprites/townsman --pixel 3.73 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/townswoman/death.png data/sprites/townswoman --pixel 3.86 --anchor bottom --filter box death:8
+G=data/sprites/guard; for f in ashen-temple:30:0.25:0.55 deepwardens:212:0.7:0.55 free-company:355:0.75:0.6; do IFS=: read n h s v <<< "$f"; mkdir -p $G/$n; for strip in turnaround walk attack hurt death; do tools/recolor_hue.py $G/$strip $G/$n/$strip --from 120 --reach 30 --hue $h --saturation $s --value $v; done; done
+python3 tools/slice_frames.py art/relic/relic.png data/sprites/pickups --pixel 14 --filter box --colors 32 --anchor bottom relic:4
+```
+
+Not yet: the trainer, who fights once the town is sacked, has no walk, attack, flinch or death
+strips (it glides, strikes standing and sinks into the floor), townsfolk have no voices, there are no faction banners, the town is one lighting room, and nothing is
+stolen but from a dead shopkeeper.

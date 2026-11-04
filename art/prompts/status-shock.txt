@@ -1,0 +1,20 @@
+Pixel-art sprite sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game: an 8-frame looping SHOCK AURA, the lightning that crackles over a monster struck by a shock spell. It is drawn over the monster's body as an overlay, so draw only the electricity, never a creature.
+
+REFERENCE IMAGES, in the order attached:
+1. A spell effect sheet from the same game (a fireball). Match its pixel size and its solid, outline-free effect shapes, but this is electricity: white and pale yellow arcs.
+2. A looping torch-flame sheet from the same game. Follow its layout exactly: 2 rows of 4 cells, the same cell proportions, one effect centred in each cell, the same scale in every frame.
+
+THE SHOCK
+- A tall, narrow area about one and a half times as tall as it is wide, the size of a standing body: thin jagged lightning arcs, one or two pixels thick, that zig-zag over it from point to point, some short sparks spitting off the arcs, and a few tiny bright spark dots.
+- The middle is mostly open magenta: two to four arcs at a time cross it, so the monster shows through.
+- Colours: white cores on the arcs, pale yellow, a bright electric yellow and a few pale violet-blue pixels at their ends. No orange or red fire.
+- The 8 frames loop seamlessly: each frame the arcs are in different places, as crackling lightning is, flickering on and off; sparks jump outward and vanish within a frame or two. No frame is a single big flash or fills the whole cell.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- In every cell the aura is centred and covers the same area, at the same scale.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow or haze.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No creature, no text, labels, numbers or frame borders.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no glow bleeding into the background.

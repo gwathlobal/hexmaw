@@ -2,9 +2,10 @@
 
 ;;; Daggerfall-style spells. A spell is a delivery (how it reaches its target)
 ;;; plus a list of effects. Each effect has a kind, a magnitude range, a duration,
-;;; an area and a target type, and the spell's cost is derived from that
-;;; composition, so a spellmaker can later build new spells from the same parts.
-;;; What an effect kind does is a method on APPLY-EFFECT.
+;;; an area, a target type and, for damage, an element, and the spell's cost is derived
+;;; from that composition, so the spellforge (forge.lisp) builds new spells from the same
+;;; parts. What an effect kind does is a method on APPLY-EFFECT (here, and in magic.lisp
+;;; for statuses, elements, healing and the rest).
 
 (defclass effect ()
   ((kind :initarg :kind :reader effect-kind
@@ -12,14 +13,21 @@
    (magnitude :initarg :magnitude :initform '(1 1) :reader effect-magnitude
               :documentation "(MIN MAX); each application rolls an integer in that range.")
    (duration :initarg :duration :initform 0 :reader effect-duration
-             :documentation "Seconds; 0 is instant. Not used yet.")
+             :documentation "Seconds; 0 is instant. An over-time kind's magnitude is then per
+second (damage, heal), a status kind's what it holds for that long (*EFFECT-KINDS*).")
    (area :initarg :area :initform 0 :reader effect-area
-         :documentation "Radius in metres; 0 is a single target. A :CIRCLE delivery's reach.")
+         :documentation "Radius in metres; 0 is a single target. A :CIRCLE delivery's reach,
+otherwise a burst where the spell strikes.")
    (target-type :initarg :target-type :initform :target :reader effect-target-type
-                :documentation ":SELF, :TOUCH or :TARGET (whatever the delivery hits).")))
+                :documentation ":SELF (the caster) or :TARGET (whatever the delivery hits;
+:TOUCH means the same).")
+   (element :initarg :element :initform NIL :reader effect-element
+            :documentation "A damage effect's element, :FIRE, :FROST or :SHOCK, or NIL.")))
 
 (defclass spell ()
   ((name :initarg :name :reader spell-name)
+   (title :initarg :title :initform NIL :reader title-of
+          :documentation "The name the player reads, if not its symbol's (SPELL-TITLE).")
    (delivery :initarg :delivery :initform :projectile :reader spell-delivery)
    (projectile-speed :initarg :projectile-speed :initform 20.0 :reader projectile-speed)
    (projectile-animation :initarg :projectile-animation :initform NIL :reader projectile-animation
@@ -49,6 +57,13 @@
 (defun find-spell (name)
   (or (gethash name *spells*) (error "No spell named ~s." name)))
 
+(defun spell-title (spell)
+  "SPELL's name as the player reads it: a forged spell's own, or a defined one's title or symbol."
+  (let ((name (spell-name spell)))
+    (cond ((stringp name) name)
+          ((title-of spell))
+          (T (substitute #\Space #\- (string-capitalize name))))))
+
 (defmacro define-spell (name (&rest options) &body effects)
   "Define spell NAME. OPTIONS are SPELL initargs; each effect is (KIND &rest EFFECT-INITARGS):
 
@@ -60,21 +75,49 @@
                                :effects (list ,@(loop for (kind . args) in effects
                                                       collect `(make-instance 'effect :kind ,kind ,@args))))))
 
-;;; Cost: each effect's base cost times its average magnitude, scaled up by
-;;; duration and area; a spell costs the sum, rounded up.
+;;; Cost: each effect's base cost times its average magnitude, scaled by how long it
+;;; lasts and by its area; a touch spell is cheaper, since it costs the caster a step
+;;; into reach. A spell costs the sum, rounded up.
 
-(defparameter *effect-base-costs* '(:damage 1.5 :knockback 0.5)
-  "Mana per point of average magnitude, per effect kind. Unlisted kinds cost 1.")
+(defparameter *effect-kinds*
+  '((:damage :base 1.5 :timing :over-time :targets (:target) :magnitude 30 :duration 8 :area 3.0)
+    (:heal :base 1.0 :timing :over-time :targets (:self) :magnitude 40 :duration 10 :area 0)
+    (:knockback :base 0.5 :timing :instant :targets (:target) :magnitude 12 :duration 0 :area 3.0)
+    (:slow :base 0.12 :timing :status :targets (:target) :magnitude 60 :duration 10 :area 3.0)
+    (:drain :base 2.0 :timing :instant :targets (:target) :magnitude 20 :duration 0 :area 0)
+    (:ward :base 0.4 :timing :status :targets (:self) :magnitude 40 :duration 20 :area 0))
+  "What each effect kind the spellforge offers is: mana per point of average magnitude
+(:BASE), how its duration counts (:TIMING: :INSTANT ignores it, :OVER-TIME makes the
+magnitude per second, :STATUS holds the magnitude that long), who it may strike
+(:TARGETS), and the most magnitude, duration and area the forge allows. Kinds not
+listed (creatures' :WHIRL, :GUST) cost 1 a point, their duration counting as a status's.")
 
-(defun effect-cost (effect)
+(defparameter *element-costs* '(:fire 1.5 :frost 1.7 :shock 1.7)
+  "Mana per point of damage, by element: frost and shock do more than fire.")
+(defparameter *over-time-discount* 0.6
+  "An over-time effect costs its magnitude a second times its duration times this.")
+(defparameter *touch-cost-scale* 0.75 "A :TOUCH spell's cost, against the same at range.")
+
+(defun kind-property (kind property &optional default)
+  (getf (rest (assoc kind *effect-kinds*)) property default))
+
+(defun effect-cost (effect &optional delivery)
   (destructuring-bind (lo hi) (effect-magnitude effect)
-    (* (getf *effect-base-costs* (effect-kind effect) 1.0)
-       (/ (+ lo hi) 2)
-       (+ 1 (/ (effect-duration effect) 5))
-       (+ 1 (effect-area effect)))))
+    (let* ((kind (effect-kind effect))
+           (duration (effect-duration effect))
+           (base (or (and (eq kind :damage) (getf *element-costs* (effect-element effect)))
+                     (kind-property kind :base 1.0)))
+           (time (ecase (kind-property kind :timing :status)
+                   (:instant 1)
+                   (:over-time (if (< 0 duration) (* duration *over-time-discount*) 1))
+                   (:status (+ 1 (/ duration 5))))))
+      (* base (/ (+ lo hi) 2) time
+         (+ 1 (effect-area effect))
+         (if (eq delivery :touch) *touch-cost-scale* 1)))))
 
 (defun spell-cost (spell)
-  (ceiling (reduce #'+ (spell-effects spell) :key #'effect-cost)))
+  (ceiling (reduce #'+ (spell-effects spell)
+                   :key (lambda (effect) (effect-cost effect (spell-delivery spell))))))
 
 (defun roll (magnitude)
   (destructuring-bind (lo hi) magnitude
@@ -102,18 +145,66 @@ horizontal part counts."))
 delivered by SOURCE.")
   (:method (source) NIL))
 
-(defmethod apply-effect ((kind (eql :damage)) effect (target creature) source)
-  ;; Blood sprays away from where it struck from.
-  (hurt target (roll (effect-magnitude effect)) :from (effect-origin source)
-                :pain-bonus (spell-pain-bonus (spell source))))
-
 (defmethod apply-effect ((kind (eql :knockback)) effect (target creature) source)
+  ;; A flash, so a push alone reads as a hit; it carries the creature (SHOVED-P) until it slows.
+  (setf (flash target) (max (flash target) *flash-time*))
   (push-creature target (effect-direction source target) (float (roll (effect-magnitude effect)) 0f0)))
 
+(defun target-effect-p (effect)
+  (member (effect-target-type effect) '(:target :touch)))
+
 (defun apply-spell (spell target source)
+  "Apply SPELL's effects on what it reaches to TARGET, whatever their area (a circle's)."
   (dolist (effect (spell-effects spell))
-    (when (eq :target (effect-target-type effect))
+    (when (target-effect-p effect)
       (apply-effect (effect-kind effect) effect target source))))
+
+(defun apply-self-effects (spell caster source)
+  (dolist (effect (spell-effects spell))
+    (when (eq :self (effect-target-type effect))
+      (apply-effect (effect-kind effect) effect caster source))))
+
+;;; Striking: a projectile or a touch reaches a point, hitting a body there or nothing (a
+;;; wall). Its single-target effects strike that body; an effect with an area bursts over
+;;; every body within it that the point can see, but its caster and those it spares.
+
+(defclass strike ()
+  ((spell :initarg :spell :reader spell)
+   (caster :initarg :caster :initform NIL :reader caster)
+   (origin :initarg :origin :reader strike-origin
+           :documentation "Where it strikes from: what it pushes away from."))
+  (:documentation "The source of effects that land without a projectile in flight: a burst,
+a touch, a weapon's enchantment."))
+
+(defmethod effect-origin ((source strike))
+  (strike-origin source))
+
+(defmethod effect-direction ((source strike) target)
+  (v- (if (typep target 'player) (feet target) (location target)) (strike-origin source)))
+
+(defun burst-spell (spell point caster)
+  "Burst SPELL's effects that have an area over every body within it of POINT."
+  (dolist (effect (spell-effects spell))
+    (when (and (target-effect-p effect) (< 0 (effect-area effect)))
+      (let ((burst (make-instance 'strike :spell spell :caster caster :origin point)))
+        (dolist (body (burst-victims point (effect-area effect) caster))
+          (apply-effect (effect-kind effect) effect body burst))))))
+
+(defun strike-with-spell (spell victim origin caster &optional (at origin))
+  "SPELL, cast by CASTER, strikes without a projectile (a touch, an enchanted blow): its
+single-target effects strike VICTIM (or no one) from point ORIGIN, those with an area
+burst over every body within it of point AT."
+  (when victim
+    (let ((source (make-instance 'strike :spell spell :caster caster :origin origin)))
+      (dolist (effect (spell-effects spell))
+        (when (and (target-effect-p effect) (= 0 (effect-area effect)))
+          (apply-effect (effect-kind effect) effect victim source)))))
+  (burst-spell spell at caster))
+
+(defun spell-burst-radius (spell)
+  "The widest area of SPELL's effects on what it strikes, 0 for none."
+  (loop for effect in (spell-effects spell)
+        when (target-effect-p effect) maximize (effect-area effect)))
 
 ;;; Projectile delivery.
 
@@ -132,7 +223,34 @@ turns it aside ends it.")
    (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
-and bursts only on entering one from outside.")))
+and bursts only on entering one from outside.")
+   (evade-asked :initform NIL :accessor evade-asked
+                :documentation "The creature last asked whether it evades this (the player's)
+projectile about to reach it, so each is asked once.")
+   (sound :initform NIL :accessor projectile-sound
+          :documentation "Its flight's loop (sound.lisp), from its first tick until it leaves.")))
+
+(defparameter *spell-sounds*
+  '(bolt (:flight :bolt-flight :impact :bolt-impact)
+    cinder (:flight :cinder-flight :impact :cinder-impact)
+    grave-skull (:cast :skull-cast :flight :skull-flight :impact :skull-impact)
+    grave-spikes (:circle :grave-circle :strike :grave-spikes)
+    gust (:cast :gust-cast)
+    rift-pull (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rift-swap (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rift-push (:cast :rift-cast :flight :rift-flight :impact :rift-impact))
+  "Each spell's clips (sound.lisp) by event: :CAST where a creature lets it go, :FLIGHT its
+projectile's loop, :IMPACT its burst, :CIRCLE a circle's loop through its wind-up and :STRIKE
+its strike. The player's own casts sound from the hands (player.lisp).")
+
+(defun spell-sound (spell event)
+  ;; A forged spell (named by a string, SPEC-SPELL) sounds like the bolt.
+  (getf (getf *spell-sounds* (if (stringp (spell-name spell)) 'bolt (spell-name spell))) event))
+
+;; A reset, a rebuild or its end takes it away: its flight falls silent.
+(defmethod leave :after ((projectile spell-projectile) container)
+  (setf (projectile-sound projectile) (stop-loop (projectile-sound projectile))))
+
 
 ;; It strikes from behind itself, along its flight, and pushes along it.
 (defmethod effect-origin ((source spell-projectile))
@@ -154,14 +272,29 @@ and bursts only on entering one from outside.")))
     (attach-glow projectile (light-color spell) (light-radius spell))
     projectile))
 
-(defun impact (projectile)
-  "Play the spell's impact where PROJECTILE hit, and remove it."
-  (let* ((spell (spell projectile))
-         (name (impact-animation spell)))
-    (when (and name (container projectile))
-      (let* ((velocity (projectile-velocity projectile))
-             (at (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
-        (attach-glow (spawn-fx name at (container projectile)) (light-color spell) (light-radius spell)))))
+(defparameter *burst-size* 0.45
+  "Radius in metres an impact animation's burst stands for: one bursting over an area is
+drawn that much bigger.")
+
+(defun impact-point (projectile)
+  "Where PROJECTILE's impact plays: a little back along its flight, out of the wall."
+  (let ((velocity (projectile-velocity projectile)))
+    (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
+
+(defun play-impact (spell at container &key water)
+  "Play SPELL's impact animation at AT, as big as its burst, with its glow and its sound. Into
+WATER it hisses out."
+  (let ((name (impact-animation spell)))
+    (when (and name container)
+      (let ((sprite (spawn-fx name at container))
+            (k (max 1.0 (/ (spell-burst-radius spell) *burst-size*))))
+        (nv* (scaling sprite) k)
+        (attach-glow sprite (light-color spell) (* (light-radius spell) (sqrt k)))
+        (play-sound (if water :bolt-hiss-water (spell-sound spell :impact)) at)))))
+
+(defun impact (projectile &key water (at (impact-point projectile)))
+  "Play the spell's impact where PROJECTILE hit, and remove it. Into WATER it hisses out."
+  (play-impact (spell projectile) at (container projectile) :water water)
   (despawn projectile))
 
 ;; The player's own projectiles never hit them, nor a creature's that creature.
@@ -187,6 +320,7 @@ and bursts only on entering one from outside.")))
 (defun deflect (target projectile)
   "TARGET's shield takes PROJECTILE: reflect it, or stop it if the shield doesn't reflect."
   (block-hit target)
+  (play-sound :shield-deflect (location projectile))
   (cond ((shield-reflects target)
          ;; Mirror the flight off the shield's face, whose normal is the way TARGET faces,
          ;; and send it back up or down too: straight on, it returns to its caster.
@@ -231,6 +365,30 @@ seconds, keeping its speed."
                         (vy v) (* speed (+ (* c uy) (* s wy)))
                         (vz v) (* speed (+ (* c uz) (* s wz))))))))))))
 
+(defparameter *evade-look-ahead* 0.2
+  "Seconds of flight ahead of the player's projectile that a creature sees it coming (EVADE-PROJECTILE).")
+
+(defgeneric evade-projectile (creature projectile)
+  (:documentation "Give CREATURE, which the player's PROJECTILE is about to reach, its chance
+to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per projectile.")
+  (:method (creature projectile) NIL))
+
+(defvar *evade-probe* (vec 0 0 0))
+
+(defun look-ahead (projectile r)
+  "Ask the creature the player's PROJECTILE will reach within *EVADE-LOOK-AHEAD* whether it evades it."
+  (let ((probe *evade-probe*)
+        (loc (location projectile))
+        (v (projectile-velocity projectile))
+        (k (float *evade-look-ahead* 0f0)))
+    (setf (vx probe) (+ (vx loc) (* k (vx v)))
+          (vy probe) (+ (vy loc) (* k (vy v)))
+          (vz probe) (+ (vz loc) (* k (vz v))))
+    (let ((c (creature-at probe r *player*)))
+      (when (and c (not (eq c (evade-asked projectile))))
+        (setf (evade-asked projectile) c)
+        (evade-projectile c projectile)))))
+
 ;; After FX-SPRITE's tick, which animates and ages it.
 (define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
@@ -238,17 +396,32 @@ seconds, keeping its speed."
            (r (* 0.5 (float *projectile-size* 0f0))))
       (when (and (homing spell-projectile) *player* (not (eq (caster spell-projectile) *player*)))
         (steer spell-projectile (float dt 0f0)))
+      (when (and *player* (eq (caster spell-projectile) *player*))
+        (look-ahead spell-projectile r))
       (nv+* loc (projectile-velocity spell-projectile) dt)
+      (let ((sound (projectile-sound spell-projectile)))
+        (if sound
+            (move-loop sound loc)
+            (setf (projectile-sound spell-projectile)
+                  (start-loop (spell-sound (spell spell-projectile) :flight) loc))))
       (let ((victim (projectile-victim spell-projectile loc r))
-            (entered (and (liquid-at (vx loc) (vy loc) (vz loc)) (not (submerged spell-projectile)))))
+            (entered (and (not (submerged spell-projectile)) (liquid-at (vx loc) (vy loc) (vz loc)))))
         (setf (submerged spell-projectile) (and (liquid-at (vx loc) (vy loc) (vz loc)) T))
         (cond ((and victim (deflects-p victim spell-projectile))
                (deflect victim spell-projectile))
               (victim
-               (apply-spell (spell spell-projectile) victim spell-projectile)
-               (impact spell-projectile))
-              ((or (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)) entered)
-               (impact spell-projectile))
+               ;; Its own effects strike from along its flight; a burst from where it hit.
+               (dolist (effect (spell-effects (spell spell-projectile)))
+                 (when (and (target-effect-p effect) (= 0 (effect-area effect)))
+                   (apply-effect (effect-kind effect) effect victim spell-projectile)))
+               (let ((at (impact-point spell-projectile)))
+                 (burst-spell (spell spell-projectile) at (caster spell-projectile))
+                 (impact spell-projectile :at at)))
+              ((or entered (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)))
+               (let ((at (impact-point spell-projectile)))
+                 (burst-spell (spell spell-projectile) at (caster spell-projectile))
+                 (impact spell-projectile :at at
+                                          :water (and entered (liquid-property (liquid-kind entered) :swim)))))
               ((< (or (spell-lifetime (spell spell-projectile)) *projectile-lifetime*) (age spell-projectile))
                (despawn spell-projectile)))))))
 
@@ -452,7 +625,8 @@ void main(){
    (aurora :initform NIL :accessor circle-aurora)
    (lamp :initform NIL :accessor circle-lamp)
    (struck :initform NIL :accessor struck :documentation "Seconds since it struck, or NIL.")
-   (rings-left :initform () :accessor rings-left :documentation "Rings of the strike yet to burst.")))
+   (rings-left :initform () :accessor rings-left :documentation "Rings of the strike yet to burst.")
+   (sound :initform NIL :accessor circle-sound :documentation "Its loop through the wind-up.")))
 
 (defun circle-radius (spell)
   (reduce #'max (spell-effects spell) :key #'effect-area :initial-value 0))
@@ -485,6 +659,7 @@ then fading."
 (defun light-circle (circle)
   "Raise CIRCLE's aurora and lamp, the first time it ticks in the scene."
   (let ((c (centre circle)))
+    (setf (circle-sound circle) (start-loop (spell-sound (spell circle) :circle) c))
     (setf (circle-aurora circle) (make-instance 'aurora :centre c :radius (circle-radius (spell circle))))
     (enter (circle-aurora circle) (container circle))
     (setf (circle-lamp circle)
@@ -504,6 +679,7 @@ then fading."
 
 ;; A reset or rebuild takes the circle away before it is done.
 (defmethod leave :after ((circle spell-circle) container)
+  (setf (circle-sound circle) (stop-loop (circle-sound circle)))
   (drop-circle-light circle))
 
 (defun in-circle-p (circle point radius)
@@ -525,7 +701,9 @@ then fading."
   (let ((spell (spell circle))
         (caster (caster circle)))
     (setf (struck circle) 0.0
-          (rings-left circle) *strike-rings*)
+          (rings-left circle) *strike-rings*
+          (circle-sound circle) (stop-loop (circle-sound circle)))
+    (play-sound (spell-sound spell :strike) (centre circle))
     (drop-aurora circle)
     (loop for c across *creatures*
           when (and (not (dead c)) (not (undead c)) (not (eq c caster))
@@ -618,10 +796,23 @@ Mana is the caster's business."
     (:circle (place-circle spell origin container caster))
     (:vortex (place-vortex spell origin direction container caster))))
 
+(defparameter *spell-looks*
+  '((:fire bolt-flight bolt-burst (1.5 0.8 0.3))
+    (:frost frost-flight frost-burst (0.45 1.0 1.8))
+    (:shock shock-flight shock-burst (1.6 1.5 0.5))
+    (:drain drain-flight drain-burst (1.6 0.3 0.5))
+    (:heal heal-flight heal-burst (0.5 1.6 0.4))
+    (:arcane arcane-flight arcane-burst (1.1 0.4 1.7)))
+  "(LOOK FLIGHT BURST LIGHT-COLOR) for each look a forged spell can have.")
+
 ;;; The spells.
 
 (defun preload-spells (scene)
-  "Load the sprites of every spell, which only appear mid-game."
+  "Load the sprites of every spell, which only appear mid-game, and of every look a forged
+spell may have, which no spell in *SPELLS* need use."
+  (loop for (nil flight burst) in *spell-looks*
+        do (preload (make-instance 'fx-sprite :animation (find-fx-animation burst)) scene)
+           (preload (make-instance 'spell-projectile :animation (find-fx-animation flight)) scene))
   (loop for spell being the hash-values of *spells*
         do (when (eq (spell-delivery spell) :vortex)
              (preload-vortex spell scene))
@@ -643,10 +834,74 @@ Mana is the caster's business."
 (define-fx-animation bolt-flight "sprites/bolt/flight" :fps 12 :loop T :size 0.4)
 (define-fx-animation bolt-burst "sprites/bolt/burst" :fps 14 :size 0.9)
 
-(define-spell bolt (:delivery :projectile :projectile-speed 20.0 :pain-bonus 10
+;; The player's starting spells. Each is one the spellforge makes (FORGEABLE-P, forge.lisp): its
+;; ranges are a forged effect's (*MAGNITUDE-SPREAD* of the top up to it), the bolt's speed, pain
+;; bonus and frames are a forged projectile's (SPEC-SPELL), so it costs what the forge would ask:
+;; the bolt fire damage at 9 and knockback at 4, 14 mana; the heal 20, 17.
+(define-spell bolt (:delivery :projectile :projectile-speed 20.0 :pain-bonus 10 :title "Fire Bolt"
                     :projectile-animation 'bolt-flight :impact-animation 'bolt-burst)
-  (:damage :magnitude '(6 10))
-  (:knockback :magnitude '(4 4)))
+  (:damage :element :fire :magnitude '(7 9))
+  (:knockback :magnitude '(3 4)))
+
+;; Cast on themself, it needs no projectile.
+(define-spell heal (:delivery :self)
+  (:heal :magnitude '(14 20) :target-type :self))
+
+;;; Looks: a forged spell (forge.lisp) flies and bursts as its element, or, with no
+;;; damage, as its first effect: the bolt's frames, recoloured (tools/recolor_hue.py,
+;;; data/sprites/spells/), with a glow to match.
+
+(define-fx-animation frost-flight "sprites/spells/frost-flight" :fps 12 :loop T :size 0.4)
+(define-fx-animation frost-burst "sprites/spells/frost-burst" :fps 14 :size 0.9)
+(define-fx-animation shock-flight "sprites/spells/shock-flight" :fps 16 :loop T :size 0.4)
+(define-fx-animation shock-burst "sprites/spells/shock-burst" :fps 16 :size 0.9)
+(define-fx-animation drain-flight "sprites/spells/drain-flight" :fps 10 :loop T :size 0.4)
+(define-fx-animation drain-burst "sprites/spells/drain-burst" :fps 14 :size 0.9)
+(define-fx-animation heal-flight "sprites/spells/heal-flight" :fps 10 :loop T :size 0.4)
+(define-fx-animation heal-burst "sprites/spells/heal-burst" :fps 14 :size 0.9)
+(define-fx-animation arcane-flight "sprites/spells/arcane-flight" :fps 12 :loop T :size 0.4)
+(define-fx-animation arcane-burst "sprites/spells/arcane-burst" :fps 14 :size 0.9)
+
+(defun spell-look (spell)
+  "The look of SPELL: a tornado's :STORM, else its effects' (EFFECTS-LOOK)."
+  (if (eq (spell-delivery spell) :vortex) :storm (effects-look (spell-effects spell))))
+
+(defun effects-look (effects)
+  "The look of a spell of EFFECTS, a list of EFFECT: its first damage's element, else its
+first effect's kind."
+  (let ((damage (find :damage effects :key #'effect-kind)))
+    (cond ((and damage (effect-element damage)))
+          (damage :fire)
+          (T (case (and effects (effect-kind (first effects)))
+               (:drain :drain)
+               ((:heal :ward) :heal)
+               (:slow :frost)
+               (T :arcane))))))
+
+;;; Specs: a spell as plain data, for forged spells, which aren't in *SPELLS* and are saved
+;;; by what they hold (save.lisp): (NAME DELIVERY &rest EFFECTS), each effect a plist of
+;;; EFFECT initargs.
+
+(defun spell-spec (spell)
+  (list* (spell-name spell) (spell-delivery spell)
+         (loop for e in (spell-effects spell)
+               collect (list :kind (effect-kind e) :magnitude (copy-list (effect-magnitude e))
+                             :duration (effect-duration e) :area (effect-area e)
+                             :target-type (effect-target-type e) :element (effect-element e)))))
+
+(defun spec-spell (spec)
+  "A new spell made from SPEC, (NAME DELIVERY &rest EFFECT-PLISTS), with its look."
+  (destructuring-bind (name delivery &rest effect-specs) spec
+    (let* ((effects (loop for args in effect-specs
+                          collect (apply #'make-instance 'effect
+                                         :magnitude (copy-list (getf args :magnitude '(1 1)))
+                                         args)))
+           (look (assoc (effects-look effects) *spell-looks*)))
+      (destructuring-bind (flight burst (r g b)) (rest look)
+        (make-instance 'spell :name name :delivery delivery :effects effects
+                              :projectile-speed 20.0 :pain-bonus 10
+                              :projectile-animation flight :impact-animation burst
+                              :light-color (vec r g b) :light-radius *bolt-light-radius*)))))
 
 ;; The acolyte's spell (creature.lisp): slower than the bolt, so a sidestep dodges it.
 ;; It flies on the bolt's frames, bigger and redder, until it has its own.

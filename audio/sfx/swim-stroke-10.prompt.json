@@ -1,0 +1,23 @@
+{
+  "prompt": "One swimming stroke heard with your head under water: everything muffled and dull, a deep low surge of water pushed past as the arms pull, then a soft muffled gurgle of bubbles. Only low and middle sounds, as if through water; no splash, no surface, no high frequencies, nothing bright. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-swim-stroke.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 1.2,
+  "output_format": "pcm_44100",
+  "n": 4,
+  "created": 1793729186,
+  "request_ids": [
+    null,
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    1.2,
+    1.2,
+    1.2,
+    1.2
+  ]
+}

@@ -11,15 +11,49 @@
 (define-fx-animation pickup-herbs "sprites/pickups/herbs" :fps 5 :loop T :size (/ 32 64.0))
 (define-fx-animation pickup-health-potion "sprites/pickups/flask" :fps 5 :loop T :size (/ 38 64.0))
 (define-fx-animation pickup-shard "sprites/pickups/shard" :fps 5 :loop T :size (/ 28 64.0))
+;; A glittering heap of arcane dust (art/pickups/dust-2.png, art/prompts/pickup-dust.txt).
+(define-fx-animation pickup-dust "sprites/pickups/dust" :fps 5 :loop T :size (/ 14 64.0))
 (define-fx-animation pickup-mana-potion "sprites/pickups/mana-potion" :fps 5 :loop T :size (/ 38 64.0))
+(define-fx-animation pickup-gold "sprites/pickups/gold" :fps 4 :loop T :size (/ 14 64.0))
+;; Glyphs (tools/draw_glyphs.py): each teaches an effect for the spellforge (forge.lisp).
+(define-fx-animation glyph-frost "sprites/pickups/glyph-frost" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-shock "sprites/pickups/glyph-shock" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-slow "sprites/pickups/glyph-slow" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-drain "sprites/pickups/glyph-drain" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-ward "sprites/pickups/glyph-ward" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-area "sprites/pickups/glyph-area" :fps 4 :loop T :size (/ 30 64.0))
 
 (defparameter *pickup-kinds*
-  '((:herbs :animation pickup-herbs :resource :health :amount 15)
-    (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40)
-    (:shard :animation pickup-shard :resource :mana :amount 28)
-    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50))
+  '((:herbs :animation pickup-herbs :resource :health :amount 15 :sound :pickup-herbs)
+    (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40
+     :sound :pickup-potion)
+    (:shard :animation pickup-shard :resource :mana :amount 28 :sound :pickup-shard)
+    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50
+     :sound :pickup-potion)
+    (:gold :animation pickup-gold :resource :gold :amount 12 :count T :sound :pickup-shard)
+    (:glyph-frost :animation glyph-frost :teaches :frost :name "Frost" :about "frost damage, which chills"
+     :sound :pickup-shard)
+    (:glyph-shock :animation glyph-shock :teaches :shock :name "Shock" :about "shock damage, which staggers"
+     :sound :pickup-shard)
+    (:glyph-slow :animation glyph-slow :teaches :slow :name "Slow" :about "slowing what it strikes"
+     :sound :pickup-shard)
+    (:glyph-drain :animation glyph-drain :teaches :drain :name "Drain" :about "taking health for your own"
+     :sound :pickup-shard)
+    (:glyph-ward :animation glyph-ward :teaches :ward :name "Ward" :about "a ward that takes blows for you"
+     :sound :pickup-shard)
+    (:glyph-area :animation glyph-area :teaches :area :name "Area" :about "bursting over an area"
+     :sound :pickup-shard)
+    (:dust :animation pickup-dust :item :dust :count T :resource :dust :sound :pickup-shard)
+    (:relic :animation pickup-relic :item :relic :sound :pickup-shard)
+    ;; A found weapon or rune (loot.lisp): its sprite is its stack's (LOOT-ANIMATION).
+    (:loot-weapon :sound :pickup-shard)
+    (:loot-rune :sound :pickup-shard))
   "What each kind of pickup restores, and how much, at once or as the :ITEM it gives (keep :AMOUNT
-the item's, *ITEM-KINDS*: a level's budget counts it).")
+the item's, *ITEM-KINDS*: a level's budget counts it), or, a glyph, the effect it :TEACHES; and
+the :SOUND of taking it. A kind with :COUNT gives what its pile holds (PICKUP-COUNT) instead:
+:AMOUNT, if it has one, is a pile's size when nothing says otherwise.")
+
+(defparameter *glyphs-per-level* 2 "Glyphs on each level of a run: three levels teach all six.")
 
 (defparameter *pickup-hover* 0.15 "Metres from the floor to the bottom of a pickup.")
 (defparameter *pickup-bob* 0.04 "Metres a pickup bobs up and down from its height.")
@@ -35,6 +69,24 @@ step's height, so one on a 0.8 m sarcophagus takes a jump.")
 (defparameter *mana-per-monster* 15 "Mana a generated level's pickups restore, per monster in it.")
 (defparameter *pickup-potion-every* 2 "Every so many pickups of a resource, one is a potion, on a reward spot if one is free.")
 (defparameter *pickup-room-weight* 2 "How much likelier a spot in a room is than one in a corridor.")
+(defparameter *gold-per-monster* 6
+  "Gold a generated level's gold pickups hold, per monster in it, at the first depth (GOLD-SCALE).
+Placed after the health and mana, on the spots they leave.")
+(defparameter *kill-gold* '((imp 4) (skeleton-warrior 3) (acolyte 7) (harpy 7) (knight 10) (necromancer 14)
+                            (gale-wraith 12) (ogre 16) (boss 120))
+  "Coin a monster the player kills drops straight into the purse, by class (the first that it is
+of), at the first depth (GOLD-SCALE). One that is no class here drops 5.")
+(defparameter *gold-depth-step* 0.3 "How much more gold each depth past the first is worth.")
+
+(defun gold-scale (&optional (depth *run-depth*))
+  "How much a coin count at the first depth is worth at DEPTH."
+  (+ 1.0 (* *gold-depth-step* (1- depth))))
+
+(defun monster-p (creature)
+  "True if CREATURE counts as one of the level's monsters: built with it, not raised in play,
+and not one of the settlement's townsfolk."
+  (and (not (summoned creature)) (not (townsfolk-p creature))))
+
 (defparameter *jump-reach* 1.0 "Metres above a floor the player can jump to get onto: a reward spot's limit.")
 
 (defun pickup-property (kind key)
@@ -51,13 +103,16 @@ imps (imp.lisp), and a save keeps them apart.")
 
 (define-shader-entity pickup (upright-fx)
   ((kind :initarg :kind :reader pickup-kind)
+   (count :initarg :count :initform 1 :reader pickup-count
+          :documentation "How many of its :ITEM it gives, for a kind with :COUNT (dust's pile).")
    (ground :initarg :ground :reader pickup-ground :documentation "Height of the floor it stands on.")
    (taken :initform NIL :accessor taken)))
 
-(defun add-pickup (container kind x y z &key (phase 0.0))
-  "A pickup of KIND standing on the floor at X Y Z. PHASE is seconds into its glint and bob."
+(defun add-pickup (container kind x y z &key (phase 0.0) (count (or (pickup-property kind :amount) 1)))
+  "A pickup of KIND standing on the floor at X Y Z. PHASE is seconds into its glint and bob,
+COUNT how many of its item (or, gold, coins) it gives."
   (let* ((animation (find-fx-animation (pickup-property kind :animation)))
-         (pickup (make-instance 'pickup :animation animation :kind kind :ground (float y 0f0)
+         (pickup (make-instance 'pickup :animation animation :kind kind :ground (float y 0f0) :count count
                                         :location (vec x (+ y *pickup-hover* (* 0.5 (animation-size animation))) z))))
     (setf (age pickup) phase)
     (vector-push-extend pickup *pickups*)
@@ -72,25 +127,52 @@ imps (imp.lisp), and a save keeps them apart.")
   (setf (restore-flash player) *restore-flash-time*
         (restored player) resource))
 
+(defun give-gold (player amount)
+  "Put AMOUNT coin in PLAYER's purse, flash the view and say so."
+  (incf (gold player) amount)
+  (flash-resource player :gold)
+  (hud-say "+~d gold" amount))
+
 (defun restore-resource (player resource amount)
-  "Give PLAYER AMOUNT of RESOURCE, :HEALTH or :MANA, and flash the view. NIL if it was full."
+  "Give PLAYER AMOUNT of RESOURCE, :HEALTH or :MANA (or :GOLD, never full), and flash the view.
+NIL if it was full."
+  (when (eq resource :gold)
+    (give-gold player (round (* amount (gold-scale))))
+    (return-from restore-resource T))
   (when (ecase resource
-          (:health (when (< (health player) *player-max-health*)
-                     (setf (health player) (min *player-max-health* (+ (health player) amount)))))
-          (:mana (when (< (mana player) *max-mana*)
-                   (setf (mana player) (min *max-mana* (+ (mana player) amount))))))
+          (:health (when (< (health player) (max-health player))
+                     (setf (health player) (min (max-health player) (+ (health player) amount)))))
+          (:mana (when (< (mana player) (max-mana player))
+                   (setf (mana player) (min (max-mana player) (+ (mana player) amount))))))
     (flash-resource player resource)
     T))
 
 (defmethod collect-pickup ((pickup pickup) player)
   (let* ((kind (pickup-kind pickup))
          (resource (pickup-property kind :resource))
-         (item (pickup-property kind :item)))
-    (if item
-        (when (give-item player item)
-          (flash-resource player resource)
-          T)
-        (restore-resource player resource (pickup-property kind :amount)))))
+         (item (pickup-property kind :item))
+         (teaches (pickup-property kind :teaches)))
+    (cond (teaches (learn-glyph player kind))
+          (item
+           (let ((given (give-item player item (if (pickup-property kind :count) (pickup-count pickup) 1))))
+             (when (< 0 given)
+               (when (pickup-property kind :count)
+                 (note-pickup item given))
+               (flash-resource player resource)
+               T)))
+          (T (restore-resource player resource (if (pickup-property kind :count)
+                                                   (pickup-count pickup)
+                                                   (pickup-property kind :amount)))))))
+
+(defun learn-glyph (player kind)
+  "Teach PLAYER the effect glyph KIND teaches. NIL, and it stays where it is, if they know it."
+  (let ((effect (pickup-property kind :teaches)))
+    (unless (member effect (known-effects player))
+      (setf (known-effects player) (append (known-effects player) (list effect)))
+      (flash-resource player :glyph)
+      (show-message (format NIL "Glyph of ~a: ~a. Forge it at an altar."
+                            (pickup-property kind :name) (pickup-property kind :about)))
+      T)))
 
 (defun touching-pickup-p (pickup player)
   (let* ((feet (feet player))
@@ -108,6 +190,7 @@ imps (imp.lisp), and a save keeps them apart.")
              (* *pickup-bob* (sin (* *pickup-bob-rate* (age pickup))))))
     (when (and *player* (< 0 (health *player*)) (touching-pickup-p pickup *player*)
                (collect-pickup pickup *player*))
+      (play-sound (pickup-property (pickup-kind pickup) :sound))
       (setf (taken pickup) T))))
 
 (defmethod render :around ((pickup pickup) (program shader-program))
@@ -141,6 +224,10 @@ imps (imp.lisp), and a save keeps them apart.")
 ;;; Loot: what a thieving imp (imp.lisp) carries off, held over its head, and drops where it
 ;;; dies. The pickup it took stays taken; what it drops is a new one.
 
+(defparameter *stealable-kinds* '(:herbs :health-potion :shard :mana-potion)
+  "The pickups an imp takes off the floor, and the kinds it can carry: what heals or restores
+mana, one at a time. Gold and dust come in piles, weapons and runes with what they hold.")
+
 (defun item-pickup-kind (item)
   "The kind of pickup that gives ITEM, an item kind (*ITEM-KINDS*)."
   (or (first (find item *pickup-kinds* :key (lambda (entry) (getf (rest entry) :item))))
@@ -153,6 +240,7 @@ imps (imp.lisp), and a save keeps them apart.")
           for at = (location pickup)
           for d = (+ (expt (- (vx at) (vx point)) 2) (expt (- (vz at) (vz point)) 2))
           when (and (not (taken pickup)) (< d best-d)
+                    (member (pickup-kind pickup) *stealable-kinds*)
                     (< (abs (- (pickup-ground pickup) (vy point))) 1.5))
             do (setf best pickup best-d d))
     best))
@@ -190,9 +278,9 @@ imps (imp.lisp), and a save keeps them apart.")
                 (vz at) (vz loc))))))
 
 (defun preload-pickups (scene)
-  "Pickups are dropped and carried off in play: load every kind's sprite up front."
-  (loop for (kind . properties) in *pickup-kinds*
-        for animation = (find-fx-animation (getf properties :animation))
+  "Imps carry pickups off and drop them in play: load every kind they take up front."
+  (loop for kind in *stealable-kinds*
+        for animation = (find-fx-animation (pickup-property kind :animation))
         do (preload (make-instance 'pickup :animation animation :kind kind :ground 0.0) scene)
            (preload (make-instance 'carried-loot :animation animation :carrier NIL) scene)))
 
@@ -200,6 +288,28 @@ imps (imp.lisp), and a save keeps them apart.")
   (dolist (i indices)
     (when (< i (length *pickups*))
       (setf (taken (aref *pickups* i)) T))))
+
+;;; Altars: where the spellforge (forge.lisp) is used. A blueprint's `altar` marks the top of
+;;; the stone it stands on (*LEVEL-ALTARS*, blocks.lisp); a sigil hangs over it, turning, with a
+;;; lamp, so it shows across a room. Here, beside the pickups, since RESET-RUN (menu.lisp) keeps
+;;; it as it keeps them.
+
+(define-fx-animation altar-sigil "sprites/pickups/altar-sigil" :fps 6 :loop T :size 0.75)
+
+(defparameter *altar-sigil-lift* 0.8 "Metres over the altar's top the middle of its sigil hangs.")
+(defparameter *altar-light-color* (vec 1.1 0.6 1.6))
+(defparameter *altar-light-radius* 5.0)
+
+(define-shader-entity altar-sigil (upright-fx) ())
+
+(defun add-altar (container top)
+  "An altar whose top is point TOP: noted in *LEVEL-ALTARS*, with its sigil and lamp."
+  (vector-push-extend (vcopy top) *level-altars*)
+  (let ((sigil (make-instance 'altar-sigil :animation (find-fx-animation 'altar-sigil)
+                                           :location (vec (vx top) (+ (vy top) *altar-sigil-lift*) (vz top)))))
+    (enter sigil container)
+    (add-lamp (location sigil) *altar-light-color* *altar-light-radius* :flicker 0.15)
+    sigil))
 
 ;;; Where they go.
 
@@ -243,8 +353,9 @@ with any at all. NIL if there are none."
       (or (try (lambda (spot) (not (member (getf spot :block) used))))
           (and (not fresh) (try (constantly T)))))))
 
-(defun scatter-pickups (container)
-  "Fill a generated level's spots until its pickups restore what its monsters call for. Drawn
+(defun scatter-pickups (container &key (reserve 0))
+  "Fill a generated level's spots until its pickups restore what its monsters call for, but
+leave RESERVE of them free, for what can't be had anywhere else (the glyphs, the relic). Drawn
 from a random state of their own, so the level and its monsters don't change."
   (let* ((random (sb-ext:seed-random-state *last-level-seed*))
          (*nav-hazards* :swim)
@@ -256,7 +367,7 @@ from a random state of their own, so the level and its monsters don't change."
                   (loop for spot across *pickup-spots*
                         when (and (not (eq start (getf spot :block))) (spot-reached-p spot seen))
                           collect spot)))
-         (monsters (length *creatures*))
+         (monsters (count-if #'monster-p *creatures*))
          (health-owed (* monsters *health-per-monster*))
          (mana-owed (* monsters *mana-per-monster*))
          (health-count 0) (mana-count 0)
@@ -266,8 +377,9 @@ from a random state of their own, so the level and its monsters don't change."
              (let* ((potion (= (1- *pickup-potion-every*)
                                (mod (if health-p health-count mana-count) *pickup-potion-every*)))
                     ;; A reward spot, but never at the cost of a block with two while another has none.
-                    (spot (or (and potion (pick-spot spots '(:reward) used random :fresh T))
-                              (pick-spot spots '(:floor :reward) used random))))
+                    (spot (and (< reserve (length spots))
+                               (or (and potion (pick-spot spots '(:reward) used random :fresh T))
+                                   (pick-spot spots '(:floor :reward) used random)))))
                (when spot
                  (let ((kind (if health-p
                                  (if potion :health-potion :herbs)
@@ -299,8 +411,199 @@ from a random state of their own, so the level and its monsters don't change."
                            (if health-p :herbs :shard))
                        (vx p) (vy p) (vz p))))
 
+(defun glyph-kinds ()
+  (loop for (kind . properties) in *pickup-kinds*
+        when (getf properties :teaches) collect kind))
+
+(defun run-glyphs (depth)
+  "The glyphs level DEPTH of the run has: the run's glyphs, shuffled by its seed alone (never by
+what the player knows, so a load builds the same level), *GLYPHS-PER-LEVEL* to a level."
+  (let* ((random (sb-ext:seed-random-state (logxor (or *run-seed* 0) #x61F)))
+         (kinds (coerce (glyph-kinds) 'vector)))
+    ;; Fisher-Yates.
+    (loop for i from (1- (length kinds)) downto 1
+          do (rotatef (aref kinds i) (aref kinds (random (1+ i) random))))
+    (let ((start (* *glyphs-per-level* (1- depth))))
+      (coerce (subseq kinds (min start (length kinds)) (min (+ start *glyphs-per-level*) (length kinds)))
+              'list))))
+
+(defun free-pickup-spots ()
+  "The pickup spots the player can reach, outside the start block, that no pickup took yet, and
+the blocks that have one."
+  (let* ((*nav-hazards* :swim)
+         (seen (multiple-value-bind (i j k) (nav-nearest-fitting *spawn-point* *player-radius* *player-height*)
+                 (and i (nav-reached i j k *player-radius* *player-height* *step-height*))))
+         (start (map-block-at (vx *spawn-point*) (+ (vy *spawn-point*) 0.1) (vz *spawn-point*)))
+         (taken-at (loop for pickup across *pickups* collect (location pickup)))
+         (spots (when seen
+                  (loop for spot across *pickup-spots*
+                        for p = (getf spot :position)
+                        when (and (not (eq start (getf spot :block)))
+                                  (notany (lambda (at) (and (< (abs (- (vx at) (vx p))) 0.01)
+                                                            (< (abs (- (vz at) (vz p))) 0.01)))
+                                          taken-at)
+                                  (spot-reached-p spot seen))
+                          collect spot)))
+         (used (loop for spot across *pickup-spots*
+                     for p = (getf spot :position)
+                     when (some (lambda (at) (and (< (abs (- (vx at) (vx p))) 0.01)
+                                                  (< (abs (- (vz at) (vz p))) 0.01)))
+                                taken-at)
+                       collect (getf spot :block))))
+    (values spots used)))
+
+(defparameter *gold-spot-share* 0.5 "The most of the free spots gold may take, leaving the rest to dust.")
+(defparameter *gold-pile* '(10 30) "Least and most coins in one pile, at the first depth, while spots are plenty.")
+
+(defun place-gold (container)
+  "Scatter the level's gold (*GOLD-PER-MONSTER* a monster) in piles of *GOLD-PILE* on spots no
+pickup or glyph took, a floor spot first, but no more than *GOLD-SPOT-SHARE* of them: arcane dust
+(PLACE-DUST) comes after, its piles growing to fill what is left. Gold's grow too, where its share
+of the spots is too few for the whole budget. From a random state of its own, so nothing placed
+before it moves."
+  (multiple-value-bind (spots used) (free-pickup-spots)
+    (let ((random (sb-ext:seed-random-state (logxor *last-level-seed* #x601D)))
+          (left (* *gold-per-monster* (count-if #'monster-p *creatures*)))
+          ;; One at least, while dust still gets one: a level whose other pickups left two
+          ;; spots had no gold at all.
+          (room (if (< 1 (length spots)) (max 1 (floor (* *gold-spot-share* (length spots)))) 0)))
+      (loop while (and (< 0 left) (< 0 room))
+            do (let ((spot (pick-spot spots '(:floor :reward) used random)))
+                 (unless spot (return))
+                 ;; A pile's coins are at the first depth: taking it scales them (RESTORE-RESOURCE).
+                 (let ((p (getf spot :position))
+                       (count (destructuring-bind (low high) *gold-pile*
+                                (min left (max (+ low (random (1+ (- high low)) random))
+                                               (ceiling left room))))))
+                   (add-pickup container :gold (vx p) (vy p) (vz p) :phase (random 10.0 random) :count count)
+                   (decf left count)
+                   (decf room)
+                   (setf spots (remove spot spots))
+                   (push (getf spot :block) used)))))))
+
+(defun place-glyphs (container)
+  "Put the level's glyphs on spots no pickup took, a reward spot first, in blocks with no
+pickup if there are any. After SCATTER-PICKUPS and from a random state of their own, so the
+other pickups and their places in *PICKUPS* (a save's taken ones) don't change."
+  (multiple-value-bind (spots used) (free-pickup-spots)
+   (let ((random (sb-ext:seed-random-state (logxor *last-level-seed* #x5EED))))
+    (dolist (kind (run-glyphs *run-depth*))
+      (let ((spot (pick-spot spots '(:reward :floor) used random)))
+        (if spot
+            (let ((p (getf spot :position)))
+              (add-pickup container kind (vx p) (vy p) (vz p) :phase (random 10.0 random))
+              (setf spots (remove spot spots))
+              (push (getf spot :block) used))
+            (v:warn :hexmaw "No spot for the glyph ~(~a~)." kind)))))))
+
+(defparameter *dust-per-monster* 2 "Arcane dust a level holds for each of its monsters.")
+(defparameter *dust-pile* (quote (8 20)) "Least and most dust in one pile, while spots are plenty.")
+
+(defun place-dust (container)
+  "Scatter the level's arcane dust (*DUST-PER-MONSTER*) in piles of *DUST-PILE* on spots no
+pickup or glyph took, a floor spot first. Last, from a random state of its own, so nothing
+placed before it moves: a save's taken pickups name their places."
+  (multiple-value-bind (spots used) (free-pickup-spots)
+    (let ((random (sb-ext:seed-random-state (logxor *last-level-seed* #xD057)))
+          (left (* *dust-per-monster* (count-if #'monster-p *creatures*))))
+      (destructuring-bind (low high) *dust-pile*
+        (loop while (< 0 left)
+              do (let ((spot (pick-spot spots '(:floor :reward) used random)))
+                   (unless spot (return))
+                   ;; Where few spots are left, a pile takes its share of what's owed: spots run
+                   ;; out after the other pickups and the glyphs, and a level got 16 of its 70.
+                   (let ((p (getf spot :position))
+                         (count (min left (max (+ low (random (1+ (- high low)) random))
+                                               (ceiling left (length spots))))))
+                     (add-pickup container :dust (vx p) (vy p) (vz p) :phase (random 10.0 random) :count count)
+                     (decf left count)
+                     (setf spots (remove spot spots))
+                     (push (getf spot :block) used))))))))
+
 (defun place-pickups (container)
   "Put the level's pickups in. Last in BUILD-LEVEL: it asks the nav grid who can reach what."
   (case *level*
-    (:generated (scatter-pickups container))
+    ;; The settlement's relic before the glyphs, which would take its wing's last spots.
+    ;; Leaving spots for the glyphs, which no other level has, and the settlement's relic: the
+    ;; settlement's small wing ran out of spots and lost a glyph for the run.
+    (:generated (scatter-pickups container :reserve (+ (length (run-glyphs *run-depth*)) (loot-count)
+                                                       (if *settlement* 1 0)))
+     (when *settlement* (place-settlement-pickups container))
+     (place-glyphs container)
+     ;; Weapons and runes (loot.lisp) on the reward spots the glyphs left.
+     (place-loot container)
+     ;; Gold before dust: dust's piles grow to fill fewer spots, gold's can't.
+     (place-gold container)
+     (place-dust container))
     (:gallery (fill-pickup-spots container))))
+
+;;; Coin from kills: straight into the purse, nothing to pick up.
+
+(defun kill-gold (creature)
+  "Coin CREATURE drops, killed by the player, at this depth."
+  (let ((entry (find-if (lambda (e) (typep creature (first e))) *kill-gold*)))
+    (round (* (if entry (second entry) 5) (gold-scale)))))
+
+(defmethod creature-died :after ((creature creature) by)
+  (when (and (eq by *player*) (monster-p creature) (eq *level* :generated))
+    (give-gold *player* (kill-gold creature))))
+
+;;; The quest-giver's relic (dialogue.lisp): a pickup in the settlement's wing, hidden and out of
+;;; reach until the quest for it is taken. Taken, it goes into the bag as an item, :RELIC, which
+;;; the quest-giver takes back when the quest is claimed.
+
+(define-fx-animation pickup-relic "sprites/pickups/relic" :fps 4 :loop T :size (/ 32 64.0))
+
+(define-shader-entity quest-pickup (pickup) ())
+
+(defun relic-sought-p ()
+  (let ((quest (and *settlement* (settlement-quest *settlement*))))
+    (and quest (eq :relic (getf quest :kind)) (eq :active (getf quest :state)))))
+
+(defmethod collect-pickup ((pickup quest-pickup) player)
+  ;; With the bag full it stays, as any item does.
+  (when (and (relic-sought-p) (< 0 (give-item player :relic)))
+    (flash-resource player :gold)
+    (hud-say "The reliquary. Take it back to the quest-giver.")
+    T))
+
+(defmethod render :around ((pickup quest-pickup) (program shader-program))
+  (when (relic-sought-p)
+    (call-next-method)))
+
+(defun spot-free-p (spot)
+  "True if no pickup stands on SPOT."
+  (let ((p (getf spot :position)))
+    (loop for pickup across *pickups*
+          for at = (location pickup)
+          never (< (+ (expt (- (vx at) (vx p)) 2) (expt (- (vz at) (vz p)) 2)) 0.01))))
+
+(defun place-settlement-pickups (container)
+  "The settlement's own: the relic on the free reward spot (or failing one, floor spot) in the
+wing furthest from the town; and in a sacked town, its loot on the town's spots. After
+SCATTER-PICKUPS, so its pickups keep their places in *PICKUPS*."
+  (let* ((*nav-hazards* :swim)
+         (seen (multiple-value-bind (i j k) (nav-nearest-fitting *spawn-point* *player-radius* *player-height*)
+                 (and i (nav-reached i j k *player-radius* *player-height* *step-height*))))
+         (wing (when seen
+                 (loop for spot across *pickup-spots*
+                       when (and (not (in-settlement-p (getf spot :position))) (spot-free-p spot)
+                                 (spot-reached-p spot seen))
+                         collect spot)))
+         (far (first (sort (copy-list wing) #'>
+                           :key (lambda (spot) (+ (if (eq :reward (getf spot :tier)) 1000 0)
+                                                  (vdistance (getf spot :position) *spawn-point*)))))))
+    (when far
+      (let ((p (getf far :position))
+            (animation (find-fx-animation 'pickup-relic)))
+        (let ((relic (make-instance 'quest-pickup :animation animation :kind :relic :ground (float (vy p) 0f0)
+                                                  :location (vec (vx p) (+ (vy p) *pickup-hover* (* 0.5 (animation-size animation))) (vz p)))))
+          (vector-push-extend relic *pickups*)
+          (enter relic container))))
+    (when (eq (built-condition *settlement*) :sacked)
+      (let ((loot '(:health-potion :gold :mana-potion :gold)))
+        (loop for spot across *pickup-spots*
+              when (and (in-settlement-p (getf spot :position)) (spot-free-p spot))
+                do (let ((p (getf spot :position)))
+                     (add-pickup container (pop loot) (vx p) (vy p) (vz p))
+                     (unless loot (return))))))))
