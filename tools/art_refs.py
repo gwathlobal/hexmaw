@@ -103,7 +103,8 @@ def references():
                 named.add(p)
                 if IMAGE.search(p) and not p.startswith('art/prompts/'):
                     folder = os.path.dirname(p)
-            if m.group(1) and '/' not in span and IMAGE.search(span) and folder:
+            if (m.group(1) and '/' not in span and IMAGE.search(span) and folder
+                    and re.match(r'\w', span) and '*' not in span):
                 named.update(f'{folder}/{e}' for e in expand(span))
     for txt in (ROOT / 'art').rglob('*.txt'):
         if 'prompts' in txt.parts:

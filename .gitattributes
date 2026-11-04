@@ -1,10 +1,20 @@
-art/**/*.png filter=lfs diff=lfs merge=lfs -text
-art/**/*.webp filter=lfs diff=lfs merge=lfs -text
-art/**/*.blend filter=lfs diff=lfs merge=lfs -text
-art/*.png filter=lfs diff=lfs merge=lfs -text
-art/*.blend filter=lfs diff=lfs merge=lfs -text
-Pixel[[:space:]]Demon[[:space:]]Character[[:space:]]Turnaround.png filter=lfs diff=lfs merge=lfs -text
-Bolt[[:space:]]Spell[[:space:]]Sheet.webp filter=lfs diff=lfs merge=lfs -text
-Imp[[:space:]]Death[[:space:]]Sheet.webp filter=lfs diff=lfs merge=lfs -text
-Fire[[:space:]]Hands[[:space:]]Sheet.png filter=lfs diff=lfs merge=lfs -text
-Sword[[:space:]]Sheet.png filter=lfs diff=lfs merge=lfs -text
+# Everything text in this repository is stored LF and checked out LF, on every platform,
+# so a Windows checkout doesn't turn run.sh and the Lisp into CRLF. Binary files are
+# detected and left alone.
+* text=auto eol=lf
+
+# Windows batch scripts need CRLF in the working tree, whatever the platform they are
+# checked out on. Stored LF in the repository, as usual.
+*.bat text eol=crlf
+
+# Source art lives in Git LFS ("Where art lives" in CLAUDE.md). data/, what the game ships
+# and the build reads, stays in git itself.
+/art/**/*.png filter=lfs diff=lfs merge=lfs -text
+/art/**/*.webp filter=lfs diff=lfs merge=lfs -text
+/art/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+/art/**/*.blend filter=lfs diff=lfs merge=lfs -text
+/Pixel[[:space:]]Demon[[:space:]]Character[[:space:]]Turnaround.png filter=lfs diff=lfs merge=lfs -text
+/Bolt[[:space:]]Spell[[:space:]]Sheet.webp filter=lfs diff=lfs merge=lfs -text
+/Imp[[:space:]]Death[[:space:]]Sheet.webp filter=lfs diff=lfs merge=lfs -text
+/Fire[[:space:]]Hands[[:space:]]Sheet.png filter=lfs diff=lfs merge=lfs -text
+/Sword[[:space:]]Sheet.png filter=lfs diff=lfs merge=lfs -text

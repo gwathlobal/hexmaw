@@ -27,7 +27,10 @@ least 2 GB of heap. Dependencies come from the project-local Quicklisp in `.ql/`
 (Shirakumo dist, not checked in), and ASDF is limited to this folder because other
 projects under `~/common-lisp/` ship conflicting copies of Trial's dependencies.
 
-A git worktree (`.claude/worktrees/<name>`) has no `.ql/` of its own: symlink the main
+A git worktree (`.claude/worktrees/<name>`) checks out the art from the main checkout's LFS
+store (`.git/lfs/` is shared), about 500 MB; `GIT_LFS_SKIP_SMUDGE=1 git worktree add ...`
+leaves pointer files in place of the pictures (48 MB in all), for work that doesn't touch art,
+and `git lfs checkout art/ogre` there fills in one folder later. It has no `.ql/` of its own: symlink the main
 checkout's, `ln -s "$(git rev-parse --git-common-dir)/../.ql" .ql`, and leave the link there
 (`/.ql` in .gitignore covers it; don't delete it when done). Port 7171 is usually the
 main checkout's game, and `tools/hd` and the reload hook talk to it by default, so editing
@@ -1535,6 +1538,31 @@ Neither keeps a conversation the way ChatGPT does: every call carries the full p
 every reference it needs, so a follow-up pose attaches the earlier result as a `--ref`.
 Keep prompts worth repeating as files under `art/prompts/`, and `--dry-run` a new command
 line to see what will be sent.
+
+## Where art lives
+
+`art/` holds the record of how every asset was made: the prompts (`art/prompts/`), each
+generated image's `.prompt.json`, frames files, and the source images themselves. The
+generators don't give the same picture twice, so the chosen take is the only copy of it.
+Images under `art/` (and the five source sheets at the root) are in **Git LFS**
+(`.gitattributes`): a commit holds a small pointer, the picture lives in `.git/lfs/objects/`
+and, once pushed, on GitHub's LFS server, and a clone downloads only the pictures of the
+commit it checks out. `data/`, what the game ships, is plain git: the build reads it. git-lfs
+must be installed (`apt install git-lfs`, then `git lfs install` once); after that `git add`,
+`commit` and `checkout` work as ever, and the files on disk are real PNGs.
+
+Nothing pushed to GitHub's LFS can be deleted short of deleting the repository, so **commit
+only the take chosen for an asset**, and whatever its `.prompt.json` lists as `refs` (what the
+chosen take was made from). Name it where it is used: the command line in this file, or a
+frames file. Commit every `.prompt.json` and prompt. Never commit the other takes, stacked
+sheets (`*-sheet.png`, rebuilt by `tools/stack_views.py`) or `make_texture.py`'s `*-tiled.png`
+previews (both ignored). `tools/art_refs.py` lists which images something names (KEEP) and
+which nothing does (ATTIC, the candidates); `tools/art_refs.py --check` fails on a tracked or
+staged candidate, or on a group of takes none of which is named (UNDECIDED: write down which
+was chosen). Run it before committing art. Candidates go to
+`../hexmaw-art-attic/` beside the main checkout, under the same paths (`MANIFEST.txt` there lists the
+first lot), or are deleted. A folder whose files are all untracked is taken as work in
+progress and left alone.
 
 ## Level textures
 

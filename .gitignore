@@ -30,6 +30,12 @@ __pycache__/
 /art/**/*-sheet.png
 /art/imp/Imp * Sheet.png
 
+# tools/make_texture.py's 3 x 3 previews, written beside the source on every run
+/art/**/*-tiled.png
+
+# Blender's and editors' copies
+/art/**/* (backup).blend
+
 # Audio sources, takes and loops (tools/gen_music.py, gen_sfx.py, make_loop.py, compose_*.py);
 # each rebuilds from its .prompt.json or script, and the game plays data/music/*.ogg
 /audio/**/*.wav
