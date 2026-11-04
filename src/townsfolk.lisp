@@ -1,8 +1,9 @@
 (in-package #:hexmaw)
 
 ;;; Townsfolk: the settlement's people (settlement.lisp), creatures that keep to their posts
-;;; and never notice the player while calm (CALM-P). Each is one picture, seen from the front
-;;; from every side, as Daggerfall's town folk are. A blueprint's npc action places them
+;;; and never notice the player while calm (CALM-P). Those who stand at their posts to be talked
+;;; to are one picture, seen from the front from every side, as Daggerfall's town folk are; those
+;;; who walk about (the guards, the commoners) have a monster's full set (DEFINE-TOWNSFOLK-SET). A blueprint's npc action places them
 ;;; (PLACE-NPC), by role: the shopkeeper, the priest, the trainer and the quest-giver offer
 ;;; their services (dialogue.lisp), commoners stand about, and the watch's guards keep the
 ;;; faction's rule. A blow at one is a crime (REPORT-CRIME): the watch warns, then fines, then
@@ -11,16 +12,45 @@
 (defparameter *townsfolk-height* 1.75 "Metres from a townsperson's feet to the top of its head.")
 
 ;; One picture each, a cell of art/townsfolk/lineup-*.png sliced at the monsters' 64 px per
-;; metre (CLAUDE.md, "Townsfolk"). The guard's tabard is recoloured per faction.
+;; metre (CLAUDE.md, "Townsfolk"): those who don't walk.
 (define-asset (hexmaw townsfolk-shopkeeper) image #p"sprites/townsfolk/shopkeeper.png" :min-filter :nearest :mag-filter :nearest)
 (define-asset (hexmaw townsfolk-priest) image #p"sprites/townsfolk/priest.png" :min-filter :nearest :mag-filter :nearest)
 (define-asset (hexmaw townsfolk-trainer) image #p"sprites/townsfolk/trainer.png" :min-filter :nearest :mag-filter :nearest)
 (define-asset (hexmaw townsfolk-quest-giver) image #p"sprites/townsfolk/quest-giver.png" :min-filter :nearest :mag-filter :nearest)
-(define-asset (hexmaw townsfolk-commoner-a) image #p"sprites/townsfolk/commoner-a.png" :min-filter :nearest :mag-filter :nearest)
-(define-asset (hexmaw townsfolk-commoner-b) image #p"sprites/townsfolk/commoner-b.png" :min-filter :nearest :mag-filter :nearest)
-(define-asset (hexmaw townsfolk-guard-ashen-temple) image #p"sprites/townsfolk/guard-ashen-temple.png" :min-filter :nearest :mag-filter :nearest)
-(define-asset (hexmaw townsfolk-guard-deepwardens) image #p"sprites/townsfolk/guard-deepwardens.png" :min-filter :nearest :mag-filter :nearest)
-(define-asset (hexmaw townsfolk-guard-free-company) image #p"sprites/townsfolk/guard-free-company.png" :min-filter :nearest :mag-filter :nearest)
+
+;; Those who walk: a turnaround and strips (walk, flinch, death, and for the guard its thrust),
+;; sliced at the same 64 px per metre (CLAUDE.md, "Townsfolk"), so a strip's height in metres is
+;; its cells' height over 64. The guard's is one set recoloured per faction, its tabard's green.
+(defvar *townsfolk-sets* (make-hash-table :test 'equal)
+  "The walking townsfolk's sprite sets by sprite name: a plist of :TEXTURE (the turnaround's
+asset), :ATLAS (its index) and the animations, :WALK, :HURT, :DEATH and :ATTACK.")
+
+(defun strip-height (index)
+  "The height in metres of the strip whose index, a path under data/, is INDEX."
+  (/ (getf (read-atlas index) :cell-height) 64.0))
+
+(defmacro define-townsfolk-set (name dir &key attack)
+  "Sprite set NAME from DIR, a folder under data/ holding turnaround, walk, hurt and death
+(and with ATTACK, attack) as tools/slice_turnaround.py and tools/slice_views.py write them."
+  (flet ((part (part) (intern (format NIL "~:@(~a-~a~)" name part) '#:hexmaw))
+         (file (part ext) (format NIL "~a/~a.~a" dir part ext)))
+    (let ((strips (append '(("walk" T) ("hurt" NIL) ("death" NIL)) (when attack '(("attack" NIL))))))
+      `(progn
+         (define-asset (hexmaw ,(part "turnaround")) image ,(pathname (file "turnaround" "png"))
+           :min-filter :nearest :mag-filter :nearest)
+         ,@(loop for (strip loop) in strips
+                 collect `(define-fx-animation ,(part strip) ,(format NIL "~a/~a" dir strip)
+                            :fps 8 :loop ,loop :size (strip-height ,(file strip "lisp"))))
+         (setf (gethash ,(string-downcase name) *townsfolk-sets*)
+               (list :texture ',(part "turnaround") :atlas ,(file "turnaround" "lisp")
+                     ,@(loop for (strip) in strips
+                             append (list (intern (string-upcase strip) :keyword) `',(part strip)))))))))
+
+(define-townsfolk-set townsman "sprites/townsman")
+(define-townsfolk-set townswoman "sprites/townswoman")
+(define-townsfolk-set guard-ashen-temple "sprites/guard/ashen-temple" :attack T)
+(define-townsfolk-set guard-deepwardens "sprites/guard/deepwardens" :attack T)
+(define-townsfolk-set guard-free-company "sprites/guard/free-company" :attack T)
 
 (defvar *townsfolk-atlases* (make-hash-table :test 'equal)
   "Read atlases by sprite name: a strip of one cell, with one view.")
@@ -35,8 +65,8 @@
     (priest "Brother Aldric" "Mother Ysolde" "Father Cenwin" "Sister Bray")
     (trainer "Old Garrick" "Hask the Scarred" "Wenna Ironhand" "Dunmore")
     (quest-giver "Lisbet Vane" "Corwin the Lamp" "Ressa Mapwright" "One-Eyed Tam")
-    ("commoner-a" "a townsman" "a labourer" "a porter")
-    ("commoner-b" "a townswoman" "a washerwoman" "a beggar")
+    ("townsman" "a townsman" "a labourer" "a porter")
+    ("townswoman" "a townswoman" "a washerwoman" "a beggar")
     (guard "a guard"))
   "The names a townsperson of each role may have, or of each sprite, where the sprite decides
 (a commoner's).")
@@ -90,12 +120,15 @@
    (max-health :initform 60)
    (pain-chance :initform 20)))
 
+(define-creature-sounds guard :step :step-armour)
+(define-creature-sounds commoner :step :step-light)
+
 (defmethod townsfolk-p ((townsfolk townsfolk)) T)
 (defmethod calm-p ((townsfolk townsfolk)) (not (provoked townsfolk)))
 
 (defparameter *roles*
   '(("shopkeeper" shopkeeper "shopkeeper") ("priest" priest "priest") ("trainer" trainer "trainer")
-    ("quest-giver" quest-giver "quest-giver") ("commoner" commoner ("commoner-a" "commoner-b"))
+    ("quest-giver" quest-giver "quest-giver") ("commoner" commoner ("townsman" "townswoman"))
     ("guard" guard :faction))
   "Each role a blueprint's npc may name: its class, and its sprite, or a list of them to pick
 from, or :FACTION for the settlement's own (the guard's tabard).")
@@ -113,17 +146,24 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
         (v:warn :hexmaw "No townsfolk role ~s; npc ignored." role)
         (destructuring-bind (class sprite) (rest entry)
           (let* ((sprite (role-sprite sprite))
-                 (atlas (townsfolk-atlas sprite))
+                 (set (gethash sprite *townsfolk-sets*))
+                 (atlas (if set (read-atlas (getf set :atlas)) (townsfolk-atlas sprite)))
                  (names (rest (or (assoc sprite *townsfolk-names* :test #'equal) (assoc class *townsfolk-names*))))
                  (greetings (rest (assoc class *townsfolk-greetings*))))
-            (spawn-creature (make-instance class :role (string-downcase role)
-                                                 :location at :facing yaw
-                                                 :texture (// 'hexmaw (intern (format NIL "TOWNSFOLK-~:@(~a~)" sprite) '#:hexmaw))
-                                                 :atlas atlas
-                                                 ;; Sliced at the monsters' 64 px per metre.
-                                                 :sprite-height (/ (getf atlas :cell-height) 64.0)
-                                                 :npc-name (nth (random (length names) *block-random*) names)
-                                                 :greeting (nth (random (length greetings) *block-random*) greetings))
+            (spawn-creature (apply #'make-instance class
+                                   :role (string-downcase role)
+                                   :location at :facing yaw
+                                   :texture (// 'hexmaw (if set
+                                                                  (getf set :texture)
+                                                                  (intern (format NIL "TOWNSFOLK-~:@(~a~)" sprite) '#:hexmaw)))
+                                   :atlas atlas
+                                   ;; Sliced at the monsters' 64 px per metre.
+                                   :sprite-height (/ (getf atlas :cell-height) 64.0)
+                                   :npc-name (nth (random (length names) *block-random*) names)
+                                   :greeting (nth (random (length greetings) *block-random*) greetings)
+                                   (when set
+                                     (list :walk-animation (getf set :walk) :hurt-animation (getf set :hurt)
+                                           :death-animation (getf set :death) :attack-animation (getf set :attack))))
                             container))))))
 
 (defun townsfolk-title (townsfolk)

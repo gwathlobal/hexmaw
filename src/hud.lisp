@@ -433,9 +433,6 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
    (prompt-line :initform (make-hud-text "" 'interact-prompt) :reader prompt-line)
    (gold-text :initform (make-hud-text) :reader gold-text)
    (shown-gold :initform NIL :accessor shown-gold)
-   (bless-text :initform (make-hud-text "") :reader bless-text
-               :documentation "The priest's blessing and the time it has left, over the purse.")
-   (shown-bless :initform NIL :accessor shown-bless :documentation "The seconds BLESS-TEXT shows.")
    (health-label :initform (make-hud-text "HP") :reader health-label)
    (health-bar :initform (make-instance 'hud-bar :fill-color *health-bar-color*) :reader health-bar)
    (health-text :initform (make-hud-text) :reader health-text)
@@ -469,7 +466,7 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
-        (level-banner hud) (message-banner hud) (pickup-banner hud) (prompt-line hud) (gold-text hud) (bless-text hud)
+        (level-banner hud) (message-banner hud) (pickup-banner hud) (prompt-line hud) (gold-text hud)
         (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
         (fps-display hud)))
 
@@ -520,7 +517,6 @@ numbers; breath has none."
          (round (* 0.4 (height *context*))))
   ;; The purse, against the bottom-right corner.
   (place (gold-text hud) (- (width *context*) *hud-margin* (* 9 (length (text (gold-text hud))))) (hud-row-y 0))
-  (place (bless-text hud) (- (width *context*) *hud-margin* (* 9 (length (text (bless-text hud))))) (hud-row-y 1))
   ;; The boss bar, centred across the top: the title, the bar, the powers under it.
   (let* ((w (width *context*))
          (title-y (- (height *context*) *boss-bar-top* +glyph-height+))
@@ -591,13 +587,5 @@ numbers; breath has none."
                 (text (stamina-text hud)) (format NIL "~d/~d" sp max-sp))))
       (unless (eql (gold *player*) (shown-gold hud))
         (setf (shown-gold hud) (gold *player*)
-              (text (gold-text hud)) (format NIL "~d gold" (gold *player*))))
-      ;; A whole second up, so the countdown never shows 0:00 while it still holds.
-      (let ((left (ceiling (blessed *player*))))
-        (unless (eql left (shown-bless hud))
-          (setf (shown-bless hud) left
-                (text (bless-text hud)) (if (plusp left)
-                                            (multiple-value-bind (m sec) (floor left 60)
-                                              (format NIL "Blessed ~d:~2,'0d" m sec))
-                                            ""))))))
+              (text (gold-text hud)) (format NIL "~d gold" (gold *player*))))))
   (layout-hud hud))

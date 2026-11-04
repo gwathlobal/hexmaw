@@ -48,8 +48,8 @@ plan 0
 ####T############T#######AAAAAA###########T#############T#######
 #qqq%%%%%%aa%%%%%%qqq####XXXXXX####............................#
 #qqq%%%%%%aa%%%%%%qqq####XXXXXX####........QQ...............$$.#
-#qqq::::::::::::::qqq####......####T....tttttttt..tttttttt.....#
-#qqqqqqqqqqqqqqqqqppq####......####.....tttttttt..tttttttt.....#
+#qqq::::::::::::::qqq####......####T.....tttttt....tttttt......#
+#qqqqqqqqqqqqqqqqqppq####......####............................#
 #qqqqqqqqqvvqqqqqqqqT####......####............................#
 Tqqqqqqqqqqqqqqqqqqqq.LL........MM................xx...........T
 #qqqqqqqqqqqqqqqqqqqq..........................................#

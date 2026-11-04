@@ -1,0 +1,23 @@
+Pixel-art sprite sheet: a 4-frame melee ATTACK animation of the GUARD, a guard of the town watch in a grim walled settlement deep underground, for a Doom/Hexen-style first-person game where characters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The guard's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: an ordinary weathered man of average height with a short dark beard; a dented, open-faced round steel helmet with a brim; a mail shirt to the thighs with mail sleeves; over it a plain sleeveless tabard of BRIGHT PURE GREEN (#00C000) with no emblem, ragged at its hem; a brown leather belt with a pouch; brown trousers and leather boots; a tall SPEAR in his RIGHT hand and a round wooden SHIELD with an iron rim and boss on his LEFT arm. Also the shading style.
+2. The guard standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The spear stays in the right hand and the shield on the left arm in every frame. Never swap them, never draw a second spear or shield. The tabard stays the same flat bright green (#00C000) in every frame: it is recoloured in the game.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 5 the 4 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the figure standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. It does not hop or float.
+- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, blood or impact effects. Only the figure.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE ATTACK: a hard spear thrust at someone standing in front of him, behind his raised shield.
+- Frame 2 (cell 2), WIND-UP: the spear brought down level at hip height, both the right arm and the spear drawn back, the point aimed forward, the shield raised in front of the chest, the weight on the back foot. This is held longest, as the warning.
+- Frame 3 (cell 3), THRUST: the spear driven forward, the right arm pushing, the body leaning in behind the shield.
+- Frame 4 (cell 4), STRIKE: the spear at full reach straight forward at chest height, the arm fully extended, the front foot stepped forward, the shield still up. The frame where the blow lands.
+- Frame 5 (cell 5), RECOVER: drawing the spear back, near the standing pose of reference 2.

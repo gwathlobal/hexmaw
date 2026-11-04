@@ -43,7 +43,8 @@
      :sound :pickup-shard)
     (:glyph-area :animation glyph-area :teaches :area :name "Area" :about "bursting over an area"
      :sound :pickup-shard)
-    (:dust :animation pickup-dust :item :dust :count T :resource :dust :sound :pickup-shard))
+    (:dust :animation pickup-dust :item :dust :count T :resource :dust :sound :pickup-shard)
+    (:relic :animation pickup-relic :item :relic :sound :pickup-shard))
   "What each kind of pickup restores, and how much, at once or as the :ITEM it gives (keep :AMOUNT
 the item's, *ITEM-KINDS*: a level's budget counts it), or, a glyph, the effect it :TEACHES; and
 the :SOUND of taking it.")
@@ -444,7 +445,8 @@ placed before it moves: a save's taken pickups name their places."
     (give-gold *player* (kill-gold creature))))
 
 ;;; The quest-giver's relic (dialogue.lisp): a pickup in the settlement's wing, hidden and out of
-;;; reach until the quest for it is taken.
+;;; reach until the quest for it is taken. Taken, it goes into the bag as an item, :RELIC, which
+;;; the quest-giver takes back when the quest is claimed.
 
 (define-fx-animation pickup-relic "sprites/pickups/relic" :fps 4 :loop T :size (/ 32 64.0))
 
@@ -455,9 +457,9 @@ placed before it moves: a save's taken pickups name their places."
     (and quest (eq :relic (getf quest :kind)) (eq :active (getf quest :state)))))
 
 (defmethod collect-pickup ((pickup quest-pickup) player)
-  (declare (ignore player))
-  (when (relic-sought-p)
-    (setf (getf (settlement-quest *settlement*) :carried) T)
+  ;; With the bag full it stays, as any item does.
+  (when (and (relic-sought-p) (< 0 (give-item player :relic)))
+    (flash-resource player :gold)
     (hud-say "The reliquary. Take it back to the quest-giver.")
     T))
 

@@ -874,16 +874,17 @@ text `forge-note`s, which wrap (Alloy's
   this stack and the bag's total; dust's and gold's use (`:about`). Its parts are `tooltip-part`s with
   the highest `late-rank`s, at depths in front of the hotbar's and quickslot's labels (which sit at
   -0.08 for it). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`
-  (potions, dust, gold). To try it: `(game (give-item *player* :health-potion 3))` and `(game
+  (potions, dust, gold, the reliquary). To try it: `(game (give-item *player* :health-potion 3))` and `(game
   (open-inventory))`; `tools/hd status` shows the hotbar (the slot asked for starred), the quickslot
   and the bag.
 - `src/status-icons.lisp` (after inventory.lisp, whose cell size it shares): the player's statuses
   as a row of icons in the top-left corner, under the frame counter while it shows. One cell per
   status in `*status-order*` (damage, slow, heal, ward; one of each kind at most, so four cells,
-  the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
+  and a fifth, `:bless`, for the priest's blessing, which isn't a status but shows as one, from
+  the player's `blessed` over `*bless-time*`; the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
   (`*status-colors*`, by element for damage), its icon (`*status-icon-frames*`, a frame of
   `data/sprites/icons/statuses`, drawn by `tools/draw_status_icons.py data/sprites/icons/statuses`:
-  burn, frost, shock, regen, slow, ward), the seconds left (a ward's points instead, which run out
+  burn, frost, shock, regen, slow, ward, bless), the seconds left (a ward's points instead, which run out
   first) over the bottom-right corner, re-uploaded only when they change, and a bar along the
   bottom for `left` over `duration`. In its last `*status-warn-time*` (3 s) the icon blinks. An
   instant heal or ward-less spell leaves no status and so no icon; its flash is the feedback.
@@ -899,7 +900,7 @@ text `forge-note`s, which wrap (Alloy's
   on every screen, counting frames in its render and updating every `*fps-interval*`.
   Right of the quickslot: the spell in hand (`spell-label`, inventory.lisp). The hands, like the
   sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). The purse
-  (`gold-text`) is in the lower-right corner, the blessing's countdown over it (`bless-text`).
+  (`gold-text`) is in the lower-right corner.
   `show-message` puts a line across the view for `*message-time*` (a glyph's, a gold find, the
   watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
   what the player looks at or stands at (`prompt-line`; a new string only when it changes, so the
@@ -2628,8 +2629,13 @@ raids the gates; **sacked**, no watch, a few survivors, each service there half 
 from the pool in the streets and loot on the town's four `pickup` spots (`place-settlement-pickups`).
 
 **Townsfolk** (`townsfolk`, a creature: `commoner`, `shopkeeper`, `priest`, `trainer`,
-`quest-giver`, `guard`) are one front-facing picture each: a billboard whose atlas has one view
-shows it from every side. They keep to their posts (`wander-radius` 0; a commoner 3 m, a guard 1.5)
+`quest-giver`, `guard`). Those who stand at their posts to be talked to (the shopkeeper, priest,
+trainer and quest-giver) are one front-facing picture each: a billboard whose atlas has one view
+shows it from every side. Those who walk about, the guard and the commoners (a `townsman` and a
+`townswoman`), have a monster's full set (`define-townsfolk-set`, `*townsfolk-sets*`, by sprite
+name): a turnaround, a walk, a flinch, a death to a corpse and, for the guard, a spear thrust, the
+guard's one set recoloured per faction (`guard-<faction>`). Guards step in armour, commoners lightly;
+none of them has a voice. They keep to their posts (`wander-radius` 0; a commoner 3 m, a guard 1.5)
 and while calm (`calm-p`, not `provoked`) never notice the player, even if they could fight
 (`attacker-p`). `place-npc` makes one from a blueprint's npc by role (`*roles*`: class and sprite,
 the guard's per faction), with a name and greeting from `*townsfolk-names*` and
@@ -2650,13 +2656,14 @@ player has sacked the town (`refusing-p`):
 - **Priest**: heals and restores mana to full, a fee per point, and blesses (`blessed`, a player
   slot: `*bless-time*` seconds of play in which blows do `*bless-scale*`, `blessing-scale` in
   `hurt-player`; carried down the stairs). Its button says what it does, and while it lasts the
-  HUD counts it down over the purse (`bless-text`).
+  HUD shows it among the status icons (`src/status-icons.lisp`), a gold cross with the seconds left.
 - **Trainer**: raises the player's `max-health`, `max-mana` and `max-stamina` (player slots that
   replaced the globals, which are now their starting values), `*training-steps*` at a time,
   `*training-limit*` steps each, each dearer by `*training-step-cost*`.
 - **Quest-giver**: one quest into the wing, drawn the first time asked (`ensure-quest`): bring back
   the relic (a `quest-pickup` on the wing's furthest free spot, placed before the glyphs so they
-  can't take the wing's last ones, hidden until the quest is taken),
+  can't take the wing's last ones, hidden until the quest is taken; touched, it goes into the bag
+  as the `:relic` item, the reliquary, and the claim takes it back out),
   a bounty on the wing's commonest monster (`bounty-target`, progress counted from the dead), or,
   besieged, hold the gates through `*gate-raids*` raids. Claimed back in town for gold and
   `*quest-reputation*`.
@@ -2708,19 +2715,34 @@ is never a crime, the Ashen Temple's rule hooking `player-cast` only. The settle
 altar room (`:altar-chance` NIL in `*settlement-level*`).
 
 The townsfolk are one generated lineup, `art/townsfolk/lineup-1.png` (`art/prompts/townsfolk-lineup.txt`,
-the imp's and acolyte's turnarounds as references; the guard's tabard pure green), sliced at the
-monsters' 64 px per metre (each sprite's height is its cell's, `/ 64`), the guard recoloured per
-faction; the relic is `art/relic/relic.png` (`art/prompts/relic.txt`), and the gold pile is drawn
-(`tools/draw_gold.py data/sprites/pickups/gold`):
+the imp's and acolyte's turnarounds as references), sliced at the monsters' 64 px per metre (each
+sprite's height is its cell's, `/ 64`); only the four who stand are used from it now. The walkers
+were made the monsters' way (see "Monster sprites") from their lineup cells (`art/<who>/design.png`,
+`<who>` being `guard`, `townsman`, `townswoman`): a turnaround (`art/prompts/<who>-turnaround.txt`,
+the design, the imp's and acolyte's turnarounds as references), its standing cells cut by
+`tools/cut_stands.py`, then `tools/gen_monster_views.sh <who> <anim> ...` for the walk, flinch and the
+guard's attack, and a front-only death. Sliced so the standing figure is 118 px (the townsman), 114
+(the townswoman) and 124 with the spear's tip (the guard, whose tabard is pure green until it is
+recoloured per faction: every strip, into `data/sprites/guard/<faction>/`). A strip's height in
+metres is its cells' over 64 (`strip-height`). The image service refused the townsman's flinch as
+"self-harm" while it said he clutched his middle. The relic is `art/relic/relic.png`
+(`art/prompts/relic.txt`), and the gold pile is drawn (`tools/draw_gold.py data/sprites/pickups/gold`):
 
 ```bash
-python3 tools/slice_frames.py art/townsfolk/lineup-1.png data/sprites/townsfolk --pixel 3.9 --filter box --anchor bottom shopkeeper:1 priest:1 trainer:1 quest-giver:1 commoner-a:1 commoner-b:1 guard:1
-T=data/sprites/townsfolk; tools/recolor_hue.py $T/guard $T/guard-ashen-temple --from 120 --reach 30 --hue 30 --saturation 0.25 --value 0.55
-tools/recolor_hue.py $T/guard $T/guard-deepwardens --from 120 --reach 30 --hue 212 --saturation 0.7 --value 0.55
-tools/recolor_hue.py $T/guard $T/guard-free-company --from 120 --reach 30 --hue 355 --saturation 0.75 --value 0.6
+python3 tools/slice_frames.py art/townsfolk/lineup-1.png data/sprites/townsfolk --pixel 3.9 --filter box --anchor bottom shopkeeper:1 priest:1 trainer:1 quest-giver:1 && rm data/sprites/townsfolk/{commoner-*,guard}.*
+tools/cut_stands.py art/guard/turnaround-2.png art/guard    # and townsman/turnaround-2, townswoman/turnaround-1
+python3 tools/slice_turnaround.py art/guard/turnaround-2.png data/sprites/guard/turnaround --height 124 --filter box
+python3 tools/slice_turnaround.py art/townsman/turnaround-2.png data/sprites/townsman/turnaround --height 118 --filter box
+python3 tools/slice_turnaround.py art/townswoman/turnaround-1.png data/sprites/townswoman/turnaround --height 114 --filter box
+V="front front-quarter side back-quarter back"
+for spec in guard:992:walk:20 guard:992:attack:20 guard:992:hurt:10 townsman:944:walk:20 townsman:944:hurt:10 townswoman:912:walk:20 townswoman:912:hurt:10; do IFS=: read who h a n <<< "$spec"; python3 tools/slice_views.py data/sprites/$who $a:$n $(for v in $V; do echo art/$who/$a-$v.png; done) --height $h --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
+python3 tools/slice_frames.py art/guard/death.png data/sprites/guard --pixel 3.5 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/townsman/death.png data/sprites/townsman --pixel 3.73 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/townswoman/death.png data/sprites/townswoman --pixel 3.86 --anchor bottom --filter box death:8
+G=data/sprites/guard; for f in ashen-temple:30:0.25:0.55 deepwardens:212:0.7:0.55 free-company:355:0.75:0.6; do IFS=: read n h s v <<< "$f"; mkdir -p $G/$n; for strip in turnaround walk attack hurt death; do tools/recolor_hue.py $G/$strip $G/$n/$strip --from 120 --reach 30 --hue $h --saturation $s --value $v; done; done
 python3 tools/slice_frames.py art/relic/relic.png data/sprites/pickups --pixel 14 --filter box --colors 32 --anchor bottom relic:4
 ```
 
-Not yet: townsfolk have no walk, attack, flinch or death strips (they glide, strike standing and
-sink into the floor), there are no faction banners, the town is one lighting room, and nothing is
+Not yet: the trainer, who fights once the town is sacked, has no walk, attack, flinch or death
+strips (it glides, strikes standing and sinks into the floor), townsfolk have no voices, there are no faction banners, the town is one lighting room, and nothing is
 stolen but from a dead shopkeeper.

@@ -30,7 +30,9 @@ for c0 in (2, 10, 18):
 fill('#', 1, 5, 21, 24); fill('#', 1, 5, 31, 34)
 fill('A', 0, 0, 25, 30); fill('X', 1, 2, 25, 30)
 # Hall (NE): tables, pillars along its front.
-fill('t', 3, 4, 40, 47); fill('t', 3, 4, 50, 57)
+# Both tables are one row deep and 3 m across, so the player can talk to the quest-giver across
+# the first from anywhere in front.
+fill('t', 3, 3, 41, 46); fill('t', 3, 3, 51, 56)
 for c0 in (38, 46, 54):
     fill('o', 8, 8, c0, c0+1)
 # Yard (SW): a low fence with a gap, dummies.

@@ -1,0 +1,30 @@
+{
+  "prompt": "Pixel-art character turnaround sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game, where characters are drawn as sprites seen from several camera angles: a TOWNSWOMAN of a grim walled settlement deep underground.\n\nREFERENCE IMAGES, in the order attached:\n1. The townswoman, seen from the front. It is the character design: copy it exactly, the same woman, clothes and colours, only turned for each view.\n2. and 3. Turnaround sheets of two monsters from the same game (a red imp, a hooded acolyte). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs.\n\nTHE TOWNSWOMAN (as in reference 1)\n- A gaunt, careworn woman of average height, a hard, tired face.\n- A ragged grey wool SHAWL over her head and shoulders like a hood, its fringed ends hanging over her chest and back; a long, faded dark-red dress to the ankles, patched, with a narrow brown belt; the toes of worn brown shoes showing under the hem.\n- A wicker BASKET held in front of her in both hands, at the waist.\n- In the side and turned views the basket is in front of her body, held out a little; in the back view it is hidden by her body.\n\nLAYOUT\n- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).\n- In the front three-quarter, side and rear three-quarter views the figure faces IMAGE-LEFT.\n- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.\n- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No text, labels, numbers, frame borders or effects outside the figure.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\n",
+  "prompt_file": "art/prompts/townswoman-turnaround.txt",
+  "refs": [
+    "art/townswoman/design.png",
+    "Pixel Demon Character Turnaround.png",
+    "art/acolyte/turnaround-2.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1793771112,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art character turnaround sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game, where characters are drawn as sprites seen from several camera angles: a TOWNSWOMAN of a grim walled settlement deep underground.\n\nREFERENCE IMAGES, in the order attached:\n1. The townswoman, seen from the front. It is the character design: copy it exactly, the same woman, clothes and colours, only turned for each view.\n2. and 3. Turnaround sheets of two monsters from the same game (a red imp, a hooded acolyte). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs.\n\nTHE TOWNSWOMAN (as in reference 1)\n- A gaunt, careworn woman of average height, a hard, tired face.\n- A ragged grey wool SHAWL over her head and shoulders like a hood, its fringed ends hanging over her chest and back; a long, faded dark-red dress to the ankles, patched, with a narrow brown belt; the toes of worn brown shoes showing under the hem.\n- A wicker BASKET held in front of her in both hands, at the waist.\n- In the side and turned views the basket is in front of her body, held out a little; in the back view it is hidden by her body.\n\nLAYOUT\n- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).\n- In the front three-quarter, side and rear three-quarter views the figure faces IMAGE-LEFT.\n- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.\n- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No text, labels, numbers, frame borders or effects outside the figure.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a1a514-d3a0-7093-8753-62dccad12761",
+    "01a1a515-de61-7822-b110-71022cd12c4f"
+  ],
+  "sizes": [
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ]
+  ]
+}

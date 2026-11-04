@@ -1,0 +1,23 @@
+Pixel-art character turnaround sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game, where characters are drawn as sprites seen from several camera angles: a GUARD of the town watch in a grim walled settlement deep underground.
+
+REFERENCE IMAGES, in the order attached:
+1. The guard, seen from the front. It is the character design: copy it exactly, the same man, clothes, colours and gear, only turned for each view.
+2. and 3. Turnaround sheets of two monsters from the same game (a red imp, a hooded acolyte). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs.
+
+THE GUARD (as in reference 1)
+- An ordinary weathered man of average height and build, a short dark beard, standing at ease but alert.
+- A dented, open-faced round steel helmet with a brim; a mail shirt to the thighs with mail sleeves; over it a plain sleeveless tabard of BRIGHT PURE GREEN (#00C000) with no emblem, ragged at its hem; a brown leather belt with a pouch; brown trousers and leather boots.
+- In his RIGHT hand a tall SPEAR held upright, its butt on the ground by his right foot, its iron head above his helmet.
+- On his LEFT arm a round wooden SHIELD with an iron rim and boss.
+- The tabard stays the same flat bright green in every view (it is recoloured in the game), front and back alike.
+- The spear stays in the right hand and the shield on the left arm in every view, so they swap sides of the body between the front and back views. In the turned views the shield is on the far side of the body or seen edge-on, the spear on the near side or behind, as the angle shows them.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).
+- In the front three-quarter, side and rear three-quarter views the figure faces IMAGE-LEFT.
+- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders or effects outside the figure.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

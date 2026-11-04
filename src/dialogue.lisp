@@ -11,8 +11,6 @@
 (defvar *talk-page* :main "Which page of the talk is up: :MAIN, or :QUEST for the quest's terms.")
 (defvar *talk-note* NIL "A line under the greeting after something was tried: \"You can't afford that.\"")
 
-(defparameter *bless-time* 300.0 "Seconds of play a blessing lasts.")
-(defparameter *bless-scale* 0.75 "What blows do to a blessed player, as a share of their damage.")
 (defparameter *training-steps* '(:health 10 :mana 10 :stamina 15) "What one step of training adds to each maximum.")
 (defparameter *training-limit* 3 "Steps of each the trainer gives.")
 (defparameter *training-step-cost* 0.6 "How much dearer each step is than the one before, as a share of the first.")
@@ -313,7 +311,7 @@ at the panel's width, and the font isn't fixed-width.")
 (defun quest-progress (quest)
   "How far QUEST has got, and how far it must."
   (ecase (getf quest :kind)
-    (:relic (values (if (getf quest :carried) 1 0) 1))
+    (:relic (values (min 1 (kind-total *player* :relic)) 1))
     (:bounty (values (min (getf quest :count) (- (dead-count (getf quest :target)) (getf quest :baseline 0)))
                      (getf quest :count)))
     (:hold-gate (values (min (getf quest :count) (- (raids-held *settlement*) (getf quest :baseline 0)))
@@ -345,6 +343,8 @@ at the panel's width, and the font isn't fixed-width.")
 
 (defun claim-quest ()
   (let ((quest (settlement-quest *settlement*)))
+    (when (eq :relic (getf quest :kind))
+      (take-item *player* :relic 1))
     (setf (getf quest :state) :claimed
           (settlement-quest *settlement*) quest)
     (incf (gold *player*) (getf quest :reward))

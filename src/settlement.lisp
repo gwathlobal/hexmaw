@@ -8,6 +8,9 @@
 ;;; spawn conditions) and what happens in play. Townsfolk are in townsfolk.lisp, what they
 ;;; offer in dialogue.lisp.
 
+;; The priest's blessing (dialogue.lisp), here since the HUD's status row shows it (status-icons.lisp).
+(defparameter *bless-time* 300.0 "Seconds of play a blessing lasts.")
+(defparameter *bless-scale* 0.75 "What blows do to a blessed player, as a share of their damage.")
 
 (defparameter *factions*
   '((:ashen-temple :name "the Ashen Temple" :rule :no-casting

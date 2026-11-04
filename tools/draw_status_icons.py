@@ -5,7 +5,8 @@ tools/slice_frames.py writes, so the game reads it like any other animation stri
   tools/draw_status_icons.py data/sprites/icons/statuses
 
 writes statuses.png (frames left to right, 2 px transparent gaps) and statuses.lisp. Frames, in
-order: burn (fire damage over time), frost, shock, regen (healing over time), slow, ward. Each is
+order: burn (fire damage over time), frost, shock, regen (healing over time), slow, ward, and
+bless (the priest's blessing, settlement.lisp). Each is
 SIZE art pixels square like the weapon icons, drawn from a character map in three shades of its
 colour, then outlined in near-black so it reads on any background. The game draws the seconds
 left (a ward's points) over the bottom-right corner, so each picture keeps to the upper left.
@@ -115,6 +116,22 @@ ICONS = [
         "....LMMMD....",
         ".....LMD.....",
         "......D......",
+    ]),
+    ("bless", ((255, 250, 220), (245, 205, 90), (175, 125, 30)), [
+        "...LLLLLLL...",
+        "..LD.....DL..",
+        "...MMMMMMM...",
+        ".............",
+        ".....LMD.....",
+        ".....LMD.....",
+        "..LLLLMMLLD..",
+        "..LMMMMMMMD..",
+        "..DDDLMDDDD..",
+        ".....LMD.....",
+        ".....LMD.....",
+        ".....LMD.....",
+        ".....LMD.....",
+        ".....DDD.....",
     ]),
 ]
 

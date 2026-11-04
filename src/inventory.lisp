@@ -19,6 +19,7 @@
     (:dust :name "Arcane dust" :icon 2 :stack 999
      :about "Spent at an altar to make spells and enchant weapons")
     (:gold :name "Gold" :icon 3 :stack 999 :note "coins" :about "Coin, for trade")
+    (:relic :name "Reliquary" :icon 4 :stack 1 :about "Lost in the undercroft: the quest-giver wants it back")
     (:sword :name "Sword" :weapon :sword :stack 1)
     (:spear :name "Spear" :weapon :spear :stack 1)
     (:rune :name "Rune" :stack 1))
