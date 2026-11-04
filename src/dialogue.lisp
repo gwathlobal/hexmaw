@@ -50,24 +50,6 @@
         (T (talk-note "You can't afford that: ~d gold." amount)
            NIL)))
 
-(defun take-item (player kind)
-  "Take one KIND from PLAYER, the bag's stacks before the quickslot's. True if they had one."
-  (let ((cell (position-if (lambda (s) (and s (eq kind (first s)) (< 0 (second s)))) (inventory player))))
-    (cond (cell
-           (let ((stack (nth cell (inventory player))))
-             (when (= 0 (decf (second stack)))
-               (setf (nth cell (inventory player)) NIL)))
-           T)
-          ((let ((quick (quickslot player)))
-             (and quick (eq kind (first quick)) (< 0 (second quick))))
-           (when (= 0 (decf (second (quickslot player))))
-             (refill-quickslot player))
-           T))))
-
-(defun item-count (player kind)
-  (+ (loop for s in (inventory player) when (and s (eq kind (first s))) sum (second s))
-     (let ((quick (quickslot player))) (if (and quick (eq kind (first quick))) (second quick) 0))))
-
 ;;; Services.
 
 (defun refusing-p ()
@@ -77,13 +59,13 @@
 (defun buy-item (kind)
   (let ((stock (settlement-stock *settlement*)))
     (cond ((<= (getf stock kind 0) 0) (talk-note "Sold out."))
-          ((not (give-item *player* kind)) (talk-note "You've no room for it."))
-          ((not (spend (price kind))) (take-item *player* kind))
+          ((zerop (give-item *player* kind)) (talk-note "You've no room for it."))
+          ((not (spend (price kind))) (take-item *player* kind 1))
           (T (decf (getf (settlement-stock *settlement*) kind))
              (talk-note "Bought a ~(~a~)." (item-property kind :name))))))
 
 (defun sell-item (kind)
-  (when (take-item *player* kind)
+  (when (take-item *player* kind 1)
     (let ((paid (max 1 (round (* *sell-share* (price kind))))))
       (incf (gold *player*) paid)
       (incf (getf (settlement-stock *settlement*) kind 0))
@@ -93,7 +75,7 @@
   "Take one from a dead shopkeeper's stall."
   (let ((stock (settlement-stock *settlement*)))
     (cond ((<= (getf stock kind 0) 0) (talk-note "There's none left."))
-          ((not (give-item *player* kind)) (talk-note "You've no room for it."))
+          ((zerop (give-item *player* kind)) (talk-note "You've no room for it."))
           (T (decf (getf (settlement-stock *settlement*) kind))
              (talk-note "Took a ~(~a~)." (item-property kind :name))))))
 
@@ -255,7 +237,7 @@ at the panel's width, and the font isn't fixed-width.")
                       collect (row "Buy a ~(~a~): ~d gold (~d left)" (lambda () (buy-item kind)) (item-property kind :name)
                                    (price kind) (getf (settlement-stock s) kind 0)))
                 (loop for kind in *shop-goods*
-                      when (< 0 (item-count *player* kind))
+                      when (< 0 (kind-total *player* kind))
                         collect (row "Sell a ~(~a~): ~d gold" (lambda () (sell-item kind)) (item-property kind :name)
                                      (max 1 (round (* *sell-share* (price kind))))))))
        ((typep who 'priest)

@@ -1,0 +1,29 @@
+{
+  "prompt": "Pixel-art sprite sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game: an 8-frame looping HEALING AURA, the healing that wells up from a creature under a heal-over-time spell. It is drawn over the creature's body as an overlay, so draw only the healing, never a creature.\n\nREFERENCE IMAGES, in the order attached:\n1. A finished aura sheet from the same game: crackling lightning over a body. Copy its layout, scale and density exactly: 2 rows of 4 cells, the same tall narrow area covered, the same amount of open magenta, many small separate pieces scattered over the area rather than one big shape. This one is healing instead of lightning.\n2. Another finished aura sheet from the same game: snowflakes drifting off a body. Copy how its small pieces are spread and drift, but make them green plus signs.\n\nTHE HEALING\n- Eight to twelve small GREEN PLUS SIGNS (+, equal arms, like a healing cross) scattered over and around a tall narrow area the size of a standing body, rising as if the body gives them off: a few bigger pluses about the size of a hand, most small, a few tiny ones, plus single-pixel green sparkles.\n- Each plus is solid pixel art: a bright pale-green highlight, a clear leaf green body and a deep green edge, the same look in every frame. No text, no hearts, no other shapes.\n- NOT a ring, a column or a glow round the body: the middle is mostly open magenta, so the creature shows through between the pluses.\n- The 8 frames loop seamlessly: the pluses float slowly upward, gently swaying, the ones near the top shrinking and fading out as new ones appear near the body's middle and feet; sparkles twinkle. No frame is a single big flash.\n\nLAYOUT\n- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.\n- In every cell the aura is centred and covers the same area, at the same scale.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow or haze.\n- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.\n- Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No creature, no text, labels, numbers or frame borders.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no glow bleeding into the background.\n",
+  "prompt_file": "art/prompts/status-regen.txt",
+  "refs": [
+    "art/status/shock-2.png",
+    "art/status/snow-2.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1793765084,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art sprite sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game: an 8-frame looping HEALING AURA, the healing that wells up from a creature under a heal-over-time spell. It is drawn over the creature's body as an overlay, so draw only the healing, never a creature.\n\nREFERENCE IMAGES, in the order attached:\n1. A finished aura sheet from the same game: crackling lightning over a body. Copy its layout, scale and density exactly: 2 rows of 4 cells, the same tall narrow area covered, the same amount of open magenta, many small separate pieces scattered over the area rather than one big shape. This one is healing instead of lightning.\n2. Another finished aura sheet from the same game: snowflakes drifting off a body. Copy how its small pieces are spread and drift, but make them green plus signs.\n\nTHE HEALING\n- Eight to twelve small GREEN PLUS SIGNS (+, equal arms, like a healing cross) scattered over and around a tall narrow area the size of a standing body, rising as if the body gives them off: a few bigger pluses about the size of a hand, most small, a few tiny ones, plus single-pixel green sparkles.\n- Each plus is solid pixel art: a bright pale-green highlight, a clear leaf green body and a deep green edge, the same look in every frame. No text, no hearts, no other shapes.\n- NOT a ring, a column or a glow round the body: the middle is mostly open magenta, so the creature shows through between the pluses.\n- The 8 frames loop seamlessly: the pluses float slowly upward, gently swaying, the ones near the top shrinking and fading out as new ones appear near the body's middle and feet; sparkles twinkle. No frame is a single big flash.\n\nLAYOUT\n- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.\n- In every cell the aura is centred and covers the same area, at the same scale.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow or haze.\n- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.\n- Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No creature, no text, labels, numbers or frame borders.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no glow bleeding into the background.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a1a4b9-13fb-7063-840f-aed4c282adcd",
+    "01a1a4b9-fb8a-7a01-9555-3d011c8a0aad"
+  ],
+  "sizes": [
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ]
+  ]
+}

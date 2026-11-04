@@ -1,0 +1,21 @@
+{
+  "prompt": "An armoured human knight spotting an enemy: a deep male war shout, muffled and echoing inside a closed steel helmet, with a clank of plate armour; a man, not a beast. Retro 1990s first-person fantasy game sound effect, a single human voice, dry, no words, no music.",
+  "prompt_file": "audio/prompts/sfx-knight-alert.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 1.2,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793708990,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    1.2,
+    1.2,
+    1.2
+  ]
+}

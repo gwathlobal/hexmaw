@@ -108,6 +108,28 @@ void main(){
 (define-shader-entity breath-bar (breath-element hud-bar) ())
 (define-shader-entity breath-text (breath-element hud-text) ())
 
+(defun wrap-text (text width)
+  "TEXT broken at spaces into lines of at most WIDTH characters, a word longer than that on a
+line of its own. Lines after the first keep the first's indent."
+  (let* ((indent (or (position #\Space text :test-not #'char=) 0))
+         (prefix (subseq text 0 indent))
+         (words (loop with start = indent
+                      for space = (position #\Space text :start start)
+                      for word = (subseq text start space)
+                      unless (string= word "") collect word
+                      while space do (setf start (1+ space))))
+         (lines ())
+         (line prefix))
+    (dolist (word words)
+      (cond ((= (length line) (length prefix))
+             (setf line (concatenate 'string line word)))
+            ((<= (+ (length line) 1 (length word)) width)
+             (setf line (concatenate 'string line " " word)))
+            (T
+             (push line lines)
+             (setf line (concatenate 'string prefix word)))))
+    (nreverse (cons line lines))))
+
 (defun make-hud-text (&optional (text "") (class 'hud-text))
   (make-instance class :text text :font-size (float +glyph-height+ 0f0)
                            :foreground *hud-text-color* :background (vec4 0 0 0 0)))
@@ -173,14 +195,25 @@ void main(){
 (defparameter *health-flash-color* (vec4 0.75 0.7 0.15 0.25) "RGB and peak opacity of a health pickup's flash.")
 (defparameter *mana-flash-color* (vec4 0.15 0.35 1.0 0.25) "RGB and peak opacity of a mana pickup's flash.")
 
+(defparameter *rift-flash-color* (vec4 0.55 0.65 1.0 0.45)
+  "RGB and peak opacity of the flash when a riftwalker's rift moves the player (riftwalker.lisp).")
+
 (define-shader-entity restore-flash (pain-flash) ())
 
 (defparameter *gold-flash-color* (vec4 0.9 0.65 0.1 0.18) "RGB and peak opacity of gold's flash.")
+
+(defparameter *ward-flash-color* (vec4 0.7 0.5 1.0 0.25) "RGB and peak opacity of a ward's flash (magic.lisp).")
+(defparameter *glyph-flash-color* (vec4 1.0 0.8 0.3 0.3) "RGB and peak opacity of a glyph's flash (pickups.lisp).")
+(defparameter *dust-flash-color* (vec4 0.75 0.5 1.0 0.25) "RGB and peak opacity of picking up arcane dust.")
 
 (defmethod flash-color ((flash restore-flash))
   (case (and *player* (restored *player*))
     (:mana *mana-flash-color*)
     (:gold *gold-flash-color*)
+    (:ward *ward-flash-color*)
+    (:glyph *glyph-flash-color*)
+    (:dust *dust-flash-color*)
+    (:rift *rift-flash-color*)
     (T *health-flash-color*)))
 
 ;;; Under water: the whole view, the hands with it, turned blue. The colour multiplies what
@@ -284,6 +317,48 @@ void main(){
 
 (define-shader-entity level-banner (hud-text) ())
 
+;;; A message across the middle of the view for a few seconds of play: what a glyph taught, a
+;;; gold find, what the watch warns of (SHOW-MESSAGE, or HUD-SAY to format it).
+
+(defparameter *message-time* 3.0 "Seconds of play a message stays up.")
+(defvar *message-left* 0.0 "Seconds of play left of the message.")
+(defvar *message* "" "The message SHOW-MESSAGE put up last.")
+
+(define-shader-entity message-banner (hud-text) ())
+
+(defmethod hud-shown-p ((banner message-banner))
+  (and (eq *game-state* :playing) (< 0.0 *message-left*)))
+
+(defun show-message (text)
+  (setf *message* text
+        *message-left* *message-time*))
+
+;;; What a pickup of a counted item gave (dust's pile, coins), just above the crosshair for a
+;;; moment: "+25 arcane dust". Pickups of one kind in quick succession add up.
+
+(defparameter *pickup-note-time* 1.5 "Seconds of play a pickup's note stays up.")
+(defparameter *pickup-note-height* 0.56 "Where its line stands, up the screen.")
+(defvar *pickup-note* "" "The note NOTE-PICKUP put up last.")
+(defvar *pickup-note-left* 0.0 "Seconds of play left of it.")
+(defvar *pickup-note-kind* NIL "The item kind it counts.")
+(defvar *pickup-note-count* 0 "How many of it the note says.")
+
+(define-shader-entity pickup-banner (hud-text) ())
+
+(defmethod hud-shown-p ((banner pickup-banner))
+  (and (eq *game-state* :playing) (< 0.0 *pickup-note-left*)))
+
+(defun note-pickup (kind count)
+  "Put up \"+COUNT name\" for COUNT of item KIND just picked up, added to the last note's count
+if that was KIND and is still up. The name is the item's :NOTE, else its :NAME."
+  (if (and (eq kind *pickup-note-kind*) (< 0.0 *pickup-note-left*))
+      (incf *pickup-note-count* count)
+      (setf *pickup-note-kind* kind
+            *pickup-note-count* count))
+  (setf *pickup-note-left* *pickup-note-time*
+        *pickup-note* (format NIL "+~d ~a" *pickup-note-count*
+                              (or (item-property kind :note) (string-downcase (item-property kind :name))))))
+
 (defmethod hud-shown-p ((banner level-banner))
   (and (eq *game-state* :playing) (< 0.0 *level-banner-left*)))
 
@@ -295,18 +370,12 @@ void main(){
             (and s (format NIL "~:[held~;once held~] by ~a"
                            (eq (settlement-condition s) :sacked) (faction-property :name s))))))
 
-;;; The message line: a short note to the player in the middle of the screen (HUD-SAY), such
-;;; as what was found or what the watch warns of, for *HUD-MESSAGE-TIME* seconds of play. And
-;;; the prompt for what E does with what the player looks at (INTERACT-TARGET, townsfolk.lisp).
-
-(defparameter *hud-message-time* 3.0 "Seconds of play a message stays up.")
-(defvar *hud-message* "" "The message on the screen, a new string each time it changes.")
-(defvar *hud-message-left* 0.0 "Seconds of play left of the message.")
+;;; HUD-SAY puts a message up from a format string, and the prompt line says what E does with
+;;; what the player looks at or stands at (INTERACT-TARGET, townsfolk.lisp).
 
 (defun hud-say (format-control &rest args)
-  "Put a message on the screen: FORMAT-CONTROL and ARGS, as for FORMAT."
-  (setf *hud-message* (apply #'format NIL format-control args)
-        *hud-message-left* *hud-message-time*))
+  "Put a message on the screen (SHOW-MESSAGE): FORMAT-CONTROL and ARGS, as for FORMAT."
+  (show-message (apply #'format NIL format-control args)))
 
 ;;; Arriving: the banner names the town and its faction (LEVEL-BANNER-TEXT, above), and the
 ;;; message line says the watch's rule, so the player knows it before they can break it.
@@ -317,16 +386,11 @@ void main(){
   "On arriving at a level, put the watch's rule, or that there is no watch, on the message line
 for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left there."
   (let ((s *settlement*))
-    (cond ((null s) (setf *hud-message-left* 0.0))
+    (cond ((null s) (setf *message-left* 0.0))
           (T (if (eq (settlement-condition s) :sacked)
                  (hud-say "The watch of ~a is dead. The undercroft holds the streets." (faction-property :name s))
                  (hud-say "The watch of ~a: ~a" (faction-property :name s) (faction-property :rule-text s)))
-             (setf *hud-message-left* *arrival-message-time*)))))
-
-(define-shader-entity hud-message (hud-text) ())
-
-(defmethod hud-shown-p ((message hud-message))
-  (and (eq *game-state* :playing) (< 0.0 *hud-message-left*)))
+             (setf *message-left* *arrival-message-time*)))))
 
 (define-shader-entity interact-prompt (hud-text) ())
 
@@ -362,7 +426,10 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
 (defclass hud (entity listener)
   ((name :initform :hud)
    (level-banner :initform (make-hud-text (level-banner-text) 'level-banner) :reader level-banner)
-   (message-line :initform (make-hud-text "" 'hud-message) :reader message-line)
+   (message-banner :initform (make-hud-text "" 'message-banner) :reader message-banner)
+   (pickup-banner :initform (make-hud-text "" 'pickup-banner) :reader pickup-banner)
+   (shown-pickup-note :initform NIL :accessor shown-pickup-note)
+   (shown-message :initform NIL :accessor shown-message)
    (prompt-line :initform (make-hud-text "" 'interact-prompt) :reader prompt-line)
    (gold-text :initform (make-hud-text) :reader gold-text)
    (shown-gold :initform NIL :accessor shown-gold)
@@ -402,7 +469,7 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
-        (level-banner hud) (message-line hud) (prompt-line hud) (gold-text hud) (bless-text hud)
+        (level-banner hud) (message-banner hud) (pickup-banner hud) (prompt-line hud) (gold-text hud) (bless-text hud)
         (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
         (fps-display hud)))
 
@@ -438,13 +505,16 @@ numbers; breath has none."
       (row (hud-row-y 1) (mana-label hud) (mana-bar hud) (mana-text hud))
       (row (hud-row-y 2) (health-label hud) (health-bar hud) (health-text hud))
       (row (hud-row-y 3) (breath-label hud) (breath-bar hud) NIL)))
+  (place (pickup-banner hud)
+         (round (- (/ (width *context*) 2) (* 4.5 (length (text (pickup-banner hud))))))
+         (round (* *pickup-note-height* (height *context*))))
+  (place (message-banner hud)
+         (round (- (/ (width *context*) 2) (* 4.5 (length (text (message-banner hud))))))
+         (round (* 0.62 (height *context*))))
   (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* +glyph-height+))
   (place (level-banner hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (level-banner hud))))))
          (round (* 0.75 (height *context*))))
-  (place (message-line hud)
-         (round (- (/ (width *context*) 2) (* 4.5 (length (text (message-line hud))))))
-         (round (* 0.3 (height *context*))))
   (place (prompt-line hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (prompt-line hud))))))
          (round (* 0.4 (height *context*))))
@@ -477,10 +547,15 @@ numbers; breath has none."
 (define-handler (hud tick) (dt)
   (when (eq *game-state* :playing)
     (setf *level-banner-left* (max 0.0 (- *level-banner-left* dt))
-          *hud-message-left* (max 0.0 (- *hud-message-left* dt))))
-  ;; Both strings are new each time they change, so EQ tells.
-  (unless (eq *hud-message* (text (message-line hud)))
-    (setf (text (message-line hud)) *hud-message*))
+          *message-left* (max 0.0 (- *message-left* dt))
+          *pickup-note-left* (max 0.0 (- *pickup-note-left* dt))))
+  (unless (eq *pickup-note* (shown-pickup-note hud))
+    (setf (shown-pickup-note hud) *pickup-note*
+          (text (pickup-banner hud)) *pickup-note*))
+  (unless (eq *message* (shown-message hud))
+    (setf (shown-message hud) *message*
+          (text (message-banner hud)) *message*))
+  ;; A new string each time it changes, so EQ tells.
   (when (and *interact-prompt* (not (eq *interact-prompt* (text (prompt-line hud)))))
     (setf (text (prompt-line hud)) *interact-prompt*))
   (let ((boss (shown-boss)))

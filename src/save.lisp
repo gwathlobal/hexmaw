@@ -19,16 +19,23 @@
 (defparameter *saved-generator-settings*
   '(*generator-rooms* *generator-attempts* *corridor-run* *generator-storeys* *generator-blocks* *spawn-pool*
     *river-length* *max-rivers* *high-length* *max-high-networks* *flooded-length* *max-flooded-networks*
-    *canal-length* *max-canals* *start-clearance*)
+    *canal-length* *max-canals* *start-clearance* *spawn-skip-scale* *elite-chance*)
   "The variables besides the seed that decide a generated level.")
 
+(defparameter *level-setting-keys*
+  '((:rooms . *generator-rooms*) (:pool . *spawn-pool*) (:skip-scale . *spawn-skip-scale*)
+    (:elite-chance . *elite-chance*))
+  "Which of *SAVED-GENERATOR-SETTINGS* a level of *RUN-LEVELS* sets, by its key.")
+
 (defun level-settings (depth)
-  "The generator's settings for level DEPTH of a run, as an alist of those variables: the
-rooms its entry in the run asks for, its own :SETTINGS (the settlement's), else their values."
+  "The generator's settings for level DEPTH of a run, as an alist of those variables: what its
+entry in the run sets by key (*LEVEL-SETTING-KEYS*), its own :SETTINGS (the settlement's), else
+their values."
   (let ((own (run-level-property depth :settings)))
     (loop for var in *saved-generator-settings*
-          collect (cons var (cond ((eq var '*generator-rooms*) (run-level-property depth :rooms))
-                                  ((assoc var own) (cdr (assoc var own)))
+          for key = (car (rassoc var *level-setting-keys*))
+          collect (cons var (cond ((assoc var own) (cdr (assoc var own)))
+                                  (key (run-level-property depth key (symbol-value var)))
                                   (T (symbol-value var)))))))
 
 (defun save-path (slot)
@@ -52,7 +59,11 @@ rooms its entry in the run asks for, its own :SETTINGS (the settlement's), else 
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     block-raise bash-time bash-pending guard-broken run-time damage-taken level-records
-    gold reputation max-health max-mana max-stamina blessed))
+    gold reputation max-health max-mana max-stamina blessed
+    known-effects hotbar-cells wanted-slot enchantments))
+
+(defmethod saved-slots append ((actor afflicted))
+  '(statuses))
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
@@ -72,6 +83,12 @@ rooms its entry in the run asks for, its own :SETTINGS (the settlement's), else 
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
 
+(defmethod saved-slots append ((riftwalker riftwalker))
+  '(blink-cooldown blink-timer pounce call-target call-point))
+
+(defmethod saved-slots append ((sign rift-sign))
+  '(caster centre))
+
 (defmethod saved-slots append ((sigil summon-sigil))
   '(caster centre burst))
 
@@ -86,7 +103,7 @@ rooms its entry in the run asks for, its own :SETTINGS (the settlement's), else 
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing projectile-velocity submerged))
+  '(spell caster homing projectile-velocity submerged evade-asked))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
@@ -102,7 +119,7 @@ rooms its entry in the run asks for, its own :SETTINGS (the settlement's), else 
   '(condition strikes fine fine-left hostile sacked-by stock trained quest raid-timer raids-held raid-on rule-grace))
 
 (defmethod saved-slots append ((townsfolk townsfolk))
-  '(provoked))
+  '(provoked last-assault))
 
 (defun settlement-record (settlement)
   "What a save keeps of SETTLEMENT: what it was built as, and what has changed since."
@@ -124,7 +141,13 @@ rooms its entry in the run asks for, its own :SETTINGS (the settlement's), else 
     (player (list :player))
     (creature (list :creature (or (position value *creatures*)
                                   (error "~a isn't in *CREATURES*." value))))
-    (spell (list :spell (spell-name value)))
+    ;; A spell of *SPELLS* by name, one the player forged by what it holds.
+    (spell (if (eq value (gethash (spell-name value) *spells*))
+               (list :spell (spell-name value))
+               (list :forged (spell-spec value))))
+    (status (list :status (status-kind value) (status-element value) (status-magnitude value)
+                  (status-left value) (status-timer value) (status-owed value)
+                  (encode-value (status-caster value)) (status-duration value)))
     (ability (list :ability (ability-name value)))
     (fx-animation (list :animation (animation-name value)))
     (cons (mapcar #'encode-value value))
@@ -139,6 +162,12 @@ references that are relative to it (an ability)."
         (:player *player*)
         (:creature (aref *creatures* (second data)))
         (:spell (find-spell (second data)))
+        (:forged (spec-spell (second data)))
+        ;; A save from before statuses kept their duration has none: LEFT stands in.
+        (:status (destructuring-bind (kind element magnitude left timer owed caster &optional duration) (rest data)
+                   (make-instance 'status :kind kind :element element :magnitude magnitude :left left
+                                          :duration (or duration left)
+                                          :timer timer :owed owed :caster (decode-value caster owner))))
         (:ability (or (find-ability owner (second data)) (error "~a has no ability ~s." owner (second data))))
         (:animation (find-fx-animation (second data)))
         (T (mapcar (lambda (d) (decode-value d owner)) data)))
@@ -192,11 +221,12 @@ A vector is written in place, since some slots have only a reader."
                          ((> x y) (return NIL)))))))
 
 (defun level-effects ()
-  "The effects in flight: projectiles, circles, impacts and bursts; not the HUD, torches or pickups."
+  "The effects in flight: projectiles, circles, impacts and bursts; not the HUD, torches, pickups or
+status auras, which come back from their statuses."
   (let ((effects ()))
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup)))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))
@@ -386,6 +416,8 @@ A vector is written in place, since some slots have only a reader."
       (when (getf record :summoned)
         (spawn-creature (make-instance (getf record :class) :summoned T) scene)))
     (restore-state *player* (getf save :player))
+    (migrate-bindings *player*)
+    (settle-held *player*)
     (place-camera *player*)
     (loop for record in records
           for creature across *creatures*

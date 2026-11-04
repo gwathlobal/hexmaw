@@ -16,8 +16,9 @@
         (v<- (feet new) (feet old))
         (v<- (rotation new) (rotation old))
         (setf (mouse-look new) (mouse-look old)))
-      (setf (weapon new) (wanted-weapon old)
-            (wanted-weapon new) (wanted-weapon old)))
+      ;; In hand at once, whatever its old slot holds on the new hotbar.
+      (setf (wanted-slot new) (wanted-slot old))
+      (settle-held new))
     (setf *player* new)
     (enter new scene)
     (when *new-run*
@@ -27,8 +28,11 @@
       ;; Come down from the level above (DESCEND): what the player carries comes along.
       (when *carried-state*
         (restore-state new *carried-state*)
+        (migrate-bindings new)
+        (settle-held new)
         (setf *carried-state* NIL))
       (when (eq *level* :generated)
+        (play-sound :level-gong)
         (setf *level-banner-left* *level-banner-time*)
         (announce-settlement))
       (when *boss-fight-start*
@@ -46,20 +50,24 @@
   (add-blood-pool scene)
   (add-settlement-director scene)
   (add-hud scene)
-  (add-weapon-bar scene)
   (add-inventory-view scene)
+  (add-status-icons scene)
   (add-hands scene)
   (add-sword scene)
   (add-spear scene)
   (add-shield scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)
+  (preload-status-auras scene)
+  ;; And a riftwalker's rifts.
+  (preload-riftwalker scene)
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
   ;; And the dust an ogre kicks up.
   (preload (make-instance 'upright-fx :animation (find-fx-animation 'ogre-dust)) scene)
   (enter (make-instance 'menu-controller) scene)
   (add-music scene)
+  (add-sounds scene)
   ;; The automap screen (map-view.lisp), after the player: its camera mustn't become the scene's.
   (add-map-view scene)
   ;; The game draws into one pass and the menus (Alloy) into another; the blend
@@ -157,7 +165,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
              (now (get-internal-real-time))
              (active (count-if (lambda (e) (< (- now (getf e :last-time)) (* 2 internal-time-units-per-second)))
                                *runtime-errors*)))
-        (format NIL "running, ~a; ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a~@[ on ~(~a~)~]~:[~; swimming~]~@[ climbing~*~] speed ~,2f hp ~d mana ~d stamina ~,1f~:[~; winded~]~@[ breath ~,1f~] weapon ~(~a~) quickslot ~(~a~) bag ~(~a~); ~
+        (format NIL "running, ~a; ~a; player feet (~,2f ~,2f ~,2f) pitch ~,2f yaw ~,2f grounded ~a~@[ on ~(~a~)~]~:[~; swimming~]~@[ climbing~*~] speed ~,2f hp ~d mana ~d stamina ~,1f~:[~; winded~]~@[ breath ~,1f~] weapon ~(~a~)~@[ casting ~a~] hotbar ~a quickslot ~(~a~) bag ~a; ~
                      creatures ~{~a~^, ~}; ~d runtime error~:p firing now, ~d recorded (tools/hd errors)"
                 (case *game-state*
                   (:title "main menu up, world frozen (start with (game (start-game)))")
@@ -166,6 +174,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                   (:map "map open, world frozen (close with (game (close-map)))")
                   (:inventory "inventory open, world frozen (close with (game (close-inventory)))")
                   (:talk (format NIL "talking to ~a, world frozen (close with (game (end-talk)))" (townsfolk-title *talk-target*)))
+                  (:forge "spellforge open, world frozen (close with (game (close-forge)))")
                   (:dead "player dead, world frozen (leave with (game (exit-to-title)))")
                   (:victory "boss slain, run won, world frozen (leave with (game (exit-to-title)))")
                   (T "playing"))
@@ -175,11 +184,16 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                 (let ((v (velocity *player*))) (sqrt (+ (expt (vx v) 2) (expt (vz v) 2))))
                 (health *player*) (floor (mana *player*)) (stamina *player*) (winded *player*)
                 (and (< (breath *player*) *breath-time*) (breath *player*)) (weapon *player*)
+                (and (held-spell *player*) (spell-title (held-spell *player*)))
+                (format NIL "[~{~a~^ ~}]" (loop for stack in (hotbar *player*) for i from 1
+                                                collect (format NIL "~d:~a~:[~;*~]" i (stack-label stack)
+                                                                (eql (1- i) (wanted-slot *player*)))))
                 (let ((*print-pretty* NIL)) (princ-to-string (quickslot *player*)))
-                (let ((*print-pretty* NIL)) (princ-to-string (remove NIL (inventory *player*))))
+                (format NIL "(~{~a~^ ~})" (mapcar #'stack-label (remove NIL (inventory *player*))))
                 (map 'list (lambda (c)
-                             (format NIL "~(~a~) ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)~@[ on ~(~a~)~]"
-                                     (type-of c) (dead c) (health c) (max-health c) (brain c)
+                             (format NIL "~(~a~)~@[ elite:~(~a~)~] ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)~@[ on ~(~a~)~]"
+                                     (type-of c) (and (typep c 'elite) (elite-trait c))
+                                     (dead c) (health c) (max-health c) (brain c)
                                      (vx (location c)) (vz (location c)) (footing c)))
                      *creatures*)
                 active (length *runtime-errors*)))

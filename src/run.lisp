@@ -7,16 +7,35 @@
 ;;; left (LEVEL-RECORD), which is what the run's totals add up.
 
 (defparameter *run-levels*
-  '((:rooms 16 :exit "descent")
-    (:rooms 19 :exit "descent")
-    (:rooms 22 :exit "arena"))
-  "A run's levels, first to last: how many rooms the generator aims for, and the block it
-puts on the doorway furthest from the start (or a list of them, tried in order): the
-descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
-(boss.lisp). NIL: no such block.")
+  '((:rooms 16 :exit "descent" :altar-chance 0.4
+     :pool (("imp" 5) ("acolyte" 2) ("knight" 2) ("harpy" 1) ("necromancer" 1))
+     :skip-scale 1.0 :elite-chance 0.0
+     :sight 1.0 :hearing 1.0 :alert 1.0 :pause 1.0 :cooldown 1.0)
+    (:rooms 19 :exit "descent" :altar-chance 0.4
+     :pool (("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1) ("gale-wraith" 1)
+            ("riftwalker" 1))
+     :skip-scale 0.75 :elite-chance 0.12
+     :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
+    (:rooms 22 :exit "arena" :altar-chance 0.4
+     :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2)
+            ("riftwalker" 2))
+     :skip-scale 0.5 :elite-chance 0.2
+     :sight 1.3 :hearing 1.6 :alert 1.6 :pause 0.7 :cooldown 0.8))
+  "A run's levels, first to last. :ROOMS is how many rooms the generator aims for, and :EXIT
+the block it puts on the doorway furthest from the start (or a list of them, tried in order):
+the descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
+(boss.lisp). NIL: no such block. :ALTAR-CHANCE is the chance of a spellforge altar room
+(forge.lisp), besides the town's.
+
+How hard its monsters are. Decided as it is built (LEVEL-SETTINGS): :POOL, what a spawn_any
+picks from (*SPAWN-POOL*; leave a kind out rather than give it weight 0), :SKIP-SCALE, which
+scales a spawn's chance of no monster (*SPAWN-SKIP-SCALE*), and :ELITE-CHANCE, a spawn's chance
+of an elite (*ELITE-CHANCE*, elite.lisp). Asked in play (DEPTH-SCALE): :SIGHT and :HEARING scale
+how far a creature notices the player, :ALERT how long it hunts after, :PAUSE its pause after an
+attack and :COOLDOWN its abilities' cooldowns. A key left out keeps the variable, or 1.")
 
 (defparameter *settlement-level*
-  '(:core "town" :rooms 6 :exit NIL :min-wing 3
+  '(:core "town" :rooms 6 :exit NIL :min-wing 3 :altar-chance NIL
     :settings ((*generator-blocks* . ("crypt" "cell" "cell-mirror" "chamber" "vestry" "vestry-mirror" "shrine" "corridor"
                                       "corridor-long" "corner" "tee" "cross" "arch" "narrow" "narrowing"
                                       "stair" "tower" "tower-mirror"))
@@ -25,7 +44,9 @@ descent, whose exit leaves the level, or the last level's arena, whose boss ends
   "The settlement's level, which RUN-LEVELS puts into the run once (settlement.lisp): grown
 from the town block (:CORE) instead of a start block, with a small wing of crypts and cells
 off its gates, at least :MIN-WING rooms besides the town. Its way down is in the town, so it
-has no :EXIT. :SETTINGS are generator settings for this level only.")
+has no :EXIT, and no altar room, the town having its altar. :SETTINGS are generator settings for
+this level only. How hard its monsters are (:POOL and the rest) it takes from the level it comes
+before (RUN-LEVELS).")
 
 (defvar *settlement* NIL
   "The SETTLEMENT of the level in play (settlement.lisp), or NIL on any other level. CLEAR-LEVEL forgets it.")
@@ -49,9 +70,10 @@ from there on is one deeper.")
 
 (defparameter *carried-slots*
   '(health mana inventory quickslot stamina winded run-time damage-taken level-records
-    gold reputation max-health max-mana max-stamina blessed)
+    gold reputation max-health max-mana max-stamina blessed
+    known-effects hotbar-cells wanted-slot enchantments)
   "The player's slots that go on to the next level; the rest start fresh (RESET-PLAYER).
-SETUP-SCENE carries the weapon anyway.")
+SETUP-SCENE takes what the hotbar slot asked for in hand (SETTLE-HELD).")
 
 (defvar *carried-state* NIL
   "CARRIED-STATE of the player leaving a level, while the next one is built, else NIL.")
@@ -67,18 +89,28 @@ stay as they were. *SETTLEMENT-OVERRIDE*'s :DEPTH fixes it (settlement.lisp)."
         (nth (random (length *settlement-depths*) random) *settlement-depths*))))
 
 (defun run-levels ()
-  "The run's levels, first to last: *RUN-LEVELS* with *SETTLEMENT-LEVEL* at its depth."
+  "The run's levels, first to last: *RUN-LEVELS* with *SETTLEMENT-LEVEL* at its depth, as hard as
+the level after it (or the last), whose keys it doesn't give itself."
   (let ((at (min (1- (settlement-depth (current-run-seed))) (length *run-levels*))))
-    (append (subseq *run-levels* 0 at) (list *settlement-level*) (nthcdr at *run-levels*))))
+    (append (subseq *run-levels* 0 at)
+            (list (append *settlement-level* (nth (min at (1- (length *run-levels*))) *run-levels*)))
+            (nthcdr at *run-levels*))))
 
 (defun run-length () (length (run-levels)))
 
-(defun run-level-property (depth key)
-  (getf (nth (1- depth) (run-levels)) key))
+(defun run-level-property (depth key &optional default)
+  (getf (nth (1- depth) (run-levels)) key default))
 
 (defun settlement-level-p (&optional (depth *run-depth*))
   "True if level DEPTH of the run is the settlement's."
   (and (run-level-property depth :core) T))
+
+(defun depth-scale (key)
+  "How much the level being played scales a creature's KEY (see *RUN-LEVELS*): 1 but on a
+generated level."
+  (if (eq *level* :generated)
+      (float (run-level-property *run-depth* key 1.0) 0f0)
+      1f0))
 
 (defun current-run-seed ()
   "The seed this run's levels come from, picked when first asked for; *LEVEL-SEED* fixes it for testing."

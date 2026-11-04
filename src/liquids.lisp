@@ -228,3 +228,69 @@ thick: the pit's floor DEPTH below, the lava's surface SURFACE below, as a bluep
 lava. Leave the hole in the floor around it."
   (add-box container x0 (- floor 0.5) z0 x1 (- floor depth) z1 :surface :floor)
   (add-liquid container :lava x0 (- floor depth) z0 x1 (- floor surface) z1))
+
+;;; Ambience (sound.lisp): every torch crackles, every lava pool bubbles and every pool of
+;;; water laps, but only the nearest few of each sound, their loops moved onto them a few
+;;; times a second; under it all, the room tone.
+
+(defparameter *ambient-sources*
+  '((:torch-crackle :source :torches :voices 3 :reach 12.0 :volume 0.6)
+    (:lava-bubble :source :lava :voices 3 :reach 18.0 :volume 0.8)
+    (:water-lap :source :water :voices 2 :reach 14.0 :volume 0.6))
+  "Per ambient loop: what sounds it (:TORCHES, or a liquid's kind, heard from the nearest point
+of its surface), how many of the nearest sources at most (8), from how far, how loud.")
+(defparameter *room-tone* :dungeon-drips "The loop under everything in play, or NIL.")
+(defparameter *room-tone-volume* 0.3)
+(defparameter *ambience-interval* 0.25 "Seconds between choosing the nearest sources again.")
+
+(defvar *ambience-timer* 0.0)
+(defvar *ambient-near* (let ((v (make-array 8))) (dotimes (i 8 v) (setf (aref v i) (vec3))))
+  "Scratch: the nearest sources found, nearest first.")
+(defvar *ambient-distances* (make-array 8 :element-type 'single-float :initial-element 0f0)
+  "Scratch: their squared distances.")
+
+(defun note-ambient-source (n count x y z d2)
+  "Keep the point X Y Z, D2 square metres off, among the N nearest of the COUNT kept so far.
+Returns how many are kept now."
+  (let ((j (if (< count n) count (1- n)))
+        (near *ambient-near*) (dist *ambient-distances*))
+    (cond ((or (< count n) (< d2 (aref dist j)))
+           (loop while (and (< 0 j) (< d2 (aref dist (1- j))))
+                 do (setf (aref dist j) (aref dist (1- j)))
+                    (v<- (aref near j) (aref near (1- j)))
+                    (decf j))
+           (setf (aref dist j) (float d2 0f0))
+           (let ((p (aref near j)))
+             (setf (vx p) (float x 0f0) (vy p) (float y 0f0) (vz p) (float z 0f0)))
+           (min n (1+ count)))
+          (T count))))
+
+(defun update-ambience (dt)
+  "Every *AMBIENCE-INTERVAL*, put each ambient loop of *AMBIENT-SOURCES* on its nearest sources
+in reach of the player's ear, and keep the room tone going (quiet under water)."
+  (when (and *player* (<= (decf *ambience-timer* dt) 0.0))
+    (setf *ambience-timer* *ambience-interval*)
+    (let* ((ear (location *player*))
+           (ex (vx ear)) (ey (vy ear)) (ez (vz ear)))
+      (when *room-tone*
+        (ambient-voice *room-tone* 0 ear (if *eye-underwater* 0.0 *room-tone-volume*)))
+      (loop for (name . properties) in *ambient-sources*
+            do (destructuring-bind (&key source voices reach volume) properties
+                 (let ((n (min voices 8)) (count 0) (r2 (* reach reach)))
+                   (flet ((consider (x y z)
+                            (let ((d2 (+ (expt (- x ex) 2) (expt (- y ey) 2) (expt (- z ez) 2))))
+                              (when (< d2 r2)
+                                (setf count (note-ambient-source n count x y z d2))))))
+                     (declare (dynamic-extent #'consider))
+                     (if (eq source :torches)
+                         (loop for p across *torch-points*
+                               do (consider (vx p) (vy p) (vz p)))
+                         (loop for liquid across *liquids*
+                               for b = (liquid-bounds liquid)
+                               do (when (eq (liquid-kind liquid) source)
+                                    (consider (max (aref b 0) (min ex (aref b 3)))
+                                              (aref b 4)
+                                              (max (aref b 2) (min ez (aref b 5))))))))
+                   (dotimes (i count)
+                     (ambient-voice name i (aref *ambient-near* i) volume))
+                   (drop-ambient-voices name count)))))))

@@ -105,9 +105,12 @@
 ;; (footing.lisp): its speed decays by :FRICTION per second, its push reaches :TOP-SPEED
 ;; times its usual speed, and below :STOP-SPEED it stops once nothing pushes it.
 (defparameter *footings*
-  '((:ice :friction 0.97 :top-speed 1.7 :stop-speed 0.1))
+  '((:ice :friction 0.97 :top-speed 1.7 :stop-speed 0.1)
+    (:snow))
   "Per surface name, its footing: Hexen's ice is 0.973 of the speed kept per 1/35 s tic
-against 0.906 on other floors, with half the push, so 0.97 per second and 1.7 times as fast.")
+against 0.906 on other floors, with half the push, so 0.97 per second and 1.7 times as fast.
+One with no :FRICTION (snow) is an ordinary floor, kept for its tread only (FLOOR-TREAD: what
+a footstep on it sounds like).")
 
 (defun footing-property (footing key)
   (getf (rest (or (assoc footing *footings*) (error "No footing ~s." footing))) key))
@@ -403,11 +406,17 @@ SURFACE-FOOTING) that, after a cut of 0 if it is a box."
     (when (< 7 (length box)) (setf (aref box 7) (float footing 0f0)))
     box))
 
-(defun solid-footing (s)
-  "The footing (a key of *FOOTINGS*) of what stands on solid S, or NIL for an ordinary floor."
+(defun solid-tread (s)
+  "The key of *FOOTINGS* solid S is made of (:ICE, :SNOW), or NIL for an ordinary floor."
   (declare (type (simple-array single-float (*)) s))
   (when (< 7 (length s))
     (first (nth (1- (truncate (aref s 7))) *footings*))))
+
+(defun solid-footing (s)
+  "The footing (a key of *FOOTINGS*) of what stands on solid S, or NIL for an ordinary floor:
+one that only has a tread is ordinary underfoot."
+  (let ((tread (solid-tread s)))
+    (and tread (footing-property tread :friction) tread)))
 
 (declaim (inline solid-cut))
 (defun solid-cut (s)
@@ -570,8 +579,8 @@ its centre line on X and Z and HEIGHT tall, or NIL. Touching faces don't count."
         (return-from solid-overlapping s)))
     NIL))
 
-(defun floor-footing (x y z &optional (radius 0.0))
-  "The footing of the floor whose top is at Y under the point X Z, as SOLID-FOOTING, or NIL.
+(defun floor-tread (x y z &optional (radius 0.0))
+  "The tread of the floor whose top is at Y under the point X Z, as SOLID-TREAD, or NIL.
 As in Hexen, the point decides; but a body RADIUS out from it standing on a ledge's edge,
 with nothing at Y under its centre, stands on that ledge's."
   (let ((x (float x 0f0)) (y (float y 0f0)) (z (float z 0f0)) (r (float radius 0f0))
@@ -579,10 +588,16 @@ with nothing at Y under its centre, stands on that ledge's."
     (do-solids-near (s (- x r) (- z r) (+ x r) (+ z r))
       (when (< (abs (- (aref s 4) y)) 0.02)
         (cond ((solid-covers-p s x z)
-               (return-from floor-footing (solid-footing s)))
+               (return-from floor-tread (solid-tread s)))
               ((and (not edge) (< 0 r) (%box-overlaps-p s x (- y 0.05) z r 0.1))
                (setf edge s)))))
-    (and edge (solid-footing edge))))
+    (and edge (solid-tread edge))))
+
+(defun floor-footing (x y z &optional (radius 0.0))
+  "The footing of the floor whose top is at Y under the point X Z, as SOLID-FOOTING, or NIL:
+FLOOR-TREAD's, if it is slippery."
+  (let ((tread (floor-tread x y z radius)))
+    (and tread (footing-property tread :friction) tread)))
 
 (defun add-box (container x0 y0 z0 x1 y1 z1
                 &key surface (color (if surface (vec 1 1 1) (vec 0.6 0.6 0.6))) (solid T))

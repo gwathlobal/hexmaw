@@ -64,8 +64,23 @@ dive in, a shove), as an exponential.")
 (defparameter *death-roll-time* 0.7 "Seconds the view takes to roll over.")
 (defparameter *death-panel-delay* 1.2 "Seconds from death to the death screen (menu.lisp).")
 (defparameter *inventory-size* 20 "Cells in the player's inventory (inventory.lisp).")
+(defparameter *starting-effects* '(:damage :heal :knockback :fire)
+  "What the player can forge with at the start of a run; glyphs (pickups.lisp) teach the rest.")
+(defparameter *hotbar-size* 9 "Slots on the hotbar (inventory.lisp), keys 1 to 9.")
+(defparameter *starting-hotbar* '(:sword bolt :spear tempest heal)
+  "What a run starts with in the bag, from its first cell, each bound to the hotbar key of its
+place, from 1: a weapon's item kind, or a spell's name, which the player carries as a rune.")
+(defparameter *starting-slot* 1 "The hotbar slot, from 0, a run starts with in hand.")
+(defparameter *footstep-stride* 2.0 "Metres walked on foot from one footstep to the next.")
+(defparameter *footstep-volume* 0.5)
+(defparameter *swim-stroke-stride* 2.2 "Metres swum from one stroke to the next.")
+(defparameter *land-sound-speed* 3.0 "Metres per second a landing must come down at to be heard.")
+(defparameter *splash-gap* 0.6
+  "Seconds after a splash before the next: wading at the waist goes in and out of the water.")
+(defparameter *gasp-breath* 0.5 "Fraction of *BREATH-TIME* left, under which surfacing gasps.")
+(defparameter *ice-slide-speed* 6.0 "Metres per second at which the slide on ice is at full volume.")
 
-(defclass player (fps-camera whirlable)
+(defclass player (fps-camera whirlable afflicted)
   ((name :initform :player)
    (fov :initform 75.0)
    (near-plane :initform 0.05f0)
@@ -97,7 +112,7 @@ dive in, a shove), as an exponential.")
    (inventory :initform (make-list *inventory-size*) :accessor inventory
               :documentation "A list of cells, each a stack, (KIND COUNT), or NIL (inventory.lisp).")
    (quickslot :initform NIL :accessor quickslot
-              :documentation "The stack Q drinks from, or NIL. A count of 0 remembers the kind.")
+              :documentation "The kind of potion Q drinks from the bag, or NIL.")
    (stamina :initform *max-stamina* :accessor stamina)
    (winded :initform NIL :accessor winded
            :documentation "True from running out of stamina until *WINDED-RECOVER*: no running.")
@@ -106,9 +121,24 @@ dive in, a shove), as an exponential.")
               :documentation "Seconds since the last cast began, or NIL before the first.")
    (pending-spell :initform NIL :accessor pending-spell
                   :documentation "Spell being cast, launched at *CAST-RELEASE*.")
-   (weapon :initform :hands :accessor weapon :documentation "Weapon on screen (sword.lisp).")
-   (wanted-weapon :initform :hands :accessor wanted-weapon
-                  :documentation "Weapon asked for; differs from WEAPON while switching.")
+   (known-effects :initform (copy-list *starting-effects*) :accessor known-effects
+                  :documentation "Effect kinds and elements, and :AREA, the player can forge with.")
+   (hotbar :initform (make-list *hotbar-size*) :accessor hotbar
+           :documentation "A list of *HOTBAR-SIZE* slots, each a weapon's or a rune's stack in the
+INVENTORY (EQ), or NIL (inventory.lisp): what keys 1 to 9 take in hand. Saved as HOTBAR-CELLS.")
+   (wanted-slot :initform *starting-slot* :accessor wanted-slot
+                :documentation "The hotbar slot, from 0, whose weapon or spell is asked for.")
+   (held-spell :initform NIL :accessor held-spell :documentation "The spell the hands on screen cast.")
+   (wanted-spell :initform NIL :accessor wanted-spell
+                 :documentation "The spell asked for; differs from HELD-SPELL while switching.")
+   (enchantments :initform () :accessor enchantments
+                 :documentation "A plist from weapon (:SWORD, :SPEAR, :SHIELD) to the spell its
+blows carry (ENCHANT-STRIKE, sword.lisp).")
+   (weapon :initform NIL :accessor weapon
+           :documentation "Weapon on screen (sword.lisp): :SWORD, :SPEAR, :HANDS or NIL.")
+   (wanted-weapon :initform NIL :accessor wanted-weapon
+                  :documentation "Weapon asked for, from the wanted hotbar slot (SYNC-WANTED);
+differs from WEAPON while switching.")
    (weapon-lower :initform 0.0 :accessor weapon-lower
                  :documentation "How far the weapon on screen is lowered: 0 up, 1 gone.")
    (swing-time :initform NIL :accessor swing-time
@@ -143,9 +173,20 @@ blow knocked it aside (BREAK-GUARD).")
    (max-mana :initform *max-mana* :accessor max-mana)
    (max-stamina :initform *max-stamina* :accessor max-stamina)
    (blessed :initform 0.0 :accessor blessed
-            :documentation "Seconds of play the priest's blessing has left (BLESSING-SCALE).")))
+            :documentation "Seconds of play the priest's blessing has left (BLESSING-SCALE).")
+   (stride-left :initform 0.0 :accessor stride-left
+                :documentation "Metres to walk or swim before the next footstep or stroke.")
+   (splash-timer :initform 0.0 :accessor splash-timer :documentation "Seconds before a splash may sound again.")
+   (breath-under :initform NIL :accessor breath-under :documentation "True if the eye was under water last tick.")
+   (slide-sound :initform NIL :accessor slide-sound :documentation "The loop of a slide on ice, or NIL.")
+   (underwater-sound :initform NIL :accessor underwater-sound :documentation "The loop heard under water, or NIL.")
+   (whirl-sound :initform NIL :accessor whirl-sound :documentation "The wind's loop while a vortex holds the player, or NIL.")))
 
 ;; Trial's camera has no roll; the player's view rolls as it falls dead (FALL-DEAD).
+;; The starting kit, in the bag and bound to its keys (GIVE-STARTING-KIT, inventory.lisp).
+(defmethod initialize-instance :after ((player player) &key)
+  (give-starting-kit player))
+
 (defmethod project-view ((camera player))
   (let ((rot (rotation camera))
         (loc (location camera)))
@@ -170,11 +211,14 @@ blow knocked it aside (BREAK-GUARD).")
         (yaw (vy (rotation player))))
     (vec (* (sin yaw) (cos pitch)) (- (sin pitch)) (- (* (cos yaw) (cos pitch))))))
 
-(defun player-cast (player name)
-  "Start casting spell NAME, if mana and the cooldown allow. The hands wind up and the
-spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it was cast."
-  (let* ((spell (find-spell name))
+(defun player-cast (player spell)
+  "Start casting SPELL, a spell or the name of one, if mana and the cooldown allow. The
+hands wind up and the spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns
+true if it was cast."
+  (let* ((spell (if (symbolp spell) (find-spell spell) spell))
          (cost (spell-cost spell)))
+    (when (and (<= (cast-timer player) 0) (< (mana player) cost))
+      (play-sound :cast-fizzle))
     (when (and (<= (cast-timer player) 0) (<= cost (mana player)))
       (decf (mana player) cost)
       (setf (cast-timer player) *cast-cooldown*
@@ -185,12 +229,32 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
         (report-crime :rule))
       T)))
 
+(defparameter *touch-reach* 1.6 "Metres a touch spell reaches, like a short blade.")
+(defparameter *touch-arc* 0.6 "Radians either side of the view a touch spell reaches.")
+
 (defun release-spell (player)
-  "Fire the pending spell from just below the eye toward where the player looks now."
-  (let* ((dir (look-direction player))
-         (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
-    (cast-spell (pending-spell player) origin dir (container player) :caster player)
-    (setf (pending-spell player) NIL)))
+  "Let the pending spell go: its effects on the caster land on PLAYER, then a projectile
+leaves from just below the eye toward where the player looks now, or a touch strikes the
+creature in reach (glancing off a shield that covers it, as a bash does)."
+  (let ((spell (pending-spell player)))
+    (setf (pending-spell player) NIL)
+    (play-sound (if (eq (spell-name spell) 'tempest) :tempest-cast :bolt-cast))
+    (apply-self-effects spell player player)
+    (case (spell-delivery spell)
+      (:self)
+      (:touch
+       (let ((target (swing-target player *touch-reach* *touch-arc*)))
+         (when target
+           (let ((at (vec (vx (location target)) (+ (vy (location target)) (* 0.5 (sprite-height target)))
+                          (vz (location target)))))
+             (if (shielded-p target (feet player))
+                 (block-hit target)
+                 (strike-with-spell spell target (feet player) player at))
+             (play-impact spell at (container player))))))
+      (T
+       (let* ((dir (look-direction player))
+              (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
+         (cast-spell spell origin dir (container player) :caster player))))))
 
 ;;; Clicks in a menu belong to the menu (menu.lisp), as does Esc.
 
@@ -210,15 +274,11 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
 (define-handler (player key-press) (key)
   (case key
     (:f12 (screenshot))
+    ;; E: talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
     (:e (when (eq *game-state* :playing)
           (player-interact player)))
     (T (when (eq *game-state* :playing)
          (select-weapon player key)))))
-
-(define-handler (player mouse-scroll) (delta)
-  ;; Wheel down (negative delta) for the next weapon, up for the previous one.
-  (when (and (eq *game-state* :playing) (/= 0 delta))
-    (cycle-weapon player (if (< delta 0) 1 -1))))
 
 (define-handler (player mouse-move) (old-pos pos)
   (when (mouse-look player)
@@ -405,6 +465,7 @@ up and down keys (1, 0 or -1)."
       (when (and at-surface (< 0 iz)
                  (or (/= vx0 (vx vel)) (/= vz0 (vz vel)))
                  (ledge-ahead-p player surface yaw))
+        (play-sound :climb-out)
         (setf (climbing player) *climb-time*)))))
 
 (defun climb-out (player dt yaw)
@@ -429,6 +490,9 @@ up and down keys (1, 0 or -1)."
 with none left."
   (let* ((feet (feet player))
          (under (swim-liquid-at (vx feet) (+ (vy feet) (eye player)) (vz feet))))
+    (when (and (breath-under player) (not under) (< (breath player) (* *gasp-breath* *breath-time*)))
+      (play-sound :surface-gasp))
+    (setf (breath-under player) (and under T))
     (setf (breath player) (if under
                               (max 0.0 (- (breath player) dt))
                               (min *breath-time* (+ (breath player) (* *breath-refill* dt)))))
@@ -460,6 +524,8 @@ follows *DEATH-PANEL-DELAY* after it began, when the mouse goes back to the menu
 player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a walk."
   (if running
       (when (<= (decf (stamina player) (* *run-stamina* dt)) 0.0)
+        (unless (winded player)
+          (play-sound :winded))
         (setf (stamina player) 0.0
               (winded player) T))
       (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt)))))
@@ -499,6 +565,8 @@ and not the last step of the stair.")
         (pain player) (max 0.0 (- (pain player) dt))
         (restore-flash player) (max 0.0 (- (restore-flash player) dt))
         (guard-broken player) (max 0.0 (- (guard-broken player) dt)))
+  (when (statuses player)
+    (update-statuses player dt))
   (when (cast-time player)
     (incf (cast-time player) dt)
     (when (and (pending-spell player) (<= *cast-release* (cast-time player)))
@@ -515,7 +583,10 @@ and not the last step of the stair.")
          (liquid (let ((feet (feet player))) (liquid-at (vx feet) (+ (vy feet) 0.05) (vz feet))))
          ;; A jump from a liquid stays slowed until it lands outside one.
          (kind (if (grounded player)
-                   (setf (wading player) (and liquid (liquid-kind liquid)))
+                   (let ((now (and liquid (liquid-kind liquid))))
+                     (when (and (eq now :lava) (not (eq (wading player) :lava)))
+                       (play-sound :lava-step))
+                     (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
          (running (and (retained :left-shift) (< 0.0 wlen) (not crouching) (= 0.0 raise)
@@ -526,7 +597,8 @@ and not the last step of the stair.")
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
                    (if (< iz 0.0) *backpedal-scale* 1.0)
-                   (if kind (liquid-property kind :speed) 1.0))))
+                   (if kind (liquid-property kind :speed) 1.0)
+                   (slow-factor player))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
     (whirl-transitions player dt)
@@ -534,6 +606,11 @@ and not the last step of the stair.")
           (vx0 (vx (velocity player)))
           (vy0 (vy (velocity player)))
           (vz0 (vz (velocity player))))
+      (setf (splash-timer player) (max 0.0 (- (splash-timer player) dt)))
+      (unless (eq (swimming player) (and water T))
+        (when (<= (splash-timer player) 0.0)
+          (play-sound (if water :splash-in :splash-out))
+          (setf (splash-timer player) *splash-gap*)))
       (setf (swimming player) (and water T))
       (cond ((whirl player)
              (orbit-player player dt wx wz))
@@ -545,7 +622,8 @@ and not the last step of the stair.")
                    (- (if (retained :space) 1.0 0.0) (if crouching 1.0 0.0))
                    running yaw))
             (T (walk player dt wx wz wlen speed kind crouching)))
-      (note-impacts player vx0 vy0 vz0 dt))
+      (note-impacts player vx0 vy0 vz0 dt)
+      (body-sounds player dt))
     (update-stamina player running dt)
     (when (< (vy (feet player)) *kill-height*)
       (respawn player))
@@ -564,10 +642,39 @@ and not the last step of the stair.")
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
     (place-camera player)))
 
+(defun body-sounds (player dt)
+  "Footsteps on foot (in snow on snow), a stroke now and then swimming, and the loops of a
+slide on ice, of the water round an eye under it and of a vortex's wind."
+  (let* ((vel (velocity player))
+         (feet (feet player))
+         (speed (sqrt (+ (expt (vx vel) 2) (expt (vz vel) 2))))
+         (on-foot (and (grounded player) (not (swimming player)) (not (whirl player))
+                       (not (climbing player)) (< 0.5 speed)))
+         (sliding (and on-foot (footing player))))
+    (cond ((and on-foot (not sliding))
+           (when (<= (decf (stride-left player) (* speed dt)) 0.0)
+             (setf (stride-left player) *footstep-stride*)
+             (play-sound (if (eq (floor-tread (vx feet) (vy feet) (vz feet) *player-radius*) :snow)
+                             :footstep-snow
+                             :footstep-stone)
+                         NIL *footstep-volume*)))
+          ((and (swimming player) (not (climbing player)))
+           (when (<= (decf (stride-left player) (* (+ speed (abs (vy vel))) dt)) 0.0)
+             (setf (stride-left player) *swim-stroke-stride*)
+             (play-sound :swim-stroke)))
+          ;; Standing, or in the air: the first step after comes soon.
+          (T (setf (stride-left player) (* 0.4 *footstep-stride*))))
+    (let ((at (location player)))
+      (setf (slide-sound player) (hold-loop (slide-sound player) (and sliding :ice-slide) at
+                                            (min 1.0 (/ speed *ice-slide-speed*)))
+            (underwater-sound player) (hold-loop (underwater-sound player) (and *eye-underwater* :underwater) at)
+            (whirl-sound player) (hold-loop (whirl-sound player) (and (whirl player) :whirl-wind) at)))))
+
 (defmethod hit-surface ((player player) speed x y z &key (threshold *impact-speed*) by)
   (declare (ignore x y z))
   ;; No shove, so the shield can't help.
   (when (< threshold speed)
+    (play-sound :body-impact)
     (hurt-player player (impact-damage speed threshold) (feet player) :shove NIL
                  :by (or by (if (or (whirl player) (flung player)) :tornado :impact)))
     (hit-stop)))
@@ -581,6 +688,8 @@ while they slide on ice, nor a floor under water, and their own falls only from 
     (unless (or (footing player) (and (= 0 vx0) (= 0 vz0)))
       (hit-across player (if (= 0 (vx vel)) vx0 0f0) (if (= 0 (vz vel)) vz0 0f0) dt))
     (cond ((and (grounded player) (< vy0 0) (not (swimming player)))
+           (when (< *land-sound-speed* (- vy0))
+             (play-sound :land))
            (if (flung player)
                (hit-surface player (- vy0) 0.0 -1.0 0.0)
                (hit-surface player (- vy0) 0.0 -1.0 0.0 :threshold *fall-impact-speed* :by :fall)))
@@ -618,6 +727,7 @@ at SPEED, out of liquid KIND if any."
     (when (and (grounded player) (retained :space) (not crouching)
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
+      (play-sound :jump)
       (setf (vy vel) (float (* *jump-speed* (if kind (liquid-property kind :jump) 1.0)) 0f0)))
     (decf (vy vel) (* *gravity* dt))
     ;; Steps only while walking: not mid-air, and not on the frame a jump starts.
@@ -682,6 +792,7 @@ again for SECONDS."
 (defun player-dies (player by)
   "PLAYER's health ran out, to BY. On a generated level the run is over: the world freezes,
 PLAYER falls (FALL-DEAD) and the death screen comes up. Elsewhere the run starts over."
+  (play-sound :player-death)
   (cond ((not (eq *level* :generated))
          ;; Not now: this runs inside a creature's tick, and RESET-RUN despawns entities.
          (queue-menu-action 'reset-run))
@@ -716,17 +827,30 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
           (cond ((<= cost (stamina player))
                  (decf (stamina player) cost)
                  (setf amount (max 1 (round (* amount *block-damage-scale*))))
+                 (play-sound (if guard-break :shield-guard-break :shield-block))
                  (when guard-break
                    (break-guard player guard-break)))
                 (T
                  (setf (stamina player) 0.0
                        blocked NIL)
+                 (play-sound :shield-guard-break)
                  (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
       ;; The priest's blessing (dialogue.lisp).
       (setf amount (max 1 (round (* amount (blessing-scale player)))))
+      ;; A ward (magic.lisp) takes what it can of what gets past the shield.
+      (setf amount (absorb-ward player amount))
+      ;; A burn's every tick would grunt: only a blow or a crash does.
+      (when (and (not blocked) (< amount (health player)))
+        (cond ((or shove (member by '(:impact :fall)))
+               (play-sound :player-hurt))
+              ((member by '(:lava :tornado))
+               (play-sound :player-burn))
+              ((eq by :drowning)
+               (play-sound :drowning))))
       (incf (damage-taken player) (min amount (health player)))
       (decf (health player) amount)
-      (setf (pain player) *pain-time*)
+      (when (< 0 amount)
+        (setf (pain player) *pain-time*))
       (when shove
         (let ((k (if blocked *block-shove-scale* 1.0)))
           (shove-player player from (* k (if (eq shove T) *player-knockback* shove)) (and lift (* k lift))))
@@ -743,16 +867,27 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
          (< (- (vy feet) margin) (vy point) (+ (vy feet) *player-height* margin)))))
 
 ;; A creature's spell, hitting the player: the shove goes the way its source pushes.
-(defmethod apply-effect ((kind (eql :damage)) effect (target player) source)
-  (hurt-player target (roll (effect-magnitude effect)) (effect-origin source)
-               :unblockable (effect-unblockable-p source) :by (caster source)))
-
 (defmethod apply-effect ((kind (eql :knockback)) effect (target player) source)
   (let ((blocked (and (not (effect-unblockable-p source))
                       (shield-blocks-p target (effect-origin source)))))
     (shove-player target (v- (feet target) (effect-direction source target))
                   (* (float (roll (effect-magnitude effect)) 0f0)
                      (if blocked *block-shove-scale* 1.0)))))
+
+(defun teleport-player (player to &key yaw)
+  "Put PLAYER's feet at TO at once, stopped, out of any vortex, the eye at standing height
+(no step's easing), turned to YAW if given; the view flashes as a pickup's does."
+  (clear-whirl player)
+  (v<- (feet player) to)
+  (let ((vel (velocity player)))
+    (setf (vx vel) 0f0 (vy vel) 0f0 (vz vel) 0f0))
+  (setf (eye player) *eye-height*
+        (wading player) NIL
+        (restore-flash player) *restore-flash-time*
+        (restored player) :rift)
+  (when yaw
+    (setf (vy (rotation player)) (float yaw 0f0)))
+  (place-camera player))
 
 (defun respawn (player)
   (clear-whirl player)

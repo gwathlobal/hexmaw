@@ -1,0 +1,21 @@
+Pixel-art character turnaround sheet for a monster in a Doom/Hexen-style first-person dark-fantasy dungeon game, where monsters are drawn as sprites seen from several camera angles: the RIFTWALKER, an assassin who steps through rifts in the air, pulls its victims to it and stabs them.
+
+REFERENCE IMAGES, in the order attached: turnaround sheets of five other monsters from the same game (a red imp, a hooded robed acolyte, an armoured knight, a gaunt necromancer with a staff, and a floating wraith of rags). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs. In particular the riftwalker must NOT look like the acolyte: no long robe, no orange or oxblood, no fire; not like the wraith: it has legs and stands on the floor, no streaming rags; and not like the necromancer: no staff, no beard, no green.
+
+THE RIFTWALKER
+- A lean, wiry humanoid of a man's height, about as tall as the acolyte, standing on the floor in a low, ready crouch, weight forward, knees bent, like a knife fighter.
+- A close-fitting HOOD and a short hooded cowl, and under the hood, instead of a face, a smooth oval MASK of polished brass, featureless, with no eyes, mouth or nose: a mirror that catches the light, its bright highlight the only warm colour on the figure.
+- Tight bindings and wrappings of charcoal black and deep indigo, wound round the arms, chest and legs, with a short tabard to mid-thigh split at the sides; soft wrapped boots. Thin and agile, nothing bulky, no armour plates.
+- In its right hand a long CURVED DAGGER held low and forward, its blade pale steel. The left hand is open and raised a little, fingers spread, and a small, hard-edged SHARD OF LIGHT floats just above that palm: pale silver-blue, a crack in the air, not a fire and not a ball.
+- Thin lines of the same pale silver-blue light run along the seams of its wrappings like cracks, a few only, so the figure reads dark with a few bright cuts.
+- A cold, dark palette, unlike the imp's red, the acolyte's oxblood and fire, the knight's steel, the necromancer's black and green or the wraith's greys: charcoal, deep indigo, pale steel, polished brass for the mask, and pale silver-blue only for the rift light.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).
+- In the front three-quarter, side and rear three-quarter views the riftwalker faces IMAGE-LEFT.
+- The same figure at the same scale in every cell, its feet on the same ground line, in the same pose; only the camera angle changes.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The whole figure, including the dagger, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, smoke, sparks or light rays outside the figure. The rift light stays on the figure and the shard, never as a halo on the magenta.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink, purple or cyan glow bleeding into the background.

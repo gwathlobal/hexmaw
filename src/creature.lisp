@@ -41,6 +41,8 @@ the weapon's bonus: some hits always pass it by, so it can't be held in its flin
 (defparameter *sight-range* 10.0 "Metres within which a creature sees the player in front of it.")
 (defparameter *hearing-range* 3.0 "Metres within which it notices the player behind it.")
 (defparameter *alert-time* 6.0 "Seconds a creature hunts after it last noticed the player or was hit.")
+
+(defun alert-time () (* *alert-time* (depth-scale :alert)))
 (defparameter *look-interval* 0.25 "Seconds between a creature's looks for the player.")
 (defparameter *chase-replan* 0.5 "Seconds between a hunting creature's fresh paths to the player.")
 (defparameter *chase-pause* 0.1 "Seconds a hunting creature stands at the end of a path before the next.")
@@ -92,7 +94,8 @@ they did after the save.")
 
 (defvar *game-state* :title
   "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING,
-:PAUSED, :MAP (the automap, map-view.lisp), :INVENTORY (the inventory panel, inventory.lisp)
+:PAUSED, :MAP (the automap, map-view.lisp), :INVENTORY (the inventory panel, inventory.lisp),
+:FORGE (the spellforge at an altar, forge.lisp)
 or :DEAD (the player fell on a generated level, PLAYER-DIES, then the death screen), :VICTORY,
 or :TALK (talking to one of the townsfolk, dialogue.lisp). Menus
 (menu.lisp) change it; anything but :PLAYING
@@ -130,6 +133,18 @@ creatures in development live; :GALLERY, every level block laid out (kit.lisp); 
    (pull :initform (vec 0 0 0) :reader pull :documentation "How fast, in m/s, vortices drag it this tick.")
    (pull-look :initform 0.0 :accessor pull-look :documentation "Seconds until it looks for a line to a vortex again.")
    (pull-clear :initform NIL :accessor pull-clear :documentation "True if it had a line to a vortex when it last looked.")))
+
+;;; Statuses (magic.lisp): what a spell leaves on an actor for a while, burning, slowed,
+;;; warded. The player and creatures alike carry them.
+
+(defclass afflicted ()
+  ((statuses :initform () :accessor statuses
+             :documentation "Its STATUSes (magic.lisp), at most one of each kind.")
+   (aura :initform NIL :accessor status-aura
+         :documentation "The STATUS-AURA (magic.lisp) a creature's damage over time shows, or NIL.
+Not saved: it comes back from the status.")
+   (heal-aura :initform NIL :accessor heal-aura
+              :documentation "The same for its healing over time.")))
 
 (defun clear-whirl (actor)
   "ACTOR is neither held nor thrown by a vortex, and can be pulled at once."
@@ -181,7 +196,7 @@ this DT-second tick: a wall or body it hit fast enough hurts it, and the body to
       (hit-surface actor speed hit-x 0.0 hit-z :by by)
       (strike-body actor speed hit-x hit-z (* speed dt) :by by))))
 
-(define-shader-entity creature (billboard whirlable)
+(define-shader-entity creature (billboard whirlable afflicted)
   ((max-health :initarg :max-health :initform 30 :accessor max-health)
    (health :accessor health)
    (body-radius :initarg :body-radius :initform 0.35 :accessor body-radius
@@ -277,6 +292,11 @@ WALK-ANIMATION; NIL to attack in the standing pose.")
 side being shut too.")
    (walk-distance :initform 0.0 :accessor walk-distance
                   :documentation "Metres walked so far; picks the walk animation's frame.")
+   (step-count :initform 0 :accessor step-count
+               :documentation "Footsteps WALK-DISTANCE had come to at the last one (CREATURE-STEPS).")
+   (flounder-sound :initform NIL :accessor flounder-sound :documentation "Its splashing loop while afloat, or NIL.")
+   (cry-timer :initform 0.0 :accessor cry-timer
+              :documentation "Seconds before a vortex's burns may make it cry out in pain again.")
    (walk-animation :initarg :walk-animation :initform NIL :accessor walk-animation
                    :documentation "Frame animation of the walk: one cycle per view, in the
 billboard's view order. NIL to glide in the standing pose.")
@@ -471,6 +491,40 @@ pain roll says (a flyer's dive, flyer.lisp).")
 summoned mid-game, or a boss (boss.lisp).")
   (:method ((creature creature)) (summoned creature)))
 
+(defgeneric creature-sound (creature event)
+  (:documentation "The clip (sound.lisp) CREATURE plays for EVENT: :ALERT on noticing the
+player, :PAIN on a flinch, :DEATH, :WINDUP as an attack starts and :RELEASE on its hit frame;
+a flyer's :FLAP, :DIVE and :CRASH (flyer.lisp), a leaper's :LEAP (ogre.lisp). NIL for none.
+DEFINE-CREATURE-SOUNDS gives a class its own.")
+  (:method ((creature creature) event)
+    (declare (ignore event))
+    NIL))
+
+(defmacro define-creature-sounds (class &rest clips)
+  "CLASS's clips by event, a plist (see CREATURE-SOUND); its subclasses (its boss) share them."
+  `(defmethod creature-sound ((creature ,class) event)
+     (getf ',clips event)))
+
+(defun creature-noise (creature event &optional (volume 1.0))
+  "Play CREATURE's clip for EVENT where it stands."
+  (let ((clip (creature-sound creature event)))
+    (when clip (play-sound clip (location creature) volume))))
+
+(defparameter *creature-step-volume* 0.9)
+(defparameter *creature-step-reach* 25.0 "Metres from the player within which a creature's footsteps play.")
+
+(defun creature-steps (creature)
+  "A footstep (its :STEP clip) every two walk frames, from the distance walked: two to a cycle."
+  (let ((n (floor (walk-distance creature) (* 2 (stride creature)))))
+    (unless (= n (step-count creature))
+      (when (and (< (step-count creature) n) (creature-walking-p creature) (not (afloat-p creature))
+                 *player* (< (vdistance (location creature) (location *player*)) *creature-step-reach*))
+        (creature-noise creature :step *creature-step-volume*))
+      (setf (step-count creature) n))))
+
+(defmethod leave :after ((creature creature) container)
+  (setf (flounder-sound creature) (stop-loop (flounder-sound creature))))
+
 (defgeneric dormant-p (creature)
   (:documentation "True while CREATURE sleeps: it neither thinks nor takes harm (a boss
 before its arena is sealed, boss.lisp). A hit only flashes it.")
@@ -494,6 +548,11 @@ monster struck by one of them fights back (FIGHT-FOE).")
 coin (pickups.lisp), the watch notes a murder (townsfolk.lisp).")
   (:method ((creature creature) by) (declare (ignore by))))
 
+(defgeneric react-to-hit (creature)
+  (:documentation "What CREATURE does after a hit it lived through, once HURT has done the
+rest (the riftwalker blinks away, riftwalker.lisp).")
+  (:method ((creature creature)) NIL))
+
 (defun hurt (creature amount &key from (pain-bonus 0) by)
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
 the blood sprays away from, by BY (as for HARMED). It flinches and breaks off what it's
@@ -503,26 +562,33 @@ doing on a pain roll, its PAIN-CHANCE plus PAIN-BONUS percent."
     (return-from hurt))
   (unless (dead creature)
     (decf (health creature) amount)
+    ;; The blow on the body, whatever struck it: a pain cry is the flinch's.
+    (play-sound (if (bleeds creature) :flesh-hit :bone-hit) (location creature))
     (when (bleeds creature)
       (bleed creature amount from))
     (setf (flash creature) *flash-time*
-          (alert creature) *alert-time*)
+          (alert creature) (alert-time))
     (when (or (<= (health creature) 0)
               (always-pained-p creature)
               (pain-roll-p creature pain-bonus))
       ;; Stop (a hit breaks off an attack too), and plan afresh once the flinch is over:
       ;; knockback moves it off its path.
       (setf (stagger creature) *stagger-time*)
-      (stop-walking creature *hurt-pause*))
+      (stop-walking creature *hurt-pause*)
+      (when (< 0 (health creature))
+        (creature-noise creature :pain)))
     (hit-stop)
     (when (<= (health creature) 0)
+      (creature-noise creature :death)
       (cond ((gib-p creature amount)
              (tear-apart creature :from from))
             ((bleeds creature)
              (bleed-out creature)))
       (setf (dead creature) 0.0)
       (creature-died creature by))
-    (harmed creature amount by)))
+    (harmed creature amount by)
+    (unless (dead creature)
+      (react-to-hit creature))))
 
 (defmethod hit-surface ((creature creature) speed x y z &key (threshold *impact-speed*) by)
   (when (< threshold speed)
@@ -537,9 +603,10 @@ a flash and it notices, but no flinch, blood or hit-stop, which would freeze the
   (unless (or (dead creature) (dormant-p creature))
     (decf (health creature) amount)
     (setf (flash creature) *flash-time*
-          (alert creature) *alert-time*)
+          (alert creature) (alert-time))
     (when (<= (health creature) 0)
       (stop-walking creature)
+      (creature-noise creature :death)
       (setf (dead creature) 0.0)
       (creature-died creature by))
     (harmed creature amount by)))
@@ -572,7 +639,7 @@ seen from FROM is one its shield covers."
   "React to a spell striking CREATURE's shield: no damage, a faint flash, the block pose
 and a moment's brace, unless it's in the middle of an attack."
   (setf (flash creature) (max (flash creature) (* 0.4 *flash-time*))
-        (alert creature) *alert-time*)
+        (alert creature) (alert-time))
   (unless (eq (brain creature) :attacking)
     (setf (brace creature) *block-time*)
     (stop-walking creature *block-time*))
@@ -587,6 +654,17 @@ by its KNOCKBACK-SCALE."
     (when (< 1f-4 len)
       (setf (vx kb) (* speed (/ (vx direction) len))
             (vz kb) (* speed (/ (vz direction) len))))))
+
+(defparameter *shove-hold-speed* 1.5
+  "Metres per second of knockback above which a creature can't walk or lunge: shoved, it is
+carried until it slows, rather than walking straight back through the push.")
+
+(defun shoved-p (creature)
+  "True while knockback carries CREATURE too fast for its own feet. Not on ice, where its
+momentum is its walk."
+  (and (not (footing creature))
+       (let ((kb (momentum creature)))
+         (< (* *shove-hold-speed* *shove-hold-speed*) (+ (expt (vx kb) 2) (expt (vz kb) 2))))))
 
 (defun slide (creature dt)
   "Move by its momentum for DT seconds, stopping at solids and bodies, then slow it by
@@ -614,7 +692,8 @@ friction: on ice by the footing's, and while it walks there it climbs steps as i
 
 (defun walking-speed (creature)
   (* (if (hunting-p creature) (or (chase-speed creature) (walk-speed creature)) (walk-speed creature))
-     (if (afloat-p creature) *flounder-speed* 1.0)))
+     (if (afloat-p creature) *flounder-speed* 1.0)
+     (slow-factor creature)))
 
 ;;; Deep water (liquids.lisp): its surface is a floor on the nav grid, so a walker shoved
 ;;; in settles onto it like any floor, and is drawn sunk to the chest. Afloat it can't
@@ -772,6 +851,8 @@ standing still plans afresh instead, round it (STANDING-BODIES), unless it just 
 Blocked for *STUCK-TIME*, it gives up the path. On ice it skids instead (SKID-PATH)."
   (when (footing creature)
     (return-from walk-path (skid-path creature dt)))
+  (when (shoved-p creature)
+    (return-from walk-path))
   (let* ((loc (location creature))
          (target (first (path creature)))
          (dx (- (vx target) (vx loc)))
@@ -897,8 +978,8 @@ it can do something about. The ogre, which leaps down, looks further.")
          (distance (sqrt (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2)))))
     (and (< 0 (health *player*))
          (< (abs (- (vy feet) (vy loc))) (sight-rise creature))
-         (or (< distance *hearing-range*)
-             (and (< distance *sight-range*)
+         (or (< distance (* *hearing-range* (depth-scale :hearing)))
+             (and (< distance (* *sight-range* (depth-scale :sight)))
                   (< (player-angle creature) #.(float (/ pi 2) 0f0))))
          (clear-path-p loc feet (* 0.8 (sprite-height creature))))))
 
@@ -910,8 +991,9 @@ it can do something about. The ogre, which leaps down, looks further.")
       (when (<= (alert creature) 0)
         ;; Just noticed: cut a wander's pause short, and turn a wander's walk into a chase.
         (setf (idle-timer creature) (min (idle-timer creature) *chase-pause*)
-              (replan-timer creature) 0.0))
-      (setf (alert creature) *alert-time*))))
+              (replan-timer creature) 0.0)
+        (creature-noise creature :alert))
+      (setf (alert creature) (alert-time)))))
 
 (defun player-bearing (point)
   "Direction from the player to POINT, as a yaw."
@@ -1092,7 +1174,8 @@ another; with none, it waits off."
         (path creature) ()
         (attack-time creature) 0.0
         (attack-pending creature) T
-        (foe-attack creature) NIL))
+        (foe-attack creature) NIL)
+  (creature-noise creature :windup))
 
 (defun chase (creature)
   "Set off along a fresh path toward the player."
@@ -1265,8 +1348,9 @@ with both taken it doesn't. True if it set off."
                       (+ (vz loc) (- (* out (cos yaw))) (* side (sin yaw)))))
          (aim (v- (vec (vx feet) (+ (vy feet) *cast-aim-height*) (vz feet)) origin)))
     (when (< 1f-4 (vlength aim))
-      (cast-spell (find-spell (attack-spell creature)) origin (nvunit aim) (container creature)
-                  :caster creature))))
+      (let ((spell (find-spell (attack-spell creature))))
+        (play-sound (spell-sound spell :cast) origin)
+        (cast-spell spell origin (nvunit aim) (container creature) :caster creature)))))
 
 (defgeneric release-attack (creature)
   (:documentation "Land CREATURE's attack, on its ATTACK-HIT-FRAME: cast its spell, or
@@ -1295,15 +1379,17 @@ strike the player if still in reach and in front of it.")
     (let ((speed (lunge-speed creature)))
       (when (and speed (attack-pending creature) (not (ranged-p creature))
                  (< time (attack-hit-time creature))
+                 (not (shoved-p creature))
                  (not (player-within-p creature (* *lunge-stop* (attack-reach creature)))))
         (let ((yaw (facing creature))
               (step (* speed dt)))
           (move-creature creature (* step (sin yaw)) (- (* step (cos yaw))) (step-height creature)))))
     (when (and (attack-pending creature) (<= (attack-hit-time creature) time))
       (setf (attack-pending creature) NIL)
+      (creature-noise creature :release)
       (release-attack creature))
     (when (<= (reduce #'+ times) time)
-      (stop-walking creature (attack-pause creature)))))
+      (stop-walking creature (* (attack-pause creature) (depth-scale :pause))))))
 
 (defgeneric attack-step (creature dt)
   (:documentation "Run DT seconds of CREATURE's attack: a blow or a cast (ATTACK), or a
@@ -1437,6 +1523,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 
 (defun revive (creature)
   (clear-whirl creature)
+  (setf (statuses creature) ())
   (setf (alert creature) 0.0
         (bleeding creature) 0f0
         (gibbed creature) NIL
@@ -1530,6 +1617,8 @@ after the flinch, block and attack.")
         (s (/ (stagger creature) *stagger-time*)))
     (setf (vx tint) (vx *flash-color*) (vy tint) (vy *flash-color*) (vz tint) (vz *flash-color*)
           (vw tint) (* f (vw *flash-color*)))
+    (unless (dead creature)
+      (status-tint creature tint))
     (setf (texture creature) (body-texture creature))
     (setf (vx scale) (* (vx base) (+ 1 (* s *stagger-squash* 0.7)))
           (vy scale) (* (vy base) (- 1 (* s *stagger-squash*)))
@@ -1638,6 +1727,10 @@ after the flinch, block and attack.")
             (stirring creature) (max 0.0 (- (stirring creature) dt)))
       (when (and (slot-bans creature) (<= (slot-ban-timer creature) 0))
         (setf (slot-bans creature) ()))
+      (when (and (statuses creature) (not (dead creature)) (not (dormant-p creature)))
+        (update-statuses creature dt))
+      (when (or (statuses creature) (status-aura creature) (heal-aura creature))
+        (update-status-aura creature))
       ;; Held or thrown by a vortex, it moves and thinks no other way.
       (let ((held (whirl-step creature dt)))
         (unless held
@@ -1654,6 +1747,8 @@ after the flinch, block and attack.")
             (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt damage)
               (setf (burn-timer creature) timer)
               (when (< 0 due)
+                (unless afloat
+                  (play-sound :creature-sizzle loc))
                 (burn creature due)))
             (when (and (< 0 damage) (not afloat) (not (dead creature)) (eq (brain creature) :idle))
               (escape-liquid creature))
@@ -1669,6 +1764,11 @@ after the flinch, block and attack.")
                        (think creature dt)))))))
         (unless held
           (keep-height creature dt))
+        (creature-steps creature)
+        (setf (flounder-sound creature)
+              (hold-loop (flounder-sound creature)
+                         (and (not held) (not (dead creature)) (afloat-p creature) :flounder)
+                         (location creature)))
         (when (dead creature)
           (incf (dead creature) dt)
           (when (and *revive-time* (eq *level* :test) (not (stays-dead-p creature))
@@ -1723,6 +1823,9 @@ after the flinch, block and attack.")
    (pain-chance :initform 30)
    (max-health :initform 30)))
 
+(define-creature-sounds imp
+  :alert :imp-alert :pain :imp-pain :death :imp-death :windup :imp-claw :step :step-light)
+
 ;;; The acolyte: a robed caster that keeps its distance and throws cinders (spells.lisp).
 ;;; It has no walk: it glides in the standing pose, the robe hiding its feet.
 
@@ -1768,6 +1871,9 @@ after the flinch, block and attack.")
    (wander-radius :initform 2.0)
    (pain-chance :initform 25)
    (max-health :initform 24)))
+
+(define-creature-sounds acolyte
+  :alert :acolyte-alert :pain :acolyte-pain :death :acolyte-death :windup :acolyte-cast)
 
 ;;; The knight: slow, in heavy plate, behind a tower shield from its feet to its helm.
 ;;; The shield turns spells away from the front and front-quarter views (and reflects
@@ -1836,3 +1942,6 @@ after the flinch, block and attack.")
    ;; Plate and a steady stance: most blows don't stagger it.
    (pain-chance :initform 8)
    (max-health :initform 60)))
+
+(define-creature-sounds knight
+  :alert :knight-alert :pain :knight-pain :death :knight-death :windup :knight-mace :step :step-armour)

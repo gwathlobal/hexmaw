@@ -26,9 +26,11 @@ imp() {
           (setf (vx (location c)) $2 (vz (location c)) $3 (facing c) $4))"
 }
 
-# weapon :hands or :sword
+# weapon :hands (the bolt, hotbar key 2) or :sword (key 1), in hand at once
 weapon() {
-  echo "(setf (weapon *player*) $1 (wanted-weapon *player*) $1 (weapon-lower *player*) 0.0)"
+  local key=:2
+  [ "$1" = ":sword" ] && key=:1
+  echo "(progn (select-weapon *player* $key) (settle-held *player*) (setf (weapon-lower *player*) 0.0))"
 }
 
 # shot NAME FORM...: set the scene up with the forms, let it draw, save the frame.

@@ -116,6 +116,9 @@ the superclasses, so that its methods here come before the slot readers there.")
    (pain-chance :initform 20)
    (max-health :initform 20)))
 
+(define-creature-sounds skeleton-warrior
+  :alert :skeleton-alert :pain :skeleton-pain :death :skeleton-collapse :windup :skeleton-chop :step :step-bone)
+
 (defun spawn-raised-skeleton (corpse container)
   "Raise a skeleton where CORPSE lies, getting up and already hunting. Returns it."
   (let* ((loc (location corpse))
@@ -125,9 +128,10 @@ the superclasses, so that its methods here come before the slot readers there.")
                                                         (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet)))
                                                         (facing corpse)))))
     (setf (rising skeleton) (death-duration skeleton)
-          (alert skeleton) *alert-time*)
+          (alert skeleton) (alert-time))
     (spawn-creature skeleton container)
     (update-creature-look skeleton)
+    (play-sound :skeleton-rise loc)
     skeleton))
 
 ;;; The necromancer.
@@ -181,6 +185,7 @@ the superclasses, so that its methods here come before the slot readers there.")
    (cooldowns :initform (list :raise 0.0 :nova 0.0))
    (raise-target :initform NIL :accessor raise-target :documentation "The corpse it is raising.")
    (raise-lamp :initform NIL :accessor raise-lamp)
+   (raise-sound :initform NIL :accessor raise-sound :documentation "The channel's loop while it runs.")
    (attack-range :initform 12.0)
    (keep-away :initform 5.0)
    ;; The staff is in its right hand.
@@ -191,6 +196,10 @@ the superclasses, so that its methods here come before the slot readers there.")
    ;; Frail: a hit usually breaks its cast, the raise's channel too.
    (pain-chance :initform 35)
    (max-health :initform 35)))
+
+;; Its casts sound from the abilities (RELEASE-ATTACK), not a wind-up.
+(define-creature-sounds necromancer
+  :alert :necro-alert :pain :necro-pain :death :necro-death :step :step-light)
 
 (defmethod spares-p ((n necromancer) target) (undead target))
 
@@ -249,6 +258,7 @@ else throw skulls, or close in."
     (setf (raise-target necromancer) NIL)
     ;; Another necromancer, or a revival, may have got there first.
     (when (and corpse (raisable-p corpse) (container necromancer))
+      (play-sound :raise-release (location corpse))
       (tear-apart corpse :from (location necromancer))
       (spawn-raised-skeleton corpse (container necromancer)))))
 
@@ -256,6 +266,7 @@ else throw skulls, or close in."
   "Draw NECROMANCER's grave circle on the floor under the player as they stand now."
   (let* ((feet (feet *player*))
          (floor (or (and *nav-grid* (nav-floor-at (vx feet) (vy feet) (vz feet))) (vy feet))))
+    (play-sound :grave-cast (location necromancer))
     (cast-spell (find-spell (ability-spell (current-ability necromancer)))
                 (vec (vx feet) floor (vz feet)) (vec 0 0 -1) (container necromancer)
                 :caster necromancer)))
@@ -267,7 +278,7 @@ else throw skulls, or close in."
       (:raise (raise-corpse necromancer))
       (:nova (cast-grave-circle necromancer)))
     (when (< 0 (ability-cooldown ability))
-      (setf (getf (cooldowns necromancer) (ability-name ability)) (ability-cooldown ability)))))
+      (setf (getf (cooldowns necromancer) (ability-name ability)) (* (ability-cooldown ability) (depth-scale :cooldown))))))
 
 (defun channelling-p (necromancer)
   "True while NECROMANCER is in the middle of raising a corpse."
@@ -292,11 +303,15 @@ out when the channel ends or breaks."
                (setf (vx color) (* k (vx *raise-light-color*))
                      (vy color) (* k (vy *raise-light-color*))
                      (vz color) (* k (vz *raise-light-color*))))
-             (setf (stirring corpse) 0.1)))
+             (setf (stirring corpse) 0.1)
+             (if (raise-sound necromancer)
+                 (move-loop (raise-sound necromancer) at)
+                 (setf (raise-sound necromancer) (start-loop :raise-channel at)))))
           (T
            ;; A hit broke the channel: the corpse stays as it was, to be tried again.
            (when (and corpse (not (eq (brain necromancer) :attacking)))
              (setf (raise-target necromancer) NIL))
+           (setf (raise-sound necromancer) (stop-loop (raise-sound necromancer)))
            (when lamp
              (remove-lamp lamp)
              (setf (raise-lamp necromancer) NIL))))))

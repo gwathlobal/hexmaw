@@ -96,6 +96,7 @@ lower middle of its splash clear.")
 ;; The mouse moves the keyboard's selection too, so only one row is ever lit.
 (defmethod (setf alloy:hovered-p) :after (value (row menu-focusable))
   (when (and value (not (alloy:focus row)))
+    (play-sound :menu-hover)
     (setf (alloy:focus row) :weak)))
 
 (defclass menu-button (menu-focusable alloy:button) ())
@@ -284,7 +285,22 @@ special variable VARIABLE to T or NIL as it is clicked; or (LABEL :SLIDER VARIAB
 title and its buttons.")
   (:method ((panel menu-panel)) ()))
 
+(defparameter *back-actions* '(resume-game close-settings close-slot-menu)
+  "Menu actions that go back, playing :MENU-BACK rather than :MENU-SELECT.")
+
+(defgeneric build-panel (panel)
+  (:documentation "Lay PANEL out and FINISH-STRUCTURE it, when it is made: by default a title
+over its lines and a column of its buttons."))
+
+(defgeneric panel-stale-p (panel)
+  (:documentation "True if PANEL, on screen, should be made again (the forge's, forge.lisp,
+after a change to what it shows). The menu controller remakes it.")
+  (:method ((panel menu-panel)) NIL))
+
 (defmethod initialize-instance :after ((panel menu-panel) &key)
+  (build-panel panel))
+
+(defmethod build-panel ((panel menu-panel))
   (let* ((buttons (panel-buttons panel))
          (lines (panel-lines panel))
          (rows (+ 1 (length buttons) (if lines 1 0)))
@@ -329,11 +345,17 @@ title and its buttons.")
                   (alloy:represent-with (if (eq action :toggle) 'menu-toggle 'menu-slider)
                                         (make-instance 'alloy:place-data
                                                        :getter (lambda () (symbol-value variable))
-                                                       :setter (lambda (value) (setf (symbol-value variable) value)))
+                                                       :setter (lambda (value)
+                                                                 (unless (eql value (symbol-value variable))
+                                                                   (play-sound (if (eq action :toggle) :menu-select :menu-slider)))
+                                                                 (setf (symbol-value variable) value)))
                                         :text label :layout-parent column :focus-parent focus))
                  (T
                   (let ((button (alloy:represent label 'menu-button :layout-parent column :focus-parent focus)))
                     (alloy:on (alloy:activate button) ()
+                      ;; Going back plays its own sound.
+                      (unless (member action *back-actions*)
+                        (play-sound :menu-select))
                       (queue-menu-action action)))))))
     (alloy:finish-structure panel backdrop focus)))
 
@@ -475,6 +497,7 @@ victory screens share."
                   ((eq *slot-menu* :load) 'load-menu)
                   (T 'main-menu)))
     (:loading 'loading-screen)
+    (:forge 'forge-panel)
     ;; After the fall (FALL-DEAD).
     (:dead (when (<= *death-panel-delay* (death-time *player*)) 'death-screen))
     (:victory 'victory-screen)
@@ -494,7 +517,6 @@ victory screens share."
         (pain player) 0.0
         (restore-flash player) 0.0
         (mana player) *max-mana*
-        (inventory player) (make-list *inventory-size*)
         (quickslot player) NIL
         (stamina player) *max-stamina*
         (winded player) NIL
@@ -505,6 +527,10 @@ victory screens share."
         ;; No cast in progress, or its bolt would leave at the start of the next game.
         (cast-time player) NIL
         (pending-spell player) NIL
+        (statuses player) ()
+        (known-effects player) (copy-list *starting-effects*)
+        (wanted-slot player) *starting-slot*
+        (enchantments player) ()
         (eye player) *eye-height*
         (weapon-lower player) 0.0
         (run-time player) 0.0
@@ -518,6 +544,8 @@ victory screens share."
         (max-mana player) *max-mana*
         (max-stamina player) *max-stamina*
         (blessed player) 0.0)
+  ;; A fresh bag: the starting kit, bound to its keys.
+  (give-starting-kit player)
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
   (place-camera player))
 
@@ -603,6 +631,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
 
 (defun resume-game ()
   (when (eq *game-state* :paused)
+    (play-sound :menu-back)
     (setf *game-state* :playing
           *save-note* NIL)
     (when *player* (capture-mouse *player*))))
@@ -619,6 +648,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
     (setf *settings-open* T)))
 
 (defun close-settings ()
+  (play-sound :menu-back)
   (setf *settings-open* NIL))
 
 (defun open-save-menu ()
@@ -630,20 +660,21 @@ boss out of the level: a test of the boss, not of the level's last rooms."
     (setf *slot-menu* :load)))
 
 (defun close-slot-menu ()
+  (play-sound :menu-back)
   (setf *slot-menu* NIL))
 
 (defun save-to-slot (slot)
   "The save panel's action: save, then back to the pause menu, which says where it went."
-  (save-game slot)
-  (close-slot-menu))
+  (play-sound (if (save-game slot) :game-saved :refused))
+  (setf *slot-menu* NIL))
 
 (defun quicksave ()
-  (when (member *game-state* '(:playing :paused))
-    (save-game :quick)))
+  (play-sound (if (and (member *game-state* '(:playing :paused)) (save-game :quick)) :game-saved :refused)))
 
 (defun quickload ()
-  (when (and (member *game-state* '(:title :playing :paused :dead)) (slot-used-p :quick))
-    (load-game :quick)))
+  (if (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
+      (load-game :quick)
+      (play-sound :refused)))
 
 (defun reset-run ()
   "Put the level back as it was built, in place: the player at the spawn point, every
@@ -670,7 +701,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))
         ;; Projectiles and impacts; effect sprites drawn on the HUD stay.
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup))))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup altar-sigil))))
           (push entity leftovers)))
       (mapc #'despawn leftovers))))
 
@@ -706,6 +737,7 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
            ((eq *game-state* :map) (close-map))
            ((eq *game-state* :inventory) (close-inventory))
            ((eq *game-state* :talk) (escape-talk))
+           ((eq *game-state* :forge) (close-forge))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
     (:f5 (queue-menu-action 'quicksave))
@@ -725,8 +757,9 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
     (trial-alloy:hide-panel 'menu-panel))
   (let ((wanted (state-menu))
         (shown (trial-alloy:find-panel 'menu-panel)))
-    ;; A panel lays itself out once, so one whose rows changed (*MENU-REFRESH*) is made again.
-    (unless (and shown (eq (type-of shown) wanted) (not *menu-refresh*))
+    ;; A panel lays itself out once, so one whose rows changed (*MENU-REFRESH*, or PANEL-STALE-P)
+    ;; is made again.
+    (unless (and shown (eq (type-of shown) wanted) (not *menu-refresh*) (not (panel-stale-p shown)))
       (setf *menu-refresh* NIL)
       (when shown (trial-alloy:hide-panel 'menu-panel))
       (when wanted (trial:show (make-instance wanted))))))

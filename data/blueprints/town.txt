@@ -16,7 +16,7 @@ legend
   q zone temple
   % box 0 0.8 dais, zone temple
   : box 0 0.4 dais, zone temple
-  a box 0 0.8 dais, zone temple     ; where the Spellforge's altar stands
+  a box 0 1.5 dais, altar, zone temple   ; the Spellforge's altar, 0.7 m over the dais: in reach from the step
   o box 0 top pillar
   P wall pillar                     ; the pillar over storey 1, with no slab under it
   X exit

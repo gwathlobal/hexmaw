@@ -56,6 +56,8 @@
    (greeting :initarg :greeting :initform "" :reader greeting)
    (provoked :initform NIL :accessor provoked
              :documentation "True while it is set against the player: it hunts like a monster if it can fight.")
+   (last-assault :initform NIL :accessor last-assault
+                 :documentation "The player's RUN-TIME at their last blow at it, or NIL (HARMED).")
    (sprite-height :initform *townsfolk-height*)
    (wander-radius :initform 0.0)
    (walk-speed :initform 1.1)
@@ -165,8 +167,10 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
         (T (format NIL "Talk to ~a" (townsfolk-title townsfolk)))))
 
 (defun interact-target (player)
-  "The nearest thing E reaches: a townsperson the player looks at."
-  (looked-at-creature player *interact-reach* *interact-arc* :test #'interactable-p :dead T))
+  "What E reaches: a townsperson the player looks at, else the altar they stand at (:ALTAR,
+forge.lisp; anywhere with *FORGE-ANYWHERE* in a debug version), else NIL."
+  (or (looked-at-creature player *interact-reach* *interact-arc* :test #'interactable-p :dead T)
+      (and (or (near-altar-p player) (and *debug-version* *forge-anywhere*)) :altar)))
 
 (defun player-interact (player)
   "E in play: do what the thing looked at offers."
@@ -251,10 +255,18 @@ against VICTIM (a townsperson) if anyone."
   (and (typep townsfolk 'guard) (provoked townsfolk) *settlement*
        (faction-property :bribable) (settlement-hostile *settlement*)))
 
+(defparameter *assault-window* 3.0
+  "Seconds of play after the player's blow at one of the townsfolk in which more blows at it,
+or a burn's every tick (magic.lisp), are the same assault.")
+
 (defmethod harmed ((townsfolk townsfolk) amount by)
   (declare (ignore amount))
   (cond ((dead townsfolk))
-        ((eq by *player*) (report-crime :assault townsfolk))
+        ((eq by *player*)
+         (let ((now (run-time *player*)) (last (last-assault townsfolk)))
+           (setf (last-assault townsfolk) now)
+           (when (or (null last) (< *assault-window* (- now last)))
+             (report-crime :assault townsfolk))))
         ;; A monster's blow: a townsperson who can fight fights back.
         ((and (typep by 'creature) (not (townsfolk-p by)) (fighter-p townsfolk) (not (foe townsfolk)))
          (setf (foe townsfolk) by (replan-timer townsfolk) 0.0))))
@@ -356,7 +368,7 @@ against VICTIM (a townsperson) if anyone."
     (cond ((not in-zone) (setf (rule-grace s) NIL))
           ((null (rule-grace s))
            (setf (rule-grace s) *rule-grace*)
-           (hud-say "The watch: ~a Put it away (press 2)." (faction-property :rule-text s)))
+           (hud-say "The watch: ~a Put it away." (faction-property :rule-text s)))
           ((<= (decf (rule-grace s) dt) 0)
            (setf (rule-grace s) (* 2 *rule-grace*))
            (report-crime :rule)))))

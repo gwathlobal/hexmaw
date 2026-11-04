@@ -248,16 +248,20 @@ shows and the player's own."
       (when low
         (let ((own (storey-at (vy (feet *player*)))))
           (setf storey (clamp (min low own) storey (max high own))))))
+    (unless (= storey *map-focus-storey*)
+      (play-sound :map-storey))
     (setf *map-focus-storey* storey)))
 
 (defun open-map ()
   (when (and (eq *game-state* :playing) *player* *map-view*)
+    (play-sound :map-open)
     (setf *game-state* :map)
     (release-mouse *player*)
     (centre-map *map-view*)))
 
 (defun close-map ()
   (when (eq *game-state* :map)
+    (play-sound :map-close)
     (setf *game-state* :playing)
     (when *player* (capture-mouse *player*))))
 

@@ -9,6 +9,11 @@ writes mana-potion.png and mana-potion.lisp. Every pixel from row --below down w
 so shading and highlights survive (--saturation and --value scale them, to tone down a key
 colour such as the townsfolk guard's green tabard). The rows above stay as they are: the flask's tan stopper and
 neck are close enough in hue to the orange glints on its belly that only the row tells them apart.
+
+--spread keeps that fraction of each pixel's hue off --from, so a gradient (the bolt's red to
+yellow fire) stays one, in the new colour; the spell looks (spells.lisp) are made that way:
+
+  tools/recolor_hue.py data/sprites/bolt/flight data/sprites/spells/frost-flight --from 30 --reach 60 --hue 200 --spread 0.5
 """
 
 import argparse
@@ -26,6 +31,8 @@ def main():
     parser.add_argument("--hue", type=float, required=True, help="hue it becomes, in degrees")
     parser.add_argument("--reach", type=float, default=22.0, help="degrees either side of --from to change")
     parser.add_argument("--below", type=int, default=0, help="first row to change, from the top")
+    parser.add_argument("--spread", type=float, default=0.0,
+                        help="fraction of each pixel's hue off --from that it keeps")
     parser.add_argument("--min-saturation", type=float, default=0.12, help="leave anything greyer than this")
     parser.add_argument("--saturation", type=float, default=1.0, help="scale the changed pixels' saturation by this")
     parser.add_argument("--value", type=float, default=1.0, help="scale the changed pixels' brightness by this")
@@ -41,7 +48,7 @@ def main():
             h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
             off = (h * 360 - args.start + 180) % 360 - 180
             if abs(off) <= args.reach and args.min_saturation <= s:
-                nr, ng, nb = colorsys.hsv_to_rgb(args.hue / 360, min(1.0, s * args.saturation), min(1.0, v * args.value))
+                nr, ng, nb = colorsys.hsv_to_rgb(((args.hue + off * args.spread) % 360) / 360, min(1.0, s * args.saturation), min(1.0, v * args.value))
                 pixels[x, y] = (round(nr * 255), round(ng * 255), round(nb * 255), a)
     strip.save(args.out.with_suffix(".png"))
 
