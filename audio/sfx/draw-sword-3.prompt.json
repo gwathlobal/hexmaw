@@ -1,0 +1,21 @@
+{
+  "prompt": "A steel sword drawn from its scabbard: a crisp metallic scrape of the blade sliding free and a bright ring of steel. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-draw-sword.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.6,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793708940,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.6,
+    0.6,
+    0.6
+  ]
+}

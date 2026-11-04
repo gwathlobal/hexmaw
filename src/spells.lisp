@@ -217,7 +217,33 @@ turns it aside ends it.")
    (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
-and bursts only on entering one from outside.")))
+and bursts only on entering one from outside.")
+   (evade-asked :initform NIL :accessor evade-asked
+                :documentation "The creature last asked whether it evades this (the player's)
+projectile about to reach it, so each is asked once.")
+   (sound :initform NIL :accessor projectile-sound
+          :documentation "Its flight's loop (sound.lisp), from its first tick until it leaves.")))
+
+(defparameter *spell-sounds*
+  '(bolt (:flight :bolt-flight :impact :bolt-impact)
+    cinder (:flight :cinder-flight :impact :cinder-impact)
+    grave-skull (:cast :skull-cast :flight :skull-flight :impact :skull-impact)
+    grave-spikes (:circle :grave-circle :strike :grave-spikes)
+    gust (:cast :gust-cast)
+    rift-pull (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rift-swap (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rift-push (:cast :rift-cast :flight :rift-flight :impact :rift-impact))
+  "Each spell's clips (sound.lisp) by event: :CAST where a creature lets it go, :FLIGHT its
+projectile's loop, :IMPACT its burst, :CIRCLE a circle's loop through its wind-up and :STRIKE
+its strike. The player's own casts sound from the hands (player.lisp).")
+
+(defun spell-sound (spell event)
+  ;; A forged spell (named by a string, SPEC-SPELL) sounds like the bolt.
+  (getf (getf *spell-sounds* (if (stringp (spell-name spell)) 'bolt (spell-name spell))) event))
+
+;; A reset, a rebuild or its end takes it away: its flight falls silent.
+(defmethod leave :after ((projectile spell-projectile) container)
+  (setf (projectile-sound projectile) (stop-loop (projectile-sound projectile))))
 
 ;; It strikes from behind itself, along its flight, and pushes along it.
 (defmethod effect-origin ((source spell-projectile))
@@ -248,18 +274,20 @@ drawn that much bigger.")
   (let ((velocity (projectile-velocity projectile)))
     (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
 
-(defun play-impact (spell at container)
-  "Play SPELL's impact animation at AT, as big as its burst, with its glow."
+(defun play-impact (spell at container &key water)
+  "Play SPELL's impact animation at AT, as big as its burst, with its glow and its sound. Into
+WATER it hisses out."
   (let ((name (impact-animation spell)))
     (when (and name container)
       (let ((sprite (spawn-fx name at container))
             (k (max 1.0 (/ (spell-burst-radius spell) *burst-size*))))
         (nv* (scaling sprite) k)
-        (attach-glow sprite (light-color spell) (* (light-radius spell) (sqrt k)))))))
+        (attach-glow sprite (light-color spell) (* (light-radius spell) (sqrt k)))
+        (play-sound (if water :bolt-hiss-water (spell-sound spell :impact)) at)))))
 
-(defun impact (projectile &optional (at (impact-point projectile)))
-  "Play the spell's impact where PROJECTILE hit, and remove it."
-  (play-impact (spell projectile) at (container projectile))
+(defun impact (projectile &key water (at (impact-point projectile)))
+  "Play the spell's impact where PROJECTILE hit, and remove it. Into WATER it hisses out."
+  (play-impact (spell projectile) at (container projectile) :water water)
   (despawn projectile))
 
 ;; The player's own projectiles never hit them, nor a creature's that creature.
@@ -285,6 +313,7 @@ drawn that much bigger.")
 (defun deflect (target projectile)
   "TARGET's shield takes PROJECTILE: reflect it, or stop it if the shield doesn't reflect."
   (block-hit target)
+  (play-sound :shield-deflect (location projectile))
   (cond ((shield-reflects target)
          ;; Mirror the flight off the shield's face, whose normal is the way TARGET faces,
          ;; and send it back up or down too: straight on, it returns to its caster.
@@ -329,6 +358,30 @@ seconds, keeping its speed."
                         (vy v) (* speed (+ (* c uy) (* s wy)))
                         (vz v) (* speed (+ (* c uz) (* s wz))))))))))))
 
+(defparameter *evade-look-ahead* 0.2
+  "Seconds of flight ahead of the player's projectile that a creature sees it coming (EVADE-PROJECTILE).")
+
+(defgeneric evade-projectile (creature projectile)
+  (:documentation "Give CREATURE, which the player's PROJECTILE is about to reach, its chance
+to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per projectile.")
+  (:method (creature projectile) NIL))
+
+(defvar *evade-probe* (vec 0 0 0))
+
+(defun look-ahead (projectile r)
+  "Ask the creature the player's PROJECTILE will reach within *EVADE-LOOK-AHEAD* whether it evades it."
+  (let ((probe *evade-probe*)
+        (loc (location projectile))
+        (v (projectile-velocity projectile))
+        (k (float *evade-look-ahead* 0f0)))
+    (setf (vx probe) (+ (vx loc) (* k (vx v)))
+          (vy probe) (+ (vy loc) (* k (vy v)))
+          (vz probe) (+ (vz loc) (* k (vz v))))
+    (let ((c (creature-at probe r *player*)))
+      (when (and c (not (eq c (evade-asked projectile))))
+        (setf (evade-asked projectile) c)
+        (evade-projectile c projectile)))))
+
 ;; After FX-SPRITE's tick, which animates and ages it.
 (define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
@@ -336,9 +389,16 @@ seconds, keeping its speed."
            (r (* 0.5 (float *projectile-size* 0f0))))
       (when (and (homing spell-projectile) *player* (not (eq (caster spell-projectile) *player*)))
         (steer spell-projectile (float dt 0f0)))
+      (when (and *player* (eq (caster spell-projectile) *player*))
+        (look-ahead spell-projectile r))
       (nv+* loc (projectile-velocity spell-projectile) dt)
+      (let ((sound (projectile-sound spell-projectile)))
+        (if sound
+            (move-loop sound loc)
+            (setf (projectile-sound spell-projectile)
+                  (start-loop (spell-sound (spell spell-projectile) :flight) loc))))
       (let ((victim (projectile-victim spell-projectile loc r))
-            (entered (and (liquid-at (vx loc) (vy loc) (vz loc)) (not (submerged spell-projectile)))))
+            (entered (and (not (submerged spell-projectile)) (liquid-at (vx loc) (vy loc) (vz loc)))))
         (setf (submerged spell-projectile) (and (liquid-at (vx loc) (vy loc) (vz loc)) T))
         (cond ((and victim (deflects-p victim spell-projectile))
                (deflect victim spell-projectile))
@@ -349,11 +409,12 @@ seconds, keeping its speed."
                    (apply-effect (effect-kind effect) effect victim spell-projectile)))
                (let ((at (impact-point spell-projectile)))
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
-                 (impact spell-projectile at)))
-              ((or (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)) entered)
+                 (impact spell-projectile :at at)))
+              ((or entered (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)))
                (let ((at (impact-point spell-projectile)))
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
-                 (impact spell-projectile at)))
+                 (impact spell-projectile :at at
+                                          :water (and entered (liquid-property (liquid-kind entered) :swim)))))
               ((< (or (spell-lifetime (spell spell-projectile)) *projectile-lifetime*) (age spell-projectile))
                (despawn spell-projectile)))))))
 
@@ -557,7 +618,8 @@ void main(){
    (aurora :initform NIL :accessor circle-aurora)
    (lamp :initform NIL :accessor circle-lamp)
    (struck :initform NIL :accessor struck :documentation "Seconds since it struck, or NIL.")
-   (rings-left :initform () :accessor rings-left :documentation "Rings of the strike yet to burst.")))
+   (rings-left :initform () :accessor rings-left :documentation "Rings of the strike yet to burst.")
+   (sound :initform NIL :accessor circle-sound :documentation "Its loop through the wind-up.")))
 
 (defun circle-radius (spell)
   (reduce #'max (spell-effects spell) :key #'effect-area :initial-value 0))
@@ -590,6 +652,7 @@ then fading."
 (defun light-circle (circle)
   "Raise CIRCLE's aurora and lamp, the first time it ticks in the scene."
   (let ((c (centre circle)))
+    (setf (circle-sound circle) (start-loop (spell-sound (spell circle) :circle) c))
     (setf (circle-aurora circle) (make-instance 'aurora :centre c :radius (circle-radius (spell circle))))
     (enter (circle-aurora circle) (container circle))
     (setf (circle-lamp circle)
@@ -609,6 +672,7 @@ then fading."
 
 ;; A reset or rebuild takes the circle away before it is done.
 (defmethod leave :after ((circle spell-circle) container)
+  (setf (circle-sound circle) (stop-loop (circle-sound circle)))
   (drop-circle-light circle))
 
 (defun in-circle-p (circle point radius)
@@ -630,7 +694,9 @@ then fading."
   (let ((spell (spell circle))
         (caster (caster circle)))
     (setf (struck circle) 0.0
-          (rings-left circle) *strike-rings*)
+          (rings-left circle) *strike-rings*
+          (circle-sound circle) (stop-loop (circle-sound circle)))
+    (play-sound (spell-sound spell :strike) (centre circle))
     (drop-aurora circle)
     (loop for c across *creatures*
           when (and (not (dead c)) (not (undead c)) (not (eq c caster))

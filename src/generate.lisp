@@ -174,6 +174,7 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
   (setf *last-level-seed* seed)
   (let* ((*generator-random* (sb-ext:seed-random-state seed))
          (*block-random* *generator-random*)
+         (*elite-random* (sb-ext:seed-random-state (logxor seed #xE117E)))
          (*spawn-clearance* NIL)
          (kit (or *generator-blocks* (remove-if-not #'block-tags (kit-blocks))))
          (cells (setf *level-cells* (make-hash-table :test 'equal)))

@@ -18,6 +18,9 @@
 ;;; Each actor runs all this in its own tick, so its camera can't lag the vortex, and
 ;;; heavier ones (KNOCKBACK-SCALE) are dragged and thrown less.
 
+(defparameter *whirl-cry-gap* 1.0 "Seconds at least between the pain cries of a creature a vortex holds.")
+(defparameter *tornado-volume* 1.5
+  "How loud its roar plays: over 1, since it is heard from across a room as it roams.")
 (defparameter *vortex-pull-radius* 6.0 "Metres from the centre line that a vortex drags things from.")
 (defparameter *vortex-pull-speed* 5.5
   "Speed in m/s it drags something at the edge of its catch, falling to nothing at the pull radius.")
@@ -237,7 +240,8 @@ void main(){
    (replan :initform 0.0 :accessor vortex-replan :documentation "Seconds until it looks for a fresh path.")
    (ceiling :initform 1000.0 :accessor vortex-ceiling :documentation "The lowest ceiling around it.")
    (puff-timer :initform 0.0 :accessor puff-timer)
-   (funnel :initform NIL :accessor vortex-funnel)))
+   (funnel :initform NIL :accessor vortex-funnel)
+   (sound :initform NIL :accessor vortex-sound :documentation "Its roar, a loop, as loud as it is strong.")))
 
 ;; All that shows of it is its funnel and its dust.
 (defmethod render :around ((vortex spell-vortex) (program shader-program)))
@@ -336,7 +340,8 @@ turns aside. It settles to the floor and notes the ceiling."
   (enter (vortex-funnel vortex) (container vortex))
   ;; A loaded one has its lamp back already (RESTORE-EFFECT).
   (unless (find vortex *lamps* :key #'source)
-    (attach-glow vortex *vortex-light-color* *vortex-light-radius*)))
+    (attach-glow vortex *vortex-light-color* *vortex-light-radius*))
+  (setf (vortex-sound vortex) (start-loop :tornado (location vortex) 0.0)))
 
 ;; Its own tick, not FX-SPRITE's: it doesn't play out an animation.
 (define-handler (spell-vortex tick) (dt)
@@ -359,6 +364,7 @@ turns aside. It settles to the floor and notes the ceiling."
         (loc (location spell-vortex))
         (funnel (vortex-funnel spell-vortex)))
     (setf (vx loc) (vx c) (vy loc) (+ (vy c) 1.0) (vz loc) (vz c))
+    (move-loop (vortex-sound spell-vortex) loc (* *tornado-volume* (vortex-strength spell-vortex)))
     (when funnel
       (setf (funnel-strength funnel) (vortex-strength spell-vortex)
             (funnel-height funnel) (min 9.0 (max 2.0 (- (vortex-ceiling spell-vortex) (vy c))))))))
@@ -378,6 +384,7 @@ turns aside. It settles to the floor and notes the ceiling."
 ;; A reset or rebuild takes it away before it is done; REVIVE and RESPAWN have cleared
 ;; whatever it held by then, and a despawn at its end holds nothing.
 (defmethod leave :after ((vortex spell-vortex) container)
+  (setf (vortex-sound vortex) (stop-loop (vortex-sound vortex)))
   (when (vortex-funnel vortex)
     (despawn (vortex-funnel vortex))
     (setf (vortex-funnel vortex) NIL))
@@ -603,10 +610,15 @@ SCALE of the full speed."
   ;; Its flinch frame, its views cycling: it tumbles.
   (setf (stagger creature) (* 0.6 *stagger-time*)
         (facing creature) (mod (+ (facing creature) (* *whirl-tumble* dt)) #.(float (* 2 pi) 0f0)))
+  (setf (cry-timer creature) (max 0.0 (- (cry-timer creature) dt)))
   (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt (whirl-damage creature))
     (setf (burn-timer creature) timer)
     (when (< 0 due)
-      (burn creature due))))
+      (burn creature due)
+      ;; The wind tears at it: a cry, though BURN makes none, every *WHIRL-CRY-GAP*.
+      (when (and (not (dead creature)) (<= (cry-timer creature) 0))
+        (setf (cry-timer creature) *whirl-cry-gap*)
+        (creature-noise creature :pain)))))
 
 (defun land-creature (creature)
   (let ((m (momentum creature))

@@ -29,6 +29,7 @@
         (restore-state new *carried-state*)
         (setf *carried-state* NIL))
       (when (eq *level* :generated)
+        (play-sound :level-gong)
         (setf *level-banner-left* *level-banner-time*))
       (when *boss-fight-start*
         (setf *boss-fight-start* NIL)
@@ -52,12 +53,15 @@
   (add-shield scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)
+  ;; And a riftwalker's rifts.
+  (preload-riftwalker scene)
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
   ;; And the dust an ogre kicks up.
   (preload (make-instance 'upright-fx :animation (find-fx-animation 'ogre-dust)) scene)
   (enter (make-instance 'menu-controller) scene)
   (add-music scene)
+  (add-sounds scene)
   ;; The automap screen (map-view.lisp), after the player: its camera mustn't become the scene's.
   (add-map-view scene)
   ;; The game draws into one pass and the menus (Alloy) into another; the blend
@@ -176,8 +180,9 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                 (let ((*print-pretty* NIL)) (princ-to-string (quickslot *player*)))
                 (let ((*print-pretty* NIL)) (princ-to-string (remove NIL (inventory *player*))))
                 (map 'list (lambda (c)
-                             (format NIL "~(~a~) ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)~@[ on ~(~a~)~]"
-                                     (type-of c) (dead c) (health c) (max-health c) (brain c)
+                             (format NIL "~(~a~)~@[ elite:~(~a~)~] ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)~@[ on ~(~a~)~]"
+                                     (type-of c) (and (typep c 'elite) (elite-trait c))
+                                     (dead c) (health c) (max-health c) (brain c)
                                      (vx (location c)) (vz (location c)) (footing c)))
                      *creatures*)
                 active (length *runtime-errors*)))

@@ -285,7 +285,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 8, ogre 9, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
+  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
@@ -603,8 +603,41 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   at a time. Otherwise it throws `gust`s: a `:gust` effect throws the player, toward its tornado
   if one is near, and with lift, since a shove on the floor dies at once. It has no walk.
   `casting-tempest-p` is a generic, so a boss's tornado cast keeps its sign up too.
+- `src/riftwalker.lisp` (after boss.lisp, whose `free-spot` and `same-arena-side-p` it uses): the
+  `riftwalker`, a masked assassin, an `ability-user` and a melee hunter (`ranged-p` is true only
+  while a cast of its runs, so the cast turns after the player as a caster's does) that flanks.
+  Its stab is its only damage. Its other abilities move things, chosen in `special-attack`:
+  `:call` (cd 14 s) brings the live ally nearest it (within `*call-reach*`, at least
+  `*call-min-distance*` from the player, no boss) to stand to the player's front quarter on the
+  side away from the riftwalker (`call-spot`), a 1 s cast
+  marked by a `rift-sign` on the floor (`tools/draw_rift_sign.py data/sprites/rift`) that a flinch
+  breaks; `:push` (cd 12 s) with the player on top of it while it is under half health or their
+  shield is up; else `:pull` (cd 8, 6 to 16 m) or `:swap` (cd 10, 5 to 14 m), 50/50 when both are
+  ready. The three are projectiles at 10 m/s (`rift-pull` violet, `rift-swap` gold, `rift-push`
+  cyan by their light), with effects `:teleport-to`, `:swap` and `:teleport-away`. They pass
+  through every creature (`spares-p`): a rift that struck the ally it had just called stood in
+  its line swapped the two. A sidestep dodges them and a raised shield facing them stops them
+  (`rift-stopped-p`); a knight's shield sends one back as its own, which moves whatever it then
+  strikes (the effects are methods on `apply-effect` for any target). A pull puts the target in front of the caster (`spot-around`), turned to it, and
+  the stab follows; a swap trades places, the player keeping their facing, and `*pounce-delay*`
+  later it blinks in right behind them (`pounce`); a push sends the target to `spot-away`, a dry
+  cell `*rift-away-walk*` (10 to 25 m) of walking off and within `*rift-away-within*`
+  (`nav-reachable-spot`'s `:test`), so the way back is always on foot. Every destination keeps to
+  its side of the arena's walls. **Blink**: every `*blink-interval*` (4 to 8 s) of hunting it steps
+  through a rift to a random spot `*blink-range*` (3 to 6 m) off in sight of the player
+  (`blink-spot`), and, past `*blink-cooldown*`, `*blink-dodge-chance*` (35%) after a hit it lives
+  through (`react-to-hit`, a generic `hurt` asks) and `*blink-evade-chance*` (50%) when the
+  player's projectile is about to reach it (`evade-projectile`, asked once per projectile from its
+  tick, `*evade-look-ahead*` ahead, spells.lisp). Moving goes through `teleport-actor` (the
+  player's is `teleport-player`, player.lisp: stopped, out of a vortex, the eye snapped, the view
+  flashing `*rift-flash-color*`) and `rift-move`, a `rift-flash` at both ends. Rolls use
+  `*roll-random*`. As a boss it is the Rift Lord (`riftwalker-boss`, defined here), denied the
+  boss's `:blink`, and an elite as `elite-riftwalker`. It spawns from level 2 of a run on (weight 1,
+  then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
+  `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
+  riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block level 3 ends in. It is an
-  empowered form of one of the seven monsters (`*boss-kinds*`: kind, class such as `imp-boss`
+  empowered form of one of the eight monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
   likely, with three powers (`boss-powers`): two from the start, the third when it enrages at
   `*boss-enrage-at*` (half) health (`active-powers`). `make-boss`, from a `spawn boss` in a
@@ -616,9 +649,10 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*boss-pain-chance*` (1, the weapon's bonus still added), melee × `*boss-damage-scale*`, knockback at most `*boss-max-knockback*`,
   never gibbed, flyers hovering `*boss-hover*` so the sword reaches them, step `*nav-tall-lift*`
   since it is taller than `*nav-clearance-height*`. No vortex pulls or catches it (`vortex-proof-p`).
-  It glows: a class fragment shader on `boss` multiplies it by `*boss-shade*` and draws a pulsing
-  rim in `*boss-glow-color*` on every opaque texel beside a see-through one (on the boss's program
-  only), with a lamp of its own. Warded shows as an arc of violet `aurora` on the floor round its
+  It glows: `rim-glow`, a shader mixin the boss and elites (`src/elite.lisp`) share, multiplies it
+  by its `rim-shade` (the boss's `*boss-shade*`) and draws a pulsing rim on every opaque texel
+  beside a see-through one (on that class's program only), in `*boss-glow-color*`, with a lamp of
+  its own (`light-rim`). Warded shows as an arc of violet `aurora` on the floor round its
   front (`update-ward`, `*ward-colors*`), over exactly the sector its reflection covers
   (`ward-arc`: the billboard views `shield-views` covers, a quarter of pi each, so 135°), turning
   with its facing. Powers are
@@ -638,7 +672,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   | `:shockwave` | a 0.9 s crouch, then `quake` round itself out to `*boss-quake-radius*` | flyers |
   | `:tornado` | the wraith's cast, sign and tornado; one up at a time | gale wraith |
   | `:summon` | 2 of its kind at normal size (3 enraged), `summoned`, while fewer than `*boss-max-minions*` live: a `summon-sigil` draws itself in on the floor at each spot through the 1.1 s cast (`begin-summon`, `summon-spots`), and at the release flame bursts up from each (an `aurora` in `*sigil-flame-colors*`) and a minion rises out of it; a broken cast takes its sigils with it | |
-  | `:blink` | a ranged kind 9 m off a close player, a melee kind behind a far one | |
+  | `:blink` | a ranged kind 9 m off a close player, a melee kind behind a far one | riftwalker |
   | `:warded` (passive) | its front turns spells back (`shield-views`) | knight |
   | `:haste` (passive) | walk and attacks × `*haste-speed*` | |
 
@@ -694,6 +728,21 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   value text). A structural command bumps `*forge-revision*` and the menu controller remakes the panel
   (`panel-stale-p`); a slider only changes the draft and the readout and note (`alloy:value-data`s the
   panel keeps). To look at it: `(game (setf *forge-anywhere* t) (open-forge))`, then `(forge-select :sword)`.
+- `src/elite.lisp`: elites, a deeper level's stronger monsters. A spawn on a generated level is
+  one with the level's `*elite-chance*` (`:elite-chance` in `*run-levels*`): `elite-roll`, from
+  `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
+  every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
+  its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `elite-riftwalker`
+  in riftwalker.lisp, `*elite-kinds*`):
+  `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
+  `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
+  kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
+  none of them the boss's orange. Its one trait (`elite-trait`): `:haste` (cyan, walk and attacks ×
+  `*elite-haste*`), `:warded` (violet, its front turns spells back, `shield-views`; never the
+  knight's) or `:tough` (bone-white, half the pain chance and the knockback). Summoned and raised
+  creatures and the boss never are. A save needn't keep the trait: the rebuild draws it again.
+  `*elite-override*` (`:all`, or a trait) makes every block spawn an elite, on any level (on the test
+  level, the blocks attached to it: the shrine and the pool). `tools/hd status` shows `elite:<trait>`.
 - `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the
   amounts: `:herbs` +15 health and `:shard` +28 mana (2 bolts) restore at once; at full one stays
   where it is, below full it is taken and any excess lost (`restore-resource`). `:health-potion`
@@ -737,7 +786,10 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   found item in the quickslot if it holds that kind, then a stack of it in the bag, then the
   quickslot if empty, then an empty cell. Q (`use-quickslot`) drinks one, not at full; when the
   stack runs out the first bag stack of that kind moves in (`refill-quickslot`), and with none
-  the quickslot keeps the kind with a count of 0, dimmed, so the next one found goes back in. I
+  the quickslot keeps the kind with a count of 0, dimmed, so the next one found goes back in. The
+  mouse wheel in play (`cycle-quickslot`) swaps the next kind in `*item-kinds*` that the bag holds
+  into the quickslot through `move-stack` (wheel down the next, up the previous), skipping kinds it
+  holds none of. I
   opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. A left
   drag moves a stack (`move-stack`): into an empty cell, onto its own kind (merging up to the
   limit), swapping with another kind; dropped on nothing it goes back, and a dimmed quickslot
@@ -777,8 +829,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   eye to `*death-eye-height*`, rolls the view (`*death-roll*`, the player's `project-view`) and
   sinks the weapons. After `*death-panel-delay*` the `death-screen` comes up with the mouse
   released: `death-stats` (killed by, time survived, monsters slain, areas explored, damage
-  taken, the seed) and a button back to the main menu. Esc does nothing there, F5 is refused and
-  F9 still quickloads. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
+  taken, the seed) and a button back to the main menu. Esc, F5 and F9 do nothing there: death
+  ends the run, with no quickload back into it. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
   `:drowning`, `:tornado`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
   Killing the boss sets `:victory` (`win-run`, boss.lisp) and the `victory-screen` comes up:
   `victory-stats` (the boss slain, then `run-stat-lines`, the rows it shares with the death
@@ -842,6 +894,42 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   to the `:effect` mixer, a space mixer, does it).
   To watch it, `(levels (node :music-director (scene +main+)))`, `(current ...)` and `(wanted ...)`. See "Sound and
   music".
+- `src/sound.lisp`: sound effects, through Harmony like the music. `audio/sfx.md` lists every
+  sound the game needs and where its hook goes. `(play-sound :clip at)` plays a one-shot at a
+  vec (positional clips; without AT, at the listener) or unplaced (first-person clips);
+  `start-loop` holds a loop's voice, `move-loop` moves it each tick (allocating nothing) and
+  `stop-loop` gives it back, returning NIL for the holder's slot: a projectile, circle, vortex,
+  sign or channel keeps its loop in a slot and stops it in its `leave :after`. Clips are
+  keywords from `data/sfx/index.lisp`; a clip not made yet plays nothing. Each clip keeps
+  voices of its own (Trial's sound assets play one copy at a time): `*sfx-voices*` per file,
+  taken in turn, the oldest cut short when all are busy, and `*loop-voices*` per loop, made
+  once by `add-sounds` (from `setup-scene`) and kept in `*sounds*` across rebuilds;
+  `(reload-sounds)` then a reset picks up re-made files. **The game thread never touches a
+  voice's connection**: `play-sound` pushes a request, and the `sound-director`'s tick hands
+  Harmony's mixing thread one function, `sound-frame`, that starts them, moves the listener
+  (`*listener-location*`, the player's eye) and the loops, and pauses the loops whenever
+  `*game-state*` isn't `:playing` (not under hit-stop). Harmony's queue holds 64 jobs, and an
+  error in its thread stops all sound for good, so `sound-frame` keeps its errors in
+  `*sound-error*`. The space mixer's axes are the other hand to the game's, so `copy-into`
+  mirrors Z (checked by recording: a sound on the player's left plays in the left channel);
+  a positional sound is at full volume within `*sound-min-distance*` (4 m) and then fades as
+  (distance / min)^-`*sound-rolloff*` (0.75: 4.5 dB a doubling; at 1 and 2 m, as it was, sounds
+  were barely heard across a room), no quieter past `*sound-max-distance*` (50 m). A big sound keeps
+  full volume further out (`*clip-min-distances*`: the tornado and the ogre's leap roar 12 m, its
+  landing 10, its footsteps 8). `tune-voice` sets them on a voice as it connects;
+  `(game (retune-sounds))` re-tunes those connected already after a change.
+  A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
+  a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
+  `hold-loop`, called every tick, keeps a holder's loop in a slot while it is wanted (the
+  player's slide on ice, the water and the wind, a creature floundering, the boss's ward).
+  The player's footsteps and strokes are `body-sounds` (player.lisp); the torches', lava's and
+  water's loops and the room tone are `update-ambience` (liquids.lisp, `*ambient-sources*`),
+  holding `ambient-voice`s on the nearest few sources. `audio/sfx.md` says where each clip
+  plays and how the hooks differ from its tables.
+  To hear one: `tools/hd '(game (play-sound :imp-pain (v+ (location *player*) (vec -3 0 0))))'`.
+  To find which sound misbehaves, `tools/hd '(game (mute :ambience))'` silences a clip or a group of
+  `*sound-groups*` (`:music`, `:effects` for every clip), loops already playing too, and `(unmute)`
+  brings everything back.
 - `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
@@ -866,8 +954,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (`swing-frame-times`, `swing-hit-frame`, `swing-reach`, `swing-arc`, `swing-damage`,
   `swing-knockback`, `swing-pain-bonus`), and generics on the sprite which weapon it draws
   for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
-  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon, the mouse wheel cycles
-  (`cycle-weapon`). The weapon slots above the HP bar (`weapon-bar`) show one icon per
+  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon (the mouse wheel is the
+  quickslot's, inventory.lisp). The weapon slots above the HP bar (`weapon-bar`) show one icon per
   weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
   frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
@@ -926,7 +1014,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup.
+  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup;
+  `*debug-level-monsters*` (a list of kinds, NIL for all) keeps only those in the hall and leaves out
+  the annex's imp, the blocks' monsters and the boss.
   A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
   and a boss of a random kind with random powers, a new one at every build (`tools/hd reset`);
   `*boss-override*` fixes them. To try a block with one kind only,
@@ -1327,6 +1417,39 @@ second), each writing a `.prompt.json` beside its output like `gen_image.py`. Bo
 (the API's PCM is stereo) or `.mp3`. Sources and prompts live under `audio/` (`audio/prompts/`,
 `audio/sfx/`, `audio/music/`), as `art/` holds the pictures; what the game plays goes in `data/`.
 
+`audio/sfx.md` lists every sound effect the game needs: the moment, the code where it starts,
+its clip (prompt `audio/prompts/sfx-<clip>.txt`, ending in a shared style line), duration, takes,
+whether it loops and whether it is positional (a mono file on the `:effect` space mixer) or
+first-person. Work from it and keep it current.
+
+Sound effects: each clip's takes are `audio/sfx/<clip>-<n>.wav` (`tools/gen_sfx.py`, with the
+duration, takes and `--loop` from `audio/sfx.md`), gitignored like the music's. The chosen take
+of each goes in `audio/sfx-picks.txt` (`imp-pain 2`; several takes are variants played in
+turn, `gain=-3` evens one out, `even` flattens a loop that swells and fades within itself,
+`lowcut=120` rolls off the sub-bass of a heavy thud before leveling, which otherwise counts it and
+leaves the part speakers play tiny; take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
+levels (the loudest 100 ms at -14 dBFS RMS, peaks under -1 through make_loop.py's limiter),
+downmixes positional clips to mono (the `:effect` space mixer takes only mono) and encodes them
+to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in
+`data/sfx/index.lisp`. Then `tools/hd '(reload-sounds)'` and `tools/hd reset`. Generated takes
+often clip: pick one that doesn't. To try a clip again, rewrite its prompt and `gen_sfx.py ... --add`,
+which numbers the new takes on from the last (`<clip>-4.wav`, recorded in `<clip>-4.prompt.json`)
+and keeps the old ones; `--influence 0.5` keeps closer to the prompt than the default 0.3. A take
+borrowed from another clip is a copy under the next number with a `.prompt.json` saying where it
+came from (`cinder-flight-3.wav` is `bolt-flight-2.wav`). A clip taken out of `audio/sfx.md`
+leaves the index and `data/sfx/` at the next `make_sfx.py`.
+
+The picker does all that from a page, with the game running: `tools/sfx_picker.py` (or the
+`sfx-picker` config in `.claude/launch.json`) serves http://127.0.0.1:8765/, every clip of
+`audio/sfx.md` with its takes to hear in the browser (marked when they clip or are quiet).
+**Use** on a take, **+**/**−** for variants or the gain buttons rewrite that clip's line in
+`audio/sfx-picks.txt`, run `make_sfx.py` on it and have the game swap it in at once
+(`reload-sound`, which frees the clip's old voices in the mixing thread and makes new ones,
+no reset) and play it 3 m in front of the player (`audition-sound`; a loop for 2 s, even with the
+game paused). **▶ In game** converts and loads a clip the game doesn't have yet. Switch as
+often as you like. It talks to the game `tools/hd` would (`.eval-port`). Its Ogg files differ
+byte for byte each run (Vorbis stream serials), the sound not.
+
 Each track is `audio/music/<name>.wav`, generated from `audio/prompts/music-<name>.txt`: three
 minutes for exploration, two for combat. A prompt ends asking for one even texture with no intro
 or ending (`music-explore-1` is `music-explore-loop.txt`), which keeps the loop easy to find, and
@@ -1393,7 +1516,7 @@ asked for 110, plays at about 160 (a tempo estimate from onset autocorrelation f
 
 Harmony picks a decoder by the file's extension, and quickloads its system when it isn't loaded;
 the binary has no Quicklisp, so each format the game plays is a dependency in the .asd
-(`cl-mixed-vorbis` for `.ogg`, `cl-mixed-wav` for `.wav`). A changed `main` class or new
+(`cl-mixed-vorbis` for `.ogg`; a `.wav` would need `cl-mixed-wav`, not there yet). A changed `main` class or new
 dependency needs a restart of `./run.sh`. In this version, `trial:seek` on a voice fails
 (`mixed:seek` takes no `:by`); seek its source by frames instead. A vorbis source's
 `frame-count` reads twice the real length, though it ends and loops where it should.
@@ -1760,6 +1883,39 @@ python3 tools/slice_frames.py art/wraith/death.png data/sprites/wraith --pixel 3
 Its strips need `--violet`: without it the slicer takes blue above green for a blend with the
 magenta background, so it keys out the violet rags, eyes and lightning and greys what's left.
 
+The riftwalker (a lean knife fighter in a low crouch, a close charcoal hood over a featureless
+mask of polished brass, wrappings of charcoal and deep indigo cracked with pale silver-blue light,
+a curved dagger in the right hand, a shard of light over the left palm) is
+`art/riftwalker/turnaround-2.png` (`art/prompts/riftwalker-turnaround.txt`, the imp's, acolyte's,
+knight's, necromancer's and wraith's sheets as style references), sliced at `--height 115` for its
+1.8 m. No view needed mirroring. Its walk, stab (wind-up, lunge, strike, recover), cast (the rift
+gathered in the left hand, held up as a jagged diamond, flung, recover: every rift and the call)
+and flinch are made with `tools/gen_monster_views.sh riftwalker <anim> ...`, and its front-only
+death (`riftwalker-death.txt`) cracks the mask and folds it face down beside the dagger. Its
+strips take `--violet` too, which keeps the indigo and the blue cracks the plain keying greys.
+
+```bash
+python3 tools/slice_turnaround.py art/riftwalker/turnaround-2.png data/sprites/riftwalker/turnaround --height 115 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk:20 stab:20 cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/riftwalker $a $(for v in $V; do echo art/riftwalker/${a%:*}-$v.png; done) --height 920 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
+python3 tools/slice_frames.py art/riftwalker/death.png data/sprites/riftwalker --pixel 3.54 --anchor bottom --filter box --violet death:8
+```
+
+Its rifts are one generated sheet, `art/spells/rift-orb.png` (`art/prompts/rift-orb.txt`, the bolt
+sheet as reference: a void diamond rimmed in cold light, then its burst into shards), whose blue
+flight is recoloured into the three rifts; the flash where something steps through is
+`art/spells/rift-flash.png` (`rift-flash.txt`, a crack as tall as a body tearing open and
+snapping shut). Both take `--cold`, which keeps the blues the usual keying takes for magenta
+spill. The orb sheet's bottom cyan line runs under its last row, where no separator bounds the
+cells, so the burst's last two frames keep a strip of it: the last command clears it.
+
+```bash
+python3 tools/slice_frames.py art/spells/rift-orb.png data/sprites/rift --pixel 10 --cold flight:5 burst:7
+for r in pull:285 swap:45 push:188; do tools/recolor_hue.py data/sprites/rift/flight data/sprites/rift/${r%:*} --from 230 --reach 50 --hue ${r#*:}; done; rm data/sprites/rift/flight.*
+python3 tools/slice_frames.py art/spells/rift-flash.png data/sprites/rift --pixel 6 --cold flash:6
+python3 -c "from PIL import Image; p='data/sprites/rift/burst.png'; im=Image.open(p).convert('RGBA'); im.putdata([(0,0,0,0) if a and r<90 and g>170 and b>170 and abs(g-b)<50 else (r,g,b,a) for r,g,b,a in im.getdata()]); im.save(p)"
+```
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -1969,11 +2125,11 @@ and `spawn MONSTER FACING [SKIP]`, where SKIP is a percent chance of no monster 
 has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has two kinds of
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre and gale wraith 1
-each), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith and
+riftwalker 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
-own state). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
+own state; one float draw whatever the weights, so changing a pool never changes the layout). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
 is one monster at its centre, so `ii` centres one on a 1 m spot. `pickup floor` or `pickup
 reward` is a spot where a level may put a pickup, one per group like a spawn, on top of a `box` in
@@ -2198,8 +2354,20 @@ A run is the generated levels of `*run-levels*` (`src/run.lisp`) one after anoth
 rooms. Each entry says how many rooms the generator aims for (over `*generator-rooms*`,
 `level-settings`) and which block it puts on the doorway furthest from the start (`:exit`, a name or
 a list tried in order): the `descent` on levels 1 and 2, the boss's `arena` on level 3 (see
-`src/boss.lisp`), whose boss ends the run. Nothing else differs between levels yet, so the
-monster mix and the kit are the same on each. `*run-depth*` is the level the player is on, from 1,
+`src/boss.lisp`), whose boss ends the run. The kit is the same on each, but the monsters get
+harder going down, by keys in each entry (none are flat stat multipliers):
+
+- built into the level (`level-settings` sets their variables for the generator, so a save keeps
+  them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre,
+  wraith or riftwalker on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
+  0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
+- asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
+  `*sight-range*` and `*hearing-range*` in `sees-player-p`, `:alert` the hunt's `alert-time`,
+  `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
+  abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+
+Pickups stay budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,
 and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
 try at level 1 being the run seed itself, so `*level-seed*` still reproduces a level 1 and a whole
 run. A reset on a generated level rebuilds the same level, since the run keeps its seed; a new one
@@ -2234,7 +2402,9 @@ to walk the stair, stand at the `descent` connector in `*level-doorways*` and ho
 
 Over seeds 1 to 200 at each size, every exit fit on the first seed and could be reached, and the
 rooms always reached their target (16.1, 19.1, 22.1 on average; 16 to 18 at the lowest size, 22 to 24
-at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run;
+at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run
+(an older count: over run seeds 1 to 20, `*creatures*` held 33.0, 42.3 and 54.3 after the depth
+scaling, against 31.9, 40.3 and 48.9 before it, with 10% elites on level 2 and 19% on level 3);
 pickups 13.2, 15.7, 18.3. A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
 levels 1 and 2 the walk to the exit is 136 m on average against 143 m for the level's longest walk,
 with a median at 99.6% of it and the lowest tenth under 81%: blocks from the start are a good stand-in.
@@ -2244,13 +2414,14 @@ flooded run, so the only way there is a swim. Frames (seed 12345, 12 spots, froz
 Over run seeds 1 to 100, level 3's arena fit on the first seed every time and could be reached, the
 level building in 1.8 s on average through `reload-scene` (2.4 s at most). It can lie close to the
 start in a straight line (seed 27: 6.7 m, a storey up), so the boss's spawn ignores the start's
-clearance. Bosses: necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
+clearance. Bosses (before the riftwalker joined `*boss-kinds*`, which changed every seed's draw):
+necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
 
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
 down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
-hands, 3 for the spear and 4 for the tornado (or the mouse wheel to cycle them), left click to
+hands, 3 for the spear and 4 for the tornado, the mouse wheel to change the quickslot's potion, left click to
 attack (swing, thrust, or cast the bolt or the tornado), right button held to raise the shield (sword only; a left
 click while it's up bashes), Q to drink from the quickslot, I for the inventory (drag items with
 the left button; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to quicksave
@@ -2282,4 +2453,4 @@ it. `(select-weapon *player* :4)` then `(player-attack *player*)` casts the play
 `(whirl *player*)` is the vortex holding them. Right after several level builds in a row, time
 runs fast for a few seconds as Trial's fixed step catches up, so a vortex's age is no measure then.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
-the wheel one notch down (next weapon).
+the wheel one notch down (the next kind into the quickslot).

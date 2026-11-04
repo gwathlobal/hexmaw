@@ -597,10 +597,11 @@ starting at START, so the path doesn't zig-zag along the grid."
         collect (multiple-value-bind (i j k) (nav-unindex c grid) (nav-point i j k grid))))
 
 (defun nav-reachable-spot (from radius height step &key (around from) (within 4.0) (max-walk (* 2 within))
-                                                   (min-distance 1.0) (grid *nav-grid*))
+                                                   (min-distance 1.0) test (grid *nav-grid*))
   "A path to a random spot that a body standing at point FROM can walk to: within
 WITHIN metres of point AROUND, at least MIN-DISTANCE and at most MAX-WALK metres of
-walking away. A list of points ending at the spot, smoothed; NIL if there is none."
+walking away, and if TEST is given, whose cell's floor point it accepts. A list of points
+ending at the spot, smoothed; NIL if there is none."
   (when grid
     (multiple-value-bind (si sj sk) (nav-nearest-fitting from radius height :grid grid)
       (when si
@@ -611,7 +612,10 @@ walking away. A list of points ending at the spot, smoothed; NIL if there is non
                                         (multiple-value-bind (i j) (nav-unindex c grid)
                                           (< (+ (expt (- (+ (nav-x0 grid) (* (+ i 0.5) cell)) (vx around)) 2)
                                                 (expt (- (+ (nav-z0 grid) (* (+ j 0.5) cell)) (vz around)) 2))
-                                             (* within within))))
+                                             (* within within)))
+                                        (or (null test)
+                                            (multiple-value-bind (i j k) (nav-unindex c grid)
+                                              (funcall test (nav-point i j k grid)))))
                                 collect c)))
             (when spots
               (let ((cells ()))

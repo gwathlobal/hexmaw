@@ -2,8 +2,9 @@
 
 ;;; The inventory: items the player carries, a quickslot Q drinks from, and a panel to move them
 ;;; around in. A stack is a list (KIND COUNT); a slot, where one lives, is a cell's index in the
-;;; player's INVENTORY or :QUICK. The quickslot is shown in play above the weapon slots; I opens
-;;; the panel above it (*GAME-STATE* :INVENTORY), which freezes the world as the map does.
+;;; player's INVENTORY or :QUICK. The quickslot is shown in play above the weapon slots, and the
+;;; mouse wheel swaps the kinds the bag holds into it; I opens the panel above it (*GAME-STATE*
+;;; :INVENTORY), which freezes the world as the map does.
 ;;; Icons come from data/sprites/icons/items (tools/draw_item_icons.py).
 
 (define-fx-animation item-icons "sprites/icons/items")
@@ -17,7 +18,7 @@ budget, so keep the two the same.")
 
 (defparameter *inventory-columns* 5 "Cells across the panel; *INVENTORY-SIZE* decides the rows.")
 (defparameter *inventory-padding* 8 "Pixels between the panel's edge and what's in it.")
-(defparameter *inventory-hint* "Drag a potion to the Q slot" "The panel's hint with no item under the pointer.")
+(defparameter *inventory-hint* "Drag to Q, or use the wheel" "The panel's hint with no item under the pointer.")
 (defparameter *inventory-back-color* (vec4 0.20 0.16 0.13 0.92))
 (defparameter *inventory-border-color* (vec4 0.60 0.48 0.28 1))
 
@@ -98,6 +99,20 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
           (T
            (setf (slot-stack player to) source
                  (slot-stack player from) target)))))
+
+(defun cycle-quickslot (player step)
+  "Put the next kind of item STEP places round *ITEM-KINDS* that the bag holds into the
+quickslot, swapping it with what was there; a negative STEP goes back. True if it changed."
+  (let* ((kinds (mapcar #'first *item-kinds*))
+         (current (first (quickslot player)))
+         (start (or (position current kinds) (if (< 0 step) -1 0)))
+         (n (length kinds)))
+    (loop for i from 1 to n
+          for kind = (nth (mod (+ start (* i step)) n) kinds)
+          for cell = (position kind (inventory player) :key #'first)
+          when (and cell (not (eq kind current)))
+            do (move-stack player cell :quick)
+               (return T))))
 
 ;;; What's drawn. The quickslot is a weapon slot of its own; the panel's parts draw last and in
 ;;; order (LATE-RANK), so its see-through back never covers world drawn after it.
@@ -231,6 +246,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
 
 (defun open-inventory ()
   (when (and (eq *game-state* :playing) *player*)
+    (play-sound :bag-open)
     (setf *game-state* :inventory)
     (release-mouse *player*)
     ;; No move has told it yet where the released pointer is.
@@ -242,6 +258,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
     ;; A drag in hand goes back where it was: its stack never left that slot.
     (when *inventory-view*
       (setf (dragging *inventory-view*) NIL))
+    (play-sound :bag-close)
     (setf *game-state* :playing)
     (when *player* (capture-mouse *player*))))
 
@@ -249,8 +266,15 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
   (case *game-state*
     (:playing (case key
                 (:i (open-inventory))
-                (:q (when *player* (use-quickslot *player*)))))
+                (:q (when *player*
+                      (play-sound (if (use-quickslot *player*) :potion-drink :refused))))))
     (:inventory (when (eq key :i) (close-inventory)))))
+
+(define-handler (inventory-view mouse-scroll) (delta)
+  ;; Wheel down (negative delta) for the next kind, up for the previous one.
+  (when (and (eq *game-state* :playing) *player* (/= 0 delta))
+    (when (cycle-quickslot *player* (if (< delta 0) 1 -1))
+      (play-sound :item-drop))))
 
 (define-handler (inventory-view mouse-move) (pos)
   (when (eq *game-state* :inventory)
@@ -261,6 +285,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
     (v<- (pointer inventory-view) pos)
     (let ((slot (slot-at (vx pos) (vy pos))))
       (when (and slot (slot-stack *player* slot))
+        (play-sound :item-pick)
         (setf (dragging inventory-view) slot)))))
 
 (define-handler (inventory-view mouse-release) (button pos)
@@ -269,6 +294,7 @@ moves, onto its own kind it merges as far as the stack limit allows, and with an
           (to (slot-at (vx pos) (vy pos))))
       (setf (dragging inventory-view) NIL)
       (when (eq *game-state* :inventory)
+        (play-sound :item-drop)
         (cond (to
                (move-stack *player* from to))
               ;; Dropped on nothing a stack goes back, but a remembered kind is forgotten.

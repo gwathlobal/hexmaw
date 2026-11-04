@@ -115,13 +115,6 @@ flash, which they reach into.")
       (setf (wanted-weapon player) weapon)
       T)))
 
-(defun cycle-weapon (player step)
-  "Ask for the weapon STEP places after the one asked for last, wrapping around
-*WEAPONS*; a negative STEP goes back."
-  (let* ((weapons (loop for (nil weapon) on *weapons* by #'cddr collect weapon))
-         (index (or (position (wanted-weapon player) weapons) 0)))
-    (setf (wanted-weapon player) (nth (mod (+ index step) (length weapons)) weapons))))
-
 (defun weapon-drop (player)
   "Fraction of its height the weapon on screen is lowered, eased."
   (let ((k (weapon-lower player)))
@@ -140,13 +133,25 @@ or down."
                     ((= 0.0 (block-raise player)) (player-swing player))))
       (:spear (player-swing player)))))
 
+(defparameter *weapon-sounds*
+  '(:sword (:swing :sword-swing :draw :draw-sword)
+    :spear (:swing :spear-thrust :draw :draw-spear)
+    :hands (:draw :draw-magic)
+    :tempest (:draw :draw-magic))
+  "Each weapon's clips (sound.lisp): :SWING as a swing starts, :DRAW as it comes up.")
+
+(defun weapon-sound (weapon event)
+  (getf (getf *weapon-sounds* weapon) event))
+
 (defun player-swing (player)
   (unless (swing-time player)
+    (play-sound (weapon-sound (weapon player) :swing))
     (setf (swing-time player) 0.0
           (swing-pending player) T)))
 
 (defun player-bash (player)
   (unless (bash-time player)
+    (play-sound :shield-bash)
     (setf (bash-time player) 0.0
           (bash-pending player) T)))
 
@@ -210,6 +215,7 @@ either side of where the player faces, level with the player, and not behind a w
   (let* ((weapon (weapon player))
          (target (swing-target player (swing-reach weapon) (swing-arc weapon))))
     (when target
+      (play-sound (if (bleeds target) :blade-hit-flesh :blade-hit-bone) (location target))
       (hurt target (roll (swing-damage weapon)) :from (feet player)
                                                 :pain-bonus (swing-pain-bonus weapon))
       (push-creature target (v- (location target) (feet player))
@@ -223,6 +229,7 @@ winding up an attack and not already poised from a bash."
   (let ((target (swing-target player *bash-reach* *bash-arc*)))
     (cond ((null target))
           ((shielded-p target (feet player))
+           (play-sound :bash-glance (location target))
            (block-hit target)
            (shove-player player (location target) *bash-recoil*)
            (break-guard player *bash-recoil-guard*))
@@ -230,6 +237,7 @@ winding up an attack and not already poised from a bash."
            (let* ((poised (< 0.0 (bash-poise target)))
                   (bonus (if (and (not poised) (winding-up-p target)) *bash-pain-bonus* -100)))
              (setf (bash-poise target) *bash-poise-time*)
+             (play-sound :bash-hit (location target))
              (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus bonus)
              (push-creature target (v- (location target) (feet player))
                             (float (* *bash-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0))
@@ -278,7 +286,8 @@ winding up an attack and not already poised from a bash."
       (setf (bash-time player) NIL)))
   ;; The shield rises while the block is held with the sword in hand and staying there,
   ;; once any swing is over; it stays up through a bash.
-  (let ((step (/ dt *block-raise-time*)))
+  (let ((step (/ dt *block-raise-time*))
+        (was (block-raise player)))
     (setf (block-raise player)
           (if (or (bash-time player)
                   (and (block-held player)
@@ -288,7 +297,9 @@ winding up an attack and not already poised from a bash."
                        (= 0.0 (weapon-lower player))
                        (not (swing-time player))))
               (min 1.0 (+ (block-raise player) step))
-              (max 0.0 (- (block-raise player) step)))))
+              (max 0.0 (- (block-raise player) step))))
+    (when (and (= was 0.0) (< 0.0 (block-raise player)) (not (bash-time player)))
+      (play-sound :shield-raise)))
   (let ((step (/ dt *weapon-switch-time*)))
     (cond ((eq (weapon player) (wanted-weapon player))
            (setf (weapon-lower player) (max 0.0 (- (weapon-lower player) step))))
@@ -296,7 +307,8 @@ winding up an attack and not already poised from a bash."
           ((< (weapon-lower player) 1.0)
            (setf (weapon-lower player) (min 1.0 (+ (weapon-lower player) step))))
           (T
-           (setf (weapon player) (wanted-weapon player))))))
+           (setf (weapon player) (wanted-weapon player))
+           (play-sound (weapon-sound (weapon player) :draw))))))
 
 ;;; The sword on screen. The spear's sprite (spear.lisp) is a subclass: these generics
 ;;; say which weapon a sprite draws and how its strip is laid out.

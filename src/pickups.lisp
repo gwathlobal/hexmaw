@@ -21,18 +21,27 @@
 (define-fx-animation glyph-area "sprites/pickups/glyph-area" :fps 4 :loop T :size (/ 30 64.0))
 
 (defparameter *pickup-kinds*
-  '((:herbs :animation pickup-herbs :resource :health :amount 15)
-    (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40)
-    (:shard :animation pickup-shard :resource :mana :amount 28)
-    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50)
-    (:glyph-frost :animation glyph-frost :teaches :frost :name "Frost" :about "frost damage, which chills")
-    (:glyph-shock :animation glyph-shock :teaches :shock :name "Shock" :about "shock damage, which staggers")
-    (:glyph-slow :animation glyph-slow :teaches :slow :name "Slow" :about "slowing what it strikes")
-    (:glyph-drain :animation glyph-drain :teaches :drain :name "Drain" :about "taking health for your own")
-    (:glyph-ward :animation glyph-ward :teaches :ward :name "Ward" :about "a ward that takes blows for you")
-    (:glyph-area :animation glyph-area :teaches :area :name "Area" :about "bursting over an area"))
+  '((:herbs :animation pickup-herbs :resource :health :amount 15 :sound :pickup-herbs)
+    (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40
+     :sound :pickup-potion)
+    (:shard :animation pickup-shard :resource :mana :amount 28 :sound :pickup-shard)
+    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50
+     :sound :pickup-potion)
+    (:glyph-frost :animation glyph-frost :teaches :frost :name "Frost" :about "frost damage, which chills"
+     :sound :pickup-shard)
+    (:glyph-shock :animation glyph-shock :teaches :shock :name "Shock" :about "shock damage, which staggers"
+     :sound :pickup-shard)
+    (:glyph-slow :animation glyph-slow :teaches :slow :name "Slow" :about "slowing what it strikes"
+     :sound :pickup-shard)
+    (:glyph-drain :animation glyph-drain :teaches :drain :name "Drain" :about "taking health for your own"
+     :sound :pickup-shard)
+    (:glyph-ward :animation glyph-ward :teaches :ward :name "Ward" :about "a ward that takes blows for you"
+     :sound :pickup-shard)
+    (:glyph-area :animation glyph-area :teaches :area :name "Area" :about "bursting over an area"
+     :sound :pickup-shard))
   "What each kind of pickup restores, and how much, at once or as the :ITEM it gives (keep :AMOUNT
-the item's, *ITEM-KINDS*: a level's budget counts it), or, a glyph, the effect it :TEACHES.")
+the item's, *ITEM-KINDS*: a level's budget counts it), or, a glyph, the effect it :TEACHES; and
+the :SOUND of taking it.")
 
 (defparameter *glyphs-per-level* 2 "Glyphs on each level of a run: three levels teach all six.")
 
@@ -130,6 +139,7 @@ taken ones by their place here. BUILD-LEVEL empties it.")
              (* *pickup-bob* (sin (* *pickup-bob-rate* (age pickup))))))
     (when (and *player* (< 0 (health *player*)) (touching-pickup-p pickup *player*)
                (collect-pickup pickup *player*))
+      (play-sound (pickup-property (pickup-kind pickup) :sound))
       (setf (taken pickup) T))))
 
 (defmethod render :around ((pickup pickup) (program shader-program))

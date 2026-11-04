@@ -1,0 +1,466 @@
+(in-package #:hexmaw)
+
+;;; Sound effects, through Harmony like the music (music.lisp). Each clip is a file or a few
+;;; variants in data/sfx/, made by tools/make_sfx.py from the takes chosen in
+;;; audio/sfx-picks.txt and listed in data/sfx/index.lisp; audio/sfx.md says which moment
+;;; plays which. A positional clip is mono and plays on Harmony's :effect mixer, a space
+;;; mixer whose listener the SOUND-DIRECTOR moves with the player's eye; a first-person one
+;;; plays on :speech, unplaced. Both mixers take the Settings' Sound volume.
+;;;
+;;; Trial's sound assets are one Harmony voice each, which plays one copy at a time, so the
+;;; clips keep voices of their own: *SFX-VOICES* per file for a one-shot, taken in turn (the
+;;; oldest is cut short when all are busy), and *LOOP-VOICES* for a loop, each held by one
+;;; caller between START-LOOP and STOP-LOOP. They are made once, by ADD-SOUNDS, and outlive
+;;; scene rebuilds (*SOUNDS*). The game thread never touches a voice's connection: PLAY-SOUND
+;;; queues a request, and once a tick the director hands Harmony's mixing thread one function,
+;;; SOUND-FRAME, which starts the requested voices, moves the loops and the listener, and
+;;; pauses the loops while the world is frozen. (Harmony's queue holds 64 jobs: one a play
+;;; would fill it in a busy frame. And an error in the mixing thread stops all sound for good,
+;;; so SOUND-FRAME keeps its errors in *SOUND-ERROR* instead.) A loop is connected the first
+;;; time it plays and from then on only paused and unpaused, as the music is.
+
+(defparameter *sfx-voices* 3 "Voices for each file of a one-shot: how many copies may overlap.")
+(defparameter *loop-voices* 6 "Voices for each loop clip: how many may sound at once.")
+(defparameter *sound-min-distance* 4.0 "Metres within which a positional sound is at full volume.")
+(defparameter *sound-max-distance* 50.0
+  "Metres beyond which a positional sound gets no quieter (the space mixer clamps the distance).")
+(defparameter *sound-rolloff* 0.75
+  "How fast a positional sound fades past *SOUND-MIN-DISTANCE*: its volume is (distance / min
+distance) to the minus this, so at 0.75 it loses 4.5 dB a doubling of distance (1 would be 6).")
+(defparameter *clip-min-distances* '(:tornado 12.0 :ogre-land 10.0 :ogre-leap 12.0 :step-heavy 8.0)
+  "Positional clips heard at full volume further off than *SOUND-MIN-DISTANCE*: the big ones.
+Read as a voice is connected (RETUNE-SOUNDS for those connected already).")
+
+(defclass sfx ()
+  ((name :initarg :name :reader sfx-name)
+   (files :initarg :files :reader sfx-files)
+   (seconds :initarg :seconds :reader sfx-seconds)
+   (space :initarg :space :reader sfx-space-p
+          :documentation "T to play on the space mixer, at a point.")
+   (loop-p :initarg :loop :reader sfx-loop-p)
+   (voices :initform (make-array 0 :adjustable T :fill-pointer 0) :reader sfx-voices
+           :documentation "SFX-VOICEs: for a one-shot *SFX-VOICES* per file, file by file.")
+   (turn :initform 0 :accessor sfx-turn
+         :documentation "The variant to play next, as an index into FILES.")
+   (freed :initform NIL :accessor sfx-freed
+          :documentation "T once RELOAD-SOUND has replaced it: requests still queued are dropped.")))
+
+(defclass sfx-voice ()
+  ((voice :initarg :voice :reader sfx-voice-voice :documentation "The Harmony voice.")
+   (sfx :initarg :sfx :reader voice-sfx)
+   (seconds :initarg :seconds :reader voice-seconds :documentation "How long its file plays.")
+   (busy-until :initform 0.0 :accessor busy-until
+               :documentation "Game seconds (SOUND-CLOCK) until a one-shot has played out.")
+   (location :initform (make-array 3 :element-type 'single-float :initial-element 0f0)
+             :reader voice-location)
+   (volume :initform 1.0 :accessor voice-volume)
+   (held :initform NIL :accessor voice-held
+         :documentation "A loop's: T while a caller holds it (START-LOOP to STOP-LOOP).")
+   (connected :initform NIL :accessor voice-connected
+              :documentation "A loop's: set in the mixing thread once it is connected.")
+   (auditioning :initform NIL :accessor voice-auditioning
+                :documentation "A loop's: T while AUDITION-SOUND plays it, paused game or not.")))
+
+(defvar *sounds* (make-hash-table :test 'eq)
+  "The clips by keyword (the index's name), with their voices. Kept across reloads and
+rebuilds, so voices are made once; RELOAD-SOUNDS makes them afresh.")
+(defvar *loop-voice-list* ()
+  "Every loop's SFX-VOICEs, for SOUND-FRAME.")
+(defvar *sound-requests* ()
+  "SFX-VOICEs of one-shots asked for and not started yet. The game thread pushes and the
+mixing thread pops, both atomically.")
+(defvar *sound-error* NIL "The last error in SOUND-FRAME, with its clip if it had one.")
+(defvar *sound-clock* 0.0 "Seconds of real time the sound director has ticked.")
+(macrolet ((def (name doc)
+             `(defvar ,name (make-array 3 :element-type 'single-float :initial-element 0f0) ,doc)))
+  (def *listener-location* "Where the listener is: the player's eye, from the game thread.")
+  (def *listener-direction* "Which way the listener faces.")
+  (def *listener-up* "Which way is up for the listener."))
+(defvar *loops-paused* NIL "T while the world is frozen by the game state: loops pause.")
+(defvar *muted* ()
+  "Clips that play nothing for now: one-shots aren't started, loops fall silent while held.
+For finding which sound misbehaves (MUTE).")
+(defvar *ambient-voices* (make-hash-table :test 'eq)
+  "Per ambient clip, a vector of the loops held on its nearest sources, nearest first
+(AMBIENT-VOICE).")
+
+(defun sound-key (name)
+  (if (keywordp name) name (intern (string-upcase name) :keyword)))
+
+(defun find-sound (name)
+  (gethash name *sounds*))
+
+(defun read-sound-index ()
+  (with-open-file (in (data-path "sfx/index.lisp"))
+    (with-standard-io-syntax
+      (let ((*package* (find-package :hexmaw)))
+        (loop for entry = (read in NIL) while entry collect entry)))))
+
+(defun make-sound-voice (sfx file seconds)
+  (make-instance 'sfx-voice
+                 :sfx sfx :seconds seconds
+                 :voice (harmony:create (data-path (format NIL "sfx/~a" file))
+                                        :mixer (if (sfx-space-p sfx) :effect :speech)
+                                        :repeat (sfx-loop-p sfx)
+                                        :on-end :disconnect)))
+
+(defun add-sounds (scene)
+  "Make the voices of every clip in the index not made yet, set up the space mixer, and
+enter the director."
+  (when harmony:*server*
+    ;; Whatever held a loop went with the old scene.
+    (dolist (voice *loop-voice-list*)
+      (setf (voice-held voice) NIL))
+    (clrhash *ambient-voices*)
+    (unless (find-sound :%mixer-set)
+      (harmony:with-server (harmony:*server* :synchronize T)
+        (let ((mixer (harmony:segment :effect harmony:*server*)))
+          (setf (mixed:min-distance mixer) (float *sound-min-distance* 0f0)
+                (mixed:max-distance mixer) (float *sound-max-distance* 0f0)
+                (mixed:rolloff mixer) (float *sound-rolloff* 0f0)
+                (mixed:soundspeed mixer) 343f0
+                (mixed:doppler-factor mixer) 0f0)))
+      (setf (gethash :%mixer-set *sounds*) T))
+    (dolist (entry (read-sound-index))
+      (destructuring-bind (&key name files seconds space loop) entry
+        (let ((key (sound-key name)))
+          (unless (find-sound key)
+            (let ((sfx (make-instance 'sfx :name key :files files :seconds seconds
+                                           :space space :loop loop)))
+              (loop for file in files
+                    for s in seconds
+                    do (dotimes (i (if loop *loop-voices* *sfx-voices*))
+                  (let ((voice (make-sound-voice sfx file s)))
+                    (vector-push-extend voice (sfx-voices sfx))
+                    (when loop (push voice *loop-voice-list*)))))
+              (setf (gethash key *sounds*) sfx))))))
+    (enter (make-instance 'sound-director) scene)))
+
+(defun free-voices (voices)
+  "Free VOICES in the mixing thread, which may still be playing them."
+  (when voices
+    (harmony:with-server (harmony:*server* :synchronize T)
+      (dolist (voice voices)
+        (mixed:free (sfx-voice-voice voice))))))
+
+(defun reload-sound (name)
+  "Make clip NAME afresh from data/sfx/index.lisp, as tools/make_sfx.py just wrote it, while
+the game runs (tools/sfx_picker.py's swap). Its old voices are freed, cut off if playing; a
+loop held then falls silent until its holder starts it again. Run it in the game thread.
+Returns the new clip, or NIL if the index no longer has it."
+  (let* ((key (sound-key name))
+         (old (find-sound key))
+         (entry (find key (read-sound-index) :key (lambda (e) (sound-key (getf e :name))))))
+    (when old
+      (setf (sfx-freed old) T)
+      (remhash key *sounds*)
+      (setf *loop-voice-list* (set-difference *loop-voice-list* (coerce (sfx-voices old) 'list)))
+      (free-voices (coerce (sfx-voices old) 'list)))
+    (when entry
+      (destructuring-bind (&key name files seconds space loop) entry
+        (declare (ignore name))
+        (let ((sfx (make-instance 'sfx :name key :files files :seconds seconds :space space :loop loop)))
+          (loop for file in files
+                for s in seconds
+                do (dotimes (i (if loop *loop-voices* *sfx-voices*))
+                     (let ((voice (make-sound-voice sfx file s)))
+                       (vector-push-extend voice (sfx-voices sfx))
+                       (when loop (push voice *loop-voice-list*)))))
+          (setf (gethash key *sounds*) sfx))))))
+
+(defvar *auditions* () "Loops AUDITION-SOUND started, with when to stop them.")
+
+(defun audition-sound (name &optional (seconds 2.0))
+  "Play clip NAME for the picker: a positional one 3 m in front of the player, a loop there
+for SECONDS, even while the game is paused. Run it in the game thread."
+  (let* ((sfx (find-sound (sound-key name)))
+         (player *player*)
+         (at (if player
+                 (let ((yaw (vy (rotation player))) (eye (location player)))
+                   (vec (+ (vx eye) (* 3 (sin yaw))) (vy eye) (- (vz eye) (* 3 (cos yaw)))))
+                 (vec 0 0 0))))
+    (cond ((null sfx) NIL)
+          ((sfx-loop-p sfx)
+           (let ((voice (start-loop (sfx-name sfx) at)))
+             (when voice
+               (setf (voice-auditioning voice) T)
+               (push (cons voice (+ *sound-clock* seconds)) *auditions*))
+             (and voice T)))
+          (T (and (play-sound (sfx-name sfx) at) T)))))
+
+(defun end-auditions ()
+  (when *auditions*
+    (setf *auditions* (delete-if (lambda (a)
+                                   (when (<= (cdr a) *sound-clock*)
+                                     (stop-loop (car a))
+                                     T))
+                                 *auditions*))))
+
+(defun reload-sounds ()
+  "Free every voice and forget the clips, so the next scene build reads data/sfx/ afresh
+(after tools/make_sfx.py). Run it, then tools/hd reset."
+  (let ((voices (loop for sfx being the hash-values of *sounds*
+                      when (typep sfx 'sfx) append (coerce (sfx-voices sfx) 'list))))
+    (clrhash *sounds*)
+    (setf *loop-voice-list* () *sound-requests* ())
+    (free-voices voices)
+    (length voices)))
+
+;;; Playing
+
+(defun copy-into (array vec)
+  "VEC into ARRAY as the space mixer counts: its axes are the other hand to the game's (a
+sound on the player's left came out on the right), so Z is mirrored."
+  (setf (aref array 0) (float (vx vec) 0f0)
+        (aref array 1) (float (vy vec) 0f0)
+        (aref array 2) (float (- (vz vec)) 0f0))
+  array)
+
+(defun voice-distance-squared (voice)
+  "How far VOICE sounds from the listener, squared (both as the space mixer counts)."
+  (let ((a (voice-location voice)) (b *listener-location*))
+    (+ (expt (- (aref a 0) (aref b 0)) 2) (expt (- (aref a 1) (aref b 1)) 2) (expt (- (aref a 2) (aref b 2)) 2))))
+
+(defun take-voice (sfx &optional (d2 0.0))
+  "A free voice of SFX's next variant; with none, for a positional clip the one furthest from
+the listener, if further than D2 (the new sound's distance squared), else NIL: the new sound
+is the one to go. A first-person clip's soonest done."
+  (let* ((files (length (sfx-files sfx)))
+         (variant (mod (sfx-turn sfx) files))
+         (start (* variant *sfx-voices*))
+         (free NIL) (best NIL) (best-d2 0.0))
+    (setf (sfx-turn sfx) (1+ variant))
+    (loop for i from start below (+ start *sfx-voices*)
+          for voice = (aref (sfx-voices sfx) i)
+          do (cond ((<= (busy-until voice) *sound-clock*)
+                    (setf free voice))
+                   ((sfx-space-p sfx)
+                    (let ((vd2 (voice-distance-squared voice)))
+                      (when (or (null best) (< best-d2 vd2))
+                        (setf best voice best-d2 vd2))))
+                   ((or (null best) (< (busy-until voice) (busy-until best)))
+                    (setf best voice))))
+    (cond (free)
+          ((not (sfx-space-p sfx)) best)
+          ((< d2 best-d2) best))))
+
+(defun listener-or (at)
+  (or at (and *player* (location *player*)) (vec 0 0 0)))
+
+(defun play-sound (name &optional at (volume 1.0))
+  "Play the one-shot NAME (a keyword from the index). A positional clip plays at AT, a vec,
+or at the listener without one; a first-person clip ignores AT. Does nothing for a clip not
+made yet, or without a sound server. A positional one beyond *SOUND-MAX-DISTANCE* plays
+nothing, and with all its voices busy it cuts short the furthest, or doesn't play if it is
+the furthest itself."
+  (let ((sfx (find-sound name)))
+    (when (and sfx (not (sfx-loop-p sfx)) (not (member name *muted*)))
+      (let* ((d2 (if (and at (sfx-space-p sfx) *player*)
+                     (let ((ear (location *player*)))
+                       (+ (expt (- (vx at) (vx ear)) 2) (expt (- (vy at) (vy ear)) 2) (expt (- (vz at) (vz ear)) 2)))
+                     0.0))
+             (voice (and (< d2 (expt *sound-max-distance* 2)) (take-voice sfx d2))))
+        (when voice
+          (copy-into (voice-location voice) (listener-or at))
+          (setf (voice-volume voice) (float volume 0f0))
+          ;; A voice asked for twice before it starts starts once.
+          (unless (< *sound-clock* (- (busy-until voice) (voice-seconds voice)))
+            (sb-ext:atomic-push voice (symbol-value '*sound-requests*)))
+          (setf (busy-until voice) (+ *sound-clock* (voice-seconds voice) 0.05))
+          voice)))))
+
+(defun start-loop (name &optional at (volume 1.0))
+  "Hold a free voice of the loop NAME, sounding at AT; NIL when none is free. Keep it to move
+it (MOVE-LOOP) and to give it back (STOP-LOOP)."
+  (let ((sfx (find-sound name)))
+    (when (and sfx (sfx-loop-p sfx))
+      (let ((voice (find NIL (sfx-voices sfx) :key #'voice-held)))
+        (when voice
+          (setf (voice-held voice) T
+                (voice-volume voice) (float volume 0f0))
+          (copy-into (voice-location voice) (listener-or at))
+          voice)))))
+
+(defun move-loop (voice at &optional volume)
+  "Put a held loop at AT (a vec), and at VOLUME if given. Allocates nothing."
+  (when voice
+    (copy-into (voice-location voice) at)
+    (when volume (setf (voice-volume voice) (float volume 0f0))))
+  voice)
+
+(defun stop-loop (voice)
+  "Give a held loop back; it falls silent in the next tick. Returns NIL, for the holder's slot."
+  (when voice (setf (voice-held voice) NIL (voice-auditioning voice) NIL))
+  NIL)
+
+(defparameter *sound-groups*
+  '((:ambience :torch-crackle :lava-bubble :water-lap :dungeon-drips)
+    (:footsteps :footstep-stone :footstep-snow :step-light :step-armour :step-heavy :step-bone)
+    (:body :jump :land :swim-stroke :splash-in :splash-out :ice-slide :underwater :whirl-wind)
+    (:hits :flesh-hit :bone-hit :flesh-wet)
+    (:menus :menu-hover :menu-select :menu-back :menu-slider))
+  "Names MUTE takes for several clips at once.")
+
+(defun mute (&rest names)
+  "Silence clips NAMES (keywords from the index, or groups of *SOUND-GROUPS*; :MUSIC for the
+music, :EFFECTS for every clip) until UNMUTE. Returns what is muted."
+  (dolist (name names *muted*)
+    (case name
+      (:music (setf (mixed:volume (harmony:segment :music harmony:*server*)) 0.0))
+      (:effects (loop for key being the hash-keys of *sounds* do (pushnew key *muted*)))
+      (T (dolist (clip (or (rest (assoc name *sound-groups*)) (list name)))
+           (pushnew clip *muted*))))))
+
+(defun unmute (&rest names)
+  "Let clips NAMES play again (as MUTE takes them); with none, everything."
+  (unless names
+    (setf names (list* :music *muted*)))
+  (dolist (name names *muted*)
+    (case name
+      (:music (setf (mixed:volume (harmony:segment :music harmony:*server*)) (float (symbol-value '*music-volume*) 0f0)))
+      (:effects (setf *muted* ()))
+      (T (dolist (clip (or (rest (assoc name *sound-groups*)) (list name)))
+           (setf *muted* (remove clip *muted*)))))))
+
+(defun hold-loop (voice name at &optional (volume 1.0))
+  "The loop a holder keeps in a slot while it wants one, called every tick: with NAME, VOICE
+(started if NIL) sounding at AT; with NAME NIL, VOICE given back. Returns what the slot holds
+next. Allocates nothing."
+  (cond (name (if voice (move-loop voice at volume) (start-loop name at volume)))
+        (T (stop-loop voice))))
+
+;;; Ambience: loops on the nearest few of many sources (torches, lava, water), which
+;;; UPDATE-AMBIENCE (liquids.lisp) picks a few times a second. ADD-SOUNDS forgets them with
+;;; the scene, since what held them went with it.
+
+(defun ambient-voice (name i at volume)
+  "Hold the Ith loop of ambient clip NAME at AT, VOLUME loud."
+  (let ((voices (or (gethash name *ambient-voices*)
+                    (setf (gethash name *ambient-voices*) (make-array 8 :initial-element NIL)))))
+    (when (< i (length voices))
+      (setf (aref voices i) (hold-loop (aref voices i) name at volume)))))
+
+(defun drop-ambient-voices (name from)
+  "Give back ambient clip NAME's loops from the FROMth on."
+  (let ((voices (gethash name *ambient-voices*)))
+    (when voices
+      (loop for i from from below (length voices)
+            do (setf (aref voices i) (stop-loop (aref voices i)))))))
+
+;;; The mixing thread's side
+
+(defun place-voice (voice)
+  (when (sfx-space-p (voice-sfx voice))
+    (setf (mixed:location (sfx-voice-voice voice)) (voice-location voice))))
+
+(defun connect-voice (voice)
+  (let ((hvoice (sfx-voice-voice voice)))
+    (unless (harmony:chain hvoice)
+      (mixed:add hvoice (harmony:segment :sources harmony:*server*))
+      (harmony:connect hvoice T (harmony:segment (if (sfx-space-p (voice-sfx voice)) :effect :speech)
+                                                 harmony:*server*)
+                       T)
+      (tune-voice voice))))
+
+(defun tune-voice (voice)
+  "Give a connected positional VOICE its distances: *SOUND-MIN-DISTANCE* or its clip's own
+(*CLIP-MIN-DISTANCES*), *SOUND-MAX-DISTANCE* and *SOUND-ROLLOFF*. In the mixing thread."
+  (when (sfx-space-p (voice-sfx voice))
+    (let ((hvoice (sfx-voice-voice voice)))
+      (setf (mixed:min-distance hvoice)
+            (float (getf *clip-min-distances* (sfx-name (voice-sfx voice)) *sound-min-distance*) 0f0)
+            (mixed:max-distance hvoice) (float *sound-max-distance* 0f0)
+            (mixed:rolloff hvoice) (float *sound-rolloff* 0f0)))))
+
+(defun retune-sounds ()
+  "Give every connected voice the distances as they are now, after changing them."
+  (harmony:call-in-mixing-context
+   (lambda ()
+     (handler-case
+         (loop for sfx being the hash-values of *sounds*
+               when (typep sfx 'sfx)
+                 do (loop for voice across (sfx-voices sfx)
+                          when (harmony:chain (sfx-voice-voice voice))
+                            do (tune-voice voice)))
+       (error (e) (setf *sound-error* e))))
+   harmony:*server* :synchronize NIL))
+
+(defvar *sound-frame-queued* NIL
+  "The SOUND-CLOCK when a SOUND-FRAME was queued, while it waits in Harmony's mixing queue.")
+(defparameter *sound-frame-lost* 0.25
+  "Seconds after which a SOUND-FRAME still waiting is taken for lost and queued again.")
+
+(defun sound-frame ()
+  "Run in Harmony's mixing thread once a tick (SOUND-DIRECTOR): the listener, the one-shots
+asked for, and every loop's state."
+  (setf *sound-frame-queued* NIL)
+  (handler-case
+      (let ((space (harmony:segment :effect harmony:*server*)))
+        (setf (mixed:location space) *listener-location*
+              (mixed:direction space) *listener-direction*
+              (mixed:up space) *listener-up*)
+        (loop for voice = (sb-ext:atomic-pop (symbol-value '*sound-requests*))
+              while voice
+              unless (sfx-freed (voice-sfx voice))
+              do (let ((hvoice (sfx-voice-voice voice)))
+                   ;; Still playing (all its voices were busy): from the top.
+                   (when (harmony:chain hvoice)
+                     (mixed:seek hvoice 0))
+                   (connect-voice voice)
+                   (setf (mixed:volume hvoice) (voice-volume voice))
+                   (place-voice voice)))
+        (dolist (voice *loop-voice-list*)
+          (let ((hvoice (sfx-voice-voice voice))
+                (on (and (voice-held voice)
+                         (or (not *loops-paused*) (voice-auditioning voice))
+                         (not (member (sfx-name (voice-sfx voice)) *muted*)))))
+            (cond (on
+                   (unless (voice-connected voice)
+                     (connect-voice voice)
+                     (setf (voice-connected voice) T))
+                   (setf (mixed:volume hvoice) (voice-volume voice))
+                   (place-voice voice)
+                   (when (harmony:paused-p hvoice) (setf (harmony:paused-p hvoice) NIL)))
+                  ((and (voice-connected voice) (not (harmony:paused-p hvoice)))
+                   (setf (harmony:paused-p hvoice) T))))))
+    (error (e) (setf *sound-error* e))))
+
+;;; The director
+
+(defclass sound-director (entity listener)
+  ((name :initform :sound-director)))
+
+(defun update-listener ()
+  "The listener at the player's eye, facing where they look."
+  (let ((player *player*))
+    (when player
+      (let* ((pitch (vx (rotation player)))
+             (yaw (vy (rotation player)))
+             (flat (cos pitch))
+             (direction *listener-direction*))
+        (copy-into *listener-location* (location player))
+        (setf (aref direction 0) (float (* flat (sin yaw)) 0f0)
+              (aref direction 1) (float (- (sin pitch)) 0f0)
+              ;; Mirrored, as COPY-INTO mirrors places.
+              (aref direction 2) (float (* flat (cos yaw)) 0f0)
+              (aref *listener-up* 1) 1f0)))))
+
+(define-handler (sound-director tick) (dt)
+  (when harmony:*server*
+    (incf *sound-clock* dt)
+    (end-auditions)
+    (update-listener)
+    ;; In liquids.lisp, which knows the torches, lava and water.
+    (update-ambience dt)
+    ;; Loops stop with the world, but not for a hit-stop's blink.
+    (setf *loops-paused* (not (eq *game-state* :playing)))
+    ;; One waiting frame does all the next would: after a level build Trial runs a burst of
+    ;; catch-up ticks, more than the mixing queue's 64 jobs.
+    ;; A frame still waiting after *SOUND-FRAME-LOST* is lost: Harmony's queue can strand a
+    ;; job pushed just as the mixing thread ends its pass, and no sound would play again.
+    (let ((queued *sound-frame-queued*))
+      (unless (and queued (< (- *sound-clock* queued) *sound-frame-lost*))
+        (setf *sound-frame-queued* *sound-clock*)
+        ;; A full queue (it once filled while a level built) signals here.
+        (handler-case (harmony:call-in-mixing-context #'sound-frame harmony:*server* :synchronize NIL)
+          (error () (setf *sound-frame-queued* NIL)))))))

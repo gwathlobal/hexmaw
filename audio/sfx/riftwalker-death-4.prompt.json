@@ -1,0 +1,21 @@
+{
+  "prompt": "A masked assassin dying: a cold, hissing whisper through a metal mask, sharp and menacing, with a faint glassy ring of rift energy under it, trailing off, then a heavy thump of a body falling onto a stone floor at the end. Retro 1990s first-person fantasy game monster sound effect, a single creature, dry, no words, no music.",
+  "prompt_file": "audio/prompts/sfx-riftwalker-death.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 2.0,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793748603,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    2.0,
+    2.0,
+    2.0
+  ]
+}

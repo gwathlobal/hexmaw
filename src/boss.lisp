@@ -23,7 +23,8 @@
     ("harpy" harpy-boss harpy "Harpy Queen" 1.7 (:flyer))
     ("necromancer" necromancer-boss necromancer "Archnecromancer" 1.5 (:caster))
     ("ogre" ogre-boss ogre "Ogre Warlord" 1.3 ())
-    ("gale-wraith" wraith-boss gale-wraith "Storm Wraith" 1.7 (:flyer :caster)))
+    ("gale-wraith" wraith-boss gale-wraith "Storm Wraith" 1.7 (:flyer :caster))
+    ("riftwalker" riftwalker-boss riftwalker "Rift Lord" 1.6 ()))
   "What a boss can be: the kind as a spawn names it, the boss's class, the class it is an
 empowered form of, its title, how much bigger it is drawn, and its traits, which deny it
 powers. Every kind is as likely.")
@@ -153,7 +154,9 @@ it once the level is built."
   (let ((arena *arena*))
     (when (and arena (not (sealed arena)))
       (setf (sealed arena) T)
-      (when instant (setf (gate-drop arena) 1.0))
+      (if instant
+          (setf (gate-drop arena) 1.0)
+          (play-sound :gate-drop (connector-location (arena-door arena))))
       (place-gate arena)
       ;; Solid at once, while it still falls: the player is already through.
       (vector-push-extend (gate-solid arena) *solids*)
@@ -344,9 +347,10 @@ normal size, gets up out of it."
     (dolist (sigil sigils)
       (let* ((at (centre sigil))
              (minion (make-instance class :location (vcopy at) :facing (facing boss) :summoned T)))
+        (play-sound :summon-burst at)
         (setf (burst sigil) 0.0
               (rising minion) (death-duration minion)
-              (alert minion) *alert-time*)
+              (alert minion) (alert-time))
         (spawn-creature minion (container boss))
         (update-creature-look minion)))))
 
@@ -369,7 +373,8 @@ normal size, gets up out of it."
    (centre :initarg :centre :reader centre)
    (burst :initform NIL :accessor burst :documentation "Seconds since the flame burst up, or NIL.")
    (lamp :initform NIL :accessor sigil-lamp)
-   (flame :initform NIL :accessor sigil-flame)))
+   (flame :initform NIL :accessor sigil-flame)
+   (sound :initform NIL :accessor sigil-sound :documentation "Its loop through the cast, or NIL.")))
 
 (defmethod initialize-instance :after ((sigil summon-sigil) &key)
   ;; Flat on the floor, facing up, just off it.
@@ -377,6 +382,7 @@ normal size, gets up out of it."
   (incf (vy (location sigil)) 0.01))
 
 (defmethod leave :after ((sigil summon-sigil) container)
+  (setf (sigil-sound sigil) (stop-loop (sigil-sound sigil)))
   (when (sigil-flame sigil)
     (despawn (sigil-flame sigil))
     (setf (sigil-flame sigil) NIL))
@@ -408,6 +414,9 @@ normal size, gets up out of it."
             (make-instance 'aurora :centre (vcopy c) :radius *sigil-flame-radius*
                                    :colors *sigil-flame-colors* :spin 0.6 :twist 0.35))
       (enter (sigil-flame summon-sigil) (container summon-sigil)))
+    (setf (sigil-sound summon-sigil)
+          (hold-loop (sigil-sound summon-sigil)
+                     (and (container summon-sigil) (not (burst summon-sigil)) :summon-sigil) c))
     (unless (frozen-p)
       (incf (age summon-sigil) dt)
       (cond ((burst summon-sigil)
@@ -435,6 +444,28 @@ normal size, gets up out of it."
             (setf (aurora-height flame) (+ low (* (- high low) (min 1.0 (* 4.0 u))))
                   (aurora-strength flame) (* (min 1.0 (* 8.0 u)) (- 1.0 (* u u))))))))))
 
+(defun same-arena-side-p (from to margin)
+  "True if TO is on the same side of the arena's walls as FROM: both in it, TO at least
+MARGIN metres in, or both outside it, TO at least MARGIN out. T with no arena."
+  (or (null *arena*)
+      (if (arena-contains-p from 0.0)
+          (arena-contains-p to margin)
+          (not (arena-contains-p to (- margin))))))
+
+(defun free-spot (point radius height &key (search 2) ignore sight-of from)
+  "The floor point of the nav cell nearest POINT, within SEARCH columns, that a body RADIUS
+by HEIGHT fits: dry, no other body than IGNORE in it, a clear line to point SIGHT-OF if
+given, and on the same side of the arena's walls as point FROM (default POINT). Or NIL."
+  (when *nav-grid*
+    (multiple-value-bind (i j k) (let ((*nav-hazards* :avoid)) (nav-nearest-fitting point radius height :search search))
+      (when i
+        (let ((to (nav-point i j k)))
+          (when (and (same-arena-side-p (or from point) to (+ radius 0.5))
+                     (or (null sight-of) (clear-path-p to sight-of 1.0))
+                     (not (body-overlapping (vx to) (+ (vy to) 0.05) (vz to) (float radius 0f0)
+                                            (- (float height 0f0) 0.05) ignore)))
+            to))))))
+
 (defun blink-destination (boss)
   "Where BOSS's Blink takes it: a ranged kind 9 m from the player on its own side of them, a
 melee kind right behind them. A cell its body fits in the arena, in sight of the player, or NIL."
@@ -450,19 +481,16 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
     (loop for turn in '(0.0 0.7 -0.7 1.4 -1.4 2.2 -2.2)
           for yaw = (+ base turn)
           for p = (vec (+ (vx feet) (* d (sin yaw))) (vy feet) (- (vz feet) (* d (cos yaw))))
-          do (multiple-value-bind (i j k) (and *nav-grid* (nav-nearest-fitting p r h :search 2))
-               (when i
-                 (let ((to (nav-point i j k)))
-                   (when (and (arena-contains-p to (+ r 0.5))
-                              (clear-path-p to feet 1.0)
-                              (not (body-overlapping (vx to) (+ (vy to) 0.05) (vz to) (float r 0f0) (- (float h 0f0) 0.05) boss)))
-                     (return to))))))))
+          for to = (free-spot p r h :ignore boss :sight-of feet :from loc)
+          when to return to)))
 
 (defun blink (boss)
   (let ((to (blink-destination boss))
         (loc (location boss)))
     (when to
       (spawn-fx 'bolt-burst (vec (vx loc) (+ (vy loc) (* 0.5 (sprite-height boss))) (vz loc)) (container boss))
+      (play-sound :blink-out loc)
+      (play-sound :blink-in to)
       (v<- loc to)
       (let ((kb (momentum boss))) (setf (vx kb) 0.0 (vz kb) 0.0))
       (setf (path boss) ())
@@ -497,6 +525,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
   :usable (lambda (boss) (< (player-distance boss) (+ (body-radius boss) 3.5)))
   :release (lambda (boss)
              (let ((at (location boss)))
+               (play-sound :ogre-land at)
                (quake boss at *boss-quake-radius* *boss-quake-damage* *quake-shove* *quake-player-shove*
                       *quake-player-lift* :inner (body-radius boss))
                (kick-dust at (* 0.6 *boss-quake-radius*) *ogre-dust-puffs* (container boss))
@@ -527,7 +556,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
   :release #'summon-minions)
 
 (define-boss-power :blink
-  :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4
+  :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4 :deny '("riftwalker")
   :usable (lambda (boss)
             (if (ranged-p boss)
                 (< (player-distance boss) 4.0)
@@ -540,9 +569,68 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
 (define-boss-power :haste
   :label "Haste" :passive T)
 
+;;; A glowing rim, one art pixel wide, round a sprite's silhouette, and a warm or plain cast
+;;; over its whole body, with a lamp of the rim's colour: the boss's look, and an elite's
+;;; (elite.lisp). On the program of a class with it only.
+
+(define-shader-entity rim-glow ()
+  ((glow :initform (vec4 0 0 0 0) :reader glow :documentation "The rim's colour and strength this frame.")
+   (texel :initform (vec2 0 0) :reader texel)
+   (glow-lamp :initform NIL :accessor glow-lamp))
+  (:documentation "A sprite with a glowing rim. List it before the creature's class."))
+
+(defparameter *plain-shade* (vec 1 1 1) "A cast that leaves the colours as they are.")
+
+(defgeneric rim-shade (entity)
+  (:documentation "What ENTITY's whole body is multiplied by.")
+  (:method ((entity rim-glow)) *plain-shade*))
+
+(defun light-rim (entity color strength radius)
+  "Set ENTITY's rim to COLOR at STRENGTH, and its lamp of RADIUS metres to match, making the lamp
+when it has none in *LAMPS*."
+  (let ((glow (glow entity)))
+    (setf (vx glow) (vx color) (vy glow) (vy color) (vz glow) (vz color)
+          (vw glow) strength))
+  (let ((lamp (glow-lamp entity)))
+    (when (and (container entity) (not (and lamp (find lamp *lamps*))))
+      (setf lamp (add-lamp (location entity) (vcopy color) radius :flicker 0.1 :source entity)
+            (glow-lamp entity) lamp))
+    (when lamp
+      (let ((c (color lamp)))
+        (setf (vx c) (* strength (vx color))
+              (vy c) (* strength (vy color))
+              (vz c) (* strength (vz color)))))))
+
+(defmethod render :before ((entity rim-glow) (program shader-program))
+  (let ((texture (texture entity))
+        (texel (texel entity)))
+    (setf (vx texel) (/ 1.0 (width texture)) (vy texel) (/ 1.0 (height texture)))
+    (setf (uniform program "rim_glow") (glow entity))
+    (setf (uniform program "rim_texel") texel)
+    (setf (uniform program "rim_shade") (rim-shade entity))))
+
+(define-class-shader (rim-glow :fragment-shader)
+  "in vec2 uv;
+out vec4 color;
+uniform sampler2D texture_image;
+uniform vec4 rim_glow;
+uniform vec2 rim_texel;
+uniform vec3 rim_shade;
+
+void main(){
+  maybe_call_next_method();
+  // An opaque texel with a see-through one beside it is on the rim.
+  float rim = 0.0;
+  rim = max(rim, step(texture(texture_image, uv + vec2(rim_texel.x, 0.0)).a, 0.5));
+  rim = max(rim, step(texture(texture_image, uv - vec2(rim_texel.x, 0.0)).a, 0.5));
+  rim = max(rim, step(texture(texture_image, uv + vec2(0.0, rim_texel.y)).a, 0.5));
+  rim = max(rim, step(texture(texture_image, uv - vec2(0.0, rim_texel.y)).a, 0.5));
+  color.rgb = mix(color.rgb * rim_shade, rim_glow.rgb, rim * rim_glow.a);
+}")
+
 ;;; The boss.
 
-(define-shader-entity boss ()
+(define-shader-entity boss (rim-glow)
   ((kind :initarg :kind :reader boss-kind :documentation "Its kind, as in *BOSS-KINDS*.")
    (powers :initarg :powers :initform () :accessor boss-powers
            :documentation "Its three powers' names; the third comes in when it enrages.")
@@ -553,10 +641,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
    (power-gap :initform 0.0 :accessor power-gap :documentation "Seconds before it may start another power.")
    (power-point :initform (vec 0 0 0) :reader power-point :documentation "Where its tornado will form.")
    (roar :initform 0.0 :accessor roar :documentation "Seconds left of its enraged roar.")
-   (glow :initform (vec4 0 0 0 0) :reader glow :documentation "The rim's colour and strength this frame.")
-   (texel :initform (vec2 0 0) :reader texel)
-   (glow-lamp :initform NIL :accessor glow-lamp)
-   (ward :initform NIL :accessor ward :documentation "The AURORA arc that shows Warded, once it has it."))
+   (ward :initform NIL :accessor ward :documentation "The AURORA arc that shows Warded, once it has it.")
+   (ward-sound :initform NIL :accessor ward-sound :documentation "The ward's hum while it is up, or NIL."))
   (:documentation "The run's boss: an empowered monster. List it first in the superclasses."))
 
 (defmethod initialize-instance :after ((boss boss) &key)
@@ -701,6 +787,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
         (roar boss) *boss-roar-time*
         (power-gap boss) 0.0)
   (stop-walking boss *boss-roar-time*)
+  (play-sound :boss-enrage (location boss))
   (kick-dust (location boss) (* 0.6 *boss-quake-radius*) *ogre-dust-puffs* (container boss))
   (hit-stop 0.3))
 
@@ -711,19 +798,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
                   ((dormant boss) 0.4)
                   (T 1.0)))
          (pulse (+ 0.75 (* 0.25 (sin (* (if (enraged boss) 7.0 3.5) *light-clock*)))))
-         (strength (* k (min 1.0 (+ pulse (* 1.5 (roar boss))))))
-         (glow (glow boss)))
-    (setf (vx glow) (vx *boss-glow-color*) (vy glow) (vy *boss-glow-color*) (vz glow) (vz *boss-glow-color*)
-          (vw glow) strength)
-    (let ((lamp (glow-lamp boss)))
-      (when (and (container boss) (not (and lamp (find lamp *lamps*))))
-        (setf lamp (add-lamp (location boss) (vcopy *boss-glow-color*) *boss-light-radius* :flicker 0.1 :source boss)
-              (glow-lamp boss) lamp))
-      (when lamp
-        (let ((color (color lamp)))
-          (setf (vx color) (* strength (vx *boss-glow-color*))
-                (vy color) (* strength (vy *boss-glow-color*))
-                (vz color) (* strength (vz *boss-glow-color*))))))
+         (strength (* k (min 1.0 (+ pulse (* 1.5 (roar boss)))))))
+    (light-rim boss *boss-glow-color* strength *boss-light-radius*)
     (update-ward boss k)))
 
 (defun ward-arc (boss)
@@ -740,6 +816,10 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
                                         :colors *ward-colors* :spin 0.15 :twist 0.05 :arc (ward-arc boss))
             (ward boss) ward)
       (enter ward (container boss)))
+    (setf (ward-sound boss)
+          (hold-loop (ward-sound boss)
+                     (and ward (container boss) (has-power-p boss :warded) (not (dead boss)) :ward-hum)
+                     (location boss) k))
     (when ward
       (let* ((loc (location boss))
              (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc))))
@@ -751,6 +831,7 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
               (aurora-strength ward) (if (has-power-p boss :warded) (* *ward-strength* k) 0.0))))))
 
 (defmethod leave :after ((boss boss) container)
+  (setf (ward-sound boss) (stop-loop (ward-sound boss)))
   (when (ward boss)
     (despawn (ward boss))
     (setf (ward boss) NIL)))
@@ -771,6 +852,7 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
                      ;; Elsewhere (the test level) there is no run to win: the gate goes up
                      ;; again, so the player can leave.
                      (when (and arena (sealed arena))
+                       (play-sound :gate-rise (connector-location (arena-door arena)))
                        (unseal-arena)))))
               ((dormant boss)
                (when (and arena (eq (arena-boss arena) boss) *player* (< 0 (health *player*))
@@ -790,35 +872,9 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
         (place-gate arena)))
     (update-boss-glow boss)))
 
-;;; Its look: a warm cast over the whole body and a pulsing rim, one art pixel wide, round
-;;; its silhouette. On the boss's program only.
+;;; Its look: a warm cast over the whole body and a pulsing rim (RIM-GLOW).
 
-(defmethod render :before ((boss boss) (program shader-program))
-  (let ((texture (texture boss))
-        (texel (texel boss)))
-    (setf (vx texel) (/ 1.0 (width texture)) (vy texel) (/ 1.0 (height texture)))
-    (setf (uniform program "boss_glow") (glow boss))
-    (setf (uniform program "boss_texel") texel)
-    (setf (uniform program "boss_shade") *boss-shade*)))
-
-(define-class-shader (boss :fragment-shader)
-  "in vec2 uv;
-out vec4 color;
-uniform sampler2D texture_image;
-uniform vec4 boss_glow;
-uniform vec2 boss_texel;
-uniform vec3 boss_shade;
-
-void main(){
-  maybe_call_next_method();
-  // An opaque texel with a see-through one beside it is on the rim.
-  float rim = 0.0;
-  rim = max(rim, step(texture(texture_image, uv + vec2(boss_texel.x, 0.0)).a, 0.5));
-  rim = max(rim, step(texture(texture_image, uv - vec2(boss_texel.x, 0.0)).a, 0.5));
-  rim = max(rim, step(texture(texture_image, uv + vec2(0.0, boss_texel.y)).a, 0.5));
-  rim = max(rim, step(texture(texture_image, uv - vec2(0.0, boss_texel.y)).a, 0.5));
-  color.rgb = mix(color.rgb * boss_shade, boss_glow.rgb, rim * boss_glow.a);
-}")
+(defmethod rim-shade ((boss boss)) *boss-shade*)
 
 ;;; One class per kind.
 

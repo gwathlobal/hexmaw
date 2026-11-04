@@ -1,0 +1,19 @@
+{
+  "prompt": "A wall torch burning in a stone dungeon: a soft steady crackle and flutter of flame. Retro 1990s first-person fantasy game sound effect, one even texture that loops seamlessly, no start or ending, no music.",
+  "prompt_file": "audio/prompts/sfx-torch-crackle.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": true,
+  "duration_seconds": 4.0,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1793714145,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    4.0,
+    4.0
+  ]
+}

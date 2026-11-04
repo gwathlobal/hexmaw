@@ -1,0 +1,21 @@
+{
+  "prompt": "A necromancer's grave circle glowing on a crypt floor: a chorus of tormented souls wailing and moaning from under the ground, ghostly voices rising and falling over each other in an eerie, hollow, echoing lament, over a low ominous drone. No words, no screaming in pain, no music. Retro 1990s first-person fantasy game sound effect, one even texture that loops seamlessly, no start or ending.",
+  "prompt_file": "audio/prompts/sfx-grave-circle.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": true,
+  "duration_seconds": 4.0,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1793734077,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    4.0,
+    4.0,
+    4.0
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "prompt": "A large winged creature crashing onto a stone floor: a heavy thump and a flurry of feathers. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-harpy-crash.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.5,
+  "loop": false,
+  "duration_seconds": 0.6,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1793714060,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    0.6,
+    0.6
+  ]
+}
