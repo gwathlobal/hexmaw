@@ -870,7 +870,8 @@ text `forge-note`s, which wrap (Alloy's
   (boss.lisp), its rim in the enchantment's colour, pulsing as the weapon's in hand (never dimmed). A
   rune's stone shows its look, not its first effect as its icon does. The debug level has
   a spear, an enchanted sword and two runes east of the dust (`place-test-loot`, from seed 7 and the
-  last level's `:loot`). `tools/hd status` shows an enchanted weapon as `sword[frost-edge]`.
+  last level's `:loot`). `tools/hd status` shows an enchanted weapon as `sword[frost-edge]`. A
+  stranded ogre's hoard (`place-hoards`, after the dust) is one more item; see "The ogre".
 - `src/inventory.lisp`: the inventory, the hotbar, the quickslot and the panel. `*item-kinds*` says
   what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
   stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
@@ -1488,7 +1489,15 @@ from `any`, the `hall`'s choice and the high quarter's own spawns; the `cavern`,
 doorways (`check-kit` with `*spawn-pool*` set to only ogres checks every block for it).
 Each block fits it, but the way to the start may not (a `stair`, a cave passage, a `narrow`
 doorway, the far bank of a river): one stranded there guards its part of the level, and
-`check-reachable` warns. Over seeds 1 to 30 at each of a run's three depths, 109 of 347 ogres
+`check-reachable` warns. It guards a hoard too (`place-hoards`, loot.lisp): `build-level` passes
+`check-reachable`'s stranded ogres (`hoard-guard-p`: elites too, not bosses or the summoned) to
+`place-pickups`, which, last of all the pickups so the others keep their places in `*pickups*`, lays
+a found item that is never plain (an enchanted sword or spear, or a generated rune;
+`make-hoard-loot`) and a pile of `*hoard-gold*` coins on the floor `*hoard-behind*` (1.5 m) behind
+its spawn point, by its facing then, `*hoard-spread*` apart (`hoard-points`: nearer or turned toward
+its side where a wall is in the way, never in front, on the spawn point at last; floor the player
+fits on and can get to). Its 2 m wander keeps it by the hoard. Each hoard logs a line ("OGRE at ...
+guards a sword: Shock Edge and 104 gold."). Over run seeds 1 to 8 on the last level, 8 hoards. Over seeds 1 to 30 at each of a run's three depths, 109 of 347 ogres
 were stranded, and no other creature.
 `*ogre-dust*` names the effect animation puffed round a landing and the slam's impact
 (`ogre-dust`, preloaded by `setup-scene`; NIL for none).

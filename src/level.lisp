@@ -144,10 +144,10 @@ player can't get to one; or if it is the settlement's and its wing came out too 
                     (return))))
     ;; Before the checks, which count the packs too.
     (spread-packs container *last-level-seed*)
-    (check-reachable)
-    (when (eq *level* :generated)
-      (check-ice-joins))
-    (place-pickups container)
+    (let ((stranded (nth-value 1 (check-reachable))))
+      (when (eq *level* :generated)
+        (check-ice-joins))
+      (place-pickups container :guards (remove-if-not #'hoard-guard-p stranded)))
     (setf *built-pickups* (length *pickups*))))
 
 (defun build-boss-wing (container)
