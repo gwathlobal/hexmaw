@@ -463,7 +463,9 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1)
                              ("gale-wraith" 1) ("riftwalker" 1))
   "What a block's spawn_any picks from, each monster with its weight. A level of the run sets
-its own (*RUN-LEVELS*' :POOL).")
+its own (*RUN-LEVELS*' :POOL). On a generated level it limits named spawns too: a choice keeps
+only the monsters in it, and a block with a named spawn it has none of isn't used
+(BLOCK-FITS-POOL-P).")
 
 (defparameter *spawn-skip-scale* 1.0
   "Scales a spawn's chance of no monster on a generated level; a level of the run sets its own.")
@@ -513,19 +515,45 @@ so a seed builds the same level whatever the condition."
 (defvar *level-altars* (make-array 0 :adjustable T :fill-pointer T)
   "The spellforge's altars (forge.lisp): each the point on top of it. BUILD-LEVEL empties it.")
 
+(defun pooled-kind-p (kind)
+  "True if KIND, a spawn's kind, is one of *SPAWN-POOL*'s."
+  (find kind *spawn-pool* :key #'first :test #'string-equal))
+
+(defun named-spawn-p (kind)
+  "True if a spawn of KIND names its monsters, \"a\" or \"a|b\", rather than drawing from the
+pool (\"any\", \"any-a|b\") or being the boss."
+  (not (or (string-equal kind "any") (string-equal kind "boss")
+           (and (< 4 (length kind)) (string-equal kind "any-" :end1 4)))))
+
+(defun block-fits-pool-p (name)
+  "True if every spawn of block NAME that names its monsters names one in *SPAWN-POOL*: a
+generated level uses only such blocks, so its pool decides which monsters it has (the high
+quarter's rooms, which spawn ogres, wait for a level whose pool has the ogre)."
+  (every (lambda (spawn)
+           (let ((kind (getf spawn :kind)))
+             (or (not (named-spawn-p kind))
+                 (some #'pooled-kind-p (uiop:split-string kind :separator "|")))))
+         (getf (find-block name) :spawns)))
+
 (defun spawn-choice (kind)
   "The monster a spawn of KIND places: KIND itself, one of \"a|b|c\" (alike), for
 \"any\" one of *SPAWN-POOL* by weight, or for \"any-a|b\" one of the pool but those (a
-block too tight for them)."
+block too tight for them). On a generated level a named one is limited to the pool too, so
+the hall's knight|...|ogre is no ogre where the pool has none."
   (let* ((choices (cond ((string-equal kind "any") *spawn-pool*)
                         ((and (< 4 (length kind)) (string-equal kind "any-" :end1 4))
                          (let ((left-out (uiop:split-string (subseq kind 4) :separator "|")))
                            (remove-if (lambda (choice) (member (first choice) left-out :test #'string-equal))
                                       *spawn-pool*)))
-                        (T (mapcar (lambda (k) (list k 1)) (uiop:split-string kind :separator "|")))))
-         ;; One float draw, whatever the weights: an integer RANDOM draws a varying number of
-         ;; times, so changing a pool's weights would change the rest of the level.
-         (pick (and choices (* (random 1.0 *block-random*) (reduce #'+ choices :key #'second)))))
+                        ((string-equal kind "boss") '(("boss" 1)))
+                        (T (loop for k in (uiop:split-string kind :separator "|")
+                                 when (or (not (eq *level* :generated)) (pooled-kind-p k))
+                                   collect (list k 1)))))
+         ;; One float draw, whatever the weights and even with no choice left: an integer
+         ;; RANDOM draws a varying number of times, so changing a pool's weights would change
+         ;; the rest of the level.
+         (roll (random 1.0 *block-random*))
+         (pick (and choices (* roll (reduce #'+ choices :key #'second)))))
     (loop for (name weight) in choices
           do (decf pick weight)
           when (< pick 0) return name

@@ -823,7 +823,8 @@ text `forge-note`s, which wrap (Alloy's
   a random state of its own seeded with the level's, so a seed always places the same ones. A save
   names the taken ones by place, so changing how they're scattered makes an older save mark the wrong
   ones taken. Over seeds 1 to 30, on a run's first level: 42 monsters (27 to 63), about half of them imps
-  (imp packs, imp.lisp), and 32 pickups. Before packs it was 33 monsters and 26 pickups (half of each
+  (imp packs, imp.lisp), and 32 pickups; since then 45 monsters (29 to 65), measured once its pool kept
+  out the high quarter's ogres. Before packs it was 33 monsters and 26 pickups (half of each
   resource potions, 5 to 8 of each, restoring 343 health and 509 mana), on its second 40 and 32, on its
   third 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
@@ -1484,7 +1485,8 @@ reach still overlaps. The high quarter's stairs are made for it (see "Blueprints
 It sees `sight-rise` (6.5 m) up and down, not 3. `*leap-debug*` logs every leap, every refusal
 and why, and what each shockwave hits. On the test level it stands in the hall's east, by
 the annex doorway (it fits the lower room, not the stair shaft). Generated levels have it
-from `any`, the `hall`'s choice and the high quarter's own spawns; the `cavern`, `balcony`,
+from level 2 on (level 1's pool has none, which keeps out the high quarter too: see `:pool` under
+"A run"), from `any`, the `hall`'s choice and the high quarter's own spawns; the `cavern`, `balcony`,
 `ice-cavern` and `ice-grotto` spawn `any-ogre`, since one there couldn't reach its own
 doorways (`check-kit` with `*spawn-pool*` set to only ogres checks every block for it).
 Each block fits it, but the way to the start may not (a `stair`, a cave passage, a `narrow`
@@ -2367,12 +2369,15 @@ and `spawn MONSTER FACING [SKIP] [when:COND|COND]`, where `when:` limits it to t
 conditions (see "The settlement") and SKIP is a percent chance of no monster (every room
 has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has two kinds of
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
-`check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
+`check-kit` place them all), and MONSTER may be a choice, `imp|knight` (on a generated level only
+those of it in the level's pool, and a block with a named spawn the pool has none of is left out,
+`block-fits-pool-p`: so the high quarter's `spawn ogre` rooms wait for a level with the ogre), or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith and
 riftwalker 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
-own state; one float draw whatever the weights, so changing a pool never changes the layout). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
+own state; one float draw whatever the weights, so changing a pool's weights never changes the layout,
+though adding or removing a kind some block names does). They combine with commas: `I box 0 0.8 dais, spawn acolyte south` stands the
 acolyte on the dais. Each connected group of one spawn character
 is one monster at its centre, so `ii` centres one on a 1 m spot. `pickup floor` or `pickup
 reward` is a spot where a level may put a pickup, one per group like a spawn, on top of a `box` in
@@ -2608,6 +2613,9 @@ harder going down, by keys in each entry (none are flat stat multipliers):
 - built into the level (`level-settings` sets their variables for the generator, so a save keeps
   them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre,
   wraith or riftwalker on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  which also limits named spawns: a choice keeps the kinds in the pool, and a block naming only kinds
+  outside it isn't used (`block-fits-pool-p`; on level 1 the high quarter's rooms, which spawn ogres,
+  and so the whole high quarter; the log says which),
   `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
   0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
 - asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
