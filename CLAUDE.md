@@ -508,7 +508,11 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   duration counts: `:instant`, `:over-time` (magnitude per second) or `:status`, who it may strike,
   and the forge's caps); `effect-cost` is base (by element for damage, `*element-costs*`) times the
   average magnitude, times the duration's factor, times 1 + area, times `*touch-cost-scale*` for a
-  touch spell. The bolt is 14 and the creatures' spells cost what they did. An effect with an area
+  touch spell. The bolt is 14 (fire 7-9 and knockback 3-4, "Fire Bolt" by its `:title`; `spell-title`),
+  heal 17 (14-20), and the creatures' spells cost what they did. The player's starting spells must be
+  ones the forge makes, ranges, cost, flight and all (`forgeable-p` and `check-starting-spells`,
+  forge.lisp, which warns as it loads: a forged range is `*magnitude-spread*` of its top up to it, and
+  damage always has an element). An effect with an area
   bursts where its spell strikes (`burst-spell`, over `burst-victims` in magic.lisp: every body
   within it with a clear line, but the caster and those it spares), the impact drawn that much
   bigger (`play-impact`, `*burst-size*`); a strike without a projectile (a touch, an enchanted
@@ -746,8 +750,10 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   cast (`spell-dust`), an enchantment `*enchant-dust-scale*` (3) a point of its mana per blow
   (`enchant-dust`); destroying one gives back `*dust-refund*` (0.5) of that (`refund-dust`). Two tabs
   (`*forge-tab*`, `forge-tab`): **Spells** lists "New spell" and every rune in the bag (`player-runes`,
-  `*forge-list-rows*` a page, `forge-page`), **Enchant** the weapons carried (`carried-weapons`: the
-  sword, the spear, and the shield with the sword). The forge is on one of them (`*forge-sink*`,
+  `*forge-list-rows*` a page, `forge-page`), **Enchant** the weapons carried (`carried-weapons`: every
+  sword and spear in the bag, each a stack, its sink, and the shield, `:shield`, with a sword;
+  `weapon-sink-p`, `sink-weapon`, `(setf sink-spell)`; `(forge-select :sword)` from the REPL takes the
+  first sword). The forge is on one of them (`*forge-sink*`,
   `forge-select`): a new spell or a plain weapon has a draft to make (`*forge-draft*`, kept per sink in
   `*forge-drafts*` while the forge is left: a `forge-draft` of a delivery and `effect-draft`s), made by
   `forge-make` into a rune in the bag on the first free key (`give-rune`) or the weapon's enchantment;
@@ -820,24 +826,55 @@ text `forge-note`s, which wrap (Alloy's
   **Glyphs** are pickup kinds with `:teaches` (`:glyph-frost` .. `:glyph-area`): touched, they teach
   the player an effect for the forge (`learn-glyph`: `known-effects`, a gold flash, a message), and
   one already known stays. Each level of a run has `*glyphs-per-level*` (2), the run's six shuffled by
-  the run seed alone (`run-glyphs`), placed after the other pickups (`place-glyphs`, from a random
-  state of their own) on free spots, a reward spot first, so the other pickups keep their places. The
-  test level has one of each along the hall's south wall, west of the pickups. **Arcane dust**
+  the run seed alone (`run-glyphs`), so the first three levels teach them all and the last has none,
+  placed after the other pickups (`place-glyphs`, from a random state of their own) on free spots, a
+  reward spot first, so the other pickups keep their places. `scatter-pickups` leaves them their spots
+  (`:reserve`, the level's glyphs and loot, `src/loot.lisp`, and the settlement's relic): the settlement's small wing ran out and
+  lost a glyph for the run. The town's shopkeeper sells the ones the player doesn't know (see "The
+  settlement"). The test level has one of each along the hall's south wall, west of the pickups. **Arcane dust**
   (`:dust`, an `:item` with `:count`: the pile's `pickup-count`) is placed last (`place-dust`, from a
   random state of its own, on spots `free-pickup-spots` leaves) until a generated level holds
-  `*dust-per-monster*` (2) for each monster, in piles of `*dust-pile*` (8 to 20; bigger where few spots
-  are left, so a level always gets its whole budget: about 60 to 80, three or four spells). Sprites:
+  `*dust-per-monster*` (2) for each monster (`monster-p`: not the townsfolk), in piles of `*dust-pile*`
+  (8 to 20; bigger where few spots are left, so a level gets its whole budget while it has a spot:
+  about 60 to 120, three to six spells). Sprites:
   `tools/draw_glyphs.py data/sprites/pickups` (a rune tablet per glyph, and `altar-sigil`).
   **Altars**: `add-altar` notes a point in `*level-altars*` (blocks.lisp; a blueprint's `altar`) and
   hangs an `altar-sigil` over it with a lamp; `reset-run` keeps it. The test level has one on a dais
   in the hall's north-west corner.
+- `src/loot.lisp`: found weapons and runes. A run starts with the sword, the fire bolt and heal; the
+  rest is loot. Each level's `:loot` (`*run-levels*`, run.lisp; `loot-property`, which takes the
+  settlement's own `(:weapons 0 :runes 1)` before the level it borrows the rest from) gives its
+  `:weapons` (level 1 a plain spear, `:first-weapon`) and `:runes`. A weapon is a sword or spear with
+  the usual stats; only its enchantment varies: `:enchant-chance` (0, 0.5, 0.8) of one costing
+  `:enchant-cost` a blow (2-3 on level 2, 3-6 on level 3) with up to `:enchant-effects`
+  (`loot-enchantment`). A rune (`make-loot-rune`) is a generated spell made as the forge makes one,
+  from a `forge-draft` (`loot-rune-draft`: a delivery from `*loot-deliveries*`, kinds from
+  `*loot-strike-kinds*` or `*loot-self-kinds*`, up to `:rune-effects`, elements, times
+  (`*loot-durations*`) and, with `:area-chance`, a burst), its magnitudes sized by bisection
+  (`size-draft`) to a cost in `:rune-mana` (10-18, 16-28, 24-40), drawn again while `draft-fault`
+  (forge.lisp, the forge's checks without the dust and bag) refuses it or it falls more than
+  `*rune-mana-slack*` short. Or it is one of `*loot-spells*` (the tornado, `tempest`), which the forge
+  can't make: once a run at most, on the first level whose `:authored-chance` (0.35, 0.5) roll from the
+  run seed comes up (`authored-loot`); 13 of run seeds 1 to 15 had it. `place-loot` (after the glyphs,
+  before gold and dust; `scatter-pickups` reserves the spots, `loot-count`) stands each as a
+  `loot-pickup` (its `loot-stack`, given as a copy so a reset hands out the same) on a reward spot
+  first, from a random state of the level's seed, so a load builds the same items; taken, it goes
+  into the bag on the next free key with "Found a sword: Frost Edge, on key 4." Its sprite is
+  `loot-sword`, `loot-spear` or `loot-rune-<look>` by its spell's look (`tools/draw_loot.py
+  data/sprites/pickups`). An enchanted weapon's pickup has the outline it has in hand: `loot-pickup` is a `rim-glow`
+  (boss.lisp), its rim in the enchantment's colour, pulsing as the weapon's in hand (never dimmed). A
+  rune's stone shows its look, not its first effect as its icon does. The debug level has
+  a spear, an enchanted sword and two runes east of the dust (`place-test-loot`, from seed 7 and the
+  last level's `:loot`). `tools/hd status` shows an enchanted weapon as `sword[frost-edge]`.
 - `src/inventory.lisp`: the inventory, the hotbar, the quickslot and the panel. `*item-kinds*` says
   what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
   stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
   5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, nothing uses it yet) 999.
-  Weapons and spells are items too: `:sword` and `:spear` (`:weapon`, what they put in hand) and
+  Weapons and spells are items too: `:sword` and `:spear` (`:weapon`, what they put in hand), a stack
+  `(:sword 1 enchantment)` (`stack-enchantment`, each weapon its own; `(:sword 1)` is plain), and
   `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
-  tag for a spell reference); none of them stack. A stack is a list `(kind count)`. **The bag holds
+  tag for a spell reference); none of them stack. `give-stack` puts one in the first free cell, bound
+  to the first free key (`give-rune` makes a rune's). A stack is a list `(kind count)`. **The bag holds
   every item** (the player's `inventory`, `*inventory-size*`, 20 cells); the hotbar and the quickslot
   only point into it, so binding a key frees no room: a hotbar slot (`*hotbar-slots*`, `:hot-1` ..
   `:hot-9`, the player's `hotbar`, `*hotbar-size*` long) holds a stack in the bag (`eq`), the quickslot
@@ -849,7 +886,9 @@ text `forge-note`s, which wrap (Alloy's
   leaves the bag is unbound (`prune-bindings`, from `sync-wanted` every tick, and `destroy-stack`).
   Bag cells mark the key bound to their stack. A run starts with `give-starting-kit` (player.lisp's
   `initialize-instance`, `reset-player`): `*starting-hotbar*`'s items in the first cells, bound to
-  keys 1 to 5 (sword, bolt, spear, tempest, heal), slot `*starting-slot*` in hand. The hotbar draws in
+  keys 1 to 3 (sword, fire bolt, heal), slot `*starting-slot*` (the sword) in hand; the rest is found
+  (`src/loot.lisp`). The debug level starts with `*debug-starting-hotbar*` instead, keys 1 to 5
+  (sword, bolt, spear, tempest, heal), so the recipes below that use keys 3 and 4 work there. The hotbar draws in
   rows of `*hotbar-columns*` (5) over the bars (`hot-position`; in one row of nine the hands covered the
   last), each slot with its key, the one asked for framed in gold, the others' icons dimmed in play, an
   enchanted weapon's border in its spell's colour. A rune's icon is its spell's look's (`stack-icon`:
@@ -1036,8 +1075,11 @@ text `forge-note`s, which wrap (Alloy's
   (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295); `add-hands`
   preloads them all, since `swap-animation` changes the strip mid-game. The recipes (the hotbar's
   defaults) work as before: `(select-weapon *player* :1)` is hotbar key 1, the sword at the start.
-- `src/sword.lisp` also has **enchantments**: a weapon's spell (`enchantments`, a plist from `:sword`,
-  `:spear` or `:shield` to a spell, made at the forge) goes with every blow of it that lands
+- `src/sword.lisp` also has **enchantments**: a weapon's spell (a sword's or spear's its own stack's,
+  `stack-enchantment`, so two swords differ; the shield's in the player's `enchantments` plist under
+  `:shield`; `weapon-spell` asks for the one in hand, `held-weapon-stack`; made at the forge or found,
+  `src/loot.lisp`; `migrate-enchantments` moves an older save's `:sword`/`:spear` entries onto the
+  bag's first such weapon, after a load and the stairs) goes with every blow of it that lands
   (`enchant-strike`, from `swing-hit` and the bash), for `enchant-cost` mana (`*enchant-cost-scale*`
   of the spell's cost) out of the pool; with too little left the blow is plain, and a miss costs
   nothing. Its self effects land on the player. The weapon's border on the hotbar and in the bag takes
@@ -1064,9 +1106,11 @@ text `forge-note`s, which wrap (Alloy's
   for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
   `weapon-aim`, NIL to keep it against the bottom-right corner). The mouse wheel is the
   quickslot's (inventory.lisp). Weapon and rune icons are frames of `data/sprites/icons/weapons.png`
-  (`*weapon-icons*`, a rune's by its spell's look `*spell-icons*`: the fireball in each look's
-  colours, the tornado), drawn by `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new
-  weapon or look needs a frame there.
+  (`*weapon-icons*`; a rune's by its spell's first effect, `spell-icon-key` into `*spell-icons*`:
+  damage by element, a flame, a snowflake, a lightning bolt; drain a drop of blood, heal a cross, ward a
+  shield, slow an hourglass, knockback a shockwave; a vortex the tornado), drawn by
+  `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon or effect kind needs a frame
+  there.
   The left hand holds a shield, a sprite of its own (`shield`, a subclass of `sword`) against
   the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
   off on screens whose whole-number scale shows fewer art pixels across. It drops and sways
@@ -2501,7 +2545,8 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
   abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
 
-Pickups stay budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,
+Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
+budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,
 and `*run-seed*` the run's seed: `(level-seed run-seed depth attempt)` gives each level's, the first
 try at level 1 being the run seed itself, so `*level-seed*` still reproduces a level 1 and a whole
 run. A reset on a generated level rebuilds the same level, since the run keeps its seed; a new one
@@ -2555,7 +2600,7 @@ Controls: click the window to capture the mouse, Esc to pause (release the mouse
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
 down; swim into a ledge at the surface to climb out), 1 to 9 for what the hotbar holds (at the
-start 1 the sword, 2 the bolt, 3 the spear, 4 the tornado, 5 heal), the mouse wheel to change the
+start 1 the sword, 2 the fire bolt, 3 heal; whatever is found goes on the next free key), the mouse wheel to change the
 quickslot's potion, left click to attack (swing, thrust, or cast the spell in hand), right button
 held to raise the shield (sword only; a left click while it's up bashes), Q to drink from the
 quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, or a
@@ -2652,7 +2697,10 @@ again (an Alloy panel lays itself out once). Services refuse while the watch is 
 player has sacked the town (`refusing-p`):
 
 - **Shopkeeper**: buys and sells `*shop-goods*` (health and mana potions; the stock, 1 + depth of
-  each, is on the settlement), selling at `*sell-share*`. Dead, its stall can be searched (`loot-item`).
+  each, is on the settlement), selling at `*sell-share*`. A page of its own (`*talk-page*` `:glyphs`,
+  `show-talk-page`) sells every glyph whose effect the player doesn't know (`shop-glyphs`, `buy-glyph`,
+  `price :glyph`, priced as goods): bought, it is learnt at once (`learn-glyph`), so it takes no room
+  and needs no stock. Dead, its stall can be searched (`loot-item`), for potions only.
 - **Priest**: heals and restores mana to full, a fee per point, and blesses (`blessed`, a player
   slot: `*bless-time*` seconds of play in which blows do `*bless-scale*`, `blessing-scale` in
   `hurt-player`; carried down the stairs). Its button says what it does, and while it lasts the
@@ -2671,8 +2719,9 @@ player has sacked the town (`refusing-p`):
 `price` is `*base-prices*`, `*price-depth-step*` dearer per depth, by the faction's multiplier and
 `(1 - standing / 400)`. **Gold** (`gold`, a player slot) comes from `:gold` pickups, which
 `place-gold` scatters on the spots health, mana, the relic and the glyphs left (`*gold-per-monster*`,
-on at most `*gold-spot-share*` of them, since arcane dust comes after and its piles grow to fill
-fewer spots), and from
+on at most `*gold-spot-share*` of them but one at least, since arcane dust comes after and its piles
+grow to fill fewer spots), in piles of `*gold-pile*` coins (`pickup-count`, as dust's; bigger where its
+share of spots is too few, so a level gets its whole budget: 200 to 370), and from
 kills (`*kill-gold*` by class, straight into the purse through `creature-died`), both
 `*gold-depth-step*` more per depth (`gold-scale`). **Reputation** (`reputation`, a plist by faction,
 -100 to 100) moves prices, greetings and the watch's patience (`*patient-reputation*`).

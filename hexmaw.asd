@@ -47,6 +47,7 @@
                (:file "menu")
                (:file "dialogue")
                (:file "forge")
+               (:file "loot")
                (:file "music")
                (:file "map-view")
                (:file "level")

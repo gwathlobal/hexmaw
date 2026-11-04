@@ -89,10 +89,27 @@ its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound."
   "The spell a rune's STACK casts, or NIL."
   (and (eq :rune (first stack)) (third stack)))
 
+(defun weapon-stack-p (stack)
+  (and (consp stack) (item-property (first stack) :weapon) T))
+
+(defun stack-enchantment (stack)
+  "The spell a weapon's STACK, (KIND 1 SPELL), strikes with on every blow (ENCHANT-STRIKE,
+sword.lisp), or NIL for a plain one: each weapon has its own, as a rune its spell."
+  (and (weapon-stack-p stack) (third stack)))
+
+(defun (setf stack-enchantment) (spell stack)
+  (if (cddr stack)
+      (setf (third stack) spell)
+      (setf (cdr (cdr stack)) (list spell)))
+  spell)
+
 (defun stack-label (stack)
   "STACK in a word or two, for TOOLS/HD STATUS: -, sword, bolt, health-potion*3."
   (cond ((null stack) "-")
         ((eq :rune (first stack)) (substitute #\- #\Space (string-downcase (spell-title (stack-spell stack)))))
+        ((stack-enchantment stack)
+         (format NIL "~(~a~)[~a]" (first stack)
+                 (substitute #\- #\Space (string-downcase (spell-title (stack-enchantment stack))))))
         ((= 1 (second stack)) (string-downcase (first stack)))
         (T (format NIL "~(~a~)*~d" (first stack) (second stack)))))
 
@@ -122,16 +139,19 @@ its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound."
           when (eq (car cell) stack) do (setf (car cell) NIL))
     (setf (nth index hotbar) stack)))
 
-(defun give-rune (player spell)
-  "Put a new rune of SPELL in the first empty bag cell, bound to the first free hotbar key if
-there is one. The rune's bag cell and its key (from 0, or NIL), or NIL if the bag is full."
+(defun give-stack (player stack)
+  "Put STACK, a weapon or a rune, in the first empty bag cell, bound to the first free hotbar key
+if there is one. Its bag cell and its key (from 0, or NIL), or NIL if the bag is full."
   (let ((cell (position NIL (inventory player)))
         (key (position NIL (hotbar player))))
     (when cell
-      (let ((stack (list :rune 1 spell)))
-        (setf (nth cell (inventory player)) stack)
-        (when key (setf (nth key (hotbar player)) stack))
-        (values cell key)))))
+      (setf (nth cell (inventory player)) stack)
+      (when key (setf (nth key (hotbar player)) stack))
+      (values cell key))))
+
+(defun give-rune (player spell)
+  "Put a new rune of SPELL in the bag (GIVE-STACK)."
+  (give-stack player (list :rune 1 spell)))
 
 (defun destroy-stack (player stack)
   "Take STACK out of the bag, and off any key bound to it."
@@ -254,10 +274,10 @@ holds; a negative STEP goes back. True if it changed."
 
 (defun give-starting-kit (player)
   "Fill PLAYER's empty bag with *STARTING-HOTBAR*'s weapons and spells (player.lisp), each bound
-to its key."
+to its key; on the debug level, *DEBUG-STARTING-HOTBAR*'s."
   (let ((bag (make-list *inventory-size*))
         (hotbar (make-list *hotbar-size*)))
-    (loop for entry in *starting-hotbar*
+    (loop for entry in (if (eq *level* :test) *debug-starting-hotbar* *starting-hotbar*)
           for i from 0
           for stack = (if (keywordp entry) (list entry 1) (list :rune 1 (find-spell entry)))
           do (setf (nth i bag) stack (nth i hotbar) stack))
@@ -274,6 +294,19 @@ to its key."
               for cell = (nth i cells)
               collect (and cell (nth cell (inventory player)))))
   cells)
+
+(defun migrate-enchantments (player)
+  "Bring PLAYER's enchantments from an older save's layout, where a sword's or spear's was the
+player's (ENCHANTMENTS, keyed by weapon), onto the first stack of that weapon in the bag. Only the
+shield's stays the player's. Harmless on a current one."
+  (dolist (weapon '(:sword :spear))
+    (let ((spell (getf (enchantments player) weapon)))
+      (when spell
+        (let ((stack (find-if (lambda (stack) (and stack (eq weapon (item-property (first stack) :weapon))
+                                                   (null (stack-enchantment stack))))
+                              (inventory player))))
+          (when stack (setf (stack-enchantment stack) spell)))
+        (remf (enchantments player) weapon)))))
 
 (defun migrate-bindings (player)
   "Bring PLAYER from an older save's layout to this one: a hotbar that held its items moves them
@@ -420,7 +453,7 @@ slot's key."))
                     (if (eq weapon :spear)
                         "Two-handed: no shield"
                         "Right button: shield up, click to bash"))
-              (enchantment-lines "Enchanted" (getf (enchantments player) weapon))
+              (enchantment-lines "Enchanted" (stack-enchantment stack))
               (when (eq weapon :sword)
                 (enchantment-lines "Shield" (getf (enchantments player) :shield))))))
           ((potion-p stack)
@@ -658,7 +691,7 @@ title, its cells and its hint's lines."
          (pad *weapon-slot-padding*)
          (dragged (and *inventory-view* (eql (cell-slot cell) (dragging *inventory-view*))))
          (weapon (and stack (item-property (first stack) :weapon)))
-         (enchantment (and weapon (weapon-enchantment *player* weapon))))
+         (enchantment (and weapon (weapon-enchantment *player* stack))))
     (setf (active frame) active
           (shown icon) (and stack T)
           ;; Dim while it's in hand, or remembered with none left.

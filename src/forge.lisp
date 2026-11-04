@@ -5,9 +5,9 @@
 ;;; out of the effects they know (glyphs teach them, pickups.lisp) and to enchant weapons, whose
 ;;; blows then carry a spell (ENCHANT-STRIKE, sword.lisp). Two tabs (*FORGE-TAB*): Spells, where
 ;;; a new spell is made into a rune in the bag (GIVE-RUNE), bound to the first free key, and an
-;;; old one unweaved for half its dust; and Enchanting, where a plain weapon of *FORGE-WEAPONS* is
-;;; enchanted and an enchanted one disenchanted, likewise. A rune or an enchantment is never
-;;; changed in place: make another, or destroy it. What is being made is a draft: a delivery and
+;;; old one unweaved for half its dust; and Enchanting, where a plain weapon (a sword or spear in
+;;; the bag, each its own, or the shield) is enchanted and an enchanted one disenchanted,
+;;; likewise. A rune or an enchantment is never changed in place: make another, or destroy it. What is being made is a draft: a delivery and
 ;;; up to *MAX-SPELL-EFFECTS* effects, each a kind, an element for damage, and the dials the kind
 ;;; has (*EFFECT-KINDS*: magnitude, duration, area). The screen (FORGE-PANEL, an Alloy panel like
 ;;; the menus) changes it through the FORGE- commands, which also work from the REPL: (game
@@ -22,7 +22,6 @@
 (defparameter *max-spell-effects* 3)
 (defparameter *max-enchant-effects* 2)
 (defparameter *max-enchant-cost* 6 "Most mana a blow of an enchanted weapon may cost.")
-(defparameter *forge-weapons* '(:sword :spear :shield) "The weapons the forge can enchant.")
 (defparameter *forge-deliveries* '(:projectile :touch :self) "How a forged spell can strike.")
 (defparameter *forge-elements* '(:fire :frost :shock))
 (defparameter *dust-per-mana* 1 "Arcane dust a spell costs to make for each mana a cast of it costs.")
@@ -53,11 +52,6 @@
   '((:damage 8 0) (:heal 15 0) (:knockback 8 0) (:slow 30 4) (:drain 6 0) (:ward 10 10))
   "(KIND MAGNITUDE DURATION) an effect starts at when added or turned to that kind.")
 
-(defparameter *magnitude-spread* 0.7 "A forged effect's least roll, against its most.")
-(defparameter *new-effects*
-  '((:damage 8 0) (:heal 15 0) (:knockback 8 0) (:slow 30 4) (:drain 6 0) (:ward 10 10))
-  "(KIND MAGNITUDE DURATION) an effect starts at when added or turned to that kind.")
-
 (defvar *forge-tab* :spells "The forge's tab: :SPELLS, making and unweaving runes, or :ENCHANT.")
 (defvar *forge-sink* :new
   "What the forge is on: :NEW (a spell to make), a rune's stack, or a weapon of *FORGE-WEAPONS*.")
@@ -70,26 +64,41 @@ are only shown, to unweave or disenchant.")
 (defvar *forge-revision* 0 "Bumped whenever the forge's screen should be made again.")
 (defvar *forge-note* NIL "What the forge says under the readout: why it can't, or what it did.")
 
-(defun weapon-sink-p (sink) (member sink *forge-weapons*))
+(defun weapon-sink-p (sink)
+  "True if SINK is a weapon: one in the bag (its stack, with its own enchantment), or the shield."
+  (or (eq sink :shield) (weapon-stack-p sink)))
+
+(defun sink-weapon (sink)
+  "The weapon SINK is, :SWORD, :SPEAR or :SHIELD, or NIL."
+  (if (eq sink :shield) :shield (and (weapon-stack-p sink) (item-property (first sink) :weapon))))
 
 (defun player-runes (player)
   "The runes PLAYER's bag holds, in its order."
   (remove :rune (carried-stacks player) :key #'first :test-not #'eq))
 
 (defun carried-weapons (player)
-  "The weapons of *FORGE-WEAPONS* PLAYER carries: the shield goes with the sword."
-  (remove-if-not (lambda (w) (< 0 (kind-total player (if (eq w :shield) :sword w)))) *forge-weapons*))
+  "The weapons PLAYER carries, each its own bag stack, and the shield, which goes with a sword."
+  (let ((stacks (remove-if-not #'weapon-stack-p (carried-stacks player))))
+    (append stacks (when (find :sword stacks :key #'sink-weapon) (list :shield)))))
 
 (defun sink-title (sink)
-  (cond ((weapon-sink-p sink) (string-capitalize sink))
+  (cond ((eq sink :shield) "Shield")
+        ((weapon-sink-p sink) (item-property (first sink) :name))
         ((eq sink :new) "New spell")
         (T (spell-title (stack-spell sink)))))
 
 (defun sink-spell (player sink)
   "The spell SINK holds: a weapon's enchantment, a rune's; NIL for :NEW."
-  (cond ((weapon-sink-p sink) (getf (enchantments player) sink))
+  (cond ((eq sink :shield) (getf (enchantments player) :shield))
+        ((weapon-sink-p sink) (stack-enchantment sink))
         ((eq sink :new) NIL)
         (T (stack-spell sink))))
+
+(defun (setf sink-spell) (spell player sink)
+  "Enchant the weapon SINK with SPELL, or with NIL disenchant it."
+  (cond ((not (eq sink :shield)) (setf (stack-enchantment sink) spell))
+        (spell (setf (getf (enchantments player) :shield) spell))
+        (T (remf (enchantments player) :shield) NIL)))
 
 (defun rune-place (player stack)
   "Where STACK is, as the forge says it: its key, or the bag."
@@ -110,12 +119,12 @@ are only shown, to unweave or disenchant.")
 
 (defun valid-sink-p (player sink tab)
   (if (eq tab :enchant)
-      (member sink (carried-weapons player))
+      (member sink (carried-weapons player) :test #'eq)
       (or (eq sink :new) (member sink (player-runes player) :test #'eq))))
 
 (defun default-sink (player tab)
   "What a tab opens on: a new spell, or the first weapon carried."
-  (if (eq tab :enchant) (or (first (carried-weapons player)) :sword) :new))
+  (if (eq tab :enchant) (or (first (carried-weapons player)) :shield) :new))
 
 (defun fit-label (text &optional (width *forge-label-width*))
   "TEXT cut to WIDTH characters, ending in .. where it was longer."
@@ -204,9 +213,10 @@ never offers damage cast on yourself or a heal thrown at a monster."
   "A name for DRAFT: its first effect's adjective, a noun for how it strikes, and its second's."
   (let* ((effects (draft-effects draft))
          (first (first effects))
-         (noun (cond ((eq (draft-sink draft) :sword) "Edge")
-                     ((eq (draft-sink draft) :spear) "Point")
-                     ((eq (draft-sink draft) :shield) "Bulwark")
+         (weapon (sink-weapon (draft-sink draft)))
+         (noun (cond ((eq weapon :sword) "Edge")
+                     ((eq weapon :spear) "Point")
+                     ((eq weapon :shield) "Bulwark")
                      ((eq (draft-delivery draft) :touch) "Touch")
                      ((eq (draft-delivery draft) :self) (if (eq :ward (and first (draft-kind first))) "Aegis" "Blessing"))
                      ((some (lambda (e) (< 0 (draft-area e))) effects) "Burst")
@@ -231,12 +241,62 @@ never offers damage cast on yourself or a heal thrown at a monster."
 
 (defun draft-spell (draft) (spec-spell (draft-spec draft)))
 
-(defun draft-problem (draft &optional (player *player*))
-  "Why DRAFT can't be made, as a sentence, or NIL."
+;;; Parity: a spell the player starts with must be one the forge makes, so that what it costs is
+;;; what the forge would ask for it, and the player can make it again.
+
+(defun forgeable-p (spell &optional (known *starting-effects*))
+  "True if the forge, knowing the effects KNOWN, makes SPELL as it is: the same delivery, effects
+(kinds, elements, ranges, durations, areas), cost, and for a projectile the same flight. A
+second value says what differs."
+  (let* ((draft (draft-from-spell spell :new))
+         (made (draft-spell draft))
+         (ours (spell-effects spell))
+         (theirs (spell-effects made)))
+    (flet ((same-effect-p (a b)
+             (and (eq (effect-kind a) (effect-kind b)) (equal (effect-magnitude a) (effect-magnitude b))
+                  (eq (effect-element a) (effect-element b)) (= (effect-duration a) (effect-duration b))
+                  (= (effect-area a) (effect-area b)) (eq (effect-target-type a) (effect-target-type b)))))
+      (let ((problem
+              (cond ((not (member (spell-delivery spell) *forge-deliveries*)) "its delivery isn't the forge's")
+                    ((or (/= (length ours) (length theirs)) (notevery #'same-effect-p ours theirs))
+                     (format NIL "its effects aren't forged ones: ~s against the forge's ~s"
+                             (rest (rest (spell-spec spell))) (rest (rest (spell-spec made)))))
+                    ((loop for e in ours
+                           thereis (or (not (member (effect-kind e) known))
+                                       (and (effect-element e) (not (member (effect-element e) known)))
+                                       (and (< 0 (effect-area e)) (not (member :area known)))))
+                     "it uses an effect the player doesn't know")
+                    ((/= (spell-cost spell) (spell-cost made))
+                     (format NIL "it costs ~d, the forge's ~d" (spell-cost spell) (spell-cost made)))
+                    ((and (eq (spell-delivery spell) :projectile)
+                          (not (and (= (projectile-speed spell) (projectile-speed made))
+                                    (= (spell-pain-bonus spell) (spell-pain-bonus made))
+                                    (eq (projectile-animation spell) (projectile-animation made))
+                                    (eq (impact-animation spell) (impact-animation made))
+                                    (eq (spell-homing spell) (spell-homing made))
+                                    (eq (spell-lifetime spell) (spell-lifetime made)))))
+                     "it flies unlike a forged projectile"))))
+        (values (null problem) problem)))))
+
+(defun check-starting-spells ()
+  "Warn of each spell in *STARTING-HOTBAR* the forge doesn't make (FORGEABLE-P). True if none."
+  (loop with all = T
+        for entry in *starting-hotbar*
+        unless (keywordp entry)
+          do (multiple-value-bind (ok problem) (forgeable-p (find-spell entry))
+               (unless ok
+                 (setf all NIL)
+                 (v:warn :hexmaw "The starting spell ~(~a~) isn't one the forge makes: ~a." entry problem)))
+        finally (return all)))
+
+(check-starting-spells)
+
+(defun draft-fault (draft max-mana)
+  "Why DRAFT isn't a spell the forge makes, its maker holding MAX-MANA, as a sentence, or NIL:
+what it holds, not what making it takes (DRAFT-PROBLEM). Generated loot asks it too (loot.lisp)."
   (let* ((effects (draft-effects draft))
-         (sink (draft-sink draft))
          (strikes (some (lambda (e) (not (self-kind-p (draft-kind e)))) effects))
-         (weapon (weapon-sink-p sink))
+         (weapon (weapon-sink-p (draft-sink draft)))
          (spell (and effects (draft-spell draft))))
     (cond ((null effects) "Add an effect.")
           ((and weapon (< *max-enchant-effects* (length effects)))
@@ -247,11 +307,17 @@ never offers damage cast on yourself or a heal thrown at a monster."
            "Cast on yourself, it strikes nothing: deliver it, or keep to self effects.")
           ((and (not weapon) (not (eq (draft-delivery draft) :self)) (not strikes))
            "Nothing in it strikes: cast it on yourself.")
-          ((and (not weapon) (< (max-mana player) (spell-cost spell)))
-           (format NIL "It costs more mana than you can hold (~d)." (floor (max-mana player))))
-          ((< (player-dust player) (sink-dust sink spell))
+          ((and (not weapon) (< max-mana (spell-cost spell)))
+           (format NIL "It costs more mana than you can hold (~d)." (floor max-mana))))))
+
+(defun draft-problem (draft &optional (player *player*))
+  "Why DRAFT can't be made, as a sentence, or NIL."
+  (let ((sink (draft-sink draft))
+        (weapon (weapon-sink-p (draft-sink draft))))
+    (cond ((draft-fault draft (max-mana player)))
+          ((< (player-dust player) (sink-dust sink (draft-spell draft)))
            (format NIL "It needs ~d arcane dust and you have ~d: find more in the dungeon, or unweave a spell."
-                   (sink-dust sink spell) (player-dust player)))
+                   (sink-dust sink (draft-spell draft)) (player-dust player)))
           ((and (not weapon) (null (position NIL (inventory player))))
            "No free bag cell for the rune."))))
 
@@ -279,8 +345,12 @@ never offers damage cast on yourself or a heal thrown at a monster."
 
 (defun forge-select (sink &optional (player *player*))
   "Put SINK on the forge: a new spell or a plain weapon to make, or a rune or an enchanted weapon
-to look at. One the player no longer carries falls back to the tab's first."
-  (let ((sink (if (valid-sink-p player sink *forge-tab*) sink (default-sink player *forge-tab*))))
+to look at. One the player no longer carries falls back to the tab's first. :SWORD or :SPEAR, as
+from the REPL, is the first one carried."
+  (let* ((sink (if (member sink '(:sword :spear))
+                   (or (find sink (carried-weapons player) :key #'sink-weapon) sink)
+                   sink))
+         (sink (if (valid-sink-p player sink *forge-tab*) sink (default-sink player *forge-tab*))))
     (setf *forge-sink* sink
           *forge-armed* NIL
           *forge-note* NIL
@@ -383,7 +453,7 @@ weapon's enchantment. The spell, or NIL (and *FORGE-NOTE* says why) if it can't 
              (remf *forge-drafts* sink)
              (if (weapon-sink-p sink)
                  (progn
-                   (setf (getf (enchantments player) sink) spell)
+                   (setf (sink-spell player sink) spell)
                    (forge-select sink player)
                    (setf *forge-note* (format NIL "~a enchanted with ~a, for ~d dust."
                                               (sink-title sink) (spell-title spell) cost)))
@@ -408,7 +478,7 @@ call only arms it (*FORGE-ARMED*); a second does it."
            (let ((back (refund-dust (sink-dust sink spell)))
                  (title (spell-title spell)))
              (if weapon
-                 (remf (enchantments player) sink)
+                 (setf (sink-spell player sink) NIL)
                  (destroy-stack player sink))
              (give-item player :dust back)
              (forge-select (if weapon sink :new) player)
@@ -799,7 +869,7 @@ and who resists it, and what its time and area change."
               (forge-button "< Prev" (lambda () (forge-page -1)) row 0 focus)
               (forge-button "Next >" (lambda () (forge-page 1)) row 1 focus))))
         (dolist (w (carried-weapons player))
-          (let ((w w) (spell (getf (enchantments player) w)))
+          (let ((w w) (spell (sink-spell player w)))
             (forge-button (fit-label (format NIL "~a: ~a" (sink-title w) (if spell (spell-title spell) "plain")))
                           (lambda () (forge-select w)) (forge-row left '(T)) 0 focus
                           :selected (eq w sink)))))

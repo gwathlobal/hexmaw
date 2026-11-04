@@ -3,12 +3,13 @@
 ;;; Talking to the townsfolk (townsfolk.lisp): E opens a DIALOGUE-PANEL, a menu over the frozen
 ;;; world (*GAME-STATE* :TALK), with the townsperson's name, what they say, and a button for
 ;;; each thing they offer. What that is comes from their role and the settlement (settlement.lisp):
-;;; the shopkeeper sells and buys potions, the priest heals, restores mana and blesses, the
-;;; trainer raises the player's maxima, the quest-giver offers a quest into the wing, and a guard
-;;; takes fines and, for the Free Company, bribes. A click acts and re-shows the panel
-;;; (*MENU-REFRESH*), since an Alloy panel lays itself out once.
+;;; the shopkeeper sells and buys potions and sells the glyphs the player doesn't know, the priest
+;;; heals, restores mana and blesses, the trainer raises the player's maxima, the quest-giver offers
+;;; a quest into the wing, and a guard takes fines and, for the Free Company, bribes. A click acts
+;;; and re-shows the panel (*MENU-REFRESH*), since an Alloy panel lays itself out once.
 
-(defvar *talk-page* :main "Which page of the talk is up: :MAIN, or :QUEST for the quest's terms.")
+(defvar *talk-page* :main
+  "Which page of the talk is up: :MAIN, or :GLYPHS for the shopkeeper's glyphs.")
 (defvar *talk-note* NIL "A line under the greeting after something was tried: \"You can't afford that.\"")
 
 (defparameter *training-steps* '(:health 10 :mana 10 :stamina 15) "What one step of training adds to each maximum.")
@@ -68,6 +69,24 @@
       (incf (gold *player*) paid)
       (incf (getf (settlement-stock *settlement*) kind 0))
       (talk-note "Sold a ~(~a~) for ~d gold." (item-property kind :name) paid))))
+
+(defun shop-glyphs (player)
+  "The glyphs the shop has for PLAYER: every one teaching an effect they don't know yet."
+  (remove-if (lambda (kind) (member (pickup-property kind :teaches) (known-effects player)))
+             (glyph-kinds)))
+
+(defun glyph-price () (price :glyph))
+
+(defun buy-glyph (kind)
+  "Teach the player glyph KIND for its price: knowledge, so it takes no room in the bag."
+  (when (spend (glyph-price))
+    (learn-glyph *player* kind)
+    (talk-note "You learn the glyph of ~a. Forge it at an altar." (pickup-property kind :name))))
+
+(defun show-talk-page (page)
+  (setf *talk-page* page
+        *talk-note* NIL
+        *menu-refresh* T))
 
 (defun loot-item (kind)
   "Take one from a dead shopkeeper's stall."
@@ -169,6 +188,10 @@
         ((and (eq (settlement-condition *settlement*) :besieged) (typep who '(or guard commoner)))
          "The undercroft keeps coming at the gates. Watch yourself.")
         ((typep who 'guard) (format NIL (greeting who) (faction-property :name)))
+        ((and (typep who 'shopkeeper) (eq *talk-page* :glyphs))
+         (if (shop-glyphs *player*)
+             "Glyphs, carved by the deep folk. Learn one, and the spellforge works its effect for you."
+             "You know every glyph I've ever had."))
         (T (greeting who))))
 
 (defparameter *dialogue-wrap* 56
@@ -230,8 +253,18 @@ at the panel's width, and the font isn't fixed-width.")
                        (list (row "Refuse" 'refuse-fine))))
               ((bribable-p who) (list (row "Buy them off (~d gold)" 'pay-bribe (bribe-price))))))
        ((refusing-p) ())
+       ((and (typep who 'shopkeeper) (eq *talk-page* :glyphs))
+        (append (loop for kind in (shop-glyphs *player*)
+                      collect (let ((kind kind))
+                                (row "Glyph of ~a, ~a: ~d gold" (lambda () (buy-glyph kind))
+                                     (pickup-property kind :name) (pickup-property kind :about) (glyph-price))))
+                (list (row "Back" (lambda () (show-talk-page :main))))))
        ((typep who 'shopkeeper)
-        (append (loop for kind in *shop-goods*
+        (append (let ((glyphs (shop-glyphs *player*)))
+                  (when glyphs
+                    (list (row "Glyphs for the spellforge (~d you don't know)" (lambda () (show-talk-page :glyphs))
+                               (length glyphs)))))
+                (loop for kind in *shop-goods*
                       collect (row "Buy a ~(~a~): ~d gold (~d left)" (lambda () (buy-item kind)) (item-property kind :name)
                                    (price kind) (getf (settlement-stock s) kind 0)))
                 (loop for kind in *shop-goods*

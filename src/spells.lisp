@@ -26,6 +26,8 @@ otherwise a burst where the spell strikes.")
 
 (defclass spell ()
   ((name :initarg :name :reader spell-name)
+   (title :initarg :title :initform NIL :reader title-of
+          :documentation "The name the player reads, if not its symbol's (SPELL-TITLE).")
    (delivery :initarg :delivery :initform :projectile :reader spell-delivery)
    (projectile-speed :initarg :projectile-speed :initform 20.0 :reader projectile-speed)
    (projectile-animation :initarg :projectile-animation :initform NIL :reader projectile-animation
@@ -56,9 +58,11 @@ otherwise a burst where the spell strikes.")
   (or (gethash name *spells*) (error "No spell named ~s." name)))
 
 (defun spell-title (spell)
-  "SPELL's name as the player reads it: a forged spell's own, or a defined one's symbol."
+  "SPELL's name as the player reads it: a forged spell's own, or a defined one's title or symbol."
   (let ((name (spell-name spell)))
-    (if (stringp name) name (substitute #\Space #\- (string-capitalize name)))))
+    (cond ((stringp name) name)
+          ((title-of spell))
+          (T (substitute #\Space #\- (string-capitalize name))))))
 
 (defmacro define-spell (name (&rest options) &body effects)
   "Define spell NAME. OPTIONS are SPELL initargs; each effect is (KIND &rest EFFECT-INITARGS):
@@ -830,14 +834,18 @@ spell may have, which no spell in *SPELLS* need use."
 (define-fx-animation bolt-flight "sprites/bolt/flight" :fps 12 :loop T :size 0.4)
 (define-fx-animation bolt-burst "sprites/bolt/burst" :fps 14 :size 0.9)
 
-(define-spell bolt (:delivery :projectile :projectile-speed 20.0 :pain-bonus 10
+;; The player's starting spells. Each is one the spellforge makes (FORGEABLE-P, forge.lisp): its
+;; ranges are a forged effect's (*MAGNITUDE-SPREAD* of the top up to it), the bolt's speed, pain
+;; bonus and frames are a forged projectile's (SPEC-SPELL), so it costs what the forge would ask:
+;; the bolt fire damage at 9 and knockback at 4, 14 mana; the heal 20, 17.
+(define-spell bolt (:delivery :projectile :projectile-speed 20.0 :pain-bonus 10 :title "Fire Bolt"
                     :projectile-animation 'bolt-flight :impact-animation 'bolt-burst)
-  (:damage :magnitude '(6 10))
-  (:knockback :magnitude '(4 4)))
+  (:damage :element :fire :magnitude '(7 9))
+  (:knockback :magnitude '(3 4)))
 
-;; The player's other starting spell: cast on themself, it needs no projectile.
+;; Cast on themself, it needs no projectile.
 (define-spell heal (:delivery :self)
-  (:heal :magnitude '(15 20) :target-type :self))
+  (:heal :magnitude '(14 20) :target-type :self))
 
 ;;; Looks: a forged spell (forge.lisp) flies and bursts as its element, or, with no
 ;;; damage, as its first effect: the bolt's frames, recoloured (tools/recolor_hue.py,

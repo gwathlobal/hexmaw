@@ -29,6 +29,7 @@
       (when *carried-state*
         (restore-state new *carried-state*)
         (migrate-bindings new)
+        (migrate-enchantments new)
         (settle-held new)
         (setf *carried-state* NIL))
       (when (eq *level* :generated)

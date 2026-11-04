@@ -285,14 +285,27 @@ winding up an attack and not already poised from a bash."
 (defun enchant-cost (spell)
   (max 1 (ceiling (* *enchant-cost-scale* (spell-cost spell)))))
 
+(defun held-weapon-stack (player)
+  "The bag stack of the weapon PLAYER holds: the wanted hotbar slot's, while it is that weapon."
+  (let ((stack (nth (wanted-slot player) (hotbar player))))
+    (and stack (eq (weapon player) (item-property (first stack) :weapon)) stack)))
+
+(defun weapon-spell (player weapon)
+  "The enchantment WEAPON's blows carry: the shield's PLAYER's own, a sword's or spear's the one
+in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
+  (if (eq weapon :shield)
+      (getf (enchantments player) :shield)
+      (let ((stack (held-weapon-stack player)))
+        (and stack (eq weapon (item-property (first stack) :weapon)) (stack-enchantment stack)))))
+
 (defun enchanted-p (player weapon)
   "True if WEAPON is enchanted and PLAYER has the mana for a blow of it."
-  (let ((spell (getf (enchantments player) weapon)))
+  (let ((spell (weapon-spell player weapon)))
     (and spell (<= (enchant-cost spell) (mana player)))))
 
 (defun enchant-strike (player weapon target)
   "WEAPON's blow landed on TARGET: its enchantment strikes too, if PLAYER can pay."
-  (let ((spell (getf (enchantments player) weapon)))
+  (let ((spell (weapon-spell player weapon)))
     (when (and spell (<= (enchant-cost spell) (mana player)))
       (decf (mana player) (enchant-cost spell))
       (let* ((loc (location target))
@@ -315,7 +328,8 @@ winding up an attack and not already poised from a bash."
     (when (and (bash-pending player) (<= (bash-hit-time) (bash-time player)))
       (setf (bash-pending player) NIL)
       (bash-hit player))
-    (unless (frame-at (bash-time player) *bash-frame-times*)
+    ;; A bash that glanced off a knight's shield knocked the guard aside (BREAK-GUARD), ending it.
+    (unless (and (bash-time player) (frame-at (bash-time player) *bash-frame-times*))
       (setf (bash-time player) NIL)))
   ;; The shield rises while the block is held with the sword in hand and staying there,
   ;; once any swing is over; it stays up through a bash.
@@ -464,7 +478,7 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
   (:method ((sprite shield)) :shield))
 
 (define-handler (sword tick :after) ()
-  (let ((spell (and *player* (getf (enchantments *player*) (rim-weapon sword))))
+  (let ((spell (and *player* (weapon-spell *player* (rim-weapon sword))))
         (glow (glow sword)))
     (if spell
         (progn
@@ -522,11 +536,22 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 (define-fx-animation weapon-icons "sprites/icons/weapons")
 
 (defparameter *weapon-icons* '(:sword 0 :spear 2) "Frame of each weapon's icon in the strip.")
-(defparameter *spell-icons* '(:fire 1 :storm 3 :frost 4 :shock 5 :drain 6 :heal 7 :arcane 8)
-  "Frame in the strip of the icon of a rune of each look (SPELL-LOOK, spells.lisp).")
+(defparameter *spell-icons*
+  '(:fire 1 :storm 3 :frost 4 :shock 5 :drain 6 :heal 7 :ward 8 :slow 9 :knockback 10)
+  "Frame in the strip of the icon of a rune by its first effect (SPELL-ICON-KEY): damage by its
+element, any other by its kind, and a tornado's :STORM.")
+
+(defun spell-icon-key (spell)
+  "What SPELL's icon shows: its first effect, damage as its element (fire without one), or the
+tornado for a vortex."
+  (let ((first (first (spell-effects spell))))
+    (cond ((eq (spell-delivery spell) :vortex) :storm)
+          ((null first) :fire)
+          ((eq (effect-kind first) :damage) (or (effect-element first) :fire))
+          (T (effect-kind first)))))
 
 (defun spell-icon (spell)
-  (getf *spell-icons* (spell-look spell) 1))
+  (getf *spell-icons* (spell-icon-key spell) 1))
 (defparameter *weapon-icon-scale* 2 "Screen pixels per icon art pixel. Whole numbers only.")
 (defparameter *weapon-slot-padding* 3 "Pixels between a slot's edge and its icon.")
 (defparameter *weapon-slot-gap* 6 "Pixels between slots, and between the slots and the bars.")
@@ -604,8 +629,7 @@ void main(){
   color.rgb *= brightness;
 }")
 
-(defun weapon-enchantment (player weapon)
-  "The spell WEAPON's blows carry: the sword's slot shows its shield's if it has none."
-  (let ((enchantments (enchantments player)))
-    (or (getf enchantments weapon)
-        (and (eq weapon :sword) (getf enchantments :shield)))))
+(defun weapon-enchantment (player stack)
+  "The spell the weapon STACK's blows carry: a sword's slot shows its shield's if it has none."
+  (or (stack-enchantment stack)
+      (and (eq :sword (item-property (first stack) :weapon)) (getf (enchantments player) :shield))))

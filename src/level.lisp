@@ -228,6 +228,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (loop for kind in (glyph-kinds)
           for x from -9 by 1
           do (add-pickup container kind x 0 8.5))
+    ;; A found weapon and rune or two east of the dust (loot.lisp).
+    (place-test-loot container)
     (build-annex container)
     (build-boss-wing container)
     ;; Corridor north, 3 m wide, 3 m tall, 14 m long.

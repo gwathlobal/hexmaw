@@ -42,10 +42,12 @@ the streets. A blueprint's npc and spawn conditions (CONDITION-EXCLUDED-P) say w
 (defparameter *shop-goods* '(:health-potion :mana-potion) "The items the shop sells (*ITEM-KINDS*).")
 
 (defparameter *base-prices*
-  '(:health-potion 30 :mana-potion 36 :heal 0.8 :mana 1.0 :bless 45 :training 60)
+  '(:health-potion 30 :mana-potion 36 :heal 0.8 :mana 1.0 :bless 45 :training 60 :glyph 90)
   "Gold at the first depth: an item; healing a point of health or restoring one of mana; a
-blessing; the trainer's first step (each step after costs more, TRAINING-PRICE).")
-(defparameter *price-groups* '(:health-potion :goods :mana-potion :goods :heal :heal :mana :mana :bless :bless :training :training)
+blessing; the trainer's first step (each step after costs more, TRAINING-PRICE); a glyph the
+shopkeeper teaches (dialogue.lisp).")
+(defparameter *price-groups* '(:health-potion :goods :mana-potion :goods :heal :heal :mana :mana :bless :bless
+                               :training :training :glyph :goods)
   "Which of a faction's :PRICES multipliers each price takes.")
 (defparameter *price-depth-step* 0.25 "How much dearer everything is per depth past the first.")
 (defparameter *sell-share* 0.4 "What the shop pays for an item, as a share of its price.")

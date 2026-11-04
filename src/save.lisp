@@ -417,6 +417,7 @@ status auras, which come back from their statuses."
         (spawn-creature (make-instance (getf record :class) :summoned T) scene)))
     (restore-state *player* (getf save :player))
     (migrate-bindings *player*)
+    (migrate-enchantments *player*)
     (settle-held *player*)
     (place-camera *player*)
     (loop for record in records

@@ -9,16 +9,22 @@
 (defparameter *run-levels*
   '((:rooms 16 :exit "descent" :altar-chance 0.4
      :pool (("imp" 5) ("acolyte" 2) ("knight" 2) ("harpy" 1) ("necromancer" 1))
+     :loot (:weapons 1 :first-weapon :spear :enchant-chance 0.0
+            :runes 1 :rune-mana (10 18) :rune-effects 1 :area-chance 0.0 :authored-chance 0.0)
      :skip-scale 1.0 :elite-chance 0.0
      :sight 1.0 :hearing 1.0 :alert 1.0 :pause 1.0 :cooldown 1.0)
     (:rooms 19 :exit "descent" :altar-chance 0.4
      :pool (("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1) ("gale-wraith" 1)
             ("riftwalker" 1))
+     :loot (:weapons 1 :enchant-chance 0.5 :enchant-cost (2 3) :enchant-effects 1
+            :runes 2 :rune-mana (16 28) :rune-effects 2 :area-chance 0.3 :authored-chance 0.35)
      :skip-scale 0.75 :elite-chance 0.12
      :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
     (:rooms 22 :exit "arena" :altar-chance 0.4
      :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2)
             ("riftwalker" 2))
+     :loot (:weapons 2 :enchant-chance 0.8 :enchant-cost (3 6) :enchant-effects 2
+            :runes 2 :rune-mana (24 40) :rune-effects 3 :area-chance 0.5 :authored-chance 0.5)
      :skip-scale 0.5 :elite-chance 0.2
      :sight 1.3 :hearing 1.6 :alert 1.6 :pause 0.7 :cooldown 0.8))
   "A run's levels, first to last. :ROOMS is how many rooms the generator aims for, and :EXIT
@@ -26,6 +32,12 @@ the block it puts on the doorway furthest from the start (or a list of them, tri
 the descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
 (boss.lisp). NIL: no such block. :ALTAR-CHANCE is the chance of a spellforge altar room
 (forge.lisp), besides the town's.
+
+What the player finds there, :LOOT (loot.lisp): :WEAPONS swords and spears (the first a
+:FIRST-WEAPON if it names one), each enchanted with :ENCHANT-CHANCE, its blows costing :ENCHANT-COST
+mana, with up to :ENCHANT-EFFECTS effects; and :RUNES ready spells costing :RUNE-MANA, with up to
+:RUNE-EFFECTS effects, a projectile's bursting with :AREA-CHANCE, and with :AUTHORED-CHANCE the
+level is the one of the run that has a spell the forge can't make (*LOOT-SPELLS*) instead.
 
 How hard its monsters are. Decided as it is built (LEVEL-SETTINGS): :POOL, what a spawn_any
 picks from (*SPAWN-POOL*; leave a kind out rather than give it weight 0), :SKIP-SCALE, which
@@ -35,7 +47,7 @@ how far a creature notices the player, :ALERT how long it hunts after, :PAUSE it
 attack and :COOLDOWN its abilities' cooldowns. A key left out keeps the variable, or 1.")
 
 (defparameter *settlement-level*
-  '(:core "town" :rooms 6 :exit NIL :min-wing 3 :altar-chance NIL
+  '(:core "town" :rooms 6 :exit NIL :min-wing 3 :altar-chance NIL :loot (:weapons 0 :runes 1)
     :settings ((*generator-blocks* . ("crypt" "cell" "cell-mirror" "chamber" "vestry" "vestry-mirror" "shrine" "corridor"
                                       "corridor-long" "corner" "tee" "cross" "arch" "narrow" "narrowing"
                                       "stair" "tower" "tower-mirror"))

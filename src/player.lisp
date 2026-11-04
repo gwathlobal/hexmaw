@@ -67,10 +67,14 @@ dive in, a shove), as an exponential.")
 (defparameter *starting-effects* '(:damage :heal :knockback :fire)
   "What the player can forge with at the start of a run; glyphs (pickups.lisp) teach the rest.")
 (defparameter *hotbar-size* 9 "Slots on the hotbar (inventory.lisp), keys 1 to 9.")
-(defparameter *starting-hotbar* '(:sword bolt :spear tempest heal)
+(defparameter *starting-hotbar* '(:sword bolt heal)
   "What a run starts with in the bag, from its first cell, each bound to the hotbar key of its
-place, from 1: a weapon's item kind, or a spell's name, which the player carries as a rune.")
-(defparameter *starting-slot* 1 "The hotbar slot, from 0, a run starts with in hand.")
+place, from 1: a weapon's item kind, or a spell's name, which the player carries as a rune. The
+rest is found in the dungeon (loot.lisp). Every spell here must be one the spellforge makes
+(CHECK-STARTING-SPELLS, forge.lisp).")
+(defparameter *debug-starting-hotbar* '(:sword bolt :spear tempest heal)
+  "What the debug level starts with instead: the spear and the tornado too, to try them.")
+(defparameter *starting-slot* 0 "The hotbar slot, from 0, a run starts with in hand: the sword.")
 (defparameter *footstep-stride* 2.0 "Metres walked on foot from one footstep to the next.")
 (defparameter *footstep-volume* 0.5)
 (defparameter *swim-stroke-stride* 2.2 "Metres swum from one stroke to the next.")
@@ -132,8 +136,8 @@ INVENTORY (EQ), or NIL (inventory.lisp): what keys 1 to 9 take in hand. Saved as
    (wanted-spell :initform NIL :accessor wanted-spell
                  :documentation "The spell asked for; differs from HELD-SPELL while switching.")
    (enchantments :initform () :accessor enchantments
-                 :documentation "A plist from weapon (:SWORD, :SPEAR, :SHIELD) to the spell its
-blows carry (ENCHANT-STRIKE, sword.lisp).")
+                 :documentation "A plist from :SHIELD to the spell the shield's bash carries
+(ENCHANT-STRIKE, sword.lisp). A sword's or spear's is its own stack's (STACK-ENCHANTMENT).")
    (weapon :initform NIL :accessor weapon
            :documentation "Weapon on screen (sword.lisp): :SWORD, :SPEAR, :HANDS or NIL.")
    (wanted-weapon :initform NIL :accessor wanted-weapon

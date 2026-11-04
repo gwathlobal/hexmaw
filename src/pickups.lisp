@@ -30,7 +30,7 @@
     (:shard :animation pickup-shard :resource :mana :amount 28 :sound :pickup-shard)
     (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50
      :sound :pickup-potion)
-    (:gold :animation pickup-gold :resource :gold :amount 12 :sound :pickup-shard)
+    (:gold :animation pickup-gold :resource :gold :amount 12 :count T :sound :pickup-shard)
     (:glyph-frost :animation glyph-frost :teaches :frost :name "Frost" :about "frost damage, which chills"
      :sound :pickup-shard)
     (:glyph-shock :animation glyph-shock :teaches :shock :name "Shock" :about "shock damage, which staggers"
@@ -44,10 +44,14 @@
     (:glyph-area :animation glyph-area :teaches :area :name "Area" :about "bursting over an area"
      :sound :pickup-shard)
     (:dust :animation pickup-dust :item :dust :count T :resource :dust :sound :pickup-shard)
-    (:relic :animation pickup-relic :item :relic :sound :pickup-shard))
+    (:relic :animation pickup-relic :item :relic :sound :pickup-shard)
+    ;; A found weapon or rune (loot.lisp): its sprite is its stack's (LOOT-ANIMATION).
+    (:loot-weapon :sound :pickup-shard)
+    (:loot-rune :sound :pickup-shard))
   "What each kind of pickup restores, and how much, at once or as the :ITEM it gives (keep :AMOUNT
 the item's, *ITEM-KINDS*: a level's budget counts it), or, a glyph, the effect it :TEACHES; and
-the :SOUND of taking it.")
+the :SOUND of taking it. A kind with :COUNT gives what its pile holds (PICKUP-COUNT) instead:
+:AMOUNT, if it has one, is a pile's size when nothing says otherwise.")
 
 (defparameter *glyphs-per-level* 2 "Glyphs on each level of a run: three levels teach all six.")
 
@@ -99,9 +103,9 @@ taken ones by their place here. BUILD-LEVEL empties it.")
    (ground :initarg :ground :reader pickup-ground :documentation "Height of the floor it stands on.")
    (taken :initform NIL :accessor taken)))
 
-(defun add-pickup (container kind x y z &key (phase 0.0) (count 1))
+(defun add-pickup (container kind x y z &key (phase 0.0) (count (or (pickup-property kind :amount) 1)))
   "A pickup of KIND standing on the floor at X Y Z. PHASE is seconds into its glint and bob,
-COUNT how many of its item it gives."
+COUNT how many of its item (or, gold, coins) it gives."
   (let* ((animation (find-fx-animation (pickup-property kind :animation)))
          (pickup (make-instance 'pickup :animation animation :kind kind :ground (float y 0f0) :count count
                                         :location (vec x (+ y *pickup-hover* (* 0.5 (animation-size animation))) z))))
@@ -151,7 +155,9 @@ NIL if it was full."
                  (note-pickup item given))
                (flash-resource player resource)
                T)))
-          (T (restore-resource player resource (pickup-property kind :amount))))))
+          (T (restore-resource player resource (if (pickup-property kind :count)
+                                                   (pickup-count pickup)
+                                                   (pickup-property kind :amount)))))))
 
 (defun learn-glyph (player kind)
   "Teach PLAYER the effect glyph KIND teaches. NIL, and it stays where it is, if they know it."
@@ -264,8 +270,9 @@ with any at all. NIL if there are none."
       (or (try (lambda (spot) (not (member (getf spot :block) used))))
           (and (not fresh) (try (constantly T)))))))
 
-(defun scatter-pickups (container)
-  "Fill a generated level's spots until its pickups restore what its monsters call for. Drawn
+(defun scatter-pickups (container &key (reserve 0))
+  "Fill a generated level's spots until its pickups restore what its monsters call for, but
+leave RESERVE of them free, for what can't be had anywhere else (the glyphs, the relic). Drawn
 from a random state of their own, so the level and its monsters don't change."
   (let* ((random (sb-ext:seed-random-state *last-level-seed*))
          (*nav-hazards* :swim)
@@ -287,8 +294,9 @@ from a random state of their own, so the level and its monsters don't change."
              (let* ((potion (= (1- *pickup-potion-every*)
                                (mod (if health-p health-count mana-count) *pickup-potion-every*)))
                     ;; A reward spot, but never at the cost of a block with two while another has none.
-                    (spot (or (and potion (pick-spot spots '(:reward) used random :fresh T))
-                              (pick-spot spots '(:floor :reward) used random))))
+                    (spot (and (< reserve (length spots))
+                               (or (and potion (pick-spot spots '(:reward) used random :fresh T))
+                                   (pick-spot spots '(:floor :reward) used random)))))
                (when spot
                  (let ((kind (if health-p
                                  (if potion :health-potion :herbs)
@@ -362,22 +370,30 @@ the blocks that have one."
     (values spots used)))
 
 (defparameter *gold-spot-share* 0.5 "The most of the free spots gold may take, leaving the rest to dust.")
+(defparameter *gold-pile* '(10 30) "Least and most coins in one pile, at the first depth, while spots are plenty.")
 
 (defun place-gold (container)
-  "Scatter the level's gold (*GOLD-PER-MONSTER* a monster) on spots no pickup or glyph took, a
-floor spot first, but no more than *GOLD-SPOT-SHARE* of them: arcane dust (PLACE-DUST) comes
-after, its piles growing to fill what is left. From a random state of its own, so nothing placed
+  "Scatter the level's gold (*GOLD-PER-MONSTER* a monster) in piles of *GOLD-PILE* on spots no
+pickup or glyph took, a floor spot first, but no more than *GOLD-SPOT-SHARE* of them: arcane dust
+(PLACE-DUST) comes after, its piles growing to fill what is left. Gold's grow too, where its share
+of the spots is too few for the whole budget. From a random state of its own, so nothing placed
 before it moves."
   (multiple-value-bind (spots used) (free-pickup-spots)
     (let ((random (sb-ext:seed-random-state (logxor *last-level-seed* #x601D)))
           (left (* *gold-per-monster* (count-if #'monster-p *creatures*)))
-          (room (floor (* *gold-spot-share* (length spots)))))
+          ;; One at least, while dust still gets one: a level whose other pickups left two
+          ;; spots had no gold at all.
+          (room (if (< 1 (length spots)) (max 1 (floor (* *gold-spot-share* (length spots)))) 0)))
       (loop while (and (< 0 left) (< 0 room))
             do (let ((spot (pick-spot spots '(:floor :reward) used random)))
                  (unless spot (return))
-                 (let ((p (getf spot :position)))
-                   (add-pickup container :gold (vx p) (vy p) (vz p) :phase (random 10.0 random))
-                   (decf left (pickup-property :gold :amount))
+                 ;; A pile's coins are at the first depth: taking it scales them (RESTORE-RESOURCE).
+                 (let ((p (getf spot :position))
+                       (count (destructuring-bind (low high) *gold-pile*
+                                (min left (max (+ low (random (1+ (- high low)) random))
+                                               (ceiling left room))))))
+                   (add-pickup container :gold (vx p) (vy p) (vz p) :phase (random 10.0 random) :count count)
+                   (decf left count)
                    (decf room)
                    (setf spots (remove spot spots))
                    (push (getf spot :block) used)))))))
@@ -406,7 +422,7 @@ pickup or glyph took, a floor spot first. Last, from a random state of its own, 
 placed before it moves: a save's taken pickups name their places."
   (multiple-value-bind (spots used) (free-pickup-spots)
     (let ((random (sb-ext:seed-random-state (logxor *last-level-seed* #xD057)))
-          (left (* *dust-per-monster* (count-if-not #'summoned *creatures*))))
+          (left (* *dust-per-monster* (count-if #'monster-p *creatures*))))
       (destructuring-bind (low high) *dust-pile*
         (loop while (< 0 left)
               do (let ((spot (pick-spot spots '(:floor :reward) used random)))
@@ -425,9 +441,14 @@ placed before it moves: a save's taken pickups name their places."
   "Put the level's pickups in. Last in BUILD-LEVEL: it asks the nav grid who can reach what."
   (case *level*
     ;; The settlement's relic before the glyphs, which would take its wing's last spots.
-    (:generated (scatter-pickups container)
+    ;; Leaving spots for the glyphs, which no other level has, and the settlement's relic: the
+    ;; settlement's small wing ran out of spots and lost a glyph for the run.
+    (:generated (scatter-pickups container :reserve (+ (length (run-glyphs *run-depth*)) (loot-count)
+                                                       (if *settlement* 1 0)))
      (when *settlement* (place-settlement-pickups container))
      (place-glyphs container)
+     ;; Weapons and runes (loot.lisp) on the reward spots the glyphs left.
+     (place-loot container)
      ;; Gold before dust: dust's piles grow to fill fewer spots, gold's can't.
      (place-gold container)
      (place-dust container))
