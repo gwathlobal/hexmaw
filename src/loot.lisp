@@ -272,3 +272,79 @@ sword and two runes, as the deepest level makes them, from a fixed seed."
                              (let ((*loot-deliveries* '((:touch 1)))) (make-loot-rune random)))
           for x from 6.5 by 1.0
           do (add-loot container stack x 0 8.5))))
+
+;;; Hoards: an ogre that can't walk to the start (STRANDED-CREATURES, kit.lisp) guards a treasure,
+;;; so the corner it can't leave is worth fighting into: a found item, always enchanted or a rune,
+;;; and a pile of gold, on the floor just behind where it spawned. Its wander keeps it within 2 m
+;;; of that, between the player and the hoard. Placed last of all the pickups, so the others keep
+;;; their places in *PICKUPS* (a save's taken ones).
+
+(defparameter *hoard-behind* 1.5 "Metres behind a guard's spawn point its hoard lies.")
+(defparameter *hoard-spread* 0.7 "Metres to the side of the item the hoard's gold lies.")
+(defparameter *hoard-gold* '(60 120) "Least and most coins in a hoard, at the first depth.")
+
+(defun hoard-guard-p (creature)
+  "True if CREATURE, stranded, guards a hoard: an ogre (or an elite one) built with the level."
+  (and (typep creature 'ogre) (monster-p creature)))
+
+(defun make-hoard-loot (random)
+  "A hoard's item: a weapon of *LOOT-WEAPONS* with an enchantment of this level, or a generated
+rune. Never plain, which on the first level every weapon is."
+  (if (< (random 1.0 random) 0.5)
+      (let ((stack (list (nth (random (length *loot-weapons*) random) *loot-weapons*) 1 NIL)))
+        (setf (stack-enchantment stack) (loot-enchantment stack random))
+        stack)
+      (make-loot-rune random)))
+
+(defun hoard-points (guard seen)
+  "Where GUARD's hoard goes, the item's point and the gold's, or NIL: behind its spawn point,
+nearer, or turned toward its side where a wall is in the way (spawns often stand with their back
+to one), never in front of it, and on it at last. A point must be floor the player fits on, a step
+from the guard's, among the cells SEEN (NAV-REACHED) they can get to."
+  (let* ((home (home guard))
+         (f (facing guard))
+         (bx (- (sin f))) (bz (cos f)))
+    (flet ((point (along across turn)
+             (let* ((dx (- (* bx (cos turn)) (* bz (sin turn))))
+                    (dz (+ (* bz (cos turn)) (* bx (sin turn))))
+                    (ox (+ (* along dx) (* across dz)))
+                    (oz (- (* along dz) (* across dx)))
+                    (p (vec (+ (vx home) ox) (+ (vy home) 0.1) (+ (vz home) oz))))
+               ;; Not in front: the guard stands between the player and its hoard.
+               (when (<= -0.1 (+ (* ox bx) (* oz bz)))
+                 (multiple-value-bind (i j k) (nav-nearest-fitting p *player-radius* *player-height* :search 0 :reach 1.0)
+                   (when i
+                     (let ((y (nav-floor i j k)))
+                       (when (<= (abs (- y (vy home))) *step-height*)
+                         (setf (vy p) y)
+                         (when (spot-reached-p (list :position p :tier :floor) seen)
+                           p)))))))))
+      (let* ((candidates (loop for along in (list *hoard-behind* (* 0.6 *hoard-behind*) 0.0)
+                               append (loop for turn in (if (< 0 along)
+                                                            (list 0.0 (/ pi 4) (- (/ pi 4)) (/ pi 2) (- (/ pi 2)))
+                                                            '(0.0))
+                                            append (loop for across in (list 0.0 *hoard-spread* (- *hoard-spread*))
+                                                         for p = (point along across turn)
+                                                         when p collect p))))
+             (item (first candidates))
+             (gold (find-if (lambda (p) (<= *hoard-spread* (vdistance p item))) (rest candidates))))
+        (when item
+          (values item (or gold item)))))))
+
+(defun place-hoards (container guards)
+  "A hoard behind each of GUARDS (HOARD-GUARD-P, stranded), from a random state of its own."
+  (when guards
+    (let* ((random (sb-ext:seed-random-state (logxor *last-level-seed* #x4041D)))
+           (*nav-hazards* :swim)
+           (seen (multiple-value-bind (i j k) (nav-nearest-fitting *spawn-point* *player-radius* *player-height*)
+                   (and i (nav-reached i j k *player-radius* *player-height* *step-height*)))))
+      (dolist (guard guards)
+        (multiple-value-bind (item gold) (and seen (hoard-points guard seen))
+          (if item
+              (let ((stack (make-hoard-loot random))
+                    (coins (random-range *hoard-gold* random)))
+                (add-loot container stack (vx item) (vy item) (vz item) :phase (random 10.0 random))
+                (add-pickup container :gold (vx gold) (vy gold) (vz gold) :phase (random 10.0 random) :count coins)
+                (v:info :hexmaw "~a at ~a guards ~a and ~d gold." (type-of guard) (home guard) (loot-title stack) coins))
+              (v:warn :hexmaw "No floor the player can reach behind ~a at ~a for its hoard."
+                      (type-of guard) (home guard))))))))
