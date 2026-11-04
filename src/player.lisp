@@ -823,9 +823,11 @@ damage, does *BLOCK-DAMAGE-SCALE* of its damage, at least 1, and shoves and lift
 seconds (BREAK-GUARD). With too little stamina the blow goes through in full, takes what
 stamina is left and knocks the shield aside for at least *STAMINA-GUARD-BREAK*. BY is what
 did it, a creature, :LAVA or :DROWNING, for the death screen. At zero health the player
-dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts the player."
-  (when (and (< 0 (health player)) (not (run-won-p)))
-    (let ((blocked (and shove (not unblockable) (shield-blocks-p player from))))
+dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts the player.
+Returns true if the shield took the blow."
+  (let ((blocked NIL))
+    (when (and (< 0 (health player)) (not (run-won-p)))
+      (setf blocked (and shove (not unblockable) (shield-blocks-p player from)))
       (when blocked
         (let ((cost (* amount *block-stamina-scale*)))
           (cond ((<= cost (stamina player))
@@ -860,7 +862,8 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
           (shove-player player from (* k (if (eq shove T) *player-knockback* shove)) (and lift (* k lift))))
         (hit-stop)))
     (when (<= (health player) 0)
-      (player-dies player by))))
+      (player-dies player by))
+    blocked))
 
 (defun player-at-p (player point margin)
   "True if POINT lies in PLAYER's body, grown by MARGIN metres."

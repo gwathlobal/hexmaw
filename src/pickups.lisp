@@ -94,7 +94,12 @@ and not one of the settlement's townsfolk."
 
 (defvar *pickups* (make-array 0 :adjustable T :fill-pointer T)
   "Every pickup in the level, taken or not, in the order they were placed: a save names the
-taken ones by their place here. BUILD-LEVEL empties it.")
+taken ones by their place here. BUILD-LEVEL empties it. Past *BUILT-PICKUPS* are those
+dropped in play (DROP-LOOT).")
+
+(defvar *built-pickups* 0
+  "How many of *PICKUPS* the level was built with; the rest were dropped in play, by thieving
+imps (imp.lisp), and a save keeps them apart.")
 
 (define-shader-entity pickup (upright-fx)
   ((kind :initarg :kind :reader pickup-kind)
@@ -193,13 +198,91 @@ NIL if it was full."
     (call-next-method)))
 
 (defun restore-pickups ()
-  "Every pickup back in its place, for a new run."
+  "Every pickup back in its place, for a new run, and those dropped in play gone."
+  (loop for i from *built-pickups* below (length *pickups*)
+        do (despawn (aref *pickups* i)))
+  (setf (fill-pointer *pickups*) (min *built-pickups* (length *pickups*)))
   (loop for pickup across *pickups* do (setf (taken pickup) NIL)))
 
 (defun taken-pickup-indices ()
   (loop for pickup across *pickups*
-        for i from 0
+        for i from 0 below *built-pickups*
         when (taken pickup) collect i))
+
+(defun dropped-pickups ()
+  "The pickups dropped in play and not taken again, as a save keeps them: kind and place."
+  (loop for i from *built-pickups* below (length *pickups*)
+        for pickup = (aref *pickups* i)
+        unless (taken pickup)
+          collect (let ((at (location pickup)))
+                    (list (pickup-kind pickup) (vx at) (pickup-ground pickup) (vz at)))))
+
+(defun restore-dropped-pickups (container drops)
+  (loop for (kind x y z) in drops
+        do (add-pickup container kind x y z)))
+
+;;; Loot: what a thieving imp (imp.lisp) carries off, held over its head, and drops where it
+;;; dies. The pickup it took stays taken; what it drops is a new one.
+
+(defparameter *stealable-kinds* '(:herbs :health-potion :shard :mana-potion)
+  "The pickups an imp takes off the floor, and the kinds it can carry: what heals or restores
+mana, one at a time. Gold and dust come in piles, weapons and runes with what they hold.")
+
+(defun item-pickup-kind (item)
+  "The kind of pickup that gives ITEM, an item kind (*ITEM-KINDS*)."
+  (or (first (find item *pickup-kinds* :key (lambda (entry) (getf (rest entry) :item))))
+      item))
+
+(defun loose-pickup-near (point range)
+  "The nearest pickup not taken within RANGE metres of POINT, on its storey, or NIL."
+  (let ((best NIL) (best-d (* range range)))
+    (loop for pickup across *pickups*
+          for at = (location pickup)
+          for d = (+ (expt (- (vx at) (vx point)) 2) (expt (- (vz at) (vz point)) 2))
+          when (and (not (taken pickup)) (< d best-d)
+                    (member (pickup-kind pickup) *stealable-kinds*)
+                    (< (abs (- (pickup-ground pickup) (vy point))) 1.5))
+            do (setf best pickup best-d d))
+    best))
+
+(defun drop-loot (container kind x y z)
+  "Drop a pickup of KIND on the floor at X Y Z, past those the level was built with."
+  (add-pickup container kind x y z))
+
+(defparameter *loot-lift* 0.05 "Metres over its carrier's head that loot is held.")
+(defparameter *loot-scale* 0.6 "Size loot is drawn at, against the pickup's: held up, it looks nearer.")
+
+(define-shader-entity carried-loot (upright-fx)
+  ((carrier :initarg :carrier :reader carrier)))
+
+(defmethod initialize-instance :after ((loot carried-loot) &key)
+  (let ((scale (scaling loot)))
+    (setf (vx scale) (* (vx scale) *loot-scale*)
+          (vy scale) (* (vy scale) *loot-scale*))))
+
+(defun add-carried-loot (carrier kind)
+  "Show a pickup of KIND held over CARRIER's head until it no longer carries it."
+  (let ((loot (make-instance 'carried-loot :animation (find-fx-animation (pickup-property kind :animation))
+                                           :carrier carrier :location (vcopy (location carrier)))))
+    (enter loot (container carrier))
+    loot))
+
+(define-handler (carried-loot tick :after) ()
+  (let ((carrier (carrier carried-loot)))
+    (if (or (dead carrier) (null (stolen carrier)) (null (container carrier)))
+        (despawn carried-loot)
+        (let ((loc (location carrier))
+              (at (location carried-loot)))
+          (setf (vx at) (vx loc)
+                (vy at) (+ (vy loc) (sprite-height carrier) *loot-lift* (* 0.5 (vy (scaling carried-loot))))
+                (vz at) (vz loc))))))
+
+(defun preload-pickups (scene)
+  "Imps carry pickups off and drop them in play: load every kind they take up front."
+  (loop for kind in *stealable-kinds*
+        for animation = (find-fx-animation (pickup-property kind :animation))
+        do (preload (make-instance 'pickup :animation animation :kind kind :ground 0.0) scene)
+           (preload (make-instance 'carried-loot :animation animation :carrier NIL) scene)))
 
 (defun take-pickups-at (indices)
   (dolist (i indices)

@@ -66,6 +66,8 @@
   (preload (make-instance 'skeleton-warrior) scene)
   ;; And the dust an ogre kicks up.
   (preload (make-instance 'upright-fx :animation (find-fx-animation 'ogre-dust)) scene)
+  ;; And the loot imps carry off and drop.
+  (preload-pickups scene)
   (enter (make-instance 'menu-controller) scene)
   (add-music scene)
   (add-sounds scene)

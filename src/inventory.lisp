@@ -202,6 +202,16 @@ nothing is taken."
                    (setf (nth (position stack bag) bag) NIL)))))
     T))
 
+(defun steal-item (player)
+  "Take one potion from PLAYER, as a thief does (imp.lisp): of the quickslot's kind if the bag
+holds any, else of the first kind in the bag. Returns its kind, or NIL if there was none."
+  (let ((kind (or (let ((quick (quickslot player)))
+                    (and quick (< 0 (kind-total player quick)) quick))
+                  (first (find-if (lambda (stack) (and stack (potion-p stack) (< 0 (second stack))))
+                                  (inventory player))))))
+    (when (and kind (take-item player kind 1))
+      kind)))
+
 (defun use-quickslot (player)
   "Drink one of the quickslot's kind, from its smallest stack in the bag. True if one was drunk;
 at full, or with none, none is."

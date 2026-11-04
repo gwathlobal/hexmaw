@@ -1,10 +1,11 @@
 (in-package #:hexmaw)
 
 ;;; Music, through Harmony (trial-harmony, set up by MAIN). In play the MUSIC-DIRECTOR,
-;;; entered by setup-scene, plays the *MUSIC-PLAYLIST* at random, one track at a time,
-;;; crossfading to another every *MUSIC-TRACK-TIME* of play (never the one playing); the
-;;; main menu, the death screen and the victory screen have tracks of their own
-;;; (*SCREEN-MUSIC*), which start from the top whenever their screen comes up. MUSIC-WANTED
+;;; entered by setup-scene, plays the level's playlist (MUSIC-PLAYLIST: exploration only in
+;;; the settlement, combat only on a run's level with the boss's arena, both elsewhere) at random,
+;;; one track at a time, crossfading to another every *MUSIC-TRACK-TIME* of play (never the
+;;; one playing); the main menu, the death screen and the victory screen have tracks of
+;;; their own (*SCREEN-MUSIC*), which start from the top whenever their screen comes up. MUSIC-WANTED
 ;;; says which track the game state wants and MUSIC-TARGET how loud: full in play, the
 ;;; automap, the inventory and the screens, ducked under the pause menu, silent on the
 ;;; loading screen. A playlist track faded out pauses, and picks up where it paused when it
@@ -44,10 +45,18 @@
 (define-asset (hexmaw music-title) org.shirakumo.fraf.trial.harmony:sound #p"music/title.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-death) org.shirakumo.fraf.trial.harmony:sound #p"music/death.ogg" :repeat T :mixer :music)
 
-(defparameter *music-playlist*
-  '(music-explore-1 music-explore-2 music-explore-3
-    music-combat-1 music-combat-2 music-combat-3 music-combat-4 music-combat-5)
-  "The tracks (asset names) play draws from at random.")
+(defparameter *music-moods*
+  '(:explore (music-explore-1 music-explore-2 music-explore-3)
+    :combat (music-combat-1 music-combat-2 music-combat-3 music-combat-4 music-combat-5))
+  "The tracks (asset names) play draws from at random, by mood.")
+
+(defun music-playlist ()
+  "The tracks play draws from on this level: no combat music in the settlement, and no
+exploration music on a run's level with the boss's arena (the debug level's arena plays
+everything)."
+  (cond (*settlement* (getf *music-moods* :explore))
+        ((and *arena* (eq *level* :generated)) (getf *music-moods* :combat))
+        (T (loop for (nil tracks) on *music-moods* by #'cddr append tracks))))
 
 (defparameter *screen-music*
   '(:title music-title :dead music-death :victory music-combat-4)
@@ -58,8 +67,9 @@ first explore-2, too much drone to explore to) and the victory screen's.")
   "The music's own random state, so picking tracks leaves the game's rolls alone.")
 
 (defun music-tracks ()
-  "Every track, the playlist's and the screens'."
-  (remove-duplicates (append *music-playlist* (loop for (nil track) on *screen-music* by #'cddr collect track))))
+  "Every track, every mood's and the screens'."
+  (remove-duplicates (append (loop for (nil tracks) on *music-moods* by #'cddr append tracks)
+                             (loop for (nil track) on *screen-music* by #'cddr collect track))))
 
 (defun music-voice (track)
   (// 'hexmaw track))
@@ -87,7 +97,8 @@ plays on.")
             :documentation "The music and sound volumes last set on the mixers.")))
 
 (defun pick-track (&optional other-than)
-  (let ((choices (or (remove other-than *music-playlist*) *music-playlist*)))
+  (let* ((playlist (music-playlist))
+         (choices (or (remove other-than playlist) playlist)))
     (nth (random (length choices) *music-random*) choices)))
 
 (defun music-wanted (director)
