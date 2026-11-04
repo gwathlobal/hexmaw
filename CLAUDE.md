@@ -395,7 +395,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   Projectiles burst on its surface; blood drops and
   gibs that fall in are gone. The surface is a `liquid-surface` quad, fullbright and fogged
   as lamp light, its texture (`data/textures/lava-flow.png`, from
-  `art/prompts/texture-lava.txt` like the other textures) swirled by crossed waves. On
+  `art/prompts/texture-lava.txt` like the other textures, `tools/make_texture.py
+  art/textures/lava-2.png data/textures/lava-flow --metres 4`) swirled by crossed waves. On
   the test level, `add-lava` digs a pit in the hall's south-west (x −9 to −6, z 3 to 7),
   its floor slab left with a hole there; the hall's room reaches down to the slab's
   underside so the glow lights the pit's rim.
@@ -493,7 +494,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (the knight 1.3), and the gibs of a creature that doesn't `bleed` leave no blood. The
   acolyte has none: it burns. A set starts as a generated sheet of pieces, each
   lying on the ground (`art/gibs/flesh-gibs-2.png`, from `art/prompts/flesh-gibs.txt` with the
-  imp's turnaround and death sheet as references), sliced by `tools/slice_frames.py` into
+  imp's turnaround and death sheet as references; the `:imp` set's is `art/gibs/imp-gibs-1.png`,
+  the `:bones` set's `art/gibs/bone-gibs.png`), sliced by `tools/slice_frames.py` into
   `art/gibs/strips/<set>`, which `tools/draw_blood.py --gibs <set>=<strip>` appends to the
   blood strip with the turned frames; cells grow to fit the biggest piece. Every run
   rebuilds the strip, so pass every set. The generator draws the pieces bigger than asked,
@@ -1567,6 +1569,7 @@ for seamless, they mostly tile; `--blend PX` cross-fades the edges when they don
 ghosts joints, so a fresh image is often better.
 
 ```bash
+tools/make_texture.py art/textures/wall-stone-2.png data/textures/wall-stone --metres 4
 tools/make_texture.py art/textures/floor-flags-2.png data/textures/floor-flags --metres 4
 tools/make_texture.py art/textures/ceiling-1.png data/textures/ceiling-stone --metres 4
 tools/make_texture.py art/textures/pillar-stone-1.png data/textures/pillar-stone --metres 2
@@ -1769,6 +1772,9 @@ colour by default: a 64-colour palette turned the knight's blue runes yellow.
 
 ```bash
 tools/make_splash.py art/splash/maw-1.png data/splash/title --shift -0.3
+tools/make_splash.py art/splash/loading-1.png data/splash/loading
+tools/make_splash.py art/splash/death-1.png data/splash/death
+tools/make_splash.py art/splash/victory-2.png data/splash/victory --shift 0.3
 ```
 
 The menu pass caches the picture by path and outlives scenes, so a re-made one shows after a
@@ -2075,8 +2081,8 @@ against the line by the generator, with nothing across it to bring back, so its 
 rebuilt from its own right end; and the leap's side and back got the crouch's maul back from a
 half-size copy, its full-size pieces having been painted out in an earlier fix. The leap's
 back-quarter, whose landing had its toes to the viewer, was drawn again with
-`ogre-leap-back-quarter-feet.txt` added to the prompt (`leap-back-quarter-b-2.png` is the
-other try).
+`ogre-leap-back-quarter-feet.txt` added to the prompt (the other try is in the art attic,
+see "Where art lives").
 
 ```bash
 python3 tools/slice_turnaround.py art/ogre/turnaround-2.png data/sprites/ogre/turnaround --height 173 --filter box
