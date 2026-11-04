@@ -280,7 +280,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   the first file with an asset).
 - `src/creature.lisp`: `creature` (health, hit reaction: flash, flinch, knockback, hit-stop;
   death, and revival after `*revive-time*`, on the test level only (`*level*`, defined here); wandering, hunting and attacking the player, and the walk and attack
-  animations), `*creatures*` for hit tests, bodies (collision between actors), and the `imp`. A creature's
+  animations), `*creatures*` for hit tests, and bodies (collision between actors). A creature's
   `death-animation` plays once on death, front view from every angle, and its last frame
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
@@ -336,6 +336,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   are generics with the caster's behaviour as the default.
 - `src/ogre.lisp`: the `ogre`, the big one (2.7 m, `body-radius` 1.0), which leaps and pushes
   the player around. See "The ogre" under "Creature movement" below.
+- `src/imp.lisp`: the `imp`, a `leaper` that pounces, springs back after its claw, breaks and
+  shrieks when its courage fails, steals, and comes in packs. See "The imp" under "Creature
+  movement" below.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
 - `src/blueprint.lisp`: builds blocks from text blueprints (`data/blueprints/*.txt`), in its own
@@ -354,7 +357,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   changes in play, so a load is the moment of the save, nothing in flight lost: the player,
   every creature by its index in `*creatures*` (raised skeletons recreated), every effect in
   the scene (projectiles, circles, impacts, with their glows), the blood pool's arrays,
-  which pickups are taken, `*hit-stop*` and the random states. Damage and knockback roll from their own state
+  which pickups are taken and what imps dropped (`:drops`, `dropped-pickups`: pickups past
+  `*built-pickups*`, which the seed doesn't place), `*hit-stop*` and the random states. Damage and knockback roll from their own state
   (`*roll-random*`, spells.lisp), since blood and wandering draw from `random` a number of
   times a frame that varies with the frame rate: so a reload rolls the same as before it.
   An object saves the slots `saved-slots` names (an `append` generic; a name with no slot
@@ -818,9 +822,10 @@ text `forge-note`s, which wrap (Alloy's
   blocks run out, and likes rooms `*pickup-room-weight*` times as much as corridors. It draws from
   a random state of its own seeded with the level's, so a seed always places the same ones. A save
   names the taken ones by place, so changing how they're scattered makes an older save mark the wrong
-  ones taken. Over seeds 1 to 30, on a run's first level: 33 monsters (24 to 42), 26 pickups (20 to 33), half of each
-  resource potions (5 to 8 of each), restoring 343 health and 509 mana. On its second, 40 monsters and 32 pickups;
-  on its third, 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
+  ones taken. Over seeds 1 to 30, on a run's first level: 42 monsters (27 to 63), about half of them imps
+  (imp packs, imp.lisp), and 32 pickups. Before packs it was 33 monsters and 26 pickups (half of each
+  resource potions, 5 to 8 of each, restoring 343 health and 509 mana), on its second 40 and 32, on its
+  third 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
   **Glyphs** are pickup kinds with `:teaches` (`:glyph-frost` .. `:glyph-area`): touched, they teach
@@ -1167,7 +1172,8 @@ text `forge-note`s, which wrap (Alloy's
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
   pool's others plugged. Its hall is empty of monsters unless `*debug-hall-monsters*` is on (then one of each,
-  `debug-spawn`), and has along its south wall one of each pickup and a pile of 60 arcane dust;
+  `debug-spawn`, and a second imp beside the first, spawned after the ogre so the others keep their
+  places in `*creatures*`: a pack), and has along its south wall one of each pickup and a pile of 60 arcane dust;
   `*debug-level-monsters*` (a list of kinds, NIL for all) keeps only those in the hall and leaves out
   the annex's imp, the blocks' monsters and the boss.
   A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
@@ -1382,11 +1388,64 @@ test level the necromancer stands at the back of the hall, behind the imp; set
 `(hurt (aref *creatures* 0) 30)` (no overkill: a corpse, not gibs) and set it hunting with
 `(setf (alert necromancer) 30.0)`.
 
+### The imp
+
+The `imp` (imp.lisp) is the monster met most (`*spawn-pool*` weight 3), small, quick and craven.
+Every trick has a tell and an answer. `skittish-p` is NIL for an imp boss, which keeps only the
+pounce.
+
+- **Pounce** (`special-attack`, `start-pounce`): from `*pounce-min*` to `*pounce-max*` (3 to 7 m) it
+  crouches `*pounce-windup*` (0.45 s, attack frame 0) and leaps, the leaper's arc with the imp's
+  numbers (0.7 m up under `*pounce-gravity*` 22: 0.5 s for 5 m), every `*pounce-cooldown*` (5 s).
+  Coming within `*pounce-reach*` of the player in the air it claws (`pounce-strike`, from its
+  `keep-height :after`: `*pounce-damage-scale*` of its claw) and bounces off. The raised shield takes
+  the claw and throws it down (`knocked`, then `downed` for `*imp-downed-time*`, the flinch's stagger
+  frame pressed flat), and so does any blow that lands while it flies (`knock-down`, from
+  `react-to-hit`). A bash in the crouch interrupts it like any wind-up. `hurt-player` returns
+  whether the shield took the blow.
+- **Hit and run** (`release-attack`): after every claw it springs back `*imp-spring-speed*`
+  (6 m/s, about 1.3 m) on its `momentum`, `*imp-spring-angle*` to one side, and gives up its spot
+  (`ban-slot`), so it comes in again from elsewhere. Its `attack-pause` is 0.35 s.
+- **Morale** (`courage`, `test-courage`, from `react-to-hit` and a packmate's `creature-died`): its
+  share of health plus `*imp-pack-courage*` (0.3) a live imp within `*imp-pack-radius*` (8 m).
+  Below `*imp-break-courage*` (0.5), once a life (`shrieked`), it stands `*shriek-time*` throbbing
+  pale (attack frame 1), then `raise-alarm`: every creature that fights within `*shriek-range*`
+  (15 m) on its storey hunts for `*shriek-alert-time*`. It then runs (`fleeing`, `*imp-flee-time*`, at
+  `*imp-flee-speed*` its chase speed): `flee-path` floods `*flee-walk*` for the cell furthest from
+  the player along a walk that comes no nearer them, else a `retreat` step; past
+  `*flee-safe-distance*` it stands and watches. With nowhere to go it fights (`cornered`). A lone
+  imp breaks below half health; one with a packmate below a fifth, or when the mate dies.
+- **Thief**: a claw that lands unblocked, with `*imp-steal-chance*` (35 percent, on
+  `*roll-random*`), takes one potion (`steal-item`, inventory.lisp: of the quickslot's kind first) and the view
+  flashes `*stolen-flash-color*`; a wandering imp goes for a pickup of `*stealable-kinds*` (herbs, shards, potions) within `*thief-sniff-range*`
+  (`wander`, `seek-loot`, `reach-loot`) and takes it (`taken`), but only with the player within
+  `*thief-witness-range*` (15 m) on its storey: left to wander unseen, 13 of a level's imps had
+  carried off its pickups in three minutes. `stolen` is the pickup kind it
+  carries, shown over its head by a `carried-loot` (pickups.lisp, `*loot-scale*`). Carrying, it
+  holds back (`holds-back-p`, which `think` asks before striking) and runs from a player within
+  `*thief-keep-away*`, fighting only when cornered. Dead (`creature-died`, from `hurt` and `burn`), it
+  drops it as a new pickup (`drop-loot`), past `*built-pickups*`; `reset-run` takes those away
+  (`restore-pickups`) and a save keeps them (`:drops`).
+- **Packs**: `place-block` notes each imp it spawns in `*pack-leaders*`, and `spread-packs`, in
+  `build-level` after the nav grid, gives `*imp-pack-chance*` (0.6) of them one more imp, or two
+  (`*imp-pack-three*`), `*pack-spacing*` to their sides (`pack-spot`), drawn from the level's seed by
+  a state of its own, so layouts and saves stay put.
+
+To try it on the test level (with `*debug-hall-monsters*` on, the hall imp is `(aref *creatures* 0)`, its packmate `(aref *creatures* 8)`): stand 5 m
+off and `(setf (alert imp) 10.0 (idle-timer imp) 0.0)` for a pounce (`*leap-debug*` logs it), with
+`(setf (block-held *player*) t)` to see it thrown down; `(hurt imp 18)` on a lone one for the
+shriek and flight; `(setf *imp-steal-chance* 100)` and `(give-item *player* :health-potion)` for a
+theft. `tools/hd status` shows each imp's brain.
+
 ### The ogre
 
 The leap belongs to the `leaper` mixin (its slots, `keep-height`, `attack-step`, `show-own-pose`,
-`try-leap`), so an imp or knight boss leaps too; a leaper with no `leap-animation` poses with the
-first three frames of its attack strip.
+`try-leap`), so a knight boss leaps too, and the imp pounces with it; a leaper with no
+`leap-animation` poses with the first three frames of its attack strip. Its limits and timing are
+generics whose defaults are the ogre's parameters (`leap-min-distance`, `leap-max-distance`,
+`leap-max-rise`, `leap-max-drop`, `leap-rise`, `leap-min-rise`, `leap-max-speed`, `leap-gravity`,
+`leap-windup`, `leap-recover-time`, `leap-cooldown-time`), and what a landing does is `leap-landed`
+(the ogre's quake by default). `*leap-debug*` logs every leaper, by class.
 
 The `ogre` (ogre.lisp) is the big one: 2.7 m tall, a body 1 m out from its centre, 120
 health, slow, barely moved by knockback (0.15). It fits the 3 m doorways, corridors and
@@ -2583,7 +2642,8 @@ Over seeds 1 to 200 at each size, every exit fit on the first seed and could be 
 rooms always reached their target (16.1, 19.1, 22.1 on average; 16 to 18 at the lowest size, 22 to 24
 at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29), so about 58 a run
 (an older count: over run seeds 1 to 20, `*creatures*` held 33.0, 42.3 and 54.3 after the depth
-scaling, against 31.9, 40.3 and 48.9 before it, with 10% elites on level 2 and 19% on level 3);
+scaling, against 31.9, 40.3 and 48.9 before it, with 10% elites on level 2 and 19% on level 3;
+all before imp packs, which add a quarter or so);
 pickups 13.2, 15.7, 18.3. A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
 levels 1 and 2 the walk to the exit is 136 m on average against 143 m for the level's longest walk,
 with a median at 99.6% of it and the lowest tenth under 81%: blocks from the start are a good stand-in.

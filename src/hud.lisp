@@ -194,6 +194,8 @@ void main(){
 
 (defparameter *health-flash-color* (vec4 0.75 0.7 0.15 0.25) "RGB and peak opacity of a health pickup's flash.")
 (defparameter *mana-flash-color* (vec4 0.15 0.35 1.0 0.25) "RGB and peak opacity of a mana pickup's flash.")
+(defparameter *stolen-flash-color* (vec4 0.22 0.05 0.3 0.35)
+  "RGB and peak opacity of the flash when an imp snatches an item (imp.lisp).")
 
 (defparameter *rift-flash-color* (vec4 0.55 0.65 1.0 0.45)
   "RGB and peak opacity of the flash when a riftwalker's rift moves the player (riftwalker.lisp).")
@@ -209,6 +211,7 @@ void main(){
 (defmethod flash-color ((flash restore-flash))
   (case (and *player* (restored *player*))
     (:mana *mana-flash-color*)
+    (:stolen *stolen-flash-color*)
     (:gold *gold-flash-color*)
     (:ward *ward-flash-color*)
     (:glyph *glyph-flash-color*)

@@ -82,6 +82,7 @@ empty. The annex's imp, the blocks' monsters and the arena's boss don't ask it."
         (fill-pointer *map-blocks*) 0
         (fill-pointer *pickup-spots*) 0
         (fill-pointer *pickups*) 0
+        (fill-pointer *pack-leaders*) 0
         (fill-pointer *level-exits*) 0
         (fill-pointer *level-zones*) 0
         (fill-pointer *level-altars*) 0
@@ -141,10 +142,13 @@ player can't get to one; or if it is the settlement's and its wing came out too 
                    (T
                     (v:warn :hexmaw "No level with an exit in ~d seeds; keeping level ~d." *max-level-attempts* *last-level-seed*)
                     (return))))
+    ;; Before the checks, which count the packs too.
+    (spread-packs container *last-level-seed*)
     (check-reachable)
     (when (eq *level* :generated)
       (check-ice-joins))
-    (place-pickups container)))
+    (place-pickups container)
+    (setf *built-pickups* (length *pickups*))))
 
 (defun build-boss-wing (container)
   "South of the hall, a corridor to the arena (arena.txt) and a boss in it, of a random kind
@@ -215,6 +219,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     ;; An ogre in the east of the hall, by the annex doorway, which it just fits through;
     ;; the annex's stair shaft and the platform's steps test where it can follow.
     (debug-spawn (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
+    ;; The hall imp's packmate, beside it (imp.lisp): together they hold their nerve.
+    (debug-spawn (make-instance 'imp :location (vec 1.5 0 -3.5) :facing pi) container)
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2

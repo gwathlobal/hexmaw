@@ -21,6 +21,7 @@
                (:file "flyer")
                (:file "necromancer")
                (:file "ogre")
+               (:file "imp")
                (:file "blocks")
                (:file "run")
                (:file "fx")
