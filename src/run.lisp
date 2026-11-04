@@ -7,7 +7,7 @@
 ;;; left (LEVEL-RECORD), which is what the run's totals add up.
 
 (defparameter *run-levels*
-  '((:rooms 16 :exit "descent" :altar-chance 0.4
+  '((:rooms 16 :exit "descent" :altar-chance 1.0
      :pool (("imp" 5) ("acolyte" 2) ("knight" 2) ("harpy" 1) ("necromancer" 1))
      :loot (:weapons 1 :first-weapon :spear :enchant-chance 0.0
             :runes 1 :rune-mana (10 18) :rune-effects 1 :area-chance 0.0 :authored-chance 0.0)
@@ -31,7 +31,9 @@
 the block it puts on the doorway furthest from the start (or a list of them, tried in order):
 the descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
 (boss.lisp). NIL: no such block. :ALTAR-CHANCE is the chance of a spellforge altar room
-(forge.lisp), besides the town's.
+(forge.lisp), besides the town's; 1 makes it certain, a level whose altar didn't fit or can't be
+walked to being built again from another seed (LEVEL-NEEDS-REBUILDING-P), so the first level always
+has one.
 
 What the player finds there, :LOOT (loot.lisp): :WEAPONS swords and spears (the first a
 :FIRST-WEAPON if it names one), each enchanted with :ENCHANT-CHANCE, its blows costing :ENCHANT-COST

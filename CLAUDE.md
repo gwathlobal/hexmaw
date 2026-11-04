@@ -2556,14 +2556,17 @@ The way down is the `descent` block (1 × 2 cells, two storeys: a doorway at the
 a landing in front of a painted arch, its stair going on into the dark; see "Level textures"). It is tagged only `descent`, so growth never picks it; `generate-level`
 puts its `:exit` on the deepest doorway still open when growth stops, by blocks from the start
 (`door-depth`, since there is no nav grid yet), just before the rest are plugged. After it, with the level's
-`:altar-chance` (0.4), the `shrine-altar` (`*altar-block*`: a 2 × 2 sanctum, a spellforge altar on
-a 0.9 m slab, tagged only `altar`) goes on a doorway between 30% and 70% of the deepest depth. That
-roll is the generator's last draw, so a level that doesn't roll one is the level it was; over seeds 1
-to 20 on level 1, 10 had one. The town (another branch) has the run's own altar. Then `build-level`
-asks `level-goal-reached-p` (an exit, or else the arena's doorway, wading and swimming where they
-must). If the player can't get there it
-empties the scene (`clear`) and tries the next seed, up to `*max-level-attempts*`; a loaded level is
-never retried, its seed having passed.
+`:altar-chance` (1 on level 1, 0.4 below), the `shrine-altar` (`*altar-block*`: a 2 × 2 sanctum, a
+spellforge altar on a 0.9 m slab, tagged only `altar`) goes on a doorway between 30% and 70% of the
+deepest depth. That roll is the generator's last draw, so a level that doesn't roll one is the level
+it was. The town (another branch) has the run's own altar. Then `build-level` asks
+`level-needs-rebuilding-p`, which says why the level won't do: `level-goal-reached-p` (an exit, or
+else the arena's doorway, wading and swimming where they must) failing, the settlement's wing too
+small, or, at an `:altar-chance` of 1, no altar the player can walk up to (`altar-reached-p`, the
+floor round its stone in reach of `near-altar-p`). Then it empties the scene (`clear`) and tries
+the next seed, up to `*max-level-attempts*`; a loaded level is never retried, its seed having
+passed. So the first level always has a spellforge: over run seeds 1 to 100 its altar fit, and could
+be reached, on the first seed every time.
 `level-settings` and the seed are what a save keeps, so a save needs only the level it's on.
 
 Standing on the landing (`at-level-exit-p`: within `*exit-reach*` across and `*exit-height*` of its

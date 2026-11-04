@@ -147,6 +147,22 @@ wading and swimming where they must."
                      (multiple-value-call #'reached-p
                        (nav-nearest-fitting (doorway-inside (arena-door *arena*)) r h :search 2 :reach 1.5))))))))))
 
+(defun altar-reached-p (&key (from *spawn-point*))
+  "True if the player can walk from FROM to a place beside an altar (*LEVEL-ALTARS*) they can
+use it from (NEAR-ALTAR-P), wading and swimming where they must."
+  (let ((r *player-radius*) (h *player-height*) (*nav-hazards* :swim) (out 1.25) (corner 0.9))
+    (multiple-value-bind (si sj sk) (and *nav-grid* (plusp (length *level-altars*)) (nav-nearest-fitting from r h))
+      (when si
+        (let ((seen (nav-reached si sj sk r h *step-height*)))
+          ;; The floor round the altar's stone, on every side and corner, whichever way it is turned.
+          (loop for top across *level-altars*
+                thereis (loop for (dx dz) in `((,out 0) (,(- out) 0) (0 ,out) (0 ,(- out))
+                                               (,corner ,corner) (,corner ,(- corner)) (,(- corner) ,corner) (,(- corner) ,(- corner)))
+                              thereis (multiple-value-bind (i j k)
+                                          (nav-nearest-fitting (vec (+ (vx top) dx) (vy top) (+ (vz top) dz)) r h
+                                                               :search 0 :reach *altar-height*)
+                                        (and i (= 1 (sbit seen (nav-index i j k))))))))))))
+
 (defun stranded-creatures (&key (from *spawn-point*))
   "The creatures that can't walk to FROM from where they live, each on the nav grid at
 its own size and step. A creature whose own cell is too tight for it can't plan a walk
