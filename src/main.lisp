@@ -3,7 +3,7 @@
 (defclass main (org.shirakumo.fraf.trial.harmony:main)
   ()
   (:default-initargs
-   :context '(:title "hexmaw" :width 1280 :height 720)))
+   :context '(:title "Hexmaw" :width 1280 :height 720)))
 
 (defmethod setup-scene ((main main) scene)
   (build-level scene)

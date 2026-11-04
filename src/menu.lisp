@@ -46,9 +46,9 @@ cut loose from the old scene's passes."
 ;; The main menu and the loading screen cover the game with a splash picture
 ;; (data/splash/, from tools/make_splash.py) instead of the veil.
 (defparameter *splash-dim* 0.6 "Opacity of the veil over a splash, so the menu stands out.")
-(defparameter *title-menu-top* 110
-  "UI units from the top of the screen to the main menu, which keeps the dagger in the
-lower middle of its splash clear.")
+(defparameter *title-menu-top* 150
+  "UI units from the top of the screen to the main menu, which puts it in the maw's dark
+throat, under the upper fangs of its splash.")
 
 (defclass splash-backdrop (menu-backdrop)
   ((splash :initarg :splash :reader splash

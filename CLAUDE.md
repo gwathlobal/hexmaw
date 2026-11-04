@@ -1,6 +1,6 @@
-# hexmaw
+# Hexmaw
 
-POC for a first-person, real-time roguelike (Daggerfall dungeons, Hexen combat), in
+Hexmaw, a first-person, real-time roguelike (Daggerfall dungeons, Hexen combat), in
 Common Lisp on [Trial](https://shirakumo.github.io/trial). The brief is at
 https://claude.ai/artifact/MikuSfUo5bY4Au8CHie4XG. The current goal is the 2-week
 engine spike: first-person controller, one imported block, the imp as a billboard,
@@ -38,7 +38,7 @@ and `HEXMAW_EVAL_PORT` still overrides it.
 `tools/hd '(namestring (root))'` says which checkout a game runs from.
 When you start the game from a worktree, put this conversation's name in its window title
 once it is up, so the user can tell the windows apart:
-`tools/hd '(game (setf (title *context*) "hexmaw — <conversation name>"))'`.
+`tools/hd '(game (setf (title *context*) "Hexmaw — <conversation name>"))'`.
 
 ## Standalone build
 
@@ -1004,8 +1004,8 @@ text `forge-note`s, which wrap (Alloy's
   `panel-splash` names a picture in `data/splash/` to cover the screen with (the main
   menu's `title`, the loading screen's `loading`, the death screen's `death`, the victory screen's `victory`, and Settings' over the main menu; see
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
-  of the screen (T, the default, centres it; the main menu's `*title-menu-top*` keeps it
-  off the dagger in its splash).
+  of the screen (T, the default, centres it; the main menu's `*title-menu-top*` puts it
+  in the maw's throat, under the upper fangs of its splash).
 - `src/music.lisp`: music, through Harmony (`trial-harmony`; `main` is its `main`, which starts
   the sound server: PulseAudio here). In play the `music-director` (entered by `add-music` in
   `setup-scene`, which stages every track's voice) plays the level's playlist at random
@@ -1754,10 +1754,13 @@ veil (`*splash-dim*`, 0.6) so it stays in the background. Each is a generated 15
 (16:9 crop, no text, a calm dark centre for the menu) plus `splash-title.txt`,
 `splash-loading.txt` or `splash-death.txt`. The title references the four monsters' turnarounds, the loading
 screen the imp's turnaround, the stone wall and the torch, and the death screen those three
-and the shield and sword (`art/sword-shield/ref-shield-a2.png`, `ref-sword-idle.png`):
+and the shield and sword (`art/sword-shield/ref-shield-a2.png`, `ref-sword-idle.png`).
+The title is the maw: the hall's far end is a mouth hewn in the rock, fangs above and
+below, its black throat the calm centre the menu sits in (`art/splash/maw-1.png`; the
+`title-*.png` before it had a ritual dagger in an altar):
 
 ```bash
-P=art/prompts; tools/gen_image.py art/splash/title.png --prompt "$(cat $P/splash-common.txt $P/splash-title.txt)" --ref "Pixel Demon Character Turnaround.png" --ref art/acolyte/turnaround-2.png --ref art/knight/runic-turnaround-3.png --ref art/harpy/turnaround-2.png --size 1536x1024 -n 2
+P=art/prompts; tools/gen_image.py art/splash/maw.png --prompt "$(cat $P/splash-common.txt $P/splash-title.txt)" --ref "Pixel Demon Character Turnaround.png" --ref art/acolyte/turnaround-2.png --ref art/knight/runic-turnaround-3.png --ref art/harpy/turnaround-2.png --size 1536x1024 -n 2
 ```
 
 `tools/make_splash.py` crops it to 16:9 (`--shift` -1 keeps the top, 1 the bottom) and
@@ -1765,7 +1768,7 @@ box-filters it to 640 × 360, 2 screen pixels per splash pixel at 1280 × 720. I
 colour by default: a 64-colour palette turned the knight's blue runes yellow.
 
 ```bash
-tools/make_splash.py art/splash/title-2.png data/splash/title --shift -0.6
+tools/make_splash.py art/splash/maw-1.png data/splash/title --shift -0.3
 ```
 
 The menu pass caches the picture by path and outlives scenes, so a re-made one shows after a

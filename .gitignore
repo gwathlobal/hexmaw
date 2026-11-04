@@ -33,3 +33,6 @@ __pycache__/
 # Audio sources, takes and loops (tools/gen_music.py, gen_sfx.py, make_loop.py, compose_*.py);
 # each rebuilds from its .prompt.json or script, and the game plays data/music/*.ogg
 /audio/**/*.wav
+
+# Working notes, not part of the product
+/ROADMAP.md
