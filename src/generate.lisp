@@ -188,9 +188,14 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
          (*block-random* *generator-random*)
          (*elite-random* (sb-ext:seed-random-state (logxor seed #xE117E)))
          (*spawn-clearance* NIL)
-         (kit (or *generator-blocks* (remove-if-not #'block-tags (kit-blocks))))
+         (all (or *generator-blocks* (remove-if-not #'block-tags (kit-blocks))))
+         ;; Only blocks whose named monsters the level's pool has.
+         (kit (remove-if-not #'block-fits-pool-p all))
          (cells (setf *level-cells* (make-hash-table :test 'equal)))
          (frontier ()) (shut ()) (doors ()) (placed-rooms 0) (networks ()) (exit-placed NIL))
+    (when (< (length kit) (length all))
+      (v:info :hexmaw "Generated level ~d: the pool leaves out ~{~a~^, ~}."
+              seed (remove-if (lambda (n) (member n kit :test #'string=)) all)))
     (labels ((full-p (family)
                ;; True once the level has as many networks of FAMILY as it may.
                (<= (symbol-value (sixth (assoc family *networks*))) (count family networks :key #'network-family)))

@@ -42,7 +42,8 @@ mana, with up to :ENCHANT-EFFECTS effects; and :RUNES ready spells costing :RUNE
 level is the one of the run that has a spell the forge can't make (*LOOT-SPELLS*) instead.
 
 How hard its monsters are. Decided as it is built (LEVEL-SETTINGS): :POOL, what a spawn_any
-picks from (*SPAWN-POOL*; leave a kind out rather than give it weight 0), :SKIP-SCALE, which
+picks from (*SPAWN-POOL*; leave a kind out rather than give it weight 0), which also limits named
+spawns (a block naming only kinds outside it isn't used: BLOCK-FITS-POOL-P), :SKIP-SCALE, which
 scales a spawn's chance of no monster (*SPAWN-SKIP-SCALE*), and :ELITE-CHANCE, a spawn's chance
 of an elite (*ELITE-CHANCE*, elite.lisp). Asked in play (DEPTH-SCALE): :SIGHT and :HEARING scale
 how far a creature notices the player, :ALERT how long it hunts after, :PAUSE its pause after an
