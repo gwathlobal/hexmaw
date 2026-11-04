@@ -101,6 +101,9 @@ side; negative du mirrors."
   (let ((camera (camera (scene +main+))))
     (when (typep camera 'fps-camera)
       (multiple-value-bind (index mirrored) (billboard-view billboard (location camera))
+        ;; A sprite with one view (the townsfolk) shows it from every side.
+        (when (null (rest (getf (atlas billboard) :views)))
+          (setf index 0 mirrored NIL))
         (setf (view-index billboard) index
               ;; Front and back are symmetric; mirroring them would only make them flicker.
               (mirrored billboard) (and mirrored (< 0 index 4))))

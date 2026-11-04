@@ -247,8 +247,8 @@ never offers damage cast on yourself or a heal thrown at a monster."
            "Cast on yourself, it strikes nothing: deliver it, or keep to self effects.")
           ((and (not weapon) (not (eq (draft-delivery draft) :self)) (not strikes))
            "Nothing in it strikes: cast it on yourself.")
-          ((and (not weapon) (< *max-mana* (spell-cost spell)))
-           (format NIL "It costs more mana than you can hold (~d)." (floor *max-mana*)))
+          ((and (not weapon) (< (max-mana player) (spell-cost spell)))
+           (format NIL "It costs more mana than you can hold (~d)." (floor (max-mana player))))
           ((< (player-dust player) (sink-dust sink spell))
            (format NIL "It needs ~d arcane dust and you have ~d: find more in the dungeon, or unweave a spell."
                    (sink-dust sink spell) (player-dust player)))
@@ -414,6 +414,22 @@ call only arms it (*FORGE-ARMED*); a second does it."
              (forge-select (if weapon sink :new) player)
              (setf *forge-note* (format NIL "~:[Unweaved~;Disenchanted~] ~a: ~d dust back." weapon title back))
              T)))))
+
+(defun near-altar-p (player)
+  "True if PLAYER stands at an altar: within *ALTAR-REACH* across of its middle, the feet within
+*ALTAR-HEIGHT* of its top."
+  (let ((feet (feet player)))
+    (loop for top across *level-altars*
+          thereis (and (< (+ (expt (- (vx top) (vx feet)) 2) (expt (- (vz top) (vz feet)) 2))
+                          (expt *altar-reach* 2))
+                       (< (abs (- (vy feet) (vy top))) *altar-height*)))))
+
+;; E at an altar (INTERACT-TARGET, townsfolk.lisp) opens the forge.
+(defmethod interactable-p ((thing (eql :altar))) T)
+(defmethod interact ((thing (eql :altar)) player)
+  (declare (ignore player))
+  (open-forge))
+(defmethod interact-label ((thing (eql :altar))) "Spellforge")
 
 (defun open-forge ()
   (when (and (eq *game-state* :playing) *player*)

@@ -1,0 +1,30 @@
+{
+  "prompt": "Pixel-art character turnaround sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game, where characters are drawn as sprites seen from several camera angles: a GUARD of the town watch in a grim walled settlement deep underground.\n\nREFERENCE IMAGES, in the order attached:\n1. The guard, seen from the front. It is the character design: copy it exactly, the same man, clothes, colours and gear, only turned for each view.\n2. and 3. Turnaround sheets of two monsters from the same game (a red imp, a hooded acolyte). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs.\n\nTHE GUARD (as in reference 1)\n- An ordinary weathered man of average height and build, a short dark beard, standing at ease but alert.\n- A dented, open-faced round steel helmet with a brim; a mail shirt to the thighs with mail sleeves; over it a plain sleeveless tabard of BRIGHT PURE GREEN (#00C000) with no emblem, ragged at its hem; a brown leather belt with a pouch; brown trousers and leather boots.\n- In his RIGHT hand a tall SPEAR held upright, its butt on the ground by his right foot, its iron head above his helmet.\n- On his LEFT arm a round wooden SHIELD with an iron rim and boss.\n- The tabard stays the same flat bright green in every view (it is recoloured in the game), front and back alike.\n- The spear stays in the right hand and the shield on the left arm in every view, so they swap sides of the body between the front and back views. In the turned views the shield is on the far side of the body or seen edge-on, the spear on the near side or behind, as the angle shows them.\n\nLAYOUT\n- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).\n- In the front three-quarter, side and rear three-quarter views the figure faces IMAGE-LEFT.\n- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.\n- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No text, labels, numbers, frame borders or effects outside the figure.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\n",
+  "prompt_file": "art/prompts/guard-turnaround.txt",
+  "refs": [
+    "art/guard/design.png",
+    "Pixel Demon Character Turnaround.png",
+    "art/acolyte/turnaround-2.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1793770831,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art character turnaround sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game, where characters are drawn as sprites seen from several camera angles: a GUARD of the town watch in a grim walled settlement deep underground.\n\nREFERENCE IMAGES, in the order attached:\n1. The guard, seen from the front. It is the character design: copy it exactly, the same man, clothes, colours and gear, only turned for each view.\n2. and 3. Turnaround sheets of two monsters from the same game (a red imp, a hooded acolyte). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs.\n\nTHE GUARD (as in reference 1)\n- An ordinary weathered man of average height and build, a short dark beard, standing at ease but alert.\n- A dented, open-faced round steel helmet with a brim; a mail shirt to the thighs with mail sleeves; over it a plain sleeveless tabard of BRIGHT PURE GREEN (#00C000) with no emblem, ragged at its hem; a brown leather belt with a pouch; brown trousers and leather boots.\n- In his RIGHT hand a tall SPEAR held upright, its butt on the ground by his right foot, its iron head above his helmet.\n- On his LEFT arm a round wooden SHIELD with an iron rim and boss.\n- The tabard stays the same flat bright green in every view (it is recoloured in the game), front and back alike.\n- The spear stays in the right hand and the shield on the left arm in every view, so they swap sides of the body between the front and back views. In the turned views the shield is on the far side of the body or seen edge-on, the spear on the near side or behind, as the angle shows them.\n\nLAYOUT\n- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).\n- In the front three-quarter, side and rear three-quarter views the figure faces IMAGE-LEFT.\n- The same figure at the same scale in every cell, standing on the same ground line, in the same pose; only the camera angle changes.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.\n- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.\n- No text, labels, numbers, frame borders or effects outside the figure.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a1a510-467b-76c0-af2d-b9db6d30bcff",
+    "01a1a511-8cf3-7f61-bac5-167d8c8c0367"
+  ],
+  "sizes": [
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ]
+  ]
+}

@@ -5,17 +5,20 @@
 ;;; data/sprites/icons/statuses, tools/draw_status_icons.py), the seconds it has left (a ward's
 ;;; points instead, which run out first) over the bottom-right corner, and a bar along the bottom
 ;;; for the time left of its whole. In its last *STATUS-WARN-TIME* the icon blinks. An actor has
-;;; one status of each kind at most, so four cells do; the ones not needed don't draw.
+;;; one status of each kind at most, so four cells do, and a fifth for the priest's blessing
+;;; (dialogue.lisp), which isn't a status but shows as one; the ones not needed don't draw.
 
 (define-fx-animation status-strip "sprites/icons/statuses")
 
-(defparameter *status-icon-frames* '(:fire 0 :frost 1 :shock 2 :heal 3 :slow 4 :ward 5)
+(defparameter *status-icon-frames* '(:fire 0 :frost 1 :shock 2 :heal 3 :slow 4 :ward 5 :bless 6)
   "The strip frame for a damage status by its element, and for the other kinds by kind.")
 (defparameter *status-colors*
   (list :fire (vec4 1.0 0.55 0.15 1) :frost (vec4 0.45 0.75 1.0 1) :shock (vec4 0.95 0.85 0.25 1)
-        :heal (vec4 0.4 0.85 0.35 1) :slow (vec4 0.6 0.7 0.95 1) :ward (vec4 0.7 0.45 1.0 1))
+        :heal (vec4 0.4 0.85 0.35 1) :slow (vec4 0.6 0.7 0.95 1) :ward (vec4 0.7 0.45 1.0 1)
+        :bless (vec4 1.0 0.85 0.4 1))
   "The border and time bar of each status, keyed as *STATUS-ICON-FRAMES* is.")
-(defparameter *status-order* '(:damage :slow :heal :ward) "Left to right, the kinds of status shown.")
+(defparameter *status-order* '(:damage :slow :heal :ward :bless)
+  "Left to right, the kinds of status shown; :BLESS is the priest's blessing.")
 (defparameter *status-warn-time* 3.0 "Seconds left from which a status's icon blinks.")
 (defparameter *status-blink-rate* 4.0 "Blinks a second in the last *STATUS-WARN-TIME*.")
 (defparameter *status-bar-height* 4 "Pixels: the time bar along a cell's bottom.")
@@ -67,20 +70,19 @@
   (dolist (part (status-cell-parts cell))
     (setf (shown part) NIL)))
 
-(defun show-status-cell (cell status x y)
-  "Lay CELL out at X, Y, its bottom-left corner, for STATUS."
+(defun show-status-cell (cell key left whole count x y)
+  "Lay CELL out at X, Y, its bottom-left corner, for a status of KEY (in *STATUS-ICON-FRAMES*)
+with LEFT of WHOLE seconds to run, showing COUNT."
   (let* ((frame (cell-frame cell))
          (icon (cell-icon cell))
          (number (cell-number cell))
          (bar (cell-bar cell))
-         (key (status-key status))
          (color (getf *status-colors* key))
          (size (item-cell-size))
          (icon-size (item-icon-size))
          (pad *weapon-slot-padding*)
-         (left (max 0.0 (status-left status)))
-         (whole (max 0.001 (or (status-duration status) left)))
-         (count (ceiling (if (eq :ward (status-kind status)) (status-magnitude status) left))))
+         (left (max 0.0 left))
+         (whole (max 0.001 whole)))
     (dolist (part (status-cell-parts cell))
       (setf (shown part) T))
     ;; The border in the status's colour, as an enchanted weapon's is.
@@ -117,9 +119,20 @@
            (cells (status-cells status-icons))
            (index 0))
       (dolist (kind *status-order*)
-        (let ((status (status-of *player* kind)))
-          (when (and status (< 0.0 (status-left status)))
-            (show-status-cell (nth index cells) status (+ *hud-margin* (* index step)) (- top size))
-            (incf index))))
+        (let ((x (+ *hud-margin* (* index step)))
+              (y (- top size)))
+          (if (eq kind :bless)
+              (let ((left (blessed *player*)))
+                (when (< 0.0 left)
+                  (show-status-cell (nth index cells) :bless left *bless-time* (ceiling left) x y)
+                  (incf index)))
+              (let ((status (status-of *player* kind)))
+                (when (and status (< 0.0 (status-left status)))
+                  (let ((left (status-left status)))
+                    (show-status-cell (nth index cells) (status-key status) left
+                                      (or (status-duration status) left)
+                                      (ceiling (if (eq :ward kind) (status-magnitude status) left))
+                                      x y))
+                  (incf index))))))
       (loop for cell in (nthcdr index cells)
             do (hide-status-cell cell)))))

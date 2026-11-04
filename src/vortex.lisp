@@ -614,7 +614,7 @@ SCALE of the full speed."
   (multiple-value-bind (timer due) (burn-due (burn-timer creature) dt (whirl-damage creature))
     (setf (burn-timer creature) timer)
     (when (< 0 due)
-      (burn creature due)
+      (burn creature due :by (caster (whirl creature)))
       ;; The wind tears at it: a cry, though BURN makes none, every *WHIRL-CRY-GAP*.
       (when (and (not (dead creature)) (<= (cry-timer creature) 0))
         (setf (cry-timer creature) *whirl-cry-gap*)

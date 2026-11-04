@@ -638,7 +638,7 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
   `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
   riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
-- `src/boss.lisp`: the boss at the end of a run, in the `arena` block level 3 ends in. It is an
+- `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
   empowered form of one of the eight monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
   likely, with three powers (`boss-powers`): two from the start, the third when it enrages at
@@ -698,10 +698,18 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   its title, health with a mark at half, and its powers, from the seal until it dies.
   `tools/hd status` shows the arena and boss. The debug level has an arena of its own down a
   corridor south of the hall (see `src/level.lisp`). `(start-boss-fight)` (the main menu's Boss fight in a
-  debug version) starts a run on level 3 with the player outside the arena's doorway and every
+  debug version) starts a run on its last level with the player outside the arena's doorway and every
   other monster taken out of the level; a save made there doesn't load (its monsters don't match),
-  so test saves on `(progn (start-level :generated) (setf *run-depth* 3))`. To enrage it,
+  so test saves on `(progn (start-level :generated) (setf *run-depth* (run-length)))`. To enrage it,
   `(game (hurt (arena-boss *arena*) 255))`.
+- `src/settlement.lisp`: the settlement, a level of its own once a run (see "The settlement"
+  below): the `settlement` class (`*settlement*`, defined in run.lisp, NIL on any other level),
+  `*factions*`, `*conditions*`, prices (`price`, `*base-prices*`) and reputation
+  (`faction-reputation`, `adjust-reputation`).
+- `src/townsfolk.lisp`: the townsfolk, the E key (`interact-target`, `interact`), the watch's
+  crimes (`report-crime`), sacking (`sack-town`) and the `settlement-director`. See "The settlement".
+- `src/dialogue.lisp`: talking to the townsfolk (`dialogue-panel`, `*game-state*` `:talk`) and
+  what they offer: the shop, the priest, the trainer, fines and bribes, and the quest. See "The settlement".
 - `src/magic.lisp`: what the forge's effects do, and statuses. An effect with a duration leaves a
   `status` on an actor (the `afflicted` mixin, creature.lisp, on creatures and the player; `afflict`):
   damage or health a second (`:damage`, `:heal`, dealt every `*status-tick*` through `burn` or
@@ -731,7 +739,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   stages the strips. The frost chill keeps its tint only. To look at one:
   `(game (afflict (aref *creatures* 0) :damage 1 8.0 :element :fire :caster *player*))`.
 - `src/forge.lisp`: the spellforge, used at an altar (`add-altar`, pickups.lisp; `near-altar-p`, within
-  `*altar-reach*`; "E: Spellforge" shows there, hud.lisp). E opens it (`open-forge`, `*game-state*`
+  `*altar-reach*` across and `*altar-height*` of its top; the HUD's prompt line says "[E] Spellforge"
+  there, the altar being one of E's targets, `interact-target`, townsfolk.lisp). E opens it (`open-forge`, `*game-state*`
   `:forge`, frozen; Esc or Leave closes it; `*forge-anywhere*` opens it anywhere in a debug version).
   Making costs arcane dust (an item, `:dust`): a spell `*dust-per-mana*` (1) a point of its mana per
   cast (`spell-dust`), an enchantment `*enchant-dust-scale*` (3) a point of its mana per blow
@@ -865,16 +874,17 @@ text `forge-note`s, which wrap (Alloy's
   this stack and the bag's total; dust's and gold's use (`:about`). Its parts are `tooltip-part`s with
   the highest `late-rank`s, at depths in front of the hotbar's and quickslot's labels (which sit at
   -0.08 for it). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`
-  (potions, dust, gold). To try it: `(game (give-item *player* :health-potion 3))` and `(game
+  (potions, dust, gold, the reliquary). To try it: `(game (give-item *player* :health-potion 3))` and `(game
   (open-inventory))`; `tools/hd status` shows the hotbar (the slot asked for starred), the quickslot
   and the bag.
 - `src/status-icons.lisp` (after inventory.lisp, whose cell size it shares): the player's statuses
   as a row of icons in the top-left corner, under the frame counter while it shows. One cell per
   status in `*status-order*` (damage, slow, heal, ward; one of each kind at most, so four cells,
-  the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
+  and a fifth, `:bless`, for the priest's blessing, which isn't a status but shows as one, from
+  the player's `blessed` over `*bless-time*`; the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
   (`*status-colors*`, by element for damage), its icon (`*status-icon-frames*`, a frame of
   `data/sprites/icons/statuses`, drawn by `tools/draw_status_icons.py data/sprites/icons/statuses`:
-  burn, frost, shock, regen, slow, ward), the seconds left (a ward's points instead, which run out
+  burn, frost, shock, regen, slow, ward, bless), the seconds left (a ward's points instead, which run out
   first) over the bottom-right corner, re-uploaded only when they change, and a bar along the
   bottom for `left` over `duration`. In its last `*status-warn-time*` (3 s) the icon blinks. An
   instant heal or ward-less spell leaves no status and so no icon; its flash is the feedback.
@@ -889,14 +899,18 @@ text `forge-note`s, which wrap (Alloy's
   frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
   on every screen, counting frames in its render and updating every `*fps-interval*`.
   Right of the quickslot: the spell in hand (`spell-label`, inventory.lisp). The hands, like the
-  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). `show-message` puts a line across the view for
-  `*message-time*` (a glyph's), and `forge-prompt` says "E: Spellforge" at an altar. A pickup of a
-  counted item (dust's pile; coins, once there are gold pickups) puts "+25 arcane dust" just above
+  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). The purse
+  (`gold-text`) is in the lower-right corner.
+  `show-message` puts a line across the view for `*message-time*` (a glyph's, a gold find, the
+  watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
+  what the player looks at or stands at (`prompt-line`; a new string only when it changes, so the
+  tick tells by EQ). A pickup of a
+  counted item (dust's pile) puts "+25 arcane dust" just above
   the crosshair for `*pickup-note-time*` (`note-pickup`, the `pickup-banner`; the item's `:note`,
   else its name), pickups of one kind in quick succession adding up.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
-  (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
+  (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:talk`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`
   to `:generated` or `:test`, put the loading screen up (`:loading`) for
@@ -2235,7 +2249,8 @@ lava: a dry dip, under a step so it is walked through), `water [Y]` (deep water 
 cell's floor up to Y, `top` for the storey's top, by default `*water-surface*` (0.3 m) under
 the next storey's floor; never above the slab over the cell or a doorway's lintel; on the
 border only under a canal doorway's open channel), `torch Y`
-and `spawn MONSTER FACING [SKIP]`, where SKIP is a percent chance of no monster (every room
+and `spawn MONSTER FACING [SKIP] [when:COND|COND]`, where `when:` limits it to those settlement
+conditions (see "The settlement") and SKIP is a percent chance of no monster (every room
 has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has two kinds of
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight`, or `any`
@@ -2301,7 +2316,8 @@ and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
 and galleries `gallery`, `gallery-corner`, `gallery-steps` (climbs a storey) and
 `gallery-chasm` (4 m of lava, a 1.5 m ledge for the player), all 7 m wide.
-The run's ends, tagged so growth never picks them: `descent` (the way down) and `arena` (4 × 4
+The settlement's `town` (8 × 6 cells, two storeys; tagged `town`, never grown into; see "The
+settlement"). The run's ends, tagged so growth never picks them: `descent` (the way down) and `arena` (4 × 4
 cells, 9 m tall, one doorway on the south, four full-height pillars, the boss, `spawn boss`, at
 the north end, and a reward spot on a 0.8 m block in each corner by the door; see `src/boss.lisp`).
 The stone caves (`cave`, `grotto`, `cavern`, `cave-passage`, `cave-bend`, `cave-fork`,
@@ -2468,7 +2484,11 @@ A run is the generated levels of `*run-levels*` (`src/run.lisp`) one after anoth
 rooms. Each entry says how many rooms the generator aims for (over `*generator-rooms*`,
 `level-settings`) and which block it puts on the doorway furthest from the start (`:exit`, a name or
 a list tried in order): the `descent` on levels 1 and 2, the boss's `arena` on level 3 (see
-`src/boss.lisp`), whose boss ends the run. The kit is the same on each, but the monsters get
+`src/boss.lisp`), whose boss ends the run. `run-levels` puts the settlement's level
+(`*settlement-level*`) among them at depth 2 or 3, so a run is 4 levels and the ones from there on
+are a depth further down (see "The settlement"); everything that asks about a depth goes through
+`run-levels`, `run-length` and `run-level-property`. The settlement's level is as hard as the level
+after it, whose keys it takes. The kit is the same on each, but the monsters get
 harder going down, by keys in each entry (none are flat stat multipliers):
 
 - built into the level (`level-settings` sets their variables for the generator, so a save keeps
@@ -2540,8 +2560,9 @@ quickslot's potion, left click to attack (swing, thrust, or cast the spell in ha
 held to raise the shield (sword only; a left click while it's up bashes), Q to drink from the
 quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, or a
 potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
-quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E at an altar
-opens the spellforge (see `src/forge.lisp`).
+quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E to talk to the
+townsperson looked at (see "The settlement") or, at an altar, to open the spellforge (see
+`src/forge.lisp`).
 
 To test combat without the mouse (the hall's monsters below need
 `(setf *debug-hall-monsters* t)` and a fresh debug level): `tools/hd '(game (player-cast *player* (quote bolt)))'`
@@ -2570,3 +2591,158 @@ it. `(select-weapon *player* :4)` then `(player-attack *player*)` casts the play
 runs fast for a few seconds as Trial's fixed step catches up, so a vortex's age is no measure then.
 `(issue (scene +main+) 'mouse-scroll :delta -1.0 :pos (vec2 0 0))` inside `(game ...)` turns
 the wheel one notch down (the next kind into the quickslot).
+
+## The settlement
+
+Once a run, at depth 2 or 3 (`settlement-depth`, from the run's seed; `*settlement-depths*`), a
+level is grown from the town (`data/blueprints/town.txt`) instead of a start block: `generate-level`'s
+`:core`, placed first with its townsfolk and monsters, the player arriving at its `arrive` point.
+The town counts as a room for the generator (`room-block-p`), so its two gates (west and east)
+grow corridors into a small wing, the undercroft: `*settlement-level*` asks for 6 rooms, the town
+included, with no networks and crypts, cells and corridors only (`:settings`, laid over the level's
+generator settings by `level-settings`), and `level-needs-rebuilding-p` tries another seed when the
+wing has fewer than `:min-wing` rooms (`*last-wing-rooms*`). The way on is the town's own `exit`,
+at the back of the recess north of the plaza, before a painted `descent-arch`. Over run seeds 21 to
+32 the wing had 5 to 7 rooms and 10 to 19 monsters, and no level warned.
+
+`make-settlement` draws its faction, condition and name from the level's seed when it is built
+(`*settlement-override*`, as `'(:depth 1 :faction :deepwardens :condition :besieged)`, fixes them for
+testing; reloading run.lisp clears it). The faction (`*factions*`) decides the watch's rule, which
+crimes count, prices and whether its guards take bribes:
+
+| Faction | Rule | Crimes | Cheap | Bribable |
+| --- | --- | --- | --- | --- |
+| `:ashen-temple` | no spell cast in town (`player-cast`) | rule, assault, murder | healing, mana | no |
+| `:deepwardens` | no sword or spear drawn in the `market` and `temple` zones (`check-drawn-blade`) | rule, assault, murder | training | no |
+| `:free-company` | none | murder | goods (and a random extra in stock) | yes |
+
+The player learns it on arriving: the level banner names the town and who holds it ("Level 2 of 4:
+Cinderhold, held by the Deepwardens", `level-banner-text`), and the message line gives the watch's
+rule for `*arrival-message-time*` (`announce-settlement`, hud.lisp, from `setup-scene`), or, sacked,
+that the watch is dead. A guard's greeting names the faction too (its `*townsfolk-greetings*` are
+format strings), and its panel shows the rule.
+
+The condition (`*conditions*`, weights 3, 2, 1) decides who is there, through the blueprint's npc
+and spawn conditions (`condition-excluded-p`, which rolls whatever the condition, so a seed builds
+the same level): **thriving**, everyone; **besieged**, everyone but some commoners, and the wing
+raids the gates; **sacked**, no watch, a few survivors, each service there half the time, monsters
+from the pool in the streets and loot on the town's four `pickup` spots (`place-settlement-pickups`).
+
+**Townsfolk** (`townsfolk`, a creature: `commoner`, `shopkeeper`, `priest`, `trainer`,
+`quest-giver`, `guard`). Those who stand at their posts to be talked to (the shopkeeper, priest,
+trainer and quest-giver) are one front-facing picture each: a billboard whose atlas has one view
+shows it from every side. Those who walk about, the guard and the commoners (a `townsman` and a
+`townswoman`), have a monster's full set (`define-townsfolk-set`, `*townsfolk-sets*`, by sprite
+name): a turnaround, a walk, a flinch, a death to a corpse and, for the guard, a spear thrust, the
+guard's one set recoloured per faction (`guard-<faction>`). Guards step in armour, commoners lightly;
+none of them has a voice. They keep to their posts (`wander-radius` 0; a commoner 3 m, a guard 1.5)
+and while calm (`calm-p`, not `provoked`) never notice the player, even if they could fight
+(`attacker-p`). `place-npc` makes one from a blueprint's npc by role (`*roles*`: class and sprite,
+the guard's per faction), with a name and greeting from `*townsfolk-names*` and
+`*townsfolk-greetings*`. They aren't monsters (`monster-p`): no kill gold, not counted by
+`run-summary` or `scatter-pickups`.
+
+**E** (`player-interact`) uses what `interact-target` gives: the nearest `interactable-p`
+townsperson within `*interact-reach*` and `*interact-arc*` (`looked-at-creature`, the sword's
+test), else `:altar` at an altar (`near-altar-p`, forge.lisp), whose `interact` opens the
+spellforge; the director keeps `*interact-prompt*` ("[E] Talk to ...", "[E] Spellforge").
+Talking (`start-talk`) sets `*game-state*` `:talk` and puts up a `dialogue-panel`; Esc or Leave
+ends it (a guard asking a fine has no Leave, and Esc there refuses it, `escape-talk`). A click acts and sets `*menu-refresh*`, which makes the menu controller build the panel
+again (an Alloy panel lays itself out once). Services refuse while the watch is hostile or once the
+player has sacked the town (`refusing-p`):
+
+- **Shopkeeper**: buys and sells `*shop-goods*` (health and mana potions; the stock, 1 + depth of
+  each, is on the settlement), selling at `*sell-share*`. Dead, its stall can be searched (`loot-item`).
+- **Priest**: heals and restores mana to full, a fee per point, and blesses (`blessed`, a player
+  slot: `*bless-time*` seconds of play in which blows do `*bless-scale*`, `blessing-scale` in
+  `hurt-player`; carried down the stairs). Its button says what it does, and while it lasts the
+  HUD shows it among the status icons (`src/status-icons.lisp`), a gold cross with the seconds left.
+- **Trainer**: raises the player's `max-health`, `max-mana` and `max-stamina` (player slots that
+  replaced the globals, which are now their starting values), `*training-steps*` at a time,
+  `*training-limit*` steps each, each dearer by `*training-step-cost*`.
+- **Quest-giver**: one quest into the wing, drawn the first time asked (`ensure-quest`): bring back
+  the relic (a `quest-pickup` on the wing's furthest free spot, placed before the glyphs so they
+  can't take the wing's last ones, hidden until the quest is taken; touched, it goes into the bag
+  as the `:relic` item, the reliquary, and the claim takes it back out),
+  a bounty on the wing's commonest monster (`bounty-target`, progress counted from the dead), or,
+  besieged, hold the gates through `*gate-raids*` raids. Claimed back in town for gold and
+  `*quest-reputation*`.
+
+`price` is `*base-prices*`, `*price-depth-step*` dearer per depth, by the faction's multiplier and
+`(1 - standing / 400)`. **Gold** (`gold`, a player slot) comes from `:gold` pickups, which
+`place-gold` scatters on the spots health, mana, the relic and the glyphs left (`*gold-per-monster*`,
+on at most `*gold-spot-share*` of them, since arcane dust comes after and its piles grow to fill
+fewer spots), and from
+kills (`*kill-gold*` by class, straight into the purse through `creature-died`), both
+`*gold-depth-step*` more per depth (`gold-scale`). **Reputation** (`reputation`, a plist by faction,
+-100 to 100) moves prices, greetings and the watch's patience (`*patient-reputation*`).
+
+**The watch** (`report-crime`): `hurt` and `burn` take `:by` (who struck, through `harmed` and
+`creature-died`), so a blow by the player at one of the townsfolk is an assault and a killing a
+murder (blows at one of them within `*assault-window*` of the last, a burn's ticks among them, are
+one assault: `last-assault`). Crimes weigh 1 (a broken rule), 2 (assault) and 3 (murder) toward `settlement-strikes`: from 1
+the watch warns (`hud-say`), from 2 it fines (`*fine-base*` a strike, by depth) and the nearest guard
+walks over to ask (`send-for-fine`; pay, refuse, or bribe the Free Company at `*bribe-share*`), and
+from 3, a murder, a refusal or `*fine-time*` unpaid, every guard turns on the player
+(`watch-turns-hostile`) until paid or bribed off (`calm-watch`; E on a hostile Free Company guard).
+The last guard dying sacks the town (`sack-town`): by the player, `*sack-reputation*` off and the
+trainer fights; by monsters, nothing worse.
+
+**Fighting a foe** (creature.lisp): a creature with a `foe` (a creature) and not hunting the player
+walks to it and attacks it with its own blow or spell (`fight-foe`; `release-attack` and
+`face-attack-target` have `:around` methods, and a foe attack never lunges). A monster struck by
+one of the townsfolk takes it as its foe, and a townsperson who can fight takes the monster that
+struck it. The `settlement-director` (on every level, for the prompt; the rest only in the
+settlement, at `*director-step*`) has free guards take on monsters up to something in town
+(`guards-watch`), and while besieged sends 2 or 3 of the wing's nearest `*raid-classes*` at the
+guards every `*raid-interval*` (`start-raid`, `run-siege`; `raids-held` counts the ones beaten off).
+Only plain fighters raid: a flyer's, caster-boss's or leaper's attack assumes the player.
+
+A save keeps the settlement's build (faction and condition, `:settlement :built`), its state
+(`saved-slots`: strikes, fine, stock, training, quest, raids, ...), the townsfolk's `provoked`,
+every creature's `foe`, and the level's entry in the run (`:level`), so a load builds the same town.
+To try it: `(progn (setf *settlement-override* (list :depth 1)) (game (start-game)))`, then
+`(game (start-talk (find-if (lambda (c) (typep c 'priest)) *creatures*)))`, `(game (setf (raid-timer
+*settlement*) 0.05))` for a raid, `(game (hurt <commoner> 3 :by *player*))` for the watch.
+`tools/hd status` shows the settlement.
+
+The town's plans are drawn by `tools/town_plan.py` (its quarters, townsfolk, spawns and loot spots;
+it rewrites the blueprint from `plan 0` on, the legend staying hand-written), and a passage in it
+must stay 1.5 m wide, as in caves: the barracks' beds once left 1 m gaps and stranded the guard
+between them. The temple's dais carries the Spellforge's altar (`a`, 0.7 m over the dais so E
+reaches it from the step in front, within `*altar-height*`), and E there opens the forge; using it
+is never a crime, the Ashen Temple's rule hooking `player-cast` only. The settlement's level has no
+altar room (`:altar-chance` NIL in `*settlement-level*`).
+
+The townsfolk are one generated lineup, `art/townsfolk/lineup-1.png` (`art/prompts/townsfolk-lineup.txt`,
+the imp's and acolyte's turnarounds as references), sliced at the monsters' 64 px per metre (each
+sprite's height is its cell's, `/ 64`); only the four who stand are used from it now. The walkers
+were made the monsters' way (see "Monster sprites") from their lineup cells (`art/<who>/design.png`,
+`<who>` being `guard`, `townsman`, `townswoman`): a turnaround (`art/prompts/<who>-turnaround.txt`,
+the design, the imp's and acolyte's turnarounds as references), its standing cells cut by
+`tools/cut_stands.py`, then `tools/gen_monster_views.sh <who> <anim> ...` for the walk, flinch and the
+guard's attack, and a front-only death. Sliced so the standing figure is 118 px (the townsman), 114
+(the townswoman) and 124 with the spear's tip (the guard, whose tabard is pure green until it is
+recoloured per faction: every strip, into `data/sprites/guard/<faction>/`). A strip's height in
+metres is its cells' over 64 (`strip-height`). The image service refused the townsman's flinch as
+"self-harm" while it said he clutched his middle. The relic is `art/relic/relic.png`
+(`art/prompts/relic.txt`), and the gold pile is drawn (`tools/draw_gold.py data/sprites/pickups/gold`):
+
+```bash
+python3 tools/slice_frames.py art/townsfolk/lineup-1.png data/sprites/townsfolk --pixel 3.9 --filter box --anchor bottom shopkeeper:1 priest:1 trainer:1 quest-giver:1 && rm data/sprites/townsfolk/{commoner-*,guard}.*
+tools/cut_stands.py art/guard/turnaround-2.png art/guard    # and townsman/turnaround-2, townswoman/turnaround-1
+python3 tools/slice_turnaround.py art/guard/turnaround-2.png data/sprites/guard/turnaround --height 124 --filter box
+python3 tools/slice_turnaround.py art/townsman/turnaround-2.png data/sprites/townsman/turnaround --height 118 --filter box
+python3 tools/slice_turnaround.py art/townswoman/turnaround-1.png data/sprites/townswoman/turnaround --height 114 --filter box
+V="front front-quarter side back-quarter back"
+for spec in guard:992:walk:20 guard:992:attack:20 guard:992:hurt:10 townsman:944:walk:20 townsman:944:hurt:10 townswoman:912:walk:20 townswoman:912:hurt:10; do IFS=: read who h a n <<< "$spec"; python3 tools/slice_views.py data/sprites/$who $a:$n $(for v in $V; do echo art/$who/$a-$v.png; done) --height $h --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
+python3 tools/slice_frames.py art/guard/death.png data/sprites/guard --pixel 3.5 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/townsman/death.png data/sprites/townsman --pixel 3.73 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/townswoman/death.png data/sprites/townswoman --pixel 3.86 --anchor bottom --filter box death:8
+G=data/sprites/guard; for f in ashen-temple:30:0.25:0.55 deepwardens:212:0.7:0.55 free-company:355:0.75:0.6; do IFS=: read n h s v <<< "$f"; mkdir -p $G/$n; for strip in turnaround walk attack hurt death; do tools/recolor_hue.py $G/$strip $G/$n/$strip --from 120 --reach 30 --hue $h --saturation $s --value $v; done; done
+python3 tools/slice_frames.py art/relic/relic.png data/sprites/pickups --pixel 14 --filter box --colors 32 --anchor bottom relic:4
+```
+
+Not yet: the trainer, who fights once the town is sacked, has no walk, attack, flinch or death
+strips (it glides, strikes standing and sinks into the floor), townsfolk have no voices, there are no faction banners, the town is one lighting room, and nothing is
+stolen but from a dead shopkeeper.

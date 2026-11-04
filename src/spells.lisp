@@ -247,6 +247,7 @@ its strike. The player's own casts sound from the hands (player.lisp).")
 (defmethod leave :after ((projectile spell-projectile) container)
   (setf (projectile-sound projectile) (stop-loop (projectile-sound projectile))))
 
+
 ;; It strikes from behind itself, along its flight, and pushes along it.
 (defmethod effect-origin ((source spell-projectile))
   (v- (location source) (projectile-velocity source)))

@@ -118,7 +118,7 @@ Damage over time shows as its aura (STATUS-AURA) instead: a tint drowned a burni
     (if entry (max 1 (round (* amount (- 1 (third entry))))) amount)))
 
 (defmethod status-blow ((creature creature) (kind (eql :damage)) amount status)
-  (burn creature (resisted creature (status-element status) amount)))
+  (burn creature (resisted creature (status-element status) amount) :by (status-caster status)))
 
 (defmethod status-blow ((creature creature) (kind (eql :heal)) amount status)
   (setf (health creature) (min (max-health creature) (+ (health creature) amount))))
@@ -127,7 +127,7 @@ Damage over time shows as its aura (STATUS-AURA) instead: a tint drowned a burni
   (hurt-player player amount (feet player) :shove NIL :by (status-caster status)))
 
 (defmethod status-blow ((player player) (kind (eql :heal)) amount status)
-  (setf (health player) (min *player-max-health* (+ (health player) amount))))
+  (setf (health player) (min (max-health player) (+ (health player) amount))))
 
 ;;; Bursts (BURST-SPELL, spells.lisp).
 
@@ -168,7 +168,8 @@ those CASTER spares."
         ;; Blood sprays away from where it struck from.
         (hurt target (resisted target element amount)
               :from (effect-origin source)
-              :pain-bonus (+ (spell-pain-bonus (spell source)) (if (eq element :shock) *shock-pain-bonus* 0))))
+              :pain-bonus (+ (spell-pain-bonus (spell source)) (if (eq element :shock) *shock-pain-bonus* 0))
+              :by (caster source)))
     (element-rider target element)))
 
 ;; A creature's spell, hitting the player: the shove goes the way its source pushes.
@@ -205,7 +206,8 @@ those CASTER spares."
   (unless (dead target)
     (let* ((before (max 0 (health target)))
            (amount (roll (effect-magnitude effect))))
-      (hurt target amount :from (effect-origin source) :pain-bonus (spell-pain-bonus (spell source)))
+      (hurt target amount :from (effect-origin source) :pain-bonus (spell-pain-bonus (spell source))
+                          :by (caster source))
       (let ((gain (round (* *drain-share* (min amount before))))
             (caster (caster source)))
         (when (and (typep caster 'player) (< 0 gain))

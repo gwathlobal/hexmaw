@@ -142,20 +142,37 @@
                      (cons (abs (- (vx position) (vx high))) :east))))
     (cdr (first (sort faces #'< :key #'car)))))
 
+(defun conditions-from-name (string)
+  "The conditions an empty's name gives, as CONDITIONS-NAME (blueprint.lisp) writes them:
+\"thriving+sacked50\" is ((\"thriving\" 100) (\"sacked\" 50)), \"all\" NIL."
+  (unless (string-equal string "all")
+    (loop for part in (uiop:split-string string :separator "+")
+          collect (let ((digits (position-if #'digit-char-p part)))
+                    (if digits
+                        (list (subseq part 0 digits) (parse-integer part :start digits))
+                        (list part 100))))))
+
 (defun spawn-name-parts (rest)
-  "The monster and the percent chance of no monster in what follows an empty's \"spawn_\":
-\"any\", or \"skip30_any\"."
-  (if (prefixp "skip" rest)
+  "The monster, the percent chance of no monster and the settlement conditions it is limited
+to, in what follows an empty's \"spawn_\": \"any\", \"skip30_any\" or \"when-sacked_skip30_any\"."
+  (let ((conditions NIL))
+    (when (prefixp "when-" rest)
       (let ((end (position #\_ rest)))
-        (values (subseq rest (1+ end)) (parse-integer rest :start 4 :end end)))
-      (values rest 0)))
+        (setf conditions (conditions-from-name (subseq rest 5 end))
+              rest (subseq rest (1+ end)))))
+    (if (prefixp "skip" rest)
+        (let ((end (position #\_ rest)))
+          (values (subseq rest (1+ end)) (parse-integer rest :start 4 :end end) conditions))
+        (values rest 0 conditions))))
 
 (defun read-block (path)
   "Read the block at PATH into a plist of :PIECES, :CONNECTORS, :SPAWNS, :TORCHES, :PICKUPS
-(each :TIER and :POSITION), :EXITS (points), :LIQUIDS (each :KIND and :BOUNDS), :BOUNDS
-(min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist of :NAME
-:KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
+(each :TIER and :POSITION), :EXITS, :ARRIVALS and :ALTARS (points), :NPCS (each :ROLE
+:CONDITIONS :POSITION and :YAW), :ZONES (each :NAME and :BOUNDS), :LIQUIDS (each :KIND and
+:BOUNDS), :BOUNDS (min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist
+of :NAME :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
   (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (pickups ()) (exits ()) (altars ()) (liquids ()) (tags ()) (weight 1.0)
+        (arrivals ()) (npcs ()) (zone-corners ())
         (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
         (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (org.shirakumo.fraf.gltf:with-gltf (gltf path)
@@ -190,8 +207,8 @@
                                     :position (vcopy (tlocation transform)))
                               connectors)))
                      ((prefixp "spawn_" name)
-                      (multiple-value-bind (kind skip) (spawn-name-parts (subseq name (length "spawn_")))
-                        (push (list :kind kind :skip skip
+                      (multiple-value-bind (kind skip conditions) (spawn-name-parts (subseq name (length "spawn_")))
+                        (push (list :kind kind :skip skip :conditions conditions
                                     :position (vcopy (tlocation transform))
                                     :yaw (rotation-yaw (trotation transform)))
                               spawns)))
@@ -204,7 +221,23 @@
                      ((prefixp "exit_" name)
                       (push (vcopy (tlocation transform)) exits))
                      ((prefixp "altar_" name)
-                      (push (vcopy (tlocation transform)) altars))))
+                      (push (vcopy (tlocation transform)) altars))
+                     ((prefixp "arrive_" name)
+                      (push (vcopy (tlocation transform)) arrivals))
+                     ((prefixp "npc_" name)
+                      ;; npc_<conditions>_<role>: the role may have dashes, not underscores.
+                      (let* ((rest (subseq name (length "npc_")))
+                             (end (position #\_ rest)))
+                        (push (list :role (subseq rest (1+ end))
+                                    :conditions (conditions-from-name (subseq rest 0 end))
+                                    :position (vcopy (tlocation transform))
+                                    :yaw (rotation-yaw (trotation transform)))
+                              npcs)))
+                     ((prefixp "zone_" name)
+                      ;; zone_<name>_<n>_lo and _hi, the corners of one box of the zone.
+                      (let* ((parts (uiop:split-string name :separator "_")))
+                        (push (list (second parts) (third parts) (fourth parts) (vcopy (tlocation transform)))
+                              zone-corners)))))
       (let* ((scenes (org.shirakumo.fraf.gltf:scenes gltf))
              (extras (and (plusp (length scenes)) (org.shirakumo.fraf.gltf:extras (aref scenes 0)))))
         (when (hash-table-p extras)
@@ -224,6 +257,13 @@
     (list :pieces (nreverse pieces) :connectors (nreverse connectors) :spawns (nreverse spawns)
           :torches (nreverse torches) :pickups (nreverse pickups) :exits (nreverse exits)
           :altars (nreverse altars) :liquids (nreverse liquids)
+          :arrivals (nreverse arrivals) :npcs (nreverse npcs)
+          :zones (loop for (zone n corner lo) in zone-corners
+                       when (string= corner "lo")
+                         collect (let ((hi (fourth (find-if (lambda (c) (and (string= (first c) zone) (string= (second c) n)
+                                                                              (string= (third c) "hi")))
+                                                             zone-corners))))
+                                   (list :name zone :bounds (list lo hi))))
           :bounds (list low high) :tags tags :weight weight)))
 
 (defvar *blocks* (make-hash-table :test 'equal)
@@ -454,6 +494,22 @@ with one kind only.")
   "The ways off the level: each a cons of the point on its floor where the player leaves and
 its block's MAP-BLOCK. BUILD-LEVEL empties it.")
 
+(defvar *level-zones* (make-array 0 :adjustable T :fill-pointer T)
+  "The placed blocks' zones (a blueprint's zone action): each a list of its name, as a
+keyword, and the low and high corners of one of its boxes. BUILD-LEVEL empties it.")
+
+(defun condition-excluded-p (conditions)
+  "True if a spawn or townsperson limited to CONDITIONS (settlement condition names, each with
+a percent chance) stays out under the settlement's condition (settlement.lisp). With no
+settlement (the gallery, a checked block) everything is placed. The roll is made either way,
+so a seed builds the same level whatever the condition."
+  (and conditions
+       (let ((roll (random 100 *block-random*))
+             (now (settlement-condition-name)))
+         (and now
+              (let ((entry (assoc now conditions :test #'string-equal)))
+                (or (null entry) (<= (second entry) roll)))))))
+
 (defvar *level-altars* (make-array 0 :adjustable T :fill-pointer T)
   "The spellforge's altars (forge.lisp): each the point on top of it. BUILD-LEVEL empties it.")
 
@@ -523,11 +579,21 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
           (vector-push-extend (cons (world p) map-block) *level-exits*))
         (dolist (p (getf def :altars))
           (add-altar container (world p)))
+        (dolist (zone (getf def :zones))
+          (destructuring-bind (lo hi) (getf zone :bounds)
+            (let ((a (world lo)) (b (world hi)))
+              (vector-push-extend (list (intern (string-upcase (getf zone :name)) :keyword) (vmin a b) (vmax a b))
+                                  *level-zones*))))
+        ;; The settlement's townsfolk (townsfolk.lisp), placed with the monsters.
+        (dolist (npc (and spawns (getf def :npcs)))
+          (unless (condition-excluded-p (getf npc :conditions))
+            (place-npc (getf npc :role) (world (getf npc :position))
+                       (- (getf npc :yaw) (* turns (float (/ pi 2) 0f0))) container)))
         (dolist (spawn (and spawns (getf def :spawns)))
           ;; The choice is made even for a spawn left out, so a seed builds the same level.
           (let* ((kind (let ((choice (spawn-choice (getf spawn :kind))))
                          (and choice (or *spawn-override* choice))))
-                 (skipped (spawn-skipped-p spawn))
+                 (skipped (or (spawn-skipped-p spawn) (condition-excluded-p (getf spawn :conditions))))
                  ;; Drawn for every spawn, so a seed's elites stay where they were.
                  (elite (elite-roll kind))
                  (class (and kind (find-symbol (string-upcase kind) '#:hexmaw)))
@@ -568,6 +634,8 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
           ;; The boss's lair: its doorway shuts behind the player (boss.lisp).
           (when (member :arena (getf def :tags))
             (note-arena map-block connectors))
+          (when (member :town (getf def :tags))
+            (note-town map-block))
           connectors)))))
 
 (defun add-doorway-portal (position direction &optional (kind "door"))

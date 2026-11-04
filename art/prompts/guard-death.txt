@@ -1,0 +1,25 @@
+Pixel-art sprite sheet: the 8-frame death animation of the GUARD, a guard of the town watch in a grim walled settlement deep underground, for a Doom/Hexen-style first-person game where characters are drawn as sprites. The death is seen from the front only. The last frame is the corpse, which stays on the floor.
+
+REFERENCE IMAGES, in the order attached:
+1. The guard's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: an ordinary weathered man of average height with a short dark beard; a dented, open-faced round steel helmet with a brim; a mail shirt to the thighs with mail sleeves; over it a plain sleeveless tabard of BRIGHT PURE GREEN (#00C000) with no emblem, ragged at its hem; a brown leather belt with a pouch; brown trousers and leather boots; a tall SPEAR in his RIGHT hand and a round wooden SHIELD with an iron rim and boss on his LEFT arm. Also the shading style.
+2. The guard standing, seen from the front. Match its pixel size, outline weight and scale exactly: frame 1 is exactly as tall as reference 2.
+
+THE DEATH: he is struck down and falls where he stands.
+- Frame 1, HIT: standing as in reference 2 but jolted back, the head knocked back, the spear tilting.
+- Frame 2, REELING: staggering back a step, the spear slipping from the hand, the shield arm dropping.
+- Frame 3, BUCKLING: the knees giving way, the body sinking, the spear falling away to one side.
+- Frame 4, KNEELING: on his knees, slumped, the shield still on the arm, the helmet tipped.
+- Frame 5, TOPPLING: pitching forward onto the shield arm and one hand.
+- Frame 6, FALLING: the body hitting the floor, the helmet knocked askew.
+- Frame 7, DOWN: lying face down, flat on the floor, the shield beside him, the spear lying on the floor next to him.
+- Frame 8, CORPSE: the same, still. This frame stays on screen.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Each frame follows on smoothly from the one before: it falls in one place, without jumps between frames, and once down it never leaves the floor.
+- The same scale in every frame. In every frame the figure rests on the same ground line near the bottom of its cell; nothing reaches below it, and nothing floats.
+- Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, dust, sparks, blood pools or gore.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

@@ -361,6 +361,8 @@ after a change to what it shows). The menu controller remakes it.")
 
 (defparameter *save-slots* '(1 2 3 :quick) "The slots the menus offer (save.lisp), :QUICK for F5 and F9.")
 (defvar *save-note* NIL "What the pause menu's title says after a save, or NIL.")
+(defvar *talk-target* NIL "The townsperson being talked to (dialogue.lisp), or NIL.")
+(defvar *menu-refresh* NIL "True when the panel on screen must be made again: its rows have changed (dialogue.lisp).")
 (defvar *pending-load* NIL
   "A save being loaded (save.lisp): BUILD-LEVEL builds its seed and SETUP-SCENE restores it.")
 
@@ -499,6 +501,8 @@ victory screens share."
     ;; After the fall (FALL-DEAD).
     (:dead (when (<= *death-panel-delay* (death-time *player*)) 'death-screen))
     (:victory 'victory-screen)
+    ;; Talking to one of the townsfolk (dialogue.lisp).
+    (:talk (when *talk-target* 'dialogue-panel))
     (:paused (cond (*settings-open* 'settings-menu)
                    ((eq *slot-menu* :save) 'save-menu)
                    ((eq *slot-menu* :load) 'load-menu)
@@ -533,7 +537,13 @@ victory screens share."
         (damage-taken player) 0
         (level-records player) ()
         (killed-by player) NIL
-        (death-time player) 0.0)
+        (death-time player) 0.0
+        (gold player) 0
+        (reputation player) ()
+        (max-health player) *player-max-health*
+        (max-mana player) *max-mana*
+        (max-stamina player) *max-stamina*
+        (blessed player) 0.0)
   ;; A fresh bag: the starting kit, bound to its keys.
   (give-starting-kit player)
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
@@ -726,6 +736,7 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
            (*slot-menu* (close-slot-menu))
            ((eq *game-state* :map) (close-map))
            ((eq *game-state* :inventory) (close-inventory))
+           ((eq *game-state* :talk) (escape-talk))
            ((eq *game-state* :forge) (close-forge))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
@@ -746,6 +757,9 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
     (trial-alloy:hide-panel 'menu-panel))
   (let ((wanted (state-menu))
         (shown (trial-alloy:find-panel 'menu-panel)))
-    (unless (and shown (eq (type-of shown) wanted) (not (panel-stale-p shown)))
+    ;; A panel lays itself out once, so one whose rows changed (*MENU-REFRESH*, or PANEL-STALE-P)
+    ;; is made again.
+    (unless (and shown (eq (type-of shown) wanted) (not *menu-refresh*) (not (panel-stale-p shown)))
+      (setf *menu-refresh* NIL)
       (when shown (trial-alloy:hide-panel 'menu-panel))
       (when wanted (trial:show (make-instance wanted))))))

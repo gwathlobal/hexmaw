@@ -111,7 +111,7 @@ automap and the inventory) the playlist's current one; NIL on the loading screen
 
 (defun update-playlist (director dt)
   "Move on to another playlist track every *MUSIC-TRACK-TIME* of play."
-  (when (and (member *game-state* '(:playing :map :inventory :forge))
+  (when (and (member *game-state* '(:playing :map :inventory :talk :forge))
              (< *music-track-time* (incf (track-time director) dt)))
     (setf (current director) (pick-track (current director))
           (track-time director) 0.0)))

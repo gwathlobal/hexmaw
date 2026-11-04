@@ -5,8 +5,8 @@ tools/slice_frames.py writes, so the game reads it like any other animation stri
   tools/draw_item_icons.py data/sprites/icons/items
 
 writes items.png (frames left to right, 2 px transparent gaps) and items.lisp. Frames, in
-order: the health potion, the mana potion, arcane dust (a glittering violet heap) and gold (a
-pile of coins). Each is SIZE art pixels square, the weapon icons'
+order: the health potion, the mana potion, arcane dust (a glittering violet heap), gold (a
+pile of coins) and the quest-giver's reliquary. Each is SIZE art pixels square, the weapon icons'
 size, drawn pixel by pixel in the palette of the potion's pickup sprite, then outlined in
 near-black so it reads on any background. The game draws a stack's count over the bottom-right
 corner and the quickslot's key over the top-left, so the bottle keeps to the middle.
@@ -99,6 +99,36 @@ def gold():
     return px
 
 
+def relic():
+    """The quest-giver's reliquary (its pickup, sprites/pickups/relic): a little gabled shrine of
+    gilded wood with a cross on its ridge and red cloth behind its front, on two feet."""
+    px = {}
+    light, mid, dark, deep = (240, 196, 110, 255), (196, 140, 64, 255), (130, 84, 36, 255), (78, 46, 20, 255)
+    red, red_dark = (196, 40, 32, 255), (120, 20, 18, 255)
+    # The cross on the ridge.
+    for y in range(1, 5):
+        px[(10, y)] = light if y < 3 else mid
+    px[(9, 2)] = light
+    px[(11, 2)] = mid
+    # The gable roof, lit on its left slope.
+    for y in range(5, 9):
+        half = (y - 4) * 2 + 1
+        for x in range(10 - half, 11 + half):
+            px[(x, y)] = light if x < 10 else mid if x < 10 + half - 1 else dark
+    # The box: a gilded frame round a red panel, split by a post.
+    for y in range(9, 17):
+        for x in range(3, 18):
+            frame = x in (3, 4, 16, 17) or y in (9, 16) or x == 10
+            px[(x, y)] = (light if x == 3 else dark if x == 17 else mid) if frame else \
+                (red if y < 13 else red_dark)
+    for x in range(3, 18):
+        px[(x, 16)] = deep
+    # The feet.
+    for x in (4, 5, 15, 16):
+        px[(x, 17)] = dark
+    return px
+
+
 def outlined(px):
     out = dict(px)
     for (x, y) in px:
@@ -116,6 +146,7 @@ def main():
         potion((84, 150, 250, 255), (26, 76, 214, 255), (14, 44, 156, 255), (8, 24, 100, 255)),
         dust(),
         gold(),
+        relic(),
     ]
     strip = Image.new("RGBA", (len(icons) * SIZE + (len(icons) - 1) * GAP, SIZE), (0, 0, 0, 0))
     for i, icon in enumerate(icons):

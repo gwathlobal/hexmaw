@@ -33,7 +33,8 @@
         (setf *carried-state* NIL))
       (when (eq *level* :generated)
         (play-sound :level-gong)
-        (setf *level-banner-left* *level-banner-time*))
+        (setf *level-banner-left* *level-banner-time*)
+        (announce-settlement))
       (when *boss-fight-start*
         (setf *boss-fight-start* NIL)
         (stand-outside-arena new))
@@ -47,6 +48,7 @@
       ;; And the sigils they rise from.
       (preload (make-instance 'summon-sigil :centre (vec 0 0 0) :animation (find-fx-animation 'summon-sigil)) scene)))
   (add-blood-pool scene)
+  (add-settlement-director scene)
   (add-hud scene)
   (add-inventory-view scene)
   (add-status-icons scene)
@@ -142,7 +144,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                       (loop for (at) across *level-exits*
                             append (list (vx at) (vy at) (vz at))))
               (format NIL "level ~(~a~)" *level*))
-          (arena-status)))
+          (or (arena-status) (settlement-status))))
 
 (defun arena-status ()
   "The arena and its boss, for STATUS, or NIL without one."
@@ -171,6 +173,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                   (:loading "building a level, world frozen")
                   (:map "map open, world frozen (close with (game (close-map)))")
                   (:inventory "inventory open, world frozen (close with (game (close-inventory)))")
+                  (:talk (format NIL "talking to ~a, world frozen (close with (game (end-talk)))" (townsfolk-title *talk-target*)))
                   (:forge "spellforge open, world frozen (close with (game (close-forge)))")
                   (:dead "player dead, world frozen (leave with (game (exit-to-title)))")
                   (:victory "boss slain, run won, world frozen (leave with (game (exit-to-title)))")

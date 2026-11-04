@@ -28,12 +28,15 @@
   "Which of *SAVED-GENERATOR-SETTINGS* a level of *RUN-LEVELS* sets, by its key.")
 
 (defun level-settings (depth)
-  "The generator's settings for level DEPTH of a run, as an alist of those variables."
-  (loop for var in *saved-generator-settings*
-        for key = (car (rassoc var *level-setting-keys*))
-        collect (cons var (if key
-                              (run-level-property depth key (symbol-value var))
-                              (symbol-value var)))))
+  "The generator's settings for level DEPTH of a run, as an alist of those variables: what its
+entry in the run sets by key (*LEVEL-SETTING-KEYS*), its own :SETTINGS (the settlement's), else
+their values."
+  (let ((own (run-level-property depth :settings)))
+    (loop for var in *saved-generator-settings*
+          for key = (car (rassoc var *level-setting-keys*))
+          collect (cons var (cond ((assoc var own) (cdr (assoc var own)))
+                                  (key (run-level-property depth key (symbol-value var)))
+                                  (T (symbol-value var)))))))
 
 (defun save-path (slot)
   (merge-pathnames (if (eq slot :quick) "quick.sav" (format NIL "slot-~d.sav" slot))
@@ -56,6 +59,7 @@
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     block-raise bash-time bash-pending guard-broken run-time damage-taken level-records
+    gold reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells wanted-slot enchantments))
 
 (defmethod saved-slots append ((actor afflicted))
@@ -65,7 +69,7 @@
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
     idle-timer path stuck walk-distance momentum flight stagger flash brace burn-timer dead bleeding
     drip-timer gibbed rising stirring bash-poise flanking flank-timer
-    sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer))
+    sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer foe foe-attack))
 
 (defmethod saved-slots append ((flyer flyer))
   '(dive-direction dive-left downed landed launching landed-dead fall-speed bob-phase))
@@ -110,6 +114,17 @@
 
 (defmethod saved-slots append ((sign gale-sign))
   '(caster centre))
+
+(defmethod saved-slots append ((settlement settlement))
+  '(condition strikes fine fine-left hostile sacked-by stock trained quest raid-timer raids-held raid-on rule-grace))
+
+(defmethod saved-slots append ((townsfolk townsfolk))
+  '(provoked last-assault))
+
+(defun settlement-record (settlement)
+  "What a save keeps of SETTLEMENT: what it was built as, and what has changed since."
+  (list :built (list :faction (settlement-faction settlement) :condition (built-condition settlement))
+        :state (object-state settlement)))
 
 (defun animation-name (animation)
   (loop for name being the hash-keys of *fx-animations* using (hash-value value)
@@ -230,7 +245,7 @@ status auras, which come back from their statuses."
           :cursor (pool-cursor pool) :splat-count (splat-count pool) :gib-count (gib-count pool))))
 
 (defun run-summary ()
-  (let ((built (remove-if #'summoned *creatures*)))
+  (let ((built (remove-if-not #'monster-p *creatures*)))
     (list :slain (count-if #'dead built) :monsters (length built))))
 
 (defun run-record ()
@@ -241,6 +256,8 @@ status auras, which come back from their statuses."
         :depth *run-depth*
         :run-seed (current-run-seed)
         :generator (level-settings *run-depth*)
+        ;; The level's entry in the run (RUN-LEVELS): its core and exit.
+        :level (nth (1- *run-depth*) (run-levels))
         :layout (level-layout)
         :globals (list :hit-stop *hit-stop*
                        :light-clock *light-clock*
@@ -258,7 +275,10 @@ status auras, which come back from their statuses."
         ;; The seed places the pickups again; a save older than them has none taken.
         :pickups (taken-pickup-indices)
         ;; Whether the gate has dropped behind the player (boss.lisp).
-        :arena (when *arena* (list :sealed (sealed *arena*)))))
+        :arena (when *arena* (list :sealed (sealed *arena*)))
+        ;; What the settlement was built as, so the load places the same townsfolk, and what
+        ;; has happened to it since (settlement.lisp).
+        :settlement (when *settlement* (settlement-record *settlement*))))
 
 ;;; Files.
 
@@ -348,11 +368,9 @@ status auras, which come back from their statuses."
            NIL))))
 
 (defun generate-saved-level (container save)
-  (let ((settings (getf save :generator)))
-    (progv (mapcar #'car settings) (mapcar #'cdr settings)
-      (generate-level container :seed (getf save :seed)
-                                :exit (run-level-property (getf save :depth) :exit)
-                                :altar-chance (run-level-property (getf save :depth) :altar-chance)))))
+  (generate-run-level container (getf save :depth) (getf save :seed) (getf save :generator)
+                      :settlement (getf (getf save :settlement) :built)
+                      :entry (getf save :level)))
 
 (defun save-matches-level-p (save)
   "True if the level just built is the one SAVE was made on."
@@ -410,6 +428,10 @@ status auras, which come back from their statuses."
   (when (and *blood-pool* (getf save :blood))
     (restore-blood *blood-pool* (getf save :blood)))
   (reveal-block-indices (getf save :map))
+  ;; Before the pickups: what the settlement holds decides which of them are there.
+  (let ((settlement (getf (getf save :settlement) :state)))
+    (when (and settlement *settlement*)
+      (restore-state *settlement* settlement)))
   (take-pickups-at (getf save :pickups))
   (let ((globals (getf save :globals)))
     (setf *hit-stop* (getf globals :hit-stop)

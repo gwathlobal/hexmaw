@@ -166,6 +166,14 @@ blow knocked it aside (BREAK-GUARD).")
               :documentation "What killed the player: a creature's type, :LAVA or :DROWNING.")
    (death-time :initform 0.0 :accessor death-time
                :documentation "Seconds since the player died (*GAME-STATE* :DEAD).")
+   (gold :initform 0 :accessor gold :documentation "Coin, from pickups and kills, spent in the settlement.")
+   (reputation :initform () :accessor reputation
+               :documentation "Standing with each faction (*FACTIONS*), a plist from -100 to 100.")
+   (max-health :initform *player-max-health* :accessor max-health :documentation "Raised by the trainer.")
+   (max-mana :initform *max-mana* :accessor max-mana)
+   (max-stamina :initform *max-stamina* :accessor max-stamina)
+   (blessed :initform 0.0 :accessor blessed
+            :documentation "Seconds of play the priest's blessing has left (BLESSING-SCALE).")
    (stride-left :initform 0.0 :accessor stride-left
                 :documentation "Metres to walk or swim before the next footstep or stroke.")
    (splash-timer :initform 0.0 :accessor splash-timer :documentation "Seconds before a splash may sound again.")
@@ -216,6 +224,9 @@ true if it was cast."
       (setf (cast-timer player) *cast-cooldown*
             (cast-time player) 0.0
             (pending-spell player) spell)
+      ;; The Ashen Temple's rule: no spell within the town's walls (settlement.lisp).
+      (when (and *settlement* (eq (faction-property :rule) :no-casting) (in-settlement-p (feet player)))
+        (report-crime :rule))
       T)))
 
 (defparameter *touch-reach* 1.6 "Metres a touch spell reaches, like a short blade.")
@@ -263,8 +274,9 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
 (define-handler (player key-press) (key)
   (case key
     (:f12 (screenshot))
-    (:e (when (and (eq *game-state* :playing) (forge-allowed-p player))
-          (open-forge)))
+    ;; E: talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
+    (:e (when (eq *game-state* :playing)
+          (player-interact player)))
     (T (when (eq *game-state* :playing)
          (select-weapon player key)))))
 
@@ -516,7 +528,7 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
           (play-sound :winded))
         (setf (stamina player) 0.0
               (winded player) T))
-      (setf (stamina player) (min *max-stamina* (+ (stamina player) (* *stamina-regen* dt)))))
+      (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt)))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
     (setf (winded player) NIL)))
 
@@ -548,6 +560,7 @@ and not the last step of the stair.")
     (place-camera player)
     (return))
   (incf (run-time player) dt)
+  (setf (blessed player) (max 0.0 (- (blessed player) dt)))
   (setf (cast-timer player) (max 0.0 (- (cast-timer player) dt))
         (pain player) (max 0.0 (- (pain player) dt))
         (restore-flash player) (max 0.0 (- (restore-flash player) dt))
@@ -822,6 +835,8 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
                        blocked NIL)
                  (play-sound :shield-guard-break)
                  (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
+      ;; The priest's blessing (dialogue.lisp).
+      (setf amount (max 1 (round (* amount (blessing-scale player)))))
       ;; A ward (magic.lisp) takes what it can of what gets past the shield.
       (setf amount (absorb-ward player amount))
       ;; A burn's every tick would grunt: only a blow or a crash does.

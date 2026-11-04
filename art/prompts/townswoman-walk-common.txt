@@ -1,0 +1,24 @@
+Pixel-art sprite sheet: the WALK cycle of the TOWNSWOMAN, a woman of a grim walled settlement deep underground, for a Doom/Hexen-style first-person game where characters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The townswoman's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a gaunt, careworn woman of average height with a hard, tired face; a ragged grey wool SHAWL over her head and shoulders like a hood, its fringed ends hanging over her chest; a long, faded dark-red dress to the ankles, patched, with a narrow brown belt; worn brown shoes; a wicker BASKET held in front of her in both hands, at the waist. Also the shading style.
+2. The townswoman standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+The basket stays held in front of her in both hands in every frame. Never drop it, swap it to one hand or draw a second basket.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 5 the 4 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the figure standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. It does not hop or float.
+- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, blood or impact effects. Only the figure.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE WALK: a small, careful, tired walk, the long dress swaying with each step so that the shoes show at its hem in turn, the basket held in front and swinging a little, the head a little bowed under the shawl. The body rises a little on the passing frames and sinks on the contact frames.
+- Frame 2 (cell 2), LEFT CONTACT: the left foot forward and planted, the right foot back, the legs at their widest.
+- Frame 3 (cell 3), PASSING: the right leg swinging forward past the planted left one, knee bent, foot just off the ground; the body at its highest.
+- Frame 4 (cell 4), RIGHT CONTACT: the right foot forward and planted, the left foot back, the legs at their widest.
+- Frame 5 (cell 5), PASSING: the left leg swinging forward past the planted right one; the body at its highest.
+The four frames loop: after frame 5 comes frame 2 again.

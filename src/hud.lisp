@@ -200,6 +200,8 @@ void main(){
 
 (define-shader-entity restore-flash (pain-flash) ())
 
+(defparameter *gold-flash-color* (vec4 0.9 0.65 0.1 0.18) "RGB and peak opacity of gold's flash.")
+
 (defparameter *ward-flash-color* (vec4 0.7 0.5 1.0 0.25) "RGB and peak opacity of a ward's flash (magic.lisp).")
 (defparameter *glyph-flash-color* (vec4 1.0 0.8 0.3 0.3) "RGB and peak opacity of a glyph's flash (pickups.lisp).")
 (defparameter *dust-flash-color* (vec4 0.75 0.5 1.0 0.25) "RGB and peak opacity of picking up arcane dust.")
@@ -207,6 +209,7 @@ void main(){
 (defmethod flash-color ((flash restore-flash))
   (case (and *player* (restored *player*))
     (:mana *mana-flash-color*)
+    (:gold *gold-flash-color*)
     (:ward *ward-flash-color*)
     (:glyph *glyph-flash-color*)
     (:dust *dust-flash-color*)
@@ -314,7 +317,8 @@ void main(){
 
 (define-shader-entity level-banner (hud-text) ())
 
-;;; A message across the middle of the view for a few seconds of play: what a glyph taught.
+;;; A message across the middle of the view for a few seconds of play: what a glyph taught, a
+;;; gold find, what the watch warns of (SHOW-MESSAGE, or HUD-SAY to format it).
 
 (defparameter *message-time* 3.0 "Seconds of play a message stays up.")
 (defvar *message-left* 0.0 "Seconds of play left of the message.")
@@ -355,18 +359,43 @@ if that was KIND and is still up. The name is the item's :NOTE, else its :NAME."
         *pickup-note* (format NIL "+~d ~a" *pickup-note-count*
                               (or (item-property kind :note) (string-downcase (item-property kind :name))))))
 
-;;; At an altar, what the spellforge's key is (forge.lisp).
-
-(define-shader-entity forge-prompt (hud-text) ())
-
-(defmethod hud-shown-p ((prompt forge-prompt))
-  (and (eq *game-state* :playing) *player* (near-altar-p *player*)))
-
 (defmethod hud-shown-p ((banner level-banner))
   (and (eq *game-state* :playing) (< 0.0 *level-banner-left*)))
 
 (defun level-banner-text ()
-  (format NIL "Level ~d of ~d" *run-depth* (run-length)))
+  "\"Level 2 of 4\", and in the settlement its name and who holds it: \", held by the Deepwardens\"."
+  (let ((s *settlement*))
+    (format NIL "Level ~d of ~d~@[: ~a~]~@[, ~a~]" *run-depth* (run-length)
+            (and s (settlement-name s))
+            (and s (format NIL "~:[held~;once held~] by ~a"
+                           (eq (settlement-condition s) :sacked) (faction-property :name s))))))
+
+;;; HUD-SAY puts a message up from a format string, and the prompt line says what E does with
+;;; what the player looks at or stands at (INTERACT-TARGET, townsfolk.lisp).
+
+(defun hud-say (format-control &rest args)
+  "Put a message on the screen (SHOW-MESSAGE): FORMAT-CONTROL and ARGS, as for FORMAT."
+  (show-message (apply #'format NIL format-control args)))
+
+;;; Arriving: the banner names the town and its faction (LEVEL-BANNER-TEXT, above), and the
+;;; message line says the watch's rule, so the player knows it before they can break it.
+
+(defparameter *arrival-message-time* 7.0 "Seconds of play the rule stays up on arriving in the settlement.")
+
+(defun announce-settlement ()
+  "On arriving at a level, put the watch's rule, or that there is no watch, on the message line
+for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left there."
+  (let ((s *settlement*))
+    (cond ((null s) (setf *message-left* 0.0))
+          (T (if (eq (settlement-condition s) :sacked)
+                 (hud-say "The watch of ~a is dead. The undercroft holds the streets." (faction-property :name s))
+                 (hud-say "The watch of ~a: ~a" (faction-property :name s) (faction-property :rule-text s)))
+             (setf *message-left* *arrival-message-time*)))))
+
+(define-shader-entity interact-prompt (hud-text) ())
+
+(defmethod hud-shown-p ((prompt interact-prompt))
+  (and (eq *game-state* :playing) *interact-prompt* T))
 
 ;;; The boss bar: the boss's title, its health and its powers, across the top of the screen
 ;;; from the moment the arena's gate drops until it dies (boss.lisp).
@@ -398,10 +427,12 @@ if that was KIND and is still up. The name is the item's :NOTE, else its :NAME."
   ((name :initform :hud)
    (level-banner :initform (make-hud-text (level-banner-text) 'level-banner) :reader level-banner)
    (message-banner :initform (make-hud-text "" 'message-banner) :reader message-banner)
-   (forge-prompt :initform (make-hud-text "E: Spellforge" 'forge-prompt) :reader forge-prompt)
    (pickup-banner :initform (make-hud-text "" 'pickup-banner) :reader pickup-banner)
    (shown-pickup-note :initform NIL :accessor shown-pickup-note)
    (shown-message :initform NIL :accessor shown-message)
+   (prompt-line :initform (make-hud-text "" 'interact-prompt) :reader prompt-line)
+   (gold-text :initform (make-hud-text) :reader gold-text)
+   (shown-gold :initform NIL :accessor shown-gold)
    (health-label :initform (make-hud-text "HP") :reader health-label)
    (health-bar :initform (make-instance 'hud-bar :fill-color *health-bar-color*) :reader health-bar)
    (health-text :initform (make-hud-text) :reader health-text)
@@ -435,7 +466,7 @@ if that was KIND and is still up. The name is the item's :NOTE, else its :NAME."
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
-        (level-banner hud) (message-banner hud) (pickup-banner hud) (forge-prompt hud)
+        (level-banner hud) (message-banner hud) (pickup-banner hud) (prompt-line hud) (gold-text hud)
         (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
         (fps-display hud)))
 
@@ -471,9 +502,6 @@ numbers; breath has none."
       (row (hud-row-y 1) (mana-label hud) (mana-bar hud) (mana-text hud))
       (row (hud-row-y 2) (health-label hud) (health-bar hud) (health-text hud))
       (row (hud-row-y 3) (breath-label hud) (breath-bar hud) NIL)))
-  (place (forge-prompt hud)
-         (round (- (/ (width *context*) 2) (* 4.5 (length (text (forge-prompt hud))))))
-         (round (* 0.42 (height *context*))))
   (place (pickup-banner hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (pickup-banner hud))))))
          (round (* *pickup-note-height* (height *context*))))
@@ -484,6 +512,11 @@ numbers; breath has none."
   (place (level-banner hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (level-banner hud))))))
          (round (* 0.75 (height *context*))))
+  (place (prompt-line hud)
+         (round (- (/ (width *context*) 2) (* 4.5 (length (text (prompt-line hud))))))
+         (round (* 0.4 (height *context*))))
+  ;; The purse, against the bottom-right corner.
+  (place (gold-text hud) (- (width *context*) *hud-margin* (* 9 (length (text (gold-text hud))))) (hud-row-y 0))
   ;; The boss bar, centred across the top: the title, the bar, the powers under it.
   (let* ((w (width *context*))
          (title-y (- (height *context*) *boss-bar-top* +glyph-height+))
@@ -518,6 +551,9 @@ numbers; breath has none."
   (unless (eq *message* (shown-message hud))
     (setf (shown-message hud) *message*
           (text (message-banner hud)) *message*))
+  ;; A new string each time it changes, so EQ tells.
+  (when (and *interact-prompt* (not (eq *interact-prompt* (text (prompt-line hud)))))
+    (setf (text (prompt-line hud)) *interact-prompt*))
   (let ((boss (shown-boss)))
     (when boss
       (setf (fill-fraction (boss-bar hud)) (/ (float (max 0 (health boss))) (max-health boss)))
@@ -533,18 +569,23 @@ numbers; breath has none."
           (sp (floor (stamina *player*))))
       (setf (strength (pain-flash hud)) (/ (pain *player*) *pain-time*)
             (strength (restore-flash hud)) (/ (restore-flash *player*) *restore-flash-time*)
-            (fill-fraction (health-bar hud)) (/ (float hp) *player-max-health*)
-            (fill-fraction (mana-bar hud)) (/ (mana *player*) *max-mana*)
-            (fill-fraction (stamina-bar hud)) (/ (stamina *player*) *max-stamina*)
+            (fill-fraction (health-bar hud)) (/ (float hp) (max-health *player*))
+            (fill-fraction (mana-bar hud)) (/ (mana *player*) (max-mana *player*))
+            (fill-fraction (stamina-bar hud)) (/ (stamina *player*) (max-stamina *player*))
             (fill-fraction (breath-bar hud)) (/ (breath *player*) *breath-time*))
-      ;; Re-uploading text costs a buffer update, so only when the number changes.
-      (unless (eql hp (shown-health hud))
-        (setf (shown-health hud) hp
-              (text (health-text hud)) (format NIL "~d/~d" hp *player-max-health*)))
-      (unless (eql mp (shown-mana hud))
-        (setf (shown-mana hud) mp
-              (text (mana-text hud)) (format NIL "~d/~d" mp (floor *max-mana*))))
-      (unless (eql sp (shown-stamina hud))
-        (setf (shown-stamina hud) sp
-              (text (stamina-text hud)) (format NIL "~d/~d" sp (floor *max-stamina*))))))
+      ;; Re-uploading text costs a buffer update, so only when a number changes: each is
+      ;; kept with its maximum (the trainer raises them) as one integer.
+      (let ((max-hp (max-health *player*)) (max-mp (floor (max-mana *player*))) (max-sp (floor (max-stamina *player*))))
+        (unless (eql (+ hp (* 100000 max-hp)) (shown-health hud))
+          (setf (shown-health hud) (+ hp (* 100000 max-hp))
+                (text (health-text hud)) (format NIL "~d/~d" hp max-hp)))
+        (unless (eql (+ mp (* 100000 max-mp)) (shown-mana hud))
+          (setf (shown-mana hud) (+ mp (* 100000 max-mp))
+                (text (mana-text hud)) (format NIL "~d/~d" mp max-mp)))
+        (unless (eql (+ sp (* 100000 max-sp)) (shown-stamina hud))
+          (setf (shown-stamina hud) (+ sp (* 100000 max-sp))
+                (text (stamina-text hud)) (format NIL "~d/~d" sp max-sp))))
+      (unless (eql (gold *player*) (shown-gold hud))
+        (setf (shown-gold hud) (gold *player*)
+              (text (gold-text hud)) (format NIL "~d gold" (gold *player*))))))
   (layout-hud hud))
