@@ -108,6 +108,28 @@ void main(){
 (define-shader-entity breath-bar (breath-element hud-bar) ())
 (define-shader-entity breath-text (breath-element hud-text) ())
 
+(defun wrap-text (text width)
+  "TEXT broken at spaces into lines of at most WIDTH characters, a word longer than that on a
+line of its own. Lines after the first keep the first's indent."
+  (let* ((indent (or (position #\Space text :test-not #'char=) 0))
+         (prefix (subseq text 0 indent))
+         (words (loop with start = indent
+                      for space = (position #\Space text :start start)
+                      for word = (subseq text start space)
+                      unless (string= word "") collect word
+                      while space do (setf start (1+ space))))
+         (lines ())
+         (line prefix))
+    (dolist (word words)
+      (cond ((= (length line) (length prefix))
+             (setf line (concatenate 'string line word)))
+            ((<= (+ (length line) 1 (length word)) width)
+             (setf line (concatenate 'string line " " word)))
+            (T
+             (push line lines)
+             (setf line (concatenate 'string prefix word)))))
+    (nreverse (cons line lines))))
+
 (defun make-hud-text (&optional (text "") (class 'hud-text))
   (make-instance class :text text :font-size (float +glyph-height+ 0f0)
                            :foreground *hud-text-color* :background (vec4 0 0 0 0)))
@@ -180,12 +202,14 @@ void main(){
 
 (defparameter *ward-flash-color* (vec4 0.7 0.5 1.0 0.25) "RGB and peak opacity of a ward's flash (magic.lisp).")
 (defparameter *glyph-flash-color* (vec4 1.0 0.8 0.3 0.3) "RGB and peak opacity of a glyph's flash (pickups.lisp).")
+(defparameter *dust-flash-color* (vec4 0.75 0.5 1.0 0.25) "RGB and peak opacity of picking up arcane dust.")
 
 (defmethod flash-color ((flash restore-flash))
   (case (and *player* (restored *player*))
     (:mana *mana-flash-color*)
     (:ward *ward-flash-color*)
     (:glyph *glyph-flash-color*)
+    (:dust *dust-flash-color*)
     (:rift *rift-flash-color*)
     (T *health-flash-color*)))
 
@@ -305,40 +329,38 @@ void main(){
   (setf *message* text
         *message-left* *message-time*))
 
+;;; What a pickup of a counted item gave (dust's pile, coins), just above the crosshair for a
+;;; moment: "+25 arcane dust". Pickups of one kind in quick succession add up.
+
+(defparameter *pickup-note-time* 1.5 "Seconds of play a pickup's note stays up.")
+(defparameter *pickup-note-height* 0.56 "Where its line stands, up the screen.")
+(defvar *pickup-note* "" "The note NOTE-PICKUP put up last.")
+(defvar *pickup-note-left* 0.0 "Seconds of play left of it.")
+(defvar *pickup-note-kind* NIL "The item kind it counts.")
+(defvar *pickup-note-count* 0 "How many of it the note says.")
+
+(define-shader-entity pickup-banner (hud-text) ())
+
+(defmethod hud-shown-p ((banner pickup-banner))
+  (and (eq *game-state* :playing) (< 0.0 *pickup-note-left*)))
+
+(defun note-pickup (kind count)
+  "Put up \"+COUNT name\" for COUNT of item KIND just picked up, added to the last note's count
+if that was KIND and is still up. The name is the item's :NOTE, else its :NAME."
+  (if (and (eq kind *pickup-note-kind*) (< 0.0 *pickup-note-left*))
+      (incf *pickup-note-count* count)
+      (setf *pickup-note-kind* kind
+            *pickup-note-count* count))
+  (setf *pickup-note-left* *pickup-note-time*
+        *pickup-note* (format NIL "+~d ~a" *pickup-note-count*
+                              (or (item-property kind :note) (string-downcase (item-property kind :name))))))
+
 ;;; At an altar, what the spellforge's key is (forge.lisp).
 
 (define-shader-entity forge-prompt (hud-text) ())
 
 (defmethod hud-shown-p ((prompt forge-prompt))
   (and (eq *game-state* :playing) *player* (near-altar-p *player*)))
-
-;;; The player's statuses (magic.lisp), right of the bars: what burns, slows or wards them.
-
-(define-shader-entity status-line (hud-text) ())
-
-(defun status-label (status)
-  (case (status-kind status)
-    (:damage (case (status-element status) (:frost "FROST") (:shock "SHOCK") (T "BURN")))
-    (:heal "REGEN")
-    (:slow "SLOW")
-    (:ward "WARD")
-    (T (string (status-kind status)))))
-
-(defun status-line-key (player)
-  "A number that changes whenever the status line's text would."
-  (let ((key 0))
-    (dolist (status (statuses player) key)
-      (setf key (mod (+ (* key 131) (position (status-kind status) '(:damage :heal :slow :ward))
-                        (* 7 (ceiling (status-left status)))
-                        (* 1009 (if (eq :ward (status-kind status)) (ceiling (status-magnitude status)) 0)))
-                     16777213)))))
-
-(defun status-line-text (player)
-  (format NIL "~{~a~^  ~}"
-          (loop for status in (statuses player)
-                collect (if (eq :ward (status-kind status))
-                            (format NIL "WARD ~d" (ceiling (status-magnitude status)))
-                            (format NIL "~a ~ds" (status-label status) (ceiling (status-left status)))))))
 
 (defmethod hud-shown-p ((banner level-banner))
   (and (eq *game-state* :playing) (< 0.0 *level-banner-left*)))
@@ -377,9 +399,9 @@ void main(){
    (level-banner :initform (make-hud-text (level-banner-text) 'level-banner) :reader level-banner)
    (message-banner :initform (make-hud-text "" 'message-banner) :reader message-banner)
    (forge-prompt :initform (make-hud-text "E: Spellforge" 'forge-prompt) :reader forge-prompt)
+   (pickup-banner :initform (make-hud-text "" 'pickup-banner) :reader pickup-banner)
+   (shown-pickup-note :initform NIL :accessor shown-pickup-note)
    (shown-message :initform NIL :accessor shown-message)
-   (status-line :initform (make-hud-text "" 'status-line) :reader status-line)
-   (shown-status-key :initform NIL :accessor shown-status-key)
    (health-label :initform (make-hud-text "HP") :reader health-label)
    (health-bar :initform (make-instance 'hud-bar :fill-color *health-bar-color*) :reader health-bar)
    (health-text :initform (make-hud-text) :reader health-text)
@@ -413,7 +435,7 @@ void main(){
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
-        (level-banner hud) (message-banner hud) (status-line hud) (forge-prompt hud)
+        (level-banner hud) (message-banner hud) (pickup-banner hud) (forge-prompt hud)
         (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
         (fps-display hud)))
 
@@ -449,13 +471,12 @@ numbers; breath has none."
       (row (hud-row-y 1) (mana-label hud) (mana-bar hud) (mana-text hud))
       (row (hud-row-y 2) (health-label hud) (health-bar hud) (health-text hud))
       (row (hud-row-y 3) (breath-label hud) (breath-bar hud) NIL)))
-  ;; Right of the quickslot (inventory.lisp), over the spell's name (sword.lisp).
-  (multiple-value-bind (qx qy) (quick-position)
-    (place (status-line hud) (+ qx (item-cell-size) *weapon-slot-gap*)
-           (+ qy 2 +glyph-height+ 4)))
   (place (forge-prompt hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (forge-prompt hud))))))
          (round (* 0.42 (height *context*))))
+  (place (pickup-banner hud)
+         (round (- (/ (width *context*) 2) (* 4.5 (length (text (pickup-banner hud))))))
+         (round (* *pickup-note-height* (height *context*))))
   (place (message-banner hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (message-banner hud))))))
          (round (* 0.62 (height *context*))))
@@ -489,15 +510,14 @@ numbers; breath has none."
 (define-handler (hud tick) (dt)
   (when (eq *game-state* :playing)
     (setf *level-banner-left* (max 0.0 (- *level-banner-left* dt))
-          *message-left* (max 0.0 (- *message-left* dt))))
+          *message-left* (max 0.0 (- *message-left* dt))
+          *pickup-note-left* (max 0.0 (- *pickup-note-left* dt))))
+  (unless (eq *pickup-note* (shown-pickup-note hud))
+    (setf (shown-pickup-note hud) *pickup-note*
+          (text (pickup-banner hud)) *pickup-note*))
   (unless (eq *message* (shown-message hud))
     (setf (shown-message hud) *message*
           (text (message-banner hud)) *message*))
-  (when *player*
-    (let ((key (status-line-key *player*)))
-      (unless (eql key (shown-status-key hud))
-        (setf (shown-status-key hud) key
-              (text (status-line hud)) (status-line-text *player*)))))
   (let ((boss (shown-boss)))
     (when boss
       (setf (fill-fraction (boss-bar hud)) (/ (float (max 0 (health boss))) (max-health boss)))

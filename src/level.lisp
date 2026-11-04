@@ -58,9 +58,15 @@ upstairs."
   "The kinds of monster the debug level's hall keeps, or NIL for all of them. With a list, the
 annex's imp, the blocks' monsters and the arena's boss stay out too.")
 
+(defparameter *debug-hall-monsters* NIL
+  "True to put one of each monster in the debug level's hall (DEBUG-SPAWN); NIL leaves the hall
+empty. The annex's imp, the blocks' monsters and the arena's boss don't ask it.")
+
 (defun debug-spawn (creature container)
-  "Spawn CREATURE in the debug level's hall, if *DEBUG-LEVEL-MONSTERS* lets its kind in."
-  (when (or (null *debug-level-monsters*) (member (type-of creature) *debug-level-monsters*))
+  "Spawn CREATURE in the debug level's hall, if *DEBUG-HALL-MONSTERS* is on and
+*DEBUG-LEVEL-MONSTERS* lets its kind in."
+  (when (and *debug-hall-monsters*
+             (or (null *debug-level-monsters*) (member (type-of creature) *debug-level-monsters*)))
     (spawn-creature creature container)))
 
 (defun clear-level ()
@@ -200,6 +206,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2
           do (add-pickup container kind x 0 8.5))
+    ;; Enough arcane dust beside them for a few spells at the altar.
+    (add-pickup container :dust 5 0 8.5 :count 60)
     ;; A spellforge altar in the north-west corner (forge.lisp): a stone 0.9 m high.
     (add-box container -9.5 0 -9.5  -7.5 0.9 -8.5 :surface :dais)
     (add-altar container (vec -8.5 0.9 -9.0))

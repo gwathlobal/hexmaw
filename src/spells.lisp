@@ -142,6 +142,8 @@ delivered by SOURCE.")
   (:method (source) NIL))
 
 (defmethod apply-effect ((kind (eql :knockback)) effect (target creature) source)
+  ;; A flash, so a push alone reads as a hit; it carries the creature (SHOVED-P) until it slows.
+  (setf (flash target) (max (flash target) *flash-time*))
   (push-creature target (effect-direction source target) (float (roll (effect-magnitude effect)) 0f0)))
 
 (defun target-effect-p (effect)
@@ -850,6 +852,10 @@ spell may have, which no spell in *SPELLS* need use."
 (define-fx-animation heal-burst "sprites/spells/heal-burst" :fps 14 :size 0.9)
 (define-fx-animation arcane-flight "sprites/spells/arcane-flight" :fps 12 :loop T :size 0.4)
 (define-fx-animation arcane-burst "sprites/spells/arcane-burst" :fps 14 :size 0.9)
+
+(defun spell-look (spell)
+  "The look of SPELL: a tornado's :STORM, else its effects' (EFFECTS-LOOK)."
+  (if (eq (spell-delivery spell) :vortex) :storm (effects-look (spell-effects spell))))
 
 (defun effects-look (effects)
   "The look of a spell of EFFECTS, a list of EFFECT: its first damage's element, else its

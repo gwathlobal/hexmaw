@@ -41,6 +41,7 @@
                (:file "sword")
                (:file "spear")
                (:file "inventory")
+               (:file "status-icons")
                (:file "menu")
                (:file "forge")
                (:file "music")

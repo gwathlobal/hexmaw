@@ -41,9 +41,9 @@ attack and :COOLDOWN its abilities' cooldowns. A key left out keeps the variable
 
 (defparameter *carried-slots*
   '(health mana inventory quickslot stamina winded run-time damage-taken level-records
-    known-effects spellbook active-spell enchantments)
+    known-effects hotbar-cells wanted-slot enchantments)
   "The player's slots that go on to the next level; the rest start fresh (RESET-PLAYER).
-SETUP-SCENE carries the weapon anyway.")
+SETUP-SCENE takes what the hotbar slot asked for in hand (SETTLE-HELD).")
 
 (defvar *carried-state* NIL
   "CARRIED-STATE of the player leaving a level, while the next one is built, else NIL.")

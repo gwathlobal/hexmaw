@@ -513,7 +513,6 @@ victory screens share."
         (pain player) 0.0
         (restore-flash player) 0.0
         (mana player) *max-mana*
-        (inventory player) (make-list *inventory-size*)
         (quickslot player) NIL
         (stamina player) *max-stamina*
         (winded player) NIL
@@ -526,8 +525,7 @@ victory screens share."
         (pending-spell player) NIL
         (statuses player) ()
         (known-effects player) (copy-list *starting-effects*)
-        (spellbook player) (mapcar #'find-spell *starting-spells*)
-        (active-spell player) 0
+        (wanted-slot player) *starting-slot*
         (enchantments player) ()
         (eye player) *eye-height*
         (weapon-lower player) 0.0
@@ -536,6 +534,8 @@ victory screens share."
         (level-records player) ()
         (killed-by player) NIL
         (death-time player) 0.0)
+  ;; A fresh bag: the starting kit, bound to its keys.
+  (give-starting-kit player)
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
   (place-camera player))
 

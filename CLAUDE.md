@@ -287,7 +287,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
   knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
-  `*max-pain-chance*` (75), so nothing can be held in its flinch. A killing blow and
+  `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
+  whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`,
+  not on ice) it neither walks nor lunges, so a hunter doesn't walk straight back through a push. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
   is the ranged one (`attack-spell`), with a cast, flinch and death but no walk: it glides
   in the standing pose, its robe hiding its feet. Its death burns, so it has a `death-glow`:
@@ -710,24 +712,62 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   status's element colour (`status-tint`, `*element-tints*`). Elements: frost also chills
   (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` halves an element for a
   class (acolyte fire, skeleton frost, gale wraith shock). Drain heals its caster `*drain-share*` of
-  what it took. Statuses are `saved-slots` (`(:status ...)` in a save).
+  what it took. Statuses are `saved-slots` (`(:status ...)` in a save). A status keeps its
+  `duration`, the time it was put on or last renewed for (`afflict` resets it when a re-cast lasts
+  longer than what is left), for the HUD's time bar. Damage over time shows on a creature as a
+  `status-aura` (its `status-aura` slot, on `afflicted`): its element's loop of small pieces scattered
+  over and round the body (`*status-auras*`: burn, wisps of flame and embers, with a flickering
+  orange lamp; frost, snowflakes and ice crystals drifting off it, no lamp; shock, crackling arcs, a
+  dim blue-white lamp; and for healing over time, `:heal`, green pluses rising off it with a faint
+  green lamp, though no creature heals itself so yet, in a slot of its own, `heal-aura`, so a creature
+  under both shows both, the heal's a little further back, `*heal-aura-pull*`, so they never
+  flicker; `aura-key`, `sync-aura`), an effect sprite standing at `*aura-rise*` of the body, its height the
+  entry's SIZE times the body's (fire 1.25 and frost 1.15, so they reach past its outline: wisps on
+  a red imp were lost in it; shock 0.85), drawn in proportion (stretched, the pixel art smeared), so
+  a boss burns bigger, and pulled `*aura-pull*` toward the camera so it draws in front of the
+  billboard. The colour tint (`status-tint`) is left to the slow and the frost chill. The creature's tick
+  spawns and ends it (`update-status-aura`): gone when the status runs out or the creature dies.
+  A save leaves it out (`level-effects`), and it comes back from the status; `preload-status-auras`
+  stages the strips. The frost chill keeps its tint only. To look at one:
+  `(game (afflict (aref *creatures* 0) :damage 1 8.0 :element :fire :caster *player*))`.
 - `src/forge.lisp`: the spellforge, used at an altar (`add-altar`, pickups.lisp; `near-altar-p`, within
   `*altar-reach*`; "E: Spellforge" shows there, hud.lisp). E opens it (`open-forge`, `*game-state*`
   `:forge`, frozen; Esc or Leave closes it; `*forge-anywhere*` opens it anywhere in a debug version).
-  It works on a draft (`*forge-draft*`: a `forge-draft` of a sink, a delivery, `effect-draft`s) for a
-  sink: a spellbook slot (0 to `*spellbook-size*` - 1) or a weapon (`*forge-weapons*`). Effects and
-  elements are those the player knows (`known-effects`: `*starting-effects*`, damage, heal,
-  knockback and fire, plus what glyphs taught; `:area` unlocks area). The commands change the draft
-  and work from the REPL: `forge-select`, `forge-add-effect`, `forge-remove-effect`, `forge-cycle-kind`,
-  `forge-cycle-element`, `forge-cycle-delivery`, `forge-inscribe` (`draft-problem` says why not:
-  self delivery with something to strike, a delivery with nothing to, more than `*max-mana*`, a
-  weapon's more than `*max-enchant-effects*` or `*max-enchant-cost*` a blow), `forge-set-active`,
-  `forge-erase`. A draft's name is made from its effects (`draft-name`, "Frost Burst"). The screen is
-  `forge-panel`, a `menu-panel` that lays itself out (`build-panel`, menu.lisp): the sinks down the
-  left, the draft on the right, its sliders `forge-slider`s (a `menu-slider` with its own range and
-  value text). A structural command bumps `*forge-revision*` and the menu controller remakes the panel
-  (`panel-stale-p`); a slider only changes the draft and the readout and note (`alloy:value-data`s the
-  panel keeps). To look at it: `(game (setf *forge-anywhere* t) (open-forge))`, then `(forge-select :sword)`.
+  Making costs arcane dust (an item, `:dust`): a spell `*dust-per-mana*` (1) a point of its mana per
+  cast (`spell-dust`), an enchantment `*enchant-dust-scale*` (3) a point of its mana per blow
+  (`enchant-dust`); destroying one gives back `*dust-refund*` (0.5) of that (`refund-dust`). Two tabs
+  (`*forge-tab*`, `forge-tab`): **Spells** lists "New spell" and every rune in the bag (`player-runes`,
+  `*forge-list-rows*` a page, `forge-page`), **Enchant** the weapons carried (`carried-weapons`: the
+  sword, the spear, and the shield with the sword). The forge is on one of them (`*forge-sink*`,
+  `forge-select`): a new spell or a plain weapon has a draft to make (`*forge-draft*`, kept per sink in
+  `*forge-drafts*` while the forge is left: a `forge-draft` of a delivery and `effect-draft`s), made by
+  `forge-make` into a rune in the bag on the first free key (`give-rune`) or the weapon's enchantment;
+  a rune or an enchanted weapon is only shown (`shown-spell-lines`) with Unweave or Disenchant
+  (`forge-destroy`, two clicks: the first arms it, `*forge-armed*`). Nothing is changed in place: make
+  another, or destroy it; spells are limited only by free bag cells. Effects and elements are those the
+  player knows (`known-effects`: `*starting-effects*`, damage, heal, knockback and fire, plus what glyphs
+  taught; `:area` unlocks area), and of those only the ones that land where the draft does (`draft-kinds`): a
+  spell cast on yourself takes heal and ward, a projectile, a touch or a weapon damage, knockback, slow
+  and drain. Changing the delivery turns the effects that no longer fit into the first kind that does
+  (`fit-effects`). A run starts knowing only fire, so with one element (or one kind for the delivery)
+  known, the Element or Effect button doesn't change it but says so in the note, naming the glyphs
+  that teach the rest (`forge-cycle-element`, `forge-cycle-kind`). `draft-problem` says why a draft can't be made (self delivery with something to
+  strike, a delivery with nothing to, more than `*max-mana*`, a weapon's more than
+  `*max-enchant-effects*` or `*max-enchant-cost*` a blow, too little dust, a full bag). A draft's name
+  is made from its effects (`draft-name`, "Frost Burst"). The screen is `forge-panel`, a `menu-panel`
+  that lays itself out (`build-panel`, menu.lisp): the tabs and sinks down the left, labels cut to
+  `*forge-label-width*` (`fit-label`), each a `forge-choice` (a `menu-button` that draws the chosen
+  one with a gold border, a warm fill and a gold label, `*forge-selected-color*` and the rest, apart
+  from the hover's orange), the work on the right, its sliders `forge-slider`s (a
+  `menu-slider` with its own range and value text), under each effect its explanation (`effect-about`,
+built from the parameters: the kind's rule, the element's quirk, who resists it from
+`*element-resistances*`, what time and area change; a `forge-about`, smaller and dimmer), and its
+text `forge-note`s, which wrap (Alloy's
+  `:wrap`) in rows as tall as `note-lines` guesses. A structural command bumps `*forge-revision*` and
+  the menu controller remakes the panel (`panel-stale-p`); a slider only changes the draft and the
+  readout and note (`alloy:value-data`s the panel keeps). From the REPL: `(game (setf
+  *forge-anywhere* t) (open-forge))`, then `(forge-tab :enchant)`, `(forge-select :sword)`,
+  `(forge-make)`, `(forge-destroy)` twice.
 - `src/elite.lisp`: elites, a deeper level's stronger monsters. A spawn on a generated level is
   one with the level's `*elite-chance*` (`:elite-chance` in `*run-levels*`): `elite-roll`, from
   `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
@@ -773,32 +813,72 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   one already known stays. Each level of a run has `*glyphs-per-level*` (2), the run's six shuffled by
   the run seed alone (`run-glyphs`), placed after the other pickups (`place-glyphs`, from a random
   state of their own) on free spots, a reward spot first, so the other pickups keep their places. The
-  test level has one of each along the hall's south wall, west of the pickups. Sprites:
+  test level has one of each along the hall's south wall, west of the pickups. **Arcane dust**
+  (`:dust`, an `:item` with `:count`: the pile's `pickup-count`) is placed last (`place-dust`, from a
+  random state of its own, on spots `free-pickup-spots` leaves) until a generated level holds
+  `*dust-per-monster*` (2) for each monster, in piles of `*dust-pile*` (8 to 20; bigger where few spots
+  are left, so a level always gets its whole budget: about 60 to 80, three or four spells). Sprites:
   `tools/draw_glyphs.py data/sprites/pickups` (a rune tablet per glyph, and `altar-sigil`).
   **Altars**: `add-altar` notes a point in `*level-altars*` (blocks.lisp; a blueprint's `altar`) and
   hangs an `altar-sigil` over it with a lamp; `reset-run` keeps it. The test level has one on a dais
   in the hall's north-west corner.
-- `src/inventory.lisp`: the inventory, the quickslot and the panel. `*item-kinds*` says what an item
-  is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a stack, 5); a
-  pickup's `:amount` must match its item's, since a level's budget counts it. A stack is a list `(kind
-  count)`, a slot is a cell's index in the player's `inventory` (`*inventory-size*`, 20) or `:quick`
-  (`slot-stack`). Both are `saved-slots`, and `reset-player` empties them. `give-item` puts a
-  found item in the quickslot if it holds that kind, then a stack of it in the bag, then the
-  quickslot if empty, then an empty cell. Q (`use-quickslot`) drinks one, not at full; when the
-  stack runs out the first bag stack of that kind moves in (`refill-quickslot`), and with none
-  the quickslot keeps the kind with a count of 0, dimmed, so the next one found goes back in. The
-  mouse wheel in play (`cycle-quickslot`) swaps the next kind in `*item-kinds*` that the bag holds
-  into the quickslot through `move-stack` (wheel down the next, up the previous), skipping kinds it
-  holds none of. I
-  opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. A left
-  drag moves a stack (`move-stack`): into an empty cell, onto its own kind (merging up to the
-  limit), swapping with another kind; dropped on nothing it goes back, and a dimmed quickslot
-  forgets its kind. The stack stays in its slot until the drop. Parts of the panel are `inventory-part`s
-  (`hud-shown-p` only in `:inventory`) with a `late-rank`, so its see-through back never covers
-  world drawn after it. The quickslot has a row of its own above the weapon bar (`quick-position`), the panel
-  right above it (`panel-box`). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`. To
-  try it: `(game (give-item *player* :health-potion))` and `(game (open-inventory))`; `tools/hd
-  status` shows the quickslot and bag.
+- `src/inventory.lisp`: the inventory, the hotbar, the quickslot and the panel. `*item-kinds*` says
+  what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
+  stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
+  5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, nothing uses it yet) 999.
+  Weapons and spells are items too: `:sword` and `:spear` (`:weapon`, what they put in hand) and
+  `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
+  tag for a spell reference); none of them stack. A stack is a list `(kind count)`. **The bag holds
+  every item** (the player's `inventory`, `*inventory-size*`, 20 cells); the hotbar and the quickslot
+  only point into it, so binding a key frees no room: a hotbar slot (`*hotbar-slots*`, `:hot-1` ..
+  `:hot-9`, the player's `hotbar`, `*hotbar-size*` long) holds a stack in the bag (`eq`), the quickslot
+  a potion kind. A slot is a cell's index, a hotbar slot or `:quick` (`slot-stack`, which shows the
+  quickslot as `*quick-view*`, its kind and the bag's total of it, `kind-total`). A drag
+  (`move-stack`): between bag cells it moves, merges or swaps, and the keys bound to the stack follow;
+  a bag weapon or rune onto a hotbar slot binds that key (`bind-stack`, off any other), a potion onto
+  Q binds Q; two hotbar slots swap; a hotbar slot or Q dropped anywhere else is unbound. A stack that
+  leaves the bag is unbound (`prune-bindings`, from `sync-wanted` every tick, and `destroy-stack`).
+  Bag cells mark the key bound to their stack. A run starts with `give-starting-kit` (player.lisp's
+  `initialize-instance`, `reset-player`): `*starting-hotbar*`'s items in the first cells, bound to
+  keys 1 to 5 (sword, bolt, spear, tempest, heal), slot `*starting-slot*` in hand. The hotbar draws in
+  rows of `*hotbar-columns*` (5) over the bars (`hot-position`; in one row of nine the hands covered the
+  last), each slot with its key, the one asked for framed in gold, the others' icons dimmed in play, an
+  enchanted weapon's border in its spell's colour. A rune's icon is its spell's look's (`stack-icon`:
+  weapons and runes from the weapon icons, sword.lisp, `swap-animation` when the strip changes). A save
+  and the stairs keep the hotbar as bag cells (`hotbar-cells`, an accessor in `saved-slots` after
+  `inventory`), and `migrate-bindings` brings an older save's held stacks into the bag. `give-item
+  player kind count` puts items onto their stacks, then into empty cells (how many went in), and binds
+  an unbound Q to the first potion; `take-item` takes from the smallest stacks. Q (`use-quickslot`)
+  drinks one of its kind from the smallest stack, not at full; at none it stays bound, dimmed, and
+  shows 0. The mouse wheel in play (`cycle-quickslot`) binds Q to the next potion kind the bag holds. I
+  opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. Parts of the
+  panel are `inventory-part`s (`hud-shown-p` only in `:inventory`) with a `late-rank`, so its
+  see-through back never covers world drawn after it. The quickslot has a row of its own above the
+  hotbar (`quick-position`), the spell in hand right of it (`spell-label`), the panel right above it
+  (`panel-box`). The hint (`*inventory-hint*`) is wrapped to the panel's width (`hint-lines`, up to three
+  `panel-hints`; `panel-box` grows to hold them) and goes blank while the pointer is on a stack, and a
+  tooltip beside it (`update-tooltip`, up and right of the pointer, kept on screen; not while dragging)
+  gives it in detail, one line each in `stack-details`, wrapped to `*tooltip-width*` (`wrap-text`,
+  hud.lisp) up to `*tooltip-lines*`: a rune's delivery, cost and every effect (`spell-lines`,
+  `effect-lines`: magnitude, time, area, an element's chill or stagger); a weapon's damage, reach,
+  swing time and its enchantment (`enchantment-lines`; the sword's shield too); a potion's restore,
+  this stack and the bag's total; dust's and gold's use (`:about`). Its parts are `tooltip-part`s with
+  the highest `late-rank`s, at depths in front of the hotbar's and quickslot's labels (which sit at
+  -0.08 for it). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`
+  (potions, dust, gold). To try it: `(game (give-item *player* :health-potion 3))` and `(game
+  (open-inventory))`; `tools/hd status` shows the hotbar (the slot asked for starred), the quickslot
+  and the bag.
+- `src/status-icons.lisp` (after inventory.lisp, whose cell size it shares): the player's statuses
+  as a row of icons in the top-left corner, under the frame counter while it shows. One cell per
+  status in `*status-order*` (damage, slow, heal, ward; one of each kind at most, so four cells,
+  the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
+  (`*status-colors*`, by element for damage), its icon (`*status-icon-frames*`, a frame of
+  `data/sprites/icons/statuses`, drawn by `tools/draw_status_icons.py data/sprites/icons/statuses`:
+  burn, frost, shock, regen, slow, ward), the seconds left (a ward's points instead, which run out
+  first) over the bottom-right corner, re-uploaded only when they change, and a bar along the
+  bottom for `left` over `duration`. In its last `*status-warn-time*` (3 s) the icon blinks. An
+  instant heal or ward-less spell leaves no status and so no icon; its flash is the feedback.
+  To look at them: `(game (afflict *player* :ward 12 20.0) (afflict *player* :slow 30 6.0))`.
 - `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
   breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
@@ -808,10 +888,12 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `hud-shown-p` decides whether an element draws (by default, not on the main menu). The
   frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
   on every screen, counting frames in its render and updating every `*fps-interval*`.
-  Right of the quickslot, clear of the casting hands (which draw over HUD text): the player's
-  statuses (`status-line`, rebuilt only when `status-line-key` changes) over the spell the hands
-  cast (`spell-label`, sword.lisp's weapon bar). `show-message` puts a line across the view for
-  `*message-time*` (a glyph's), and `forge-prompt` says "E: Spellforge" at an altar.
+  Right of the quickslot: the spell in hand (`spell-label`, inventory.lisp). The hands, like the
+  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). `show-message` puts a line across the view for
+  `*message-time*` (a glyph's), and `forge-prompt` says "E: Spellforge" at an altar. A pickup of a
+  counted item (dust's pile; coins, once there are gold pickups) puts "+25 arcane dust" just above
+  the crosshair for `*pickup-note-time*` (`note-pickup`, the `pickup-banner`; the item's `:note`,
+  else its name), pickups of one kind in quick succession adding up.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
   (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
@@ -934,18 +1016,30 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
   whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
-  to `*cast-release*`.
+  to `*cast-release*`. Their fire takes the look of the spell in them (`*hand-looks*`, by
+  `spell-look`: a tornado's `:storm`, else its effects'), one strip per look, each the fire strip
+  recoloured, `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/<look> --hue H`
+  (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295); `add-hands`
+  preloads them all, since `swap-animation` changes the strip mid-game. The recipes (the hotbar's
+  defaults) work as before: `(select-weapon *player* :1)` is hotbar key 1, the sword at the start.
 - `src/sword.lisp` also has **enchantments**: a weapon's spell (`enchantments`, a plist from `:sword`,
   `:spear` or `:shield` to a spell, made at the forge) goes with every blow of it that lands
   (`enchant-strike`, from `swing-hit` and the bash), for `enchant-cost` mana (`*enchant-cost-scale*`
   of the spell's cost) out of the pool; with too little left the blow is plain, and a miss costs
-  nothing. Its self effects land on the player. Its weapon slot's border takes the spell's colour,
-  dimmed while mana can't pay (`weapon-enchantment`, `spell-tint`). The hands cast `current-spell`,
-  the `spellbook`'s `active-spell` (R cycles it; `*starting-spells*` bolt and heal).
-- `src/sword.lisp`: the sword and weapon switching. The player holds one weapon (`*weapons*`:
-  1 the sword, 2 the casting hands, 3 the spear, 4 the tornado, cast by the same hands with their
-  fire recoloured: `hands`' `hand-weapon`, `data/sprites/hands/storm`, from
-  `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/storm`); switching lowers one off screen and raises the next.
+  nothing. Its self effects land on the player. The weapon's border on the hotbar and in the bag takes
+  the spell's colour, dimmed while mana can't pay (`weapon-enchantment`, `spell-tint`), and so does its
+  sprite on screen: `sword` (and so the spear and the shield) is a `rim-glow` (boss.lisp), whose rim
+  `rim-weapon`'s enchantment colours each tick, pulsing on `*light-clock*` (`*weapon-rim-strength*`,
+  `*weapon-rim-pulse*`) and dimmed by `*enchant-dim*`; `*weapon-rim-width*` (2 texels, `rim-width`)
+  since the weapons' art is fine-grained. The shield's rim is the shield's own enchantment.
+- `src/sword.lisp`: the sword and weapon switching. The player holds one weapon: whatever the hotbar
+  slot asked for holds (`wanted-slot`; keys 1 to 9, `select-slot`, or `select-weapon` with the key
+  `:1` .. `:9`): the sword, the spear, or the casting hands with a rune's spell (`weapon` `:hands`,
+  `held-spell`), or nothing for an empty slot. `sync-wanted` (every tick of `update-weapons`) reads
+  `wanted-weapon` and `wanted-spell` off the slot, so a drag in the inventory changes what is in hand:
+  a weapon or rune dragged off the slot leaves the player empty-handed. Switching lowers one off
+  screen and raises the next, from one spell to another too; `settle-held` takes it in hand at once
+  (after a load, the stairs or a reset).
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
   so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
   blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
@@ -954,15 +1048,15 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   (`swing-frame-times`, `swing-hit-frame`, `swing-reach`, `swing-arc`, `swing-damage`,
   `swing-knockback`, `swing-pain-bonus`), and generics on the sprite which weapon it draws
   for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
-  `weapon-aim`, NIL to keep it against the bottom-right corner). Number keys pick a weapon (the mouse wheel is the
-  quickslot's, inventory.lisp). The weapon slots above the HP bar (`weapon-bar`) show one icon per
-  weapon in `*weapons*` with its key number, the one asked for framed in gold. Icons are
-  frames of `data/sprites/icons/weapons.png` (`*weapon-icons*`), drawn by
-  `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon needs a frame there.
+  `weapon-aim`, NIL to keep it against the bottom-right corner). The mouse wheel is the
+  quickslot's (inventory.lisp). Weapon and rune icons are frames of `data/sprites/icons/weapons.png`
+  (`*weapon-icons*`, a rune's by its spell's look `*spell-icons*`: the fireball in each look's
+  colours, the tornado), drawn by `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new
+  weapon or look needs a frame there.
   The left hand holds a shield, a sprite of its own (`shield`, a subclass of `sword`) against
   the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
   off on screens whose whole-number scale shows fewer art pixels across. It drops and sways
-  with the sword. Both draw at `*weapon-depth*`, behind the bars, the weapon slots and the
+  with the sword. Both draw at `*weapon-depth*`, behind the bars, the hotbar and the
   pain flash. Holding the right button raises the shield over `*block-raise-time*`
   (`block-raise`, 0 to 1; not during a swing, and it comes down before a weapon switch);
   fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
@@ -1014,7 +1108,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   torches light through its walls. Its corridor ends in the `shrine` block, and the `pool`
   (deep water, liquids.lisp) hangs off the shrine's west doorway, `attach-block` by its
   `connector_east` facing `:east`, the two doorways sharing one portal (`drop-portal`) and the
-  pool's others plugged. Its hall has one of each monster and, along its south wall, one of each pickup;
+  pool's others plugged. Its hall is empty of monsters unless `*debug-hall-monsters*` is on (then one of each,
+  `debug-spawn`), and has along its south wall one of each pickup and a pile of 60 arcane dust;
   `*debug-level-monsters*` (a list of kinds, NIL for all) keeps only those in the hall and leaves out
   the annex's imp, the blocks' monsters and the boss.
   A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
@@ -1916,6 +2011,23 @@ python3 tools/slice_frames.py art/spells/rift-flash.png data/sprites/rift --pixe
 python3 -c "from PIL import Image; p='data/sprites/rift/burst.png'; im=Image.open(p).convert('RGBA'); im.putdata([(0,0,0,0) if a and r<90 and g>170 and b>170 and abs(g-b)<50 else (r,g,b,a) for r,g,b,a in im.getdata()]); im.save(p)"
 ```
 
+The status auras (magic.lisp) are 8-frame loops in `data/sprites/status/`, each a generated 2 × 4
+sheet on magenta of small separate pieces over a body-sized area, the middle left open. Shock came
+first (`art/prompts/status-shock.txt`, the bolt sheet and the torch's flame sheet as references);
+it set the look, so fire (`status-burn.txt`, wisps of flame) and frost (`status-snow.txt`,
+snowflakes) take its sheet as their first reference, with the bolt sheet for fire's colours and the
+first frost try (`art/status/frost-1.png`, `-2`, rime round the body's outline, dropped) for
+frost's. Ice and lightning are keyed with `--cold` to keep their blues:
+
+```bash
+tools/gen_image.py art/status/burn.png --prompt-file art/prompts/status-burn.txt --ref art/status/shock-2.png --ref "Bolt Spell Sheet.webp" --size 1536x1024 -n 2
+tools/gen_image.py art/status/regen.png --prompt-file art/prompts/status-regen.txt --ref art/status/shock-2.png --ref art/status/snow-2.png --size 1536x1024 -n 2
+python3 tools/slice_frames.py art/status/regen-1.png data/sprites/status --pixel 5 --filter box regen:8
+python3 tools/slice_frames.py art/status/burn-1.png data/sprites/status --pixel 5 --filter box burn:8
+python3 tools/slice_frames.py art/status/snow-2.png data/sprites/status --pixel 5 --filter box --cold frost:8
+python3 tools/slice_frames.py art/status/shock-2.png data/sprites/status --pixel 5 --filter box --cold shock:8
+```
+
 A monster's death is one 8-frame strip, front view only, cut from a 2 × 4 generated sheet
 whose last frame is the corpse. `--pixel` is chosen so the standing imp in frame 1 is as
 tall as a turnaround cell (96 px), so the strip shares the walking sprite's scale. The
@@ -1943,6 +2055,8 @@ tools/recolor_hue.py data/sprites/pickups/flask data/sprites/pickups/mana-potion
 tools/gen_image.py art/pickups/herbs.png --prompt-file art/prompts/healing-herbs.txt --ref "Pixel Demon Character Turnaround.png" --ref art/pickups/sheet-2.png --size 1536x1024 -n 3
 python3 tools/slice_frames.py art/pickups/herbs-3.png data/sprites/pickups --pixel 12 --filter box --colors 32 --anchor bottom herbs:4
 tools/draw_item_icons.py data/sprites/icons/items
+tools/gen_image.py art/pickups/dust.png --prompt-file art/prompts/pickup-dust.txt --ref "Pixel Demon Character Turnaround.png" --ref art/pickups/sheet-2.png --size 1536x1024 -n 2
+python3 tools/slice_frames.py art/pickups/dust-2.png data/sprites/pickups --pixel 14 --filter box --anchor bottom --violet dust:4
 ```
 
 The arena's gate is one generated picture, an ornate iron portcullis flat-on with magenta in its
@@ -2391,7 +2505,7 @@ Standing on the landing (`at-level-exit-p`: within `*exit-reach*` across and `*e
 floor, which leaves out the stair's last step and the room next door) runs `descend`. It adds a
 `level-record` to the player's `level-records` (monsters, slain, blocks, explored, seed), keeps
 `carried-state` (`*carried-slots*`: **a new slot that should survive the stairs needs adding there**,
-as well as to `saved-slots`; what the player knows, the spellbook, the active spell and the
+as well as to `saved-slots`; what the player knows, the hotbar, the slot in hand and the
 enchantments are there), and rebuilds through `load-level`; `setup-scene` lays that state over
 the fresh player. It is one-way: the old level goes with its scene, along with anything in flight. No
 key or clearing is needed. `run-totals` adds the records to the level in play, for the death screen.
@@ -2420,15 +2534,17 @@ necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10
 Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
 the pause menu) and Esc again to resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
-down; swim into a ledge at the surface to climb out), 1 for the sword, 2 for the casting
-hands, 3 for the spear and 4 for the tornado, the mouse wheel to change the quickslot's potion, left click to
-attack (swing, thrust, or cast the bolt or the tornado), right button held to raise the shield (sword only; a left
-click while it's up bashes), Q to drink from the quickslot, I for the inventory (drag items with
-the left button; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to quicksave
-and F9 to quickload (generated levels only), F12 for a screenshot. R cycles the spell the hands
-cast, and E at an altar opens the spellforge (see `src/forge.lisp`).
+down; swim into a ledge at the surface to climb out), 1 to 9 for what the hotbar holds (at the
+start 1 the sword, 2 the bolt, 3 the spear, 4 the tornado, 5 heal), the mouse wheel to change the
+quickslot's potion, left click to attack (swing, thrust, or cast the spell in hand), right button
+held to raise the shield (sword only; a left click while it's up bashes), Q to drink from the
+quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, or a
+potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
+quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E at an altar
+opens the spellforge (see `src/forge.lisp`).
 
-To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
+To test combat without the mouse (the hall's monsters below need
+`(setf *debug-hall-monsters* t)` and a fresh debug level): `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
 0.23 s in; stand within 2 m of the imp, facing it), and with `:3` thrusts the spear (0.24 s in, within 3.5 m); `(setf (block-raise *player*) 1.0)` under hit-stop

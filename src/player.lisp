@@ -66,8 +66,11 @@ dive in, a shove), as an exponential.")
 (defparameter *inventory-size* 20 "Cells in the player's inventory (inventory.lisp).")
 (defparameter *starting-effects* '(:damage :heal :knockback :fire)
   "What the player can forge with at the start of a run; glyphs (pickups.lisp) teach the rest.")
-(defparameter *spellbook-size* 4 "Spells the player can carry, which the hands cast one at a time.")
-(defparameter *starting-spells* '(bolt heal) "The spellbook a run starts with, by name.")
+(defparameter *hotbar-size* 9 "Slots on the hotbar (inventory.lisp), keys 1 to 9.")
+(defparameter *starting-hotbar* '(:sword bolt :spear tempest heal)
+  "What a run starts with in the bag, from its first cell, each bound to the hotbar key of its
+place, from 1: a weapon's item kind, or a spell's name, which the player carries as a rune.")
+(defparameter *starting-slot* 1 "The hotbar slot, from 0, a run starts with in hand.")
 (defparameter *footstep-stride* 2.0 "Metres walked on foot from one footstep to the next.")
 (defparameter *footstep-volume* 0.5)
 (defparameter *swim-stroke-stride* 2.2 "Metres swum from one stroke to the next.")
@@ -109,7 +112,7 @@ dive in, a shove), as an exponential.")
    (inventory :initform (make-list *inventory-size*) :accessor inventory
               :documentation "A list of cells, each a stack, (KIND COUNT), or NIL (inventory.lisp).")
    (quickslot :initform NIL :accessor quickslot
-              :documentation "The stack Q drinks from, or NIL. A count of 0 remembers the kind.")
+              :documentation "The kind of potion Q drinks from the bag, or NIL.")
    (stamina :initform *max-stamina* :accessor stamina)
    (winded :initform NIL :accessor winded
            :documentation "True from running out of stamina until *WINDED-RECOVER*: no running.")
@@ -120,16 +123,22 @@ dive in, a shove), as an exponential.")
                   :documentation "Spell being cast, launched at *CAST-RELEASE*.")
    (known-effects :initform (copy-list *starting-effects*) :accessor known-effects
                   :documentation "Effect kinds and elements, and :AREA, the player can forge with.")
-   (spellbook :initform (mapcar #'find-spell *starting-spells*) :accessor spellbook
-              :documentation "The spells the hands can cast, at most *SPELLBOOK-SIZE*.")
-   (active-spell :initform 0 :accessor active-spell
-                 :documentation "Index in SPELLBOOK of the spell the hands cast.")
+   (hotbar :initform (make-list *hotbar-size*) :accessor hotbar
+           :documentation "A list of *HOTBAR-SIZE* slots, each a weapon's or a rune's stack in the
+INVENTORY (EQ), or NIL (inventory.lisp): what keys 1 to 9 take in hand. Saved as HOTBAR-CELLS.")
+   (wanted-slot :initform *starting-slot* :accessor wanted-slot
+                :documentation "The hotbar slot, from 0, whose weapon or spell is asked for.")
+   (held-spell :initform NIL :accessor held-spell :documentation "The spell the hands on screen cast.")
+   (wanted-spell :initform NIL :accessor wanted-spell
+                 :documentation "The spell asked for; differs from HELD-SPELL while switching.")
    (enchantments :initform () :accessor enchantments
                  :documentation "A plist from weapon (:SWORD, :SPEAR, :SHIELD) to the spell its
 blows carry (ENCHANT-STRIKE, sword.lisp).")
-   (weapon :initform :hands :accessor weapon :documentation "Weapon on screen (sword.lisp).")
-   (wanted-weapon :initform :hands :accessor wanted-weapon
-                  :documentation "Weapon asked for; differs from WEAPON while switching.")
+   (weapon :initform NIL :accessor weapon
+           :documentation "Weapon on screen (sword.lisp): :SWORD, :SPEAR, :HANDS or NIL.")
+   (wanted-weapon :initform NIL :accessor wanted-weapon
+                  :documentation "Weapon asked for, from the wanted hotbar slot (SYNC-WANTED);
+differs from WEAPON while switching.")
    (weapon-lower :initform 0.0 :accessor weapon-lower
                  :documentation "How far the weapon on screen is lowered: 0 up, 1 gone.")
    (swing-time :initform NIL :accessor swing-time
@@ -166,6 +175,10 @@ blow knocked it aside (BREAK-GUARD).")
    (whirl-sound :initform NIL :accessor whirl-sound :documentation "The wind's loop while a vortex holds the player, or NIL.")))
 
 ;; Trial's camera has no roll; the player's view rolls as it falls dead (FALL-DEAD).
+;; The starting kit, in the bag and bound to its keys (GIVE-STARTING-KIT, inventory.lisp).
+(defmethod initialize-instance :after ((player player) &key)
+  (give-starting-kit player))
+
 (defmethod project-view ((camera player))
   (let ((rot (rotation camera))
         (loc (location camera)))
@@ -247,21 +260,9 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
   (when (eq button :right)
     (setf (block-held player) NIL)))
 
-(defun current-spell (player)
-  "The spell the hands cast."
-  (let ((book (spellbook player)))
-    (and book (nth (mod (active-spell player) (length book)) book))))
-
-(defun cycle-spell (player &optional (step 1))
-  (let ((n (length (spellbook player))))
-    (when (< 0 n)
-      (setf (active-spell player) (mod (+ (active-spell player) step) n)))))
-
 (define-handler (player key-press) (key)
   (case key
     (:f12 (screenshot))
-    (:r (when (eq *game-state* :playing)
-          (cycle-spell player)))
     (:e (when (and (eq *game-state* :playing) (forge-allowed-p player))
           (open-forge)))
     (T (when (eq *game-state* :playing)

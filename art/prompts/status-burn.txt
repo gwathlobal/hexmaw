@@ -1,0 +1,20 @@
+Pixel-art sprite sheet for a Doom/Hexen-style first-person dark-fantasy dungeon game: an 8-frame looping BURNING AURA, the fire that clings to a monster set alight by a fire spell. It is drawn over the monster's body as an overlay, so draw only the fire, never a creature.
+
+REFERENCE IMAGES, in the order attached:
+1. A finished aura sheet from the same game: crackling lightning over a body. Copy its layout, scale and density exactly: 2 rows of 4 cells, the same tall narrow area covered, the same amount of open magenta, several small separate pieces scattered over the area rather than one big shape. This one is fire instead of lightning.
+2. A spell effect sheet from the same game (a fireball). Match its fire colours and its solid, outline-free fire shapes.
+
+THE FIRE
+- Five to eight SMALL, separate wisps of flame scattered over a tall narrow area the size of a standing body, each a little licking flame no bigger than a hand: a rounded base narrowing up into one or two pointed tongues. Different sizes, some low near the feet, some at the sides, some up near the shoulders and head. A few single-pixel embers drifting up between them.
+- NOT one big bonfire or column of fire: the middle is mostly open magenta, so the monster shows through between the wisps.
+- Colours: a pale yellow core in the bigger wisps, yellow, orange and a deep red rim and tips. No smoke.
+- The 8 frames loop seamlessly: the wisps dance, each flickering and licking up and down, some rising and shrinking out at the top while new small ones kindle lower down, embers floating up and winking out. No frame is a single big flash.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- In every cell the aura is centred and covers the same area, at the same scale.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow or haze.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No creature, no text, labels, numbers or frame borders.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no glow bleeding into the background.

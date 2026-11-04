@@ -1,8 +1,10 @@
 (in-package #:hexmaw)
 
-;;; The sword, and switching between weapons. The player holds one weapon at a time
-;;; (*WEAPONS*): the sword, the casting hands or the spear (spear.lisp). Switching
-;;; lowers the current one off the bottom of the screen and raises the next, Hexen-style.
+;;; The sword, and switching between weapons. The player holds one weapon at a time: the
+;;; sword, the spear (spear.lisp) or the casting hands with a spell, whichever the hotbar slot
+;;; asked for holds (keys 1 to 9; the hotbar is the inventory's, inventory.lisp). Switching
+;;; lowers the current one off the bottom of the screen and raises the next, Hexen-style; one
+;;; spell to another lowers and raises the hands.
 ;;;
 ;;; The sword's slash and the spear's thrust are both swings: SWING-TIME runs whichever
 ;;; is in hand, and the generics below (SWING-FRAME-TIMES, SWING-REACH and the rest)
@@ -27,7 +29,7 @@
 (defparameter *sword-idle-frames* 4 "Strip frames the idle loop steps through, from the first.")
 (defparameter *sword-swing-first* 4 "Strip index of the slash's first frame.")
 
-(defparameter *weapons* '(:1 :sword :2 :hands :3 :spear :4 :tempest) "Key to press for each weapon.")
+(defparameter *hotbar-keys* '(:1 :2 :3 :4 :5 :6 :7 :8 :9) "The key of each hotbar slot.")
 (defparameter *weapon-switch-time* 0.15 "Seconds to lower a weapon, and again to raise the next.")
 
 (defparameter *swing-frame-times* '(0.05 0.07 0.07 0.04 0.06 0.07 0.08 0.08)
@@ -71,9 +73,6 @@ keeps the proportions of its render and of the generator's restyle.")
   "Art pixels the strip reaches past the right edge. The arm runs off that edge in the
 cut, so this must be more than the sway, or the cut-off end shows.")
 (defparameter *sword-bob* 3.0 "Sway at walking speed, in art pixels.")
-(defparameter *weapon-depth* -1.0
-  "HUD depth of the sword and shield: behind the bars, the weapon slots and the pain
-flash, which they reach into.")
 
 (defgeneric swing-frame-times (weapon)
   (:documentation "Seconds each frame of WEAPON's swing shows. The swing is over after the last."))
@@ -97,23 +96,53 @@ flash, which they reach into.")
 (defmethod swing-knockback ((weapon (eql :sword))) *sword-knockback*)
 (defmethod swing-pain-bonus ((weapon (eql :sword))) *sword-pain-bonus*)
 
-;;; Weapon state lives on the player: WEAPON is the one on screen, WANTED-WEAPON the
-;;; one asked for, WEAPON-LOWER how far it is lowered (0 up, 1 off screen).
+;;; Weapon state lives on the player: WEAPON (and HELD-SPELL, for the hands) is the one on
+;;; screen, WANTED-WEAPON (and WANTED-SPELL) the one asked for, from the hotbar slot
+;;; WANTED-SLOT, WEAPON-LOWER how far it is lowered (0 up, 1 off screen).
 
 (defun attacking-p (player)
   (or (swing-time player) (pending-spell player) (cast-position)
       (bash-time player) (< 0.0 (block-raise player))))
 
-(defun weapon-ready-p (player)
+(defun weapon-in-hand-p (player)
+  "True if what is on screen is what is asked for."
   (and (eq (weapon player) (wanted-weapon player))
+       (eq (held-spell player) (wanted-spell player))))
+
+(defun weapon-ready-p (player)
+  (and (weapon-in-hand-p player)
        (= 0.0 (weapon-lower player))))
 
+(defun sync-wanted (player)
+  "Ask for what the wanted hotbar slot holds now, which a drag in the inventory may have
+changed: its weapon, the hands with its rune's spell, or nothing."
+  ;; A stack that left the bag (a rune unweaved) is no longer bound.
+  (prune-bindings player)
+  (let ((stack (nth (wanted-slot player) (hotbar player))))
+    (setf (wanted-weapon player) (cond ((null stack) NIL)
+                                       ((eq :rune (first stack)) :hands)
+                                       (T (item-property (first stack) :weapon)))
+          (wanted-spell player) (stack-spell stack))))
+
+(defun settle-held (player)
+  "Take what the wanted hotbar slot holds in hand at once, after a load, the stairs or a reset:
+a spell decoded apart from its rune isn't the rune's, and would be switched for it."
+  (sync-wanted player)
+  (setf (weapon player) (wanted-weapon player)
+        (held-spell player) (wanted-spell player)))
+
+(defun select-slot (player index)
+  "Take what hotbar slot INDEX, from 0, holds in hand; an empty one changes nothing. True if
+it holds something."
+  (when (nth index (hotbar player))
+    (setf (wanted-slot player) index)
+    (sync-wanted player)
+    T))
+
 (defun select-weapon (player key)
-  "Switch to the weapon on KEY, if any. Returns true if KEY names one."
-  (let ((weapon (getf *weapons* key)))
-    (when weapon
-      (setf (wanted-weapon player) weapon)
-      T)))
+  "Take what the hotbar slot on KEY (:1 to :9) holds in hand. True if it holds something."
+  (let ((index (position key *hotbar-keys*)))
+    (and index (select-slot player index))))
 
 (defun weapon-drop (player)
   "Fraction of its height the weapon on screen is lowered, eased."
@@ -121,14 +150,13 @@ flash, which they reach into.")
     (* k k)))
 
 (defun player-attack (player)
-  "Attack with the weapon in hand: cast the bolt or the tornado, swing the sword, thrust the
+  "Attack with the weapon in hand: cast the spell in the hands, swing the sword, thrust the
 spear, or, with the shield raised, bash with it. Nothing while the shield is on its way up
-or down."
+or down, or with nothing in hand."
   (when (weapon-ready-p player)
-    (ecase (weapon player)
-      (:hands (let ((spell (current-spell player)))
-                (when spell (player-cast player spell))))
-      (:tempest (player-cast player 'tempest))
+    (case (weapon player)
+      (:hands (when (held-spell player)
+                (player-cast player (held-spell player))))
       (:sword (cond ((<= 1.0 (block-raise player)) (player-bash player))
                     ((= 0.0 (block-raise player)) (player-swing player))))
       (:spear (player-swing player)))))
@@ -136,8 +164,7 @@ or down."
 (defparameter *weapon-sounds*
   '(:sword (:swing :sword-swing :draw :draw-sword)
     :spear (:swing :spear-thrust :draw :draw-spear)
-    :hands (:draw :draw-magic)
-    :tempest (:draw :draw-magic))
+    :hands (:draw :draw-magic))
   "Each weapon's clips (sound.lisp): :SWING as a swing starts, :DRAW as it comes up.")
 
 (defun weapon-sound (weapon event)
@@ -300,27 +327,35 @@ winding up an attack and not already poised from a bash."
               (max 0.0 (- (block-raise player) step))))
     (when (and (= was 0.0) (< 0.0 (block-raise player)) (not (bash-time player)))
       (play-sound :shield-raise)))
+  (sync-wanted player)
   (let ((step (/ dt *weapon-switch-time*)))
-    (cond ((eq (weapon player) (wanted-weapon player))
+    (cond ((weapon-in-hand-p player)
            (setf (weapon-lower player) (max 0.0 (- (weapon-lower player) step))))
           ((attacking-p player))
+          ;; Empty-handed, the next one comes straight up.
+          ((null (weapon player))
+           (setf (weapon player) (wanted-weapon player)
+                 (held-spell player) (wanted-spell player)
+                 (weapon-lower player) 1.0)
+           (play-sound (weapon-sound (weapon player) :draw)))
           ((< (weapon-lower player) 1.0)
            (setf (weapon-lower player) (min 1.0 (+ (weapon-lower player) step))))
           (T
-           (setf (weapon player) (wanted-weapon player))
+           (setf (weapon player) (wanted-weapon player)
+                 (held-spell player) (wanted-spell player))
            (play-sound (weapon-sound (weapon player) :draw))))))
 
 ;;; The sword on screen. The spear's sprite (spear.lisp) is a subclass: these generics
 ;;; say which weapon a sprite draws and how its strip is laid out.
 
-(define-shader-entity sword (hud-element fx-sprite)
+(define-shader-entity sword (rim-glow hud-element fx-sprite)
   ((vertex-array :initform (// 'hexmaw 'hud-quad))
    (animation :initform (find-fx-animation 'sword))
    (bob-phase :initform 0.0 :accessor bob-phase)
    (bob-amount :initform 0.0 :accessor bob-amount)))
 
 (defgeneric held-weapon (sprite)
-  (:documentation "The weapon (a keyword of *WEAPONS*) SPRITE is drawn for."))
+  (:documentation "The weapon (:SWORD or :SPEAR, as a weapon item's :WEAPON) SPRITE is drawn for."))
 (defgeneric idle-frames (sprite)
   (:documentation "Strip frames SPRITE's idle loop steps through, from the first."))
 (defgeneric swing-first (sprite)
@@ -407,6 +442,32 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 (define-shader-entity shield (sword)
   ((animation :initform (find-fx-animation 'shield))))
 
+;;; An enchanted weapon on screen glows at its rim in its spell's colour (RIM-GLOW, boss.lisp),
+;;; as its hotbar slot's border does: pulsing, and dim while mana can't pay a blow.
+
+(defparameter *weapon-rim-strength* 0.85 "How strongly an enchanted weapon's rim shows its colour, at the pulse's top.")
+(defparameter *weapon-rim-pulse* 0.25 "How far the rim's strength falls at the pulse's bottom.")
+(defparameter *weapon-rim-rate* 3.0 "The rim's pulse, in radians a second.")
+
+(defparameter *weapon-rim-width* 2 "Texels the rim reaches in: the weapons' art is fine-grained.")
+(defmethod rim-width ((sprite sword)) *weapon-rim-width*)
+
+(defgeneric rim-weapon (sprite)
+  (:documentation "The weapon whose enchantment SPRITE's rim shows: the shield's own for the shield.")
+  (:method ((sprite sword)) (held-weapon sprite))
+  (:method ((sprite shield)) :shield))
+
+(define-handler (sword tick :after) ()
+  (let ((spell (and *player* (getf (enchantments *player*) (rim-weapon sword))))
+        (glow (glow sword)))
+    (if spell
+        (progn
+          (spell-tint spell glow 1.0)
+          (setf (vw glow) (* (if (<= (enchant-cost spell) (mana *player*)) 1.0 *enchant-dim*)
+                             (- *weapon-rim-strength*
+                                (* *weapon-rim-pulse* 0.5 (+ 1.0 (sin (* *weapon-rim-rate* *light-clock*))))))))
+        (setf (vw glow) 0.0))))
+
 (defun add-shield (container)
   (enter (make-instance 'shield) container))
 
@@ -454,7 +515,12 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (define-fx-animation weapon-icons "sprites/icons/weapons")
 
-(defparameter *weapon-icons* '(:sword 0 :hands 1 :spear 2 :tempest 3) "Frame of each weapon's icon in the strip.")
+(defparameter *weapon-icons* '(:sword 0 :spear 2) "Frame of each weapon's icon in the strip.")
+(defparameter *spell-icons* '(:fire 1 :storm 3 :frost 4 :shock 5 :drain 6 :heal 7 :arcane 8)
+  "Frame in the strip of the icon of a rune of each look (SPELL-LOOK, spells.lisp).")
+
+(defun spell-icon (spell)
+  (getf *spell-icons* (spell-look spell) 1))
 (defparameter *weapon-icon-scale* 2 "Screen pixels per icon art pixel. Whole numbers only.")
 (defparameter *weapon-slot-padding* 3 "Pixels between a slot's edge and its icon.")
 (defparameter *weapon-slot-gap* 6 "Pixels between slots, and between the slots and the bars.")
@@ -532,72 +598,8 @@ void main(){
   color.rgb *= brightness;
 }")
 
-(defclass weapon-bar (entity listener)
-  ((name :initform :weapon-bar)
-   (slots :initform () :accessor slots :documentation "(weapon slot icon label) per weapon.")
-   (spell-label :initform (make-hud-text "" 'spell-label) :reader spell-label
-                :documentation "The spell the hands cast and its cost, right of the slots.")
-   (shown-spell :initform NIL :accessor shown-spell)))
-
-(define-shader-entity spell-label (hud-text) ())
-
-(defmethod hud-shown-p ((label spell-label))
-  (and (call-next-method) *player* (eq :hands (wanted-weapon *player*))))
-
 (defun weapon-enchantment (player weapon)
   "The spell WEAPON's blows carry: the sword's slot shows its shield's if it has none."
   (let ((enchantments (enchantments player)))
     (or (getf enchantments weapon)
         (and (eq weapon :sword) (getf enchantments :shield)))))
-
-(defun add-weapon-bar (container)
-  (let ((bar (make-instance 'weapon-bar)))
-    (setf (slots bar)
-          (loop for (key weapon) on *weapons* by #'cddr
-                collect (list weapon
-                              (make-instance 'weapon-slot)
-                              (make-instance 'weapon-icon :frame (getf *weapon-icons* weapon))
-                              (make-hud-text (string key)))))
-    (enter bar container)
-    ;; Slot, icon and number overlap: entered back to front, and placed at depths to match.
-    (loop for (nil . parts) in (slots bar)
-          do (dolist (part parts) (enter part container)))
-    (enter (spell-label bar) container)
-    bar))
-
-(define-handler (weapon-bar tick) ()
-  (let* ((atlas (animation-atlas (find-fx-animation 'weapon-icons)))
-         (scale *weapon-icon-scale*)
-         (icon-w (* scale (getf atlas :cell-width)))
-         (icon-h (* scale (getf atlas :cell-height)))
-         (pad *weapon-slot-padding*)
-         (slot-w (+ icon-w pad pad))
-         (slot-h (+ icon-h pad pad))
-         (y (+ (hud-top) *weapon-slot-gap*))
-         (wanted (and *player* (wanted-weapon *player*))))
-    (loop for (weapon slot icon label) in (slots weapon-bar)
-          for x from *hud-margin* by (+ slot-w *weapon-slot-gap*)
-          for active = (eq weapon wanted)
-          do (setf (active slot) active
-                   (active icon) active
-                   (vx (scaling slot)) (float slot-w 0f0)
-                   (vy (scaling slot)) (float slot-h 0f0)
-                   (vx (scaling icon)) (float icon-w 0f0)
-                   (vy (scaling icon)) (float icon-h 0f0))
-             (place slot x y -0.2)
-             (place icon (+ x pad) (+ y pad) -0.1)
-             (place label (+ x pad) (- (+ y slot-h) pad +glyph-height+))
-             (let ((spell (and *player* (weapon-enchantment *player* weapon))))
-               (setf (enchanted slot) (and spell T))
-               (when spell
-                 (spell-tint spell (enchant-color slot)
-                             (if (<= (enchant-cost spell) (mana *player*)) 1.0 *enchant-dim*)))))
-    ;; The spell the hands cast, right of the quickslot (inventory.lisp), clear of the
-    ;; hands, re-uploaded only when it changes.
-    (let ((spell (and *player* (current-spell *player*)))
-          (label (spell-label weapon-bar)))
-      (unless (eq spell (shown-spell weapon-bar))
-        (setf (shown-spell weapon-bar) spell
-              (text label) (if spell (format NIL "~a  ~d MP  (R)" (spell-title spell) (spell-cost spell)) "")))
-      (multiple-value-bind (qx qy) (quick-position)
-        (place label (+ qx (item-cell-size) *weapon-slot-gap*) (+ qy 2))))))

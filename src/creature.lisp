@@ -138,7 +138,12 @@ creatures in development live; :GALLERY, every level block laid out (kit.lisp); 
 
 (defclass afflicted ()
   ((statuses :initform () :accessor statuses
-             :documentation "Its STATUSes (magic.lisp), at most one of each kind.")))
+             :documentation "Its STATUSes (magic.lisp), at most one of each kind.")
+   (aura :initform NIL :accessor status-aura
+         :documentation "The STATUS-AURA (magic.lisp) a creature's damage over time shows, or NIL.
+Not saved: it comes back from the status.")
+   (heal-aura :initform NIL :accessor heal-aura
+              :documentation "The same for its healing over time.")))
 
 (defun clear-whirl (actor)
   "ACTOR is neither held nor thrown by a vortex, and can be pulled at once."
@@ -624,6 +629,17 @@ by its KNOCKBACK-SCALE."
       (setf (vx kb) (* speed (/ (vx direction) len))
             (vz kb) (* speed (/ (vz direction) len))))))
 
+(defparameter *shove-hold-speed* 1.5
+  "Metres per second of knockback above which a creature can't walk or lunge: shoved, it is
+carried until it slows, rather than walking straight back through the push.")
+
+(defun shoved-p (creature)
+  "True while knockback carries CREATURE too fast for its own feet. Not on ice, where its
+momentum is its walk."
+  (and (not (footing creature))
+       (let ((kb (momentum creature)))
+         (< (* *shove-hold-speed* *shove-hold-speed*) (+ (expt (vx kb) 2) (expt (vz kb) 2))))))
+
 (defun slide (creature dt)
   "Move by its momentum for DT seconds, stopping at solids and bodies, then slow it by
 friction: on ice by the footing's, and while it walks there it climbs steps as it walks."
@@ -803,6 +819,8 @@ standing still plans afresh instead, round it (STANDING-BODIES), unless it just 
 Blocked for *STUCK-TIME*, it gives up the path. On ice it skids instead (SKID-PATH)."
   (when (footing creature)
     (return-from walk-path (skid-path creature dt)))
+  (when (shoved-p creature)
+    (return-from walk-path))
   (let* ((loc (location creature))
          (target (first (path creature)))
          (dx (- (vx target) (vx loc)))
@@ -1328,6 +1346,7 @@ strike the player if still in reach and in front of it.")
     (let ((speed (lunge-speed creature)))
       (when (and speed (attack-pending creature) (not (ranged-p creature))
                  (< time (attack-hit-time creature))
+                 (not (shoved-p creature))
                  (not (player-within-p creature (* *lunge-stop* (attack-reach creature)))))
         (let ((yaw (facing creature))
               (step (* speed dt)))
@@ -1592,6 +1611,8 @@ after the flinch, block and attack.")
         (setf (slot-bans creature) ()))
       (when (and (statuses creature) (not (dead creature)) (not (dormant-p creature)))
         (update-statuses creature dt))
+      (when (or (statuses creature) (status-aura creature) (heal-aura creature))
+        (update-status-aura creature))
       ;; Held or thrown by a vortex, it moves and thinks no other way.
       (let ((held (whirl-step creature dt)))
         (unless held
