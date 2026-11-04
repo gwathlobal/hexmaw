@@ -1006,9 +1006,11 @@ text `forge-note`s, which wrap (Alloy's
   off the dagger in its splash).
 - `src/music.lisp`: music, through Harmony (`trial-harmony`; `main` is its `main`, which starts
   the sound server: PulseAudio here). In play the `music-director` (entered by `add-music` in
-  `setup-scene`, which stages every track's voice) plays `*music-playlist*` at random, the three
-  exploration and five combat loops (assets `music-explore-1` to `-3`, `music-combat-1` to `-5`,
-  `data/music/<name>.ogg`, on Harmony's `:music` mixer), crossfading over `*music-fade-time*` to
+  `setup-scene`, which stages every track's voice) plays the level's playlist at random
+  (`music-playlist`, from `*music-moods*`: the three exploration and five combat loops, assets
+  `music-explore-1` to `-3`, `music-combat-1` to `-5`, `data/music/<name>.ogg`, on Harmony's
+  `:music` mixer; exploration only in the settlement, combat only on a run's level with the
+  boss's arena, both elsewhere, the debug level too), crossfading over `*music-fade-time*` to
   another (`pick-track`, from `*music-random*`, never the one playing) every `*music-track-time*`
   (3 min) of play. `*screen-music*` gives the main menu `music-title` (composed, see "Sound and
   music"), the death screen `music-death` (the first explore-2, a drone) and the victory screen
