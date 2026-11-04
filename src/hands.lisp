@@ -7,12 +7,26 @@
 ;;;
 ;;; The art has both hands close together, so each hand is its own entity drawing
 ;;; one half of the frame, pushed out from the centre for a wider stance. They close
-;;; up for the frames where they meet around the fireball. Walking sways them.
+;;; up for the frames where they meet around the fireball. Walking sways them. Their fire
+;;; takes the look of the spell in them (*HAND-LOOKS*).
 
 (define-fx-animation fire-hands "sprites/hands/hands" :fps 6 :loop T)
-;; The same with the fire recoloured (tools/recolor_strip.py), for casting the tornado.
+;; The same with the fire recoloured (tools/recolor_strip.py), one for each look.
 (define-fx-animation storm-hands "sprites/hands/storm" :fps 6 :loop T)
+(define-fx-animation frost-hands "sprites/hands/frost" :fps 6 :loop T)
+(define-fx-animation shock-hands "sprites/hands/shock" :fps 6 :loop T)
+(define-fx-animation drain-hands "sprites/hands/drain" :fps 6 :loop T)
+(define-fx-animation heal-hands "sprites/hands/heal" :fps 6 :loop T)
+(define-fx-animation arcane-hands "sprites/hands/arcane" :fps 6 :loop T)
 
+(defparameter *hand-looks*
+  '(:fire fire-hands :storm storm-hands :frost frost-hands :shock shock-hands :drain drain-hands
+    :heal heal-hands :arcane arcane-hands)
+  "The hands' strip for a spell of each look (SPELL-LOOK, spells.lisp).")
+
+(defparameter *weapon-depth* -1.0
+  "HUD depth of the hands, the sword, the shield and the spear: behind the bars, the hotbar, the
+inventory and its tooltip, and the pain flash, which they reach into.")
 (defparameter *hands-height* 0.62
   "Vertical art scale: the strip's cell height times the scale is about this fraction
 of the window height. Snaps to whole screen pixels per art pixel.")
@@ -42,8 +56,6 @@ fire, so for now it borrows the cast's rest poses (its first and last two frames
   ((vertex-array :initform (// 'hexmaw 'hud-quad))
    (animation :initform (find-fx-animation 'fire-hands))
    (side :initarg :side :initform :left :reader side :documentation ":left or :right half.")
-   (hand-weapon :initarg :hand-weapon :initform :hands :reader hand-weapon
-                :documentation "The weapon (sword.lisp) these hands are on screen for.")
    (spread :initform 1.0 :accessor spread :documentation "0 together, 1 fully apart.")
    (bob-phase :initform 0.0 :accessor bob-phase)
    (bob-amount :initform 0.0 :accessor bob-amount)))
@@ -51,9 +63,9 @@ fire, so for now it borrows the cast's rest poses (its first and last two frames
 (defun add-hands (container)
   (enter (make-instance 'hands :side :left) container)
   (enter (make-instance 'hands :side :right) container)
-  (let ((storm (find-fx-animation 'storm-hands)))
-    (enter (make-instance 'hands :side :left :hand-weapon :tempest :animation storm) container)
-    (enter (make-instance 'hands :side :right :hand-weapon :tempest :animation storm) container)))
+  ;; Their other looks are swapped in mid-game (SWAP-ANIMATION): load them now.
+  (loop for (nil name) on *hand-looks* by #'cddr
+        do (preload (make-instance 'hands :animation (find-fx-animation name)) container)))
 
 (defun cast-position ()
   "How far the cast animation has run, in frames from its first, or NIL when none plays."
@@ -90,7 +102,7 @@ out when standing or airborne."
                                   #.(float (* 2 pi) 0f0)))))
 
 (defmethod render :around ((hands hands) (program shader-program))
-  (when (and *player* (eq (weapon *player*) (hand-weapon hands)))
+  (when (and *player* (eq (weapon *player*) :hands))
     (call-next-method)))
 
 (defun layout-hands (hands)
@@ -115,13 +127,17 @@ sway. The sway only ever dips, so the arms' cut-off ends stay below the screen."
               (round (* bob sx (cos phase))))
            (- (+ (* *hands-drop* sy)
                  (round (* bob sy (abs (sin phase))))
-                 (round (* sy cell-h (weapon-drop *player*))))))))
+                 (round (* sy cell-h (weapon-drop *player*)))))
+           *weapon-depth*)))
 
 (define-handler (hands tick) (dt)
   (unless (frozen-p)
     (incf (age hands) dt)
     (when *player*
       (update-bob hands dt)))
+  (let ((spell (and *player* (held-spell *player*))))
+    (when spell
+      (swap-animation hands (find-fx-animation (getf *hand-looks* (spell-look spell) 'fire-hands)))))
   (let* ((atlas (animation-atlas (sprite-animation hands)))
          (position (cast-position))
          (frame (hands-frame hands position))

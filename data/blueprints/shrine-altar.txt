@@ -1,0 +1,20 @@
+; A small sanctum round a spellforge altar (forge.lisp): a slab of stone 0.9 m high in the
+; middle, where the player forges spells and enchants weapons. No tag growth picks: the
+; generator places it itself, on some levels (*RUN-LEVELS* :altar-chance), on a doorway part
+; way into the level. Its doorways plug, so it fits by any of its four.
+cells 2 2
+tags altar
+material dais 0.58 0.47 0.30
+legend
+  A box 0 0.9 dais, altar
+
+plan 0
+#nnnnnn#########
+#..............e
+T..............e
+#..............e
+#.....AAAA.....#
+w..............#
+w..............T
+w..............#
+#########ssssss#

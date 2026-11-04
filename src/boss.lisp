@@ -585,6 +585,10 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
   (:documentation "What ENTITY's whole body is multiplied by.")
   (:method ((entity rim-glow)) *plain-shade*))
 
+(defgeneric rim-width (entity)
+  (:documentation "Texels in from its edge ENTITY's rim reaches: fine-grained art wants more.")
+  (:method ((entity rim-glow)) 1))
+
 (defun light-rim (entity color strength radius)
   "Set ENTITY's rim to COLOR at STRENGTH, and its lamp of RADIUS metres to match, making the lamp
 when it has none in *LAMPS*."
@@ -604,7 +608,8 @@ when it has none in *LAMPS*."
 (defmethod render :before ((entity rim-glow) (program shader-program))
   (let ((texture (texture entity))
         (texel (texel entity)))
-    (setf (vx texel) (/ 1.0 (width texture)) (vy texel) (/ 1.0 (height texture)))
+    (setf (vx texel) (/ (float (rim-width entity)) (width texture))
+          (vy texel) (/ (float (rim-width entity)) (height texture)))
     (setf (uniform program "rim_glow") (glow entity))
     (setf (uniform program "rim_texel") texel)
     (setf (uniform program "rim_shade") (rim-shade entity))))

@@ -288,7 +288,19 @@ title and its buttons.")
 (defparameter *back-actions* '(resume-game close-settings close-slot-menu)
   "Menu actions that go back, playing :MENU-BACK rather than :MENU-SELECT.")
 
+(defgeneric build-panel (panel)
+  (:documentation "Lay PANEL out and FINISH-STRUCTURE it, when it is made: by default a title
+over its lines and a column of its buttons."))
+
+(defgeneric panel-stale-p (panel)
+  (:documentation "True if PANEL, on screen, should be made again (the forge's, forge.lisp,
+after a change to what it shows). The menu controller remakes it.")
+  (:method ((panel menu-panel)) NIL))
+
 (defmethod initialize-instance :after ((panel menu-panel) &key)
+  (build-panel panel))
+
+(defmethod build-panel ((panel menu-panel))
   (let* ((buttons (panel-buttons panel))
          (lines (panel-lines panel))
          (rows (+ 1 (length buttons) (if lines 1 0)))
@@ -483,6 +495,7 @@ victory screens share."
                   ((eq *slot-menu* :load) 'load-menu)
                   (T 'main-menu)))
     (:loading 'loading-screen)
+    (:forge 'forge-panel)
     ;; After the fall (FALL-DEAD).
     (:dead (when (<= *death-panel-delay* (death-time *player*)) 'death-screen))
     (:victory 'victory-screen)
@@ -500,7 +513,6 @@ victory screens share."
         (pain player) 0.0
         (restore-flash player) 0.0
         (mana player) *max-mana*
-        (inventory player) (make-list *inventory-size*)
         (quickslot player) NIL
         (stamina player) *max-stamina*
         (winded player) NIL
@@ -511,6 +523,10 @@ victory screens share."
         ;; No cast in progress, or its bolt would leave at the start of the next game.
         (cast-time player) NIL
         (pending-spell player) NIL
+        (statuses player) ()
+        (known-effects player) (copy-list *starting-effects*)
+        (wanted-slot player) *starting-slot*
+        (enchantments player) ()
         (eye player) *eye-height*
         (weapon-lower player) 0.0
         (run-time player) 0.0
@@ -518,6 +534,8 @@ victory screens share."
         (level-records player) ()
         (killed-by player) NIL
         (death-time player) 0.0)
+  ;; A fresh bag: the starting kit, bound to its keys.
+  (give-starting-kit player)
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))
   (place-camera player))
 
@@ -673,7 +691,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))
         ;; Projectiles and impacts; effect sprites drawn on the HUD stay.
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup))))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup altar-sigil))))
           (push entity leftovers)))
       (mapc #'despawn leftovers))))
 
@@ -708,6 +726,7 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
            (*slot-menu* (close-slot-menu))
            ((eq *game-state* :map) (close-map))
            ((eq *game-state* :inventory) (close-inventory))
+           ((eq *game-state* :forge) (close-forge))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
     (:f5 (queue-menu-action 'quicksave))
@@ -727,6 +746,6 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
     (trial-alloy:hide-panel 'menu-panel))
   (let ((wanted (state-menu))
         (shown (trial-alloy:find-panel 'menu-panel)))
-    (unless (and shown (eq (type-of shown) wanted))
+    (unless (and shown (eq (type-of shown) wanted) (not (panel-stale-p shown)))
       (when shown (trial-alloy:hide-panel 'menu-panel))
       (when wanted (trial:show (make-instance wanted))))))

@@ -66,6 +66,8 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
 
 (defun generator-roll (limit) (random limit *generator-random*))
 
+(defparameter *altar-block* "shrine-altar" "The block a generated level's spellforge altar stands in (forge.lisp).")
+
 (defun weighted-order (names)
   "NAMES in a random order, the heavier (BLOCK-WEIGHT) more likely first."
   (let ((left (copy-list names)) (out ()))
@@ -164,10 +166,11 @@ Returns the pairs."
 (defvar *level-networks* () "The last generated level's networks: its rivers and high quarters.")
 
 (defun generate-level (container &key (seed (or *level-seed* (random most-positive-fixnum (make-random-state T))))
-                                      (rooms *generator-rooms*) exit)
+                                      (rooms *generator-rooms*) exit altar-chance)
   "Grow a level from SEED, aiming for ROOMS rooms. EXIT names a block to put on the open
 doorway furthest from the start once it has grown, or is a list of them, tried in order.
-Returns the seed and whether EXIT went in."
+After it, with ALTAR-CHANCE (0 to 1, or NIL), the spellforge's altar room goes on a doorway
+part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
   (setf *last-level-seed* seed)
   (let* ((*generator-random* (sb-ext:seed-random-state seed))
          (*block-random* *generator-random*)
@@ -344,6 +347,13 @@ Returns the seed and whether EXIT went in."
       (when exit
         (setf exit-placed (loop for d in (stable-sort (copy-list frontier) #'> :key #'door-depth)
                                 thereis (attach d (allowed d (uiop:ensure-list exit))))))
+      ;; Last, so the rest of the level is the same whether it rolls one or not.
+      (when (and altar-chance (< (generator-roll 1.0) altar-chance))
+        (let* ((deepest (reduce #'max frontier :key #'door-depth :initial-value 0))
+               (middle (remove-if-not (lambda (d) (<= (* 0.3 deepest) (door-depth d) (* 0.7 deepest))) frontier))
+               (placed (loop for d in (append (shuffle middle) (shuffle (set-difference frontier middle)))
+                             thereis (attach d (allowed d (list *altar-block*))))))
+          (v:info :hexmaw "Generated level ~d: ~:[no room for the altar~;an altar~]." seed placed)))
       (dolist (d frontier) (shut d))
       (dolist (c shut) (seal-connector container c))
       ;; Every doorway left open should meet another.

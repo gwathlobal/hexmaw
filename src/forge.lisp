@@ -1,0 +1,822 @@
+(in-package #:hexmaw)
+
+;;; The spellforge: at an altar (ADD-ALTAR, pickups.lisp; the town's, or a level's altar room)
+;;; the player spends arcane dust (an item, inventory.lisp; found in the dungeon) to make spells
+;;; out of the effects they know (glyphs teach them, pickups.lisp) and to enchant weapons, whose
+;;; blows then carry a spell (ENCHANT-STRIKE, sword.lisp). Two tabs (*FORGE-TAB*): Spells, where
+;;; a new spell is made into a rune in the bag (GIVE-RUNE), bound to the first free key, and an
+;;; old one unweaved for half its dust; and Enchanting, where a plain weapon of *FORGE-WEAPONS* is
+;;; enchanted and an enchanted one disenchanted, likewise. A rune or an enchantment is never
+;;; changed in place: make another, or destroy it. What is being made is a draft: a delivery and
+;;; up to *MAX-SPELL-EFFECTS* effects, each a kind, an element for damage, and the dials the kind
+;;; has (*EFFECT-KINDS*: magnitude, duration, area). The screen (FORGE-PANEL, an Alloy panel like
+;;; the menus) changes it through the FORGE- commands, which also work from the REPL: (game
+;;; (open-forge)), (forge-tab :enchant), (forge-select :sword), (forge-add-effect), (forge-make).
+;;; A change of what the screen shows bumps *FORGE-REVISION*, and the menu controller remakes the
+;;; panel (PANEL-STALE-P); a slider only changes the draft and the readout.
+
+(defparameter *altar-reach* 1.8 "Metres across from an altar's middle the player can use it from.")
+(defparameter *altar-height* 1.3 "Metres up or down from an altar's top the player's feet may be.")
+(defvar *forge-anywhere* NIL "True to open the forge anywhere with E, in a debug version.")
+
+(defparameter *max-spell-effects* 3)
+(defparameter *max-enchant-effects* 2)
+(defparameter *max-enchant-cost* 6 "Most mana a blow of an enchanted weapon may cost.")
+(defparameter *forge-weapons* '(:sword :spear :shield) "The weapons the forge can enchant.")
+(defparameter *forge-deliveries* '(:projectile :touch :self) "How a forged spell can strike.")
+(defparameter *forge-elements* '(:fire :frost :shock))
+(defparameter *dust-per-mana* 1 "Arcane dust a spell costs to make for each mana a cast of it costs.")
+(defparameter *enchant-dust-scale* 3 "Arcane dust an enchantment costs for each mana a blow of it costs.")
+(defparameter *dust-refund* 0.5 "Fraction of its dust unweaving a spell or disenchanting a weapon gives back.")
+(defparameter *forge-label-width* 24 "Characters a left-column label may take; a longer one is cut.")
+(defparameter *forge-list-rows* 7 "Runes the Spells tab lists at a time; more page.")
+(defparameter *forge-note-chars* 62 "Characters a right-column line holds before it wraps.")
+
+;;; The draft.
+
+(defclass effect-draft ()
+  ((kind :initarg :kind :accessor draft-kind)
+   (element :initarg :element :initform NIL :accessor draft-element)
+   (magnitude :initarg :magnitude :accessor draft-magnitude
+              :documentation "The top of its range; the bottom is *MAGNITUDE-SPREAD* of it.")
+   (duration :initarg :duration :initform 0 :accessor draft-duration)
+   (area :initarg :area :initform 0 :accessor draft-area)))
+
+(defclass forge-draft ()
+  ((sink :initarg :sink :accessor draft-sink
+         :documentation "What it is for: a rune's stack, :NEW for a new rune, or a weapon.")
+   (delivery :initarg :delivery :initform :projectile :accessor draft-delivery)
+   (effects :initarg :effects :initform () :accessor draft-effects)))
+
+(defparameter *magnitude-spread* 0.7 "A forged effect's least roll, against its most.")
+(defparameter *new-effects*
+  '((:damage 8 0) (:heal 15 0) (:knockback 8 0) (:slow 30 4) (:drain 6 0) (:ward 10 10))
+  "(KIND MAGNITUDE DURATION) an effect starts at when added or turned to that kind.")
+
+(defparameter *magnitude-spread* 0.7 "A forged effect's least roll, against its most.")
+(defparameter *new-effects*
+  '((:damage 8 0) (:heal 15 0) (:knockback 8 0) (:slow 30 4) (:drain 6 0) (:ward 10 10))
+  "(KIND MAGNITUDE DURATION) an effect starts at when added or turned to that kind.")
+
+(defvar *forge-tab* :spells "The forge's tab: :SPELLS, making and unweaving runes, or :ENCHANT.")
+(defvar *forge-sink* :new
+  "What the forge is on: :NEW (a spell to make), a rune's stack, or a weapon of *FORGE-WEAPONS*.")
+(defvar *forge-draft* NIL
+  "The draft being made, for :NEW or a plain weapon; NIL for a rune or an enchanted weapon, which
+are only shown, to unweave or disenchant.")
+(defvar *forge-drafts* () "A plist from sink (:NEW or a weapon) to its draft, kept while the forge is left.")
+(defvar *forge-armed* NIL "The sink a first click of Unweave or Disenchant armed: a second does it.")
+(defvar *forge-page* 0 "The page of runes the Spells tab lists.")
+(defvar *forge-revision* 0 "Bumped whenever the forge's screen should be made again.")
+(defvar *forge-note* NIL "What the forge says under the readout: why it can't, or what it did.")
+
+(defun weapon-sink-p (sink) (member sink *forge-weapons*))
+
+(defun player-runes (player)
+  "The runes PLAYER's bag holds, in its order."
+  (remove :rune (carried-stacks player) :key #'first :test-not #'eq))
+
+(defun carried-weapons (player)
+  "The weapons of *FORGE-WEAPONS* PLAYER carries: the shield goes with the sword."
+  (remove-if-not (lambda (w) (< 0 (kind-total player (if (eq w :shield) :sword w)))) *forge-weapons*))
+
+(defun sink-title (sink)
+  (cond ((weapon-sink-p sink) (string-capitalize sink))
+        ((eq sink :new) "New spell")
+        (T (spell-title (stack-spell sink)))))
+
+(defun sink-spell (player sink)
+  "The spell SINK holds: a weapon's enchantment, a rune's; NIL for :NEW."
+  (cond ((weapon-sink-p sink) (getf (enchantments player) sink))
+        ((eq sink :new) NIL)
+        (T (stack-spell sink))))
+
+(defun rune-place (player stack)
+  "Where STACK is, as the forge says it: its key, or the bag."
+  (let ((key (stack-key player stack)))
+    (if key (format NIL "key ~d" (1+ key)) "bag")))
+
+(defun spell-dust (spell) (max 1 (ceiling (* *dust-per-mana* (spell-cost spell)))))
+(defun enchant-dust (spell) (max 1 (ceiling (* *enchant-dust-scale* (enchant-cost spell)))))
+(defun sink-dust (sink spell)
+  "The dust SPELL costs to make for SINK: an enchantment's, or a rune's."
+  (if (weapon-sink-p sink) (enchant-dust spell) (spell-dust spell)))
+(defun refund-dust (cost) (floor (* *dust-refund* cost)))
+(defun player-dust (player) (kind-total player :dust))
+
+(defun editable-p (player sink)
+  "True if the forge makes something for SINK: a new spell, or a weapon not yet enchanted."
+  (or (eq sink :new) (and (weapon-sink-p sink) (null (sink-spell player sink)))))
+
+(defun valid-sink-p (player sink tab)
+  (if (eq tab :enchant)
+      (member sink (carried-weapons player))
+      (or (eq sink :new) (member sink (player-runes player) :test #'eq))))
+
+(defun default-sink (player tab)
+  "What a tab opens on: a new spell, or the first weapon carried."
+  (if (eq tab :enchant) (or (first (carried-weapons player)) :sword) :new))
+
+(defun fit-label (text &optional (width *forge-label-width*))
+  "TEXT cut to WIDTH characters, ending in .. where it was longer."
+  (if (<= (length text) width) text (concatenate 'string (subseq text 0 (- width 2)) "..")))
+
+(defun known-kinds (player)
+  (loop for (kind) in *effect-kinds* when (member kind (known-effects player)) collect kind))
+
+(defun known-elements (player)
+  (remove-if-not (lambda (e) (member e (known-effects player))) *forge-elements*))
+
+(defun area-known-p (player) (member :area (known-effects player)))
+
+(defun self-kind-p (kind) (equal '(:self) (kind-property kind :targets)))
+
+(defun draft-strikes-p (draft)
+  "True if DRAFT's effects land on what it reaches (a weapon's blows, a delivered spell),
+NIL if on the caster (a spell cast on yourself)."
+  (or (weapon-sink-p (draft-sink draft)) (not (eq (draft-delivery draft) :self))))
+
+(defun draft-kinds (draft player)
+  "The effect kinds DRAFT may hold: those PLAYER knows that land where it does, so the forge
+never offers damage cast on yourself or a heal thrown at a monster."
+  (let ((strikes (draft-strikes-p draft)))
+    (remove-if (lambda (kind) (if strikes (self-kind-p kind) (not (self-kind-p kind)))) (known-kinds player))))
+
+(defun fit-effects (draft player)
+  "Turn each of DRAFT's effects that can't land where it does into the first kind that can."
+  (let ((kinds (draft-kinds draft player)))
+    (setf (draft-effects draft)
+          (loop for e in (draft-effects draft)
+                when (member (draft-kind e) kinds) collect e
+                else when kinds collect (clamp-effect (new-effect (first kinds)) player)))))
+
+(defun new-effect (kind)
+  (destructuring-bind (magnitude duration) (rest (assoc kind *new-effects*))
+    (make-instance 'effect-draft :kind kind :magnitude magnitude :duration duration
+                                 :element (when (eq kind :damage) :fire))))
+
+(defun draft-from-spell (spell sink)
+  "A draft of SPELL, for SINK; one damage effect if there is no SPELL."
+  (let ((effects (loop for e in (and spell (spell-effects spell))
+                       when (assoc (effect-kind e) *effect-kinds*)
+                         collect (make-instance 'effect-draft :kind (effect-kind e)
+                                                              :element (effect-element e)
+                                                              :magnitude (second (effect-magnitude e))
+                                                              :duration (effect-duration e)
+                                                              :area (effect-area e)))))
+    (make-instance 'forge-draft :sink sink
+                                :delivery (if (and spell (member (spell-delivery spell) *forge-deliveries*))
+                                              (spell-delivery spell)
+                                              :projectile)
+                                :effects (or effects (list (new-effect :damage))))))
+
+(defun clamp-effect (effect player)
+  "Keep EFFECT's dials within what its kind allows and the player knows."
+  (let ((kind (draft-kind effect)))
+    (setf (draft-magnitude effect) (max 1 (min (kind-property kind :magnitude) (draft-magnitude effect))))
+    (setf (draft-duration effect)
+          (ecase (kind-property kind :timing)
+            (:instant 0)
+            (:over-time (max 0 (min (kind-property kind :duration) (draft-duration effect))))
+            (:status (max 1 (min (kind-property kind :duration) (draft-duration effect))))))
+    (setf (draft-area effect)
+          (if (and (area-known-p player) (not (self-kind-p kind)))
+              (max 0 (min (kind-property kind :area) (draft-area effect)))
+              0))
+    (setf (draft-element effect)
+          (when (eq kind :damage)
+            (let ((known (known-elements player)))
+              (if (member (draft-element effect) known) (draft-element effect) (first known)))))
+    effect))
+
+(defparameter *element-words* '(:fire ("Fire" "Flame") :frost ("Frost" "Frost") :shock ("Shock" "Lightning")))
+(defparameter *kind-words*
+  '(:heal ("Healing" "Mending") :knockback ("Force" "Force") :slow ("Binding" "Binding")
+    :drain ("Draining" "Thirst") :ward ("Warding" "Warding"))
+  "(ADJECTIVE NOUN) each effect kind names a spell by.")
+
+(defun effect-words (effect)
+  (if (eq (draft-kind effect) :damage)
+      (getf *element-words* (or (draft-element effect) :fire))
+      (getf *kind-words* (draft-kind effect))))
+
+(defun draft-name (draft)
+  "A name for DRAFT: its first effect's adjective, a noun for how it strikes, and its second's."
+  (let* ((effects (draft-effects draft))
+         (first (first effects))
+         (noun (cond ((eq (draft-sink draft) :sword) "Edge")
+                     ((eq (draft-sink draft) :spear) "Point")
+                     ((eq (draft-sink draft) :shield) "Bulwark")
+                     ((eq (draft-delivery draft) :touch) "Touch")
+                     ((eq (draft-delivery draft) :self) (if (eq :ward (and first (draft-kind first))) "Aegis" "Blessing"))
+                     ((some (lambda (e) (< 0 (draft-area e))) effects) "Burst")
+                     (T "Bolt"))))
+    (if first
+        (let ((other (find (effect-words first) (rest effects) :key #'effect-words :test-not #'equal)))
+          (format NIL "~a ~a~@[ of ~a~]" (first (effect-words first)) noun
+                  (and other (second (effect-words other)))))
+        noun)))
+
+(defun draft-spec (draft)
+  "DRAFT as a spell spec (SPEC-SPELL, spells.lisp)."
+  (list* (draft-name draft)
+         (if (weapon-sink-p (draft-sink draft)) :touch (draft-delivery draft))
+         (loop for e in (draft-effects draft)
+               for top = (draft-magnitude e)
+               collect (list :kind (draft-kind e)
+                             :magnitude (list (max 1 (ceiling (* *magnitude-spread* top))) top)
+                             :duration (draft-duration e) :area (draft-area e)
+                             :target-type (if (self-kind-p (draft-kind e)) :self :target)
+                             :element (draft-element e)))))
+
+(defun draft-spell (draft) (spec-spell (draft-spec draft)))
+
+(defun draft-problem (draft &optional (player *player*))
+  "Why DRAFT can't be made, as a sentence, or NIL."
+  (let* ((effects (draft-effects draft))
+         (sink (draft-sink draft))
+         (strikes (some (lambda (e) (not (self-kind-p (draft-kind e)))) effects))
+         (weapon (weapon-sink-p sink))
+         (spell (and effects (draft-spell draft))))
+    (cond ((null effects) "Add an effect.")
+          ((and weapon (< *max-enchant-effects* (length effects)))
+           (format NIL "A weapon holds at most ~d effects." *max-enchant-effects*))
+          ((and weapon (< *max-enchant-cost* (enchant-cost spell)))
+           (format NIL "Too strong for a weapon: at most ~d mana a blow." *max-enchant-cost*))
+          ((and (not weapon) (eq (draft-delivery draft) :self) strikes)
+           "Cast on yourself, it strikes nothing: deliver it, or keep to self effects.")
+          ((and (not weapon) (not (eq (draft-delivery draft) :self)) (not strikes))
+           "Nothing in it strikes: cast it on yourself.")
+          ((and (not weapon) (< *max-mana* (spell-cost spell)))
+           (format NIL "It costs more mana than you can hold (~d)." (floor *max-mana*)))
+          ((< (player-dust player) (sink-dust sink spell))
+           (format NIL "It needs ~d arcane dust and you have ~d: find more in the dungeon, or unweave a spell."
+                   (sink-dust sink spell) (player-dust player)))
+          ((and (not weapon) (null (position NIL (inventory player))))
+           "No free bag cell for the rune."))))
+
+(defun draft-cost-text (draft player)
+  (declare (ignore player))
+  (if (null (draft-effects draft))
+      ""
+      (let ((spell (draft-spell draft)))
+        (if (weapon-sink-p (draft-sink draft))
+            (format NIL "~d MP a blow, ~d dust to enchant" (enchant-cost spell) (enchant-dust spell))
+            (format NIL "~d MP a cast, ~d dust to make" (spell-cost spell) (spell-dust spell))))))
+
+;;; Commands: each changes the draft or what the player holds, and says the screen is stale.
+
+(defun forge-changed ()
+  (incf *forge-revision*))
+
+(defun sink-draft (player sink)
+  "SINK's draft, kept from the last time it was on the forge, or a fresh one."
+  (or (getf *forge-drafts* sink)
+      (let ((draft (draft-from-spell NIL sink)))
+        (dolist (e (draft-effects draft)) (clamp-effect e player))
+        (fit-effects draft player)
+        (setf (getf *forge-drafts* sink) draft))))
+
+(defun forge-select (sink &optional (player *player*))
+  "Put SINK on the forge: a new spell or a plain weapon to make, or a rune or an enchanted weapon
+to look at. One the player no longer carries falls back to the tab's first."
+  (let ((sink (if (valid-sink-p player sink *forge-tab*) sink (default-sink player *forge-tab*))))
+    (setf *forge-sink* sink
+          *forge-armed* NIL
+          *forge-note* NIL
+          *forge-draft* (and (editable-p player sink) (sink-draft player sink)))
+    (forge-changed)
+    sink))
+
+(defun forge-tab (tab &optional (player *player*))
+  "Turn to TAB, :SPELLS or :ENCHANT."
+  (setf *forge-tab* tab)
+  (forge-select (if (valid-sink-p player *forge-sink* tab) *forge-sink* (default-sink player tab)) player))
+
+(defun forge-page (step &optional (player *player*))
+  (let ((pages (max 1 (ceiling (length (player-runes player)) *forge-list-rows*))))
+    (setf *forge-page* (mod (+ *forge-page* step) pages))
+    (forge-changed)))
+
+(defun forge-add-effect (&optional (kind :damage) (player *player*))
+  (let* ((draft *forge-draft*)
+         (kinds (and draft (draft-kinds draft player))))
+    (when (and kinds
+               (< (length (draft-effects draft))
+                  (if (weapon-sink-p (draft-sink draft)) *max-enchant-effects* *max-spell-effects*)))
+      (setf (draft-effects draft)
+            (append (draft-effects draft)
+                    (list (clamp-effect (new-effect (if (member kind kinds) kind (first kinds))) player))))
+      (forge-changed))))
+
+(defun forge-remove-effect (index)
+  (setf (draft-effects *forge-draft*) (remove (nth index (draft-effects *forge-draft*)) (draft-effects *forge-draft*)))
+  (forge-changed))
+
+(defun next-in (list item)
+  (or (second (member item list)) (first list)))
+
+(defun unknown-phrase (things)
+  "THINGS, keywords, as \"frost and shock\"."
+  (format NIL "~{~(~a~)~#[~; and ~:;, ~]~}" things))
+
+(defun forge-cycle-kind (index &optional (player *player*))
+  "The next kind PLAYER knows that this draft can hold; with no other, the note says which
+glyphs would teach more."
+  (let* ((effect (nth index (draft-effects *forge-draft*)))
+         (kinds (draft-kinds *forge-draft* player))
+         (kind (next-in kinds (draft-kind effect)))
+         (fresh (new-effect kind)))
+    (when (eq kind (draft-kind effect))
+      (let* ((strikes (draft-strikes-p *forge-draft*))
+             (missing (loop for (k) in *effect-kinds*
+                            when (and (not (member k (known-effects player)))
+                                      (if strikes (not (self-kind-p k)) (self-kind-p k)))
+                              collect k)))
+        (setf *forge-note*
+              (format NIL "~:(~a~) is the only effect you know ~:[cast on yourself~;that strikes~]~@[: glyphs in the dungeon teach ~a~]."
+                      kind strikes (and missing (unknown-phrase missing))))
+        (forge-changed)
+        (return-from forge-cycle-kind NIL)))
+    (setf (draft-kind effect) kind
+          (draft-magnitude effect) (draft-magnitude fresh)
+          (draft-duration effect) (draft-duration fresh)
+          (draft-element effect) (draft-element fresh))
+    (clamp-effect effect player)
+    (forge-changed)))
+
+(defun forge-cycle-element (index &optional (player *player*))
+  "The next element PLAYER knows; with no other, the note says which glyphs would teach more."
+  (let ((effect (nth index (draft-effects *forge-draft*))))
+    (when (eq :damage (draft-kind effect))
+      (let ((next (next-in (known-elements player) (draft-element effect))))
+        (if (eq next (draft-element effect))
+            (setf *forge-note*
+                  (format NIL "~:(~a~) is the only element you know: glyphs in the dungeon teach ~a."
+                          next (unknown-phrase (remove-if (lambda (e) (member e (known-effects player)))
+                                                          *forge-elements*))))
+            (setf (draft-element effect) next
+                  *forge-note* NIL)))
+      (forge-changed))))
+
+(defun forge-cycle-delivery (&optional (player *player*))
+  "The next delivery; effects that can't land where it does become ones that can."
+  (setf (draft-delivery *forge-draft*) (next-in *forge-deliveries* (draft-delivery *forge-draft*)))
+  (fit-effects *forge-draft* player)
+  (forge-changed))
+
+(defun forge-make (&optional (player *player*))
+  "Make the draft, for its dust: a new rune in the bag, on the first free key, or the plain
+weapon's enchantment. The spell, or NIL (and *FORGE-NOTE* says why) if it can't be made."
+  (let* ((draft *forge-draft*)
+         (sink *forge-sink*)
+         (problem (and draft (draft-problem draft player))))
+    (cond ((null draft) NIL)
+          (problem
+           (setf *forge-note* problem)
+           (forge-changed)
+           NIL)
+          (T
+           (let* ((spell (draft-spell draft))
+                  (cost (sink-dust sink spell)))
+             (take-item player :dust cost)
+             (remf *forge-drafts* sink)
+             (if (weapon-sink-p sink)
+                 (progn
+                   (setf (getf (enchantments player) sink) spell)
+                   (forge-select sink player)
+                   (setf *forge-note* (format NIL "~a enchanted with ~a, for ~d dust."
+                                              (sink-title sink) (spell-title spell) cost)))
+                 (multiple-value-bind (cell key) (give-rune player spell)
+                   (forge-select (nth cell (inventory player)) player)
+                   (setf *forge-note* (format NIL "Made ~a for ~d dust: ~:[in the bag~;on key ~:*~d~]."
+                                              (spell-title spell) cost (and key (1+ key))))))
+             spell)))))
+
+(defun forge-destroy (&optional (player *player*))
+  "Unweave the rune on the forge, or disenchant its weapon, for half its dust back. The first
+call only arms it (*FORGE-ARMED*); a second does it."
+  (let* ((sink *forge-sink*)
+         (spell (sink-spell player sink))
+         (weapon (weapon-sink-p sink)))
+    (cond ((null spell) NIL)
+          ((not (eq *forge-armed* sink))
+           (setf *forge-armed* sink
+                 *forge-note* NIL)
+           (forge-changed))
+          (T
+           (let ((back (refund-dust (sink-dust sink spell)))
+                 (title (spell-title spell)))
+             (if weapon
+                 (remf (enchantments player) sink)
+                 (destroy-stack player sink))
+             (give-item player :dust back)
+             (forge-select (if weapon sink :new) player)
+             (setf *forge-note* (format NIL "~:[Unweaved~;Disenchanted~] ~a: ~d dust back." weapon title back))
+             T)))))
+
+(defun open-forge ()
+  (when (and (eq *game-state* :playing) *player*)
+    (setf *game-state* :forge)
+    (release-mouse *player*)
+    (forge-tab *forge-tab*)))
+
+(defun close-forge ()
+  (when (eq *game-state* :forge)
+    (setf *game-state* :playing)
+    (when *player* (capture-mouse *player*))))
+
+;;; The screen: the tabs, what the player holds down the left, the work on the right.
+
+(defparameter *forge-row-height* 34)
+(defparameter *forge-gap* 6)
+(defparameter *forge-left-width* 300)
+(defparameter *forge-right-width* 660)
+
+(defclass forge-slider (menu-slider)
+  ((describe :initarg :describe :reader slider-describe
+             :documentation "A function of the value giving the text at the slider's right."))
+  (:documentation "A MENU-SLIDER over any range, its value written as DESCRIBE writes it."))
+
+(presentations:define-realization (presentations:default-look-and-feel forge-slider)
+  ((:background simple:rectangle)
+   (alloy:margins)
+   :pattern *menu-button-color*)
+  ((:fill simple:rectangle)
+   (alloy:extent 0 0 0 (alloy:ph))
+   :pattern *menu-slider-fill-color*)
+  ((:border simple:rectangle)
+   (alloy:margins)
+   :line-width (alloy:un 2)
+   :pattern *menu-border-color*)
+  ((:label simple:text)
+   (alloy:margins 10 1 1 1)
+   (alloy:text alloy:renderable)
+   :pattern *menu-text-color*
+   :size (alloy:un 17)
+   :halign :start :valign :middle)
+  ((:value simple:text)
+   (alloy:margins 1 1 10 1)
+   ""
+   :pattern *menu-text-color*
+   :size (alloy:un 17)
+   :halign :end :valign :middle))
+
+(presentations:define-update (presentations:default-look-and-feel forge-slider)
+  (:background
+   :pattern (if (or alloy:focus alloy:hovered-p) *menu-button-hover-color* *menu-button-color*))
+  (:fill
+   :bounds (alloy:extent 0 0 (alloy:pw (alloy:slider-unit alloy:renderable)) (alloy:ph))
+   :pattern *menu-slider-fill-color*)
+  (:border
+   :pattern *menu-border-color*
+   :hidden-p NIL)
+  (:label
+   :text (alloy:text alloy:renderable)
+   :pattern *menu-text-color*)
+  (:value
+   :text (funcall (slider-describe alloy:renderable) (alloy:value alloy:renderable))
+   :pattern *menu-text-color*))
+
+(defclass forge-note (alloy:label) ()
+  (:documentation "Text that wraps within its row, which is as many lines tall as it needs."))
+
+(presentations:define-realization (presentations:default-look-and-feel forge-note)
+  ((:label simple:text)
+   (alloy:margins 4 2 4 2)
+   alloy:text
+   :pattern *menu-text-color*
+   :size (alloy:un 19)
+   :wrap T
+   :halign :start :valign :middle))
+
+(presentations:define-update (presentations:default-look-and-feel forge-note)
+  (:label
+   :text alloy:text
+   :pattern *menu-text-color*))
+
+(defmethod presentations::compute-sizing-strategy ((renderer presentations:default-look-and-feel) (note forge-note))
+  presentations::*fit-to-all-shapes*)
+
+(defclass forge-panel (menu-panel)
+  ((revision :initform *forge-revision* :reader panel-revision)
+   (readout :initform (make-instance 'alloy:value-data :value "") :reader readout
+            :documentation "The draft's name and costs: a slider changes it.")
+   (note :initform (make-instance 'alloy:value-data :value "") :reader note
+         :documentation "*FORGE-NOTE*, an armed Unweave's question, or why the draft can't be made.")))
+
+(defmethod panel-title ((panel forge-panel)) "Spellforge")
+(defmethod panel-buttons ((panel forge-panel)) ())
+(defmethod panel-stale-p ((panel forge-panel))
+  (/= (panel-revision panel) *forge-revision*))
+
+(defun forge-readout-text ()
+  (let ((draft *forge-draft*))
+    (if draft
+        (format NIL "~a  -  ~a" (draft-name draft) (draft-cost-text draft *player*))
+        "")))
+
+(defun forge-note-text ()
+  (or *forge-note*
+      (and *forge-armed*
+           (format NIL "~:[Unweave~;Disenchant~] ~a? Click again to do it."
+                   (weapon-sink-p *forge-armed*) (spell-title (sink-spell *player* *forge-armed*))))
+      (and *forge-draft* (draft-problem *forge-draft*))
+      ""))
+
+(defun refresh-readout (panel)
+  (setf (alloy:value (readout panel)) (forge-readout-text)
+        (alloy:value (note panel)) (forge-note-text)))
+
+(defun forge-row (parent sizes &optional (height *forge-row-height*))
+  "A row of cells SIZES wide in PARENT, HEIGHT tall, a grid to enter widgets into by :COL."
+  (let ((row (make-instance 'alloy:grid-layout :col-sizes sizes :row-sizes (list height)
+                                               :cell-margins (alloy:margins 3 0))))
+    (alloy:enter row parent)
+    row))
+
+(defparameter *forge-selected-color* (chroma:color 0.30 0.22 0.07 0.95) "A selected choice's fill.")
+(defparameter *forge-selected-border* (chroma:color 0.98 0.80 0.32) "A selected choice's border.")
+(defparameter *forge-selected-text* (chroma:color 1.0 0.88 0.5) "A selected choice's label.")
+
+(defclass forge-choice (menu-button)
+  ((selected :initarg :selected :initform NIL :reader selected-p))
+  (:documentation "A button for one of a set (a tab, a rune, a weapon): the one chosen has a gold
+border, a warm fill and a gold label, apart from the hover's orange."))
+
+(presentations:define-realization (presentations:default-look-and-feel forge-choice)
+  ((:background simple:rectangle)
+   (alloy:margins)
+   :pattern *menu-button-color*)
+  ((:border simple:rectangle)
+   (alloy:margins)
+   :line-width (alloy:un 2)
+   :pattern *menu-border-color*)
+  ((:label simple:text)
+   (alloy:margins 1)
+   alloy:text
+   :pattern *menu-text-color*
+   :size (alloy:un 20)
+   :halign :middle :valign :middle))
+
+(presentations:define-update (presentations:default-look-and-feel forge-choice)
+  (:background
+   :pattern (cond ((or alloy:focus alloy:hovered-p) *menu-button-hover-color*)
+                  ((selected-p alloy:renderable) *forge-selected-color*)
+                  (T *menu-button-color*)))
+  (:border
+   :pattern (if (selected-p alloy:renderable) *forge-selected-border* *menu-border-color*)
+   :line-width (alloy:un (if (selected-p alloy:renderable) 3 2))
+   :hidden-p NIL)
+  (:label
+   :text alloy:text
+   :pattern (if (selected-p alloy:renderable) *forge-selected-text* *menu-text-color*)))
+
+(defun forge-button (label action row col focus &key (selected NIL choice))
+  "A button LABEL in ROW's cell COL that runs ACTION, a function, on the next tick. With
+:SELECTED, one of a set (FORGE-CHOICE), drawn chosen when it is true."
+  (let ((button (if choice
+                    (alloy:represent-with 'forge-choice (make-instance 'alloy:value-data :value label)
+                                          :focus-parent focus :selected selected)
+                    (alloy:represent-with 'menu-button (make-instance 'alloy:value-data :value label)
+                                          :focus-parent focus))))
+    (alloy:enter button row :row 0 :col col)
+    (alloy:on (alloy:activate button) ()
+      (queue-menu-action action))
+    button))
+
+(defun forge-text (text row col &optional (value ""))
+  (alloy:enter (alloy:represent-with 'menu-stat (make-instance 'alloy:value-data :value text) :value value)
+               row :row 0 :col col))
+
+(defun note-lines (text &optional (chars *forge-note-chars*))
+  "Rows TEXT takes, wrapped at about CHARS characters a row."
+  (max 1 (ceiling (length text) chars)))
+
+(defun forge-note-row (parent data &optional (lines 1))
+  "A row of wrapping text LINES rows tall, showing DATA, a string or an ALLOY:VALUE-DATA."
+  (let ((row (forge-row parent '(T) (+ (* lines (- *forge-row-height* 10)) 10))))
+    (alloy:enter (alloy:represent-with 'forge-note
+                                       (if (stringp data) (make-instance 'alloy:value-data :value data) data))
+                 row :row 0 :col 0)
+    row))
+
+(defun forge-dial (panel label getter setter range step describe row col focus)
+  (let ((slider (alloy:represent-with 'forge-slider
+                                      (make-instance 'alloy:place-data
+                                                     :getter getter
+                                                     :setter (lambda (value)
+                                                               (funcall setter value)
+                                                               (setf *forge-note* NIL)
+                                                               (refresh-readout panel)))
+                                      :text label :range range :step step :grid step
+                                      :describe describe :focus-parent focus)))
+    (alloy:enter slider row :row 0 :col col)
+    slider))
+
+;;; What each effect does, under its dials: from the parameters, so it stays true when they're tuned.
+
+(defparameter *forge-about-chars* 74 "Characters an effect's explanation holds a row before it wraps.")
+
+(defun resisters (element)
+  "Who takes less of ELEMENT, as a phrase: \"acolytes take half\"."
+  (let ((entries (remove element *element-resistances* :key #'second :test-not #'eq)))
+    (when entries
+      (format NIL "~{~a~^ and ~} take ~a"
+              (mapcar (lambda (e) (string-downcase (substitute #\Space #\- (format NIL "~as" (first e))))) entries)
+              (let ((fraction (third (first entries))))
+                (if (= fraction 0.5) "half" (format NIL "~d% less" (round (* 100 fraction)))))))))
+
+(defun effect-about (effect)
+  "What EFFECT, an effect draft, does, in a sentence or two: its kind's rule, its element's quirk
+and who resists it, and what its time and area change."
+  (let* ((kind (draft-kind effect))
+         (element (draft-element effect))
+         (over-time (< 0 (draft-duration effect)))
+         (area (< 0 (draft-area effect)))
+         (text
+           (case kind
+             (:damage
+              (format NIL "~a~@[ ~@(~a~).~]~:[~; Over time: that much a second, ticking on it, with no flinch~:[~;, so shock's pain bonus is lost~].~]"
+                      (ecase (or element :fire)
+                        (:fire "Fire: plain damage, the cheapest to cast.")
+                        (:frost (format NIL "Frost: also chills what it hits, ~d% slower for ~d s. Costs more than fire."
+                                        *frost-chill* (round *frost-chill-time*)))
+                        (:shock (format NIL "Shock: +~d% to the pain roll, so foes flinch and break off their attacks more often. Costs more than fire."
+                                        *shock-pain-bonus*)))
+                      (resisters (or element :fire))
+                      over-time (eq element :shock)))
+             (:heal (if over-time
+                        "Heals you that much a second for its time, rather than all at once."
+                        "Heals you at once."))
+             (:knockback "Pushes what it strikes away; while it slides it can't walk or lunge at you.")
+             (:slow (format NIL "Slows what it strikes by that much for its time, never below ~d% of its speed."
+                            (round (* 100 *slowest*))))
+             (:drain "Takes health from what it strikes and gives you half of what it took. It has no element, so nothing resists it.")
+             (:ward "Takes blows for you: absorbs that much damage before your health does, until it is spent or its time runs out.")
+             (T ""))))
+    (if area
+        (concatenate 'string text " It bursts over its area: everything there in a clear line, but you.")
+        text)))
+
+(defclass forge-about (forge-note) ()
+  (:documentation "A smaller, dimmer FORGE-NOTE: an effect's explanation under its dials."))
+
+(defparameter *forge-about-color* (chroma:color 0.72 0.68 0.6) "An effect's explanation's text.")
+
+(presentations:define-realization (presentations:default-look-and-feel forge-about)
+  ((:label simple:text)
+   (alloy:margins 6 0 4 0)
+   alloy:text
+   :pattern *forge-about-color*
+   :size (alloy:un 16)
+   :wrap T
+   :halign :start :valign :middle))
+
+(presentations:define-update (presentations:default-look-and-feel forge-about)
+  (:label
+   :text alloy:text
+   :pattern *forge-about-color*))
+
+(defun forge-about-row (parent text lines)
+  "An effect's explanation, LINES rows of small text."
+  (let ((row (forge-row parent '(T) (+ (* lines 20) 6))))
+    (alloy:enter (alloy:represent-with 'forge-about (make-instance 'alloy:value-data :value text))
+                 row :row 0 :col 0)
+    row))
+
+(defun build-effect-rows (panel column effect index focus player)
+  (let ((kind (draft-kind effect))
+        (row (forge-row column '(250 250 T))))
+    (forge-button (format NIL "Effect: ~:(~a~)" kind) (lambda () (forge-cycle-kind index)) row 0 focus)
+    (if (eq kind :damage)
+        (forge-button (format NIL "Element: ~:(~a~)" (draft-element effect)) (lambda () (forge-cycle-element index)) row 1 focus)
+        (forge-text (if (self-kind-p kind) "On you" "On what it strikes") row 1))
+    (forge-button "Remove" (lambda () (forge-remove-effect index)) row 2 focus)
+    (let ((dials (forge-row column '(220 220 T))))
+      (forge-dial panel (if (member kind '(:slow)) "Slow" "Power")
+                  (lambda () (draft-magnitude effect))
+                  (lambda (v) (setf (draft-magnitude effect) (max 1 (round v))))
+                  (cons 1 (kind-property kind :magnitude)) 1
+                  (lambda (v)
+                    (let ((top (max 1 (round v))))
+                      (if (eq kind :slow)
+                          (format NIL "~d%" top)
+                          (format NIL "~d-~d~:[~;/s~]" (max 1 (ceiling (* *magnitude-spread* top))) top
+                                  (and (eq :over-time (kind-property kind :timing)) (< 0 (draft-duration effect)))))))
+                  dials 0 focus)
+      (if (eq :instant (kind-property kind :timing))
+          (forge-text "Instant" dials 1)
+          (forge-dial panel "Time"
+                      (lambda () (draft-duration effect))
+                      (lambda (v) (setf (draft-duration effect) (round v)))
+                      (cons (if (eq :status (kind-property kind :timing)) 1 0) (kind-property kind :duration)) 1
+                      (lambda (v) (if (< 0 (round v)) (format NIL "~d s" (round v)) "at once"))
+                      dials 1 focus))
+      (if (and (area-known-p player) (not (self-kind-p kind)) (< 0 (kind-property kind :area)))
+          (forge-dial panel "Area"
+                      (lambda () (draft-area effect))
+                      (lambda (v) (setf (draft-area effect) (/ (round (* 2 v)) 2)))
+                      (cons 0 (kind-property kind :area)) 0.5
+                      (lambda (v) (if (< 0 v) (format NIL "~,1f m" (/ (round (* 2 v)) 2)) "one"))
+                      dials 2 focus)
+          (forge-text (if (self-kind-p kind) "" "No area") dials 2)))
+    ;; What it does, and its element's quirk.
+    (let ((about (effect-about effect)))
+      (forge-about-row column about (note-lines about *forge-about-chars*)))))
+
+(defun shown-spell-lines (player sink)
+  "What the forge says of a rune or an enchanted weapon it only shows."
+  (let ((spell (sink-spell player sink)))
+    (if (weapon-sink-p sink)
+        (cons (format NIL "~d MP a blow, ~d dust to make" (enchant-cost spell) (enchant-dust spell))
+              (mapcan #'effect-lines (spell-effects spell)))
+        (append (spell-lines spell)
+                (list (format NIL "Made for ~d dust, ~a" (spell-dust spell)
+                              (let ((key (stack-key player sink))) (if key (format NIL "on key ~d" (1+ key)) "in the bag"))))))))
+
+(defmethod build-panel ((panel forge-panel))
+  (let* ((player *player*)
+         (tab *forge-tab*)
+         ;; Only a choice that is gone (a rune unweaved, a weapon dropped) is chosen again: that
+         ;; clears the note and an armed Unweave, which every remake would otherwise lose.
+         (sink (if (valid-sink-p player *forge-sink* tab)
+                   *forge-sink*
+                   (forge-select (default-sink player tab) player)))
+         (draft *forge-draft*)
+         (weapon (weapon-sink-p sink))
+         (step (+ *forge-row-height* *forge-gap*))
+         (backdrop (make-instance 'menu-backdrop
+                                  :col-sizes `(T ,*forge-left-width* 24 ,*forge-right-width* T)
+                                  :row-sizes `(T ,(* 15 step) T)))
+         (left (make-instance 'alloy:vertical-linear-layout
+                              :min-size (alloy:size *forge-left-width* *forge-row-height*)
+                              :cell-margins (alloy:margins 0 (/ *forge-gap* 2))))
+         (right (make-instance 'alloy:vertical-linear-layout
+                               :min-size (alloy:size *forge-right-width* *forge-row-height*)
+                               :cell-margins (alloy:margins 0 (/ *forge-gap* 2))))
+         (focus (make-instance 'alloy:focus-list)))
+    ;; FORGE-SELECT bumped the revision; this panel is the one for it.
+    (setf (slot-value panel 'revision) *forge-revision*)
+    (alloy:enter left backdrop :row 1 :col 1)
+    (alloy:enter right backdrop :row 1 :col 3)
+    ;; The tabs, the dust, and what the player holds.
+    (alloy:enter (alloy:represent "Spellforge" 'menu-title) left)
+    (let ((row (forge-row left '(T T))))
+      (forge-button "Spells" (lambda () (forge-tab :spells)) row 0 focus :selected (eq tab :spells))
+      (forge-button "Enchant" (lambda () (forge-tab :enchant)) row 1 focus :selected (eq tab :enchant)))
+    (forge-text "Arcane dust" (forge-row left '(T)) 0 (princ-to-string (player-dust player)))
+    (if (eq tab :spells)
+        (let* ((runes (player-runes player))
+               (pages (max 1 (ceiling (length runes) *forge-list-rows*)))
+               (page (min *forge-page* (1- pages))))
+          (forge-button "New spell" (lambda () (forge-select :new)) (forge-row left '(T)) 0 focus
+                        :selected (eq sink :new))
+          (loop for rune in (nthcdr (* page *forge-list-rows*) runes)
+                repeat *forge-list-rows*
+                do (let ((rune rune))
+                     (forge-button (fit-label (format NIL "~a (~a)" (sink-title rune) (rune-place player rune)))
+                                   (lambda () (forge-select rune)) (forge-row left '(T)) 0 focus
+                                   :selected (eq rune sink))))
+          (when (< 1 pages)
+            (let ((row (forge-row left '(T T))))
+              (forge-button "< Prev" (lambda () (forge-page -1)) row 0 focus)
+              (forge-button "Next >" (lambda () (forge-page 1)) row 1 focus))))
+        (dolist (w (carried-weapons player))
+          (let ((w w) (spell (getf (enchantments player) w)))
+            (forge-button (fit-label (format NIL "~a: ~a" (sink-title w) (if spell (spell-title spell) "plain")))
+                          (lambda () (forge-select w)) (forge-row left '(T)) 0 focus
+                          :selected (eq w sink)))))
+    ;; The work: a draft to make, or a spell to look at and unweave.
+    (alloy:enter (alloy:represent-with 'menu-title (make-instance 'alloy:value-data
+                                                                  :value (if draft (sink-title sink)
+                                                                             (spell-title (sink-spell player sink)))))
+                 right)
+    (cond (draft
+           (if weapon
+               (forge-text "Its blows carry it, for mana a blow" (forge-row right '(T)) 0)
+               (forge-button (format NIL "Delivery: ~:(~a~)" (draft-delivery draft)) 'forge-cycle-delivery
+                             (forge-row right '(T)) 0 focus))
+           (loop for effect in (draft-effects draft)
+                 for index from 0
+                 do (build-effect-rows panel right effect index focus player))
+           (when (and (draft-kinds draft player)
+                      (< (length (draft-effects draft)) (if weapon *max-enchant-effects* *max-spell-effects*)))
+             (forge-button "Add an effect" 'forge-add-effect (forge-row right '(T)) 0 focus))
+           (forge-note-row right (readout panel) 1))
+          (T
+           (dolist (line (shown-spell-lines player sink))
+             (forge-note-row right line (note-lines line)))))
+    (forge-note-row right (note panel) 2)
+    (refresh-readout panel)
+    (let ((row (forge-row right '(320 T 200))))
+      (cond (draft
+             (forge-button (if weapon "Enchant it" "Make the spell") 'forge-make row 0 focus))
+            (T
+             (forge-button (format NIL "~a~:[~;: sure?~] (+~d dust)"
+                                   (if weapon "Disenchant" "Unweave") (eq *forge-armed* sink)
+                                   (refund-dust (sink-dust sink (sink-spell player sink))))
+                           'forge-destroy row 0 focus)))
+      (forge-text "" row 1)
+      (forge-button "Leave" 'close-forge row 2 focus))
+    (alloy:finish-structure panel backdrop focus)))

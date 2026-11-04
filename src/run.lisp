@@ -7,16 +7,16 @@
 ;;; left (LEVEL-RECORD), which is what the run's totals add up.
 
 (defparameter *run-levels*
-  '((:rooms 16 :exit "descent"
+  '((:rooms 16 :exit "descent" :altar-chance 0.4
      :pool (("imp" 5) ("acolyte" 2) ("knight" 2) ("harpy" 1) ("necromancer" 1))
      :skip-scale 1.0 :elite-chance 0.0
      :sight 1.0 :hearing 1.0 :alert 1.0 :pause 1.0 :cooldown 1.0)
-    (:rooms 19 :exit "descent"
+    (:rooms 19 :exit "descent" :altar-chance 0.4
      :pool (("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1) ("gale-wraith" 1)
             ("riftwalker" 1))
      :skip-scale 0.75 :elite-chance 0.12
      :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
-    (:rooms 22 :exit "arena"
+    (:rooms 22 :exit "arena" :altar-chance 0.4
      :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2)
             ("riftwalker" 2))
      :skip-scale 0.5 :elite-chance 0.2
@@ -24,7 +24,8 @@
   "A run's levels, first to last. :ROOMS is how many rooms the generator aims for, and :EXIT
 the block it puts on the doorway furthest from the start (or a list of them, tried in order):
 the descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
-(boss.lisp). NIL: no such block.
+(boss.lisp). NIL: no such block. :ALTAR-CHANCE is the chance of a spellforge altar room
+(forge.lisp), besides the town's.
 
 How hard its monsters are. Decided as it is built (LEVEL-SETTINGS): :POOL, what a spawn_any
 picks from (*SPAWN-POOL*; leave a kind out rather than give it weight 0), :SKIP-SCALE, which
@@ -39,9 +40,10 @@ attack and :COOLDOWN its abilities' cooldowns. A key left out keeps the variable
 (defvar *last-level-seed* NIL "The seed of the last generated level, to build it again.")
 
 (defparameter *carried-slots*
-  '(health mana inventory quickslot stamina winded run-time damage-taken level-records)
+  '(health mana inventory quickslot stamina winded run-time damage-taken level-records
+    known-effects hotbar-cells wanted-slot enchantments)
   "The player's slots that go on to the next level; the rest start fresh (RESET-PLAYER).
-SETUP-SCENE carries the weapon anyway.")
+SETUP-SCENE takes what the hotbar slot asked for in hand (SETTLE-HELD).")
 
 (defvar *carried-state* NIL
   "CARRIED-STATE of the player leaving a level, while the next one is built, else NIL.")

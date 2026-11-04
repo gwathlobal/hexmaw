@@ -21,6 +21,13 @@
     (setf (texture sprite) (animation-texture animation)
           (scaling sprite) (vec (* h (/ (getf atlas :cell-width) (getf atlas :cell-height))) h 1))))
 
+(defun swap-animation (sprite animation)
+  "Show ANIMATION's strip on SPRITE from now on. Its texture must be loaded already: in use by
+an entity in the scene, or preloaded."
+  (unless (eq animation (sprite-animation sprite))
+    (setf (slot-value sprite 'animation) animation
+          (texture sprite) (animation-texture animation))))
+
 (defun spawn-fx (name location container)
   "Play effect animation NAME once at LOCATION. Returns the effect sprite."
   (let ((sprite (make-instance 'fx-sprite :animation (find-fx-animation name) :location (vcopy location))))

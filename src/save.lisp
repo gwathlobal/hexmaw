@@ -55,7 +55,11 @@
   '(feet rotation velocity grounded eye health pain restore-flash restored burn-timer wading swimming climbing breath drown-timer
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
-    block-raise bash-time bash-pending guard-broken run-time damage-taken level-records))
+    block-raise bash-time bash-pending guard-broken run-time damage-taken level-records
+    known-effects hotbar-cells wanted-slot enchantments))
+
+(defmethod saved-slots append ((actor afflicted))
+  '(statuses))
 
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
@@ -122,7 +126,13 @@
     (player (list :player))
     (creature (list :creature (or (position value *creatures*)
                                   (error "~a isn't in *CREATURES*." value))))
-    (spell (list :spell (spell-name value)))
+    ;; A spell of *SPELLS* by name, one the player forged by what it holds.
+    (spell (if (eq value (gethash (spell-name value) *spells*))
+               (list :spell (spell-name value))
+               (list :forged (spell-spec value))))
+    (status (list :status (status-kind value) (status-element value) (status-magnitude value)
+                  (status-left value) (status-timer value) (status-owed value)
+                  (encode-value (status-caster value)) (status-duration value)))
     (ability (list :ability (ability-name value)))
     (fx-animation (list :animation (animation-name value)))
     (cons (mapcar #'encode-value value))
@@ -137,6 +147,12 @@ references that are relative to it (an ability)."
         (:player *player*)
         (:creature (aref *creatures* (second data)))
         (:spell (find-spell (second data)))
+        (:forged (spec-spell (second data)))
+        ;; A save from before statuses kept their duration has none: LEFT stands in.
+        (:status (destructuring-bind (kind element magnitude left timer owed caster &optional duration) (rest data)
+                   (make-instance 'status :kind kind :element element :magnitude magnitude :left left
+                                          :duration (or duration left)
+                                          :timer timer :owed owed :caster (decode-value caster owner))))
         (:ability (or (find-ability owner (second data)) (error "~a has no ability ~s." owner (second data))))
         (:animation (find-fx-animation (second data)))
         (T (mapcar (lambda (d) (decode-value d owner)) data)))
@@ -190,11 +206,12 @@ A vector is written in place, since some slots have only a reader."
                          ((> x y) (return NIL)))))))
 
 (defun level-effects ()
-  "The effects in flight: projectiles, circles, impacts and bursts; not the HUD, torches or pickups."
+  "The effects in flight: projectiles, circles, impacts and bursts; not the HUD, torches, pickups or
+status auras, which come back from their statuses."
   (let ((effects ()))
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup)))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))
@@ -334,7 +351,8 @@ A vector is written in place, since some slots have only a reader."
   (let ((settings (getf save :generator)))
     (progv (mapcar #'car settings) (mapcar #'cdr settings)
       (generate-level container :seed (getf save :seed)
-                                :exit (run-level-property (getf save :depth) :exit)))))
+                                :exit (run-level-property (getf save :depth) :exit)
+                                :altar-chance (run-level-property (getf save :depth) :altar-chance)))))
 
 (defun save-matches-level-p (save)
   "True if the level just built is the one SAVE was made on."
@@ -380,6 +398,8 @@ A vector is written in place, since some slots have only a reader."
       (when (getf record :summoned)
         (spawn-creature (make-instance (getf record :class) :summoned T) scene)))
     (restore-state *player* (getf save :player))
+    (migrate-bindings *player*)
+    (settle-held *player*)
     (place-camera *player*)
     (loop for record in records
           for creature across *creatures*
