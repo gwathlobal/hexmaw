@@ -7,13 +7,13 @@
 ;;; left (LEVEL-RECORD), which is what the run's totals add up.
 
 (defparameter *run-levels*
-  '((:rooms 16 :exit "descent")
-    (:rooms 19 :exit "descent")
-    (:rooms 22 :exit "arena"))
-  "A run's levels, first to last: how many rooms the generator aims for, and the block it
-puts on the doorway furthest from the start (or a list of them, tried in order): the
-descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
-(boss.lisp). NIL: no such block.")
+  '((:rooms 16 :exit "descent" :altar-chance 0.4)
+    (:rooms 19 :exit "descent" :altar-chance 0.4)
+    (:rooms 22 :exit "arena" :altar-chance 0.4))
+  "A run's levels, first to last: how many rooms the generator aims for, the block it puts on
+the doorway furthest from the start (or a list of them, tried in order): the descent, whose
+exit leaves the level, or the last level's arena, whose boss ends the run (boss.lisp), NIL for
+no such block; and the chance of a spellforge altar room (forge.lisp), besides the town's.")
 
 (defvar *run-depth* 1 "Which of *RUN-LEVELS* the player is on, from 1.")
 (defvar *run-seed* NIL "The run's seed, or NIL until a level needs one.")
@@ -21,7 +21,8 @@ descent, whose exit leaves the level, or the last level's arena, whose boss ends
 (defvar *last-level-seed* NIL "The seed of the last generated level, to build it again.")
 
 (defparameter *carried-slots*
-  '(health mana inventory quickslot stamina winded run-time damage-taken level-records)
+  '(health mana inventory quickslot stamina winded run-time damage-taken level-records
+    known-effects spellbook active-spell enchantments)
   "The player's slots that go on to the next level; the rest start fresh (RESET-PLAYER).
 SETUP-SCENE carries the weapon anyway.")
 

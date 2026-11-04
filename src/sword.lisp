@@ -133,7 +133,8 @@ spear, or, with the shield raised, bash with it. Nothing while the shield is on 
 or down."
   (when (weapon-ready-p player)
     (ecase (weapon player)
-      (:hands (player-cast player 'bolt))
+      (:hands (let ((spell (current-spell player)))
+                (when spell (player-cast player spell))))
       (:tempest (player-cast player 'tempest))
       (:sword (cond ((<= 1.0 (block-raise player)) (player-bash player))
                     ((= 0.0 (block-raise player)) (player-swing player))))
@@ -212,7 +213,8 @@ either side of where the player faces, level with the player, and not behind a w
       (hurt target (roll (swing-damage weapon)) :from (feet player)
                                                 :pain-bonus (swing-pain-bonus weapon))
       (push-creature target (v- (location target) (feet player))
-                     (float (swing-knockback weapon) 0f0)))))
+                     (float (swing-knockback weapon) 0f0))
+      (enchant-strike player weapon target))))
 
 (defun bash-hit (player)
   "Bash the creature in front of PLAYER. Against a shield that covers it, the bash glances
@@ -230,7 +232,33 @@ winding up an attack and not already poised from a bash."
              (setf (bash-poise target) *bash-poise-time*)
              (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus bonus)
              (push-creature target (v- (location target) (feet player))
-                            (float (* *bash-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0)))))))
+                            (float (* *bash-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0))
+             (enchant-strike player :shield target))))))
+
+;;; Enchantments: a weapon's spell (the forge's, forge.lisp) goes with every blow of it that
+;;; lands, for ENCHANT-COST mana out of the player's pool; with too little left, the blow
+;;; lands plain. A miss costs nothing.
+
+(defparameter *enchant-cost-scale* 0.5 "Mana a blow costs, against its spell's cost to cast.")
+
+(defun enchant-cost (spell)
+  (max 1 (ceiling (* *enchant-cost-scale* (spell-cost spell)))))
+
+(defun enchanted-p (player weapon)
+  "True if WEAPON is enchanted and PLAYER has the mana for a blow of it."
+  (let ((spell (getf (enchantments player) weapon)))
+    (and spell (<= (enchant-cost spell) (mana player)))))
+
+(defun enchant-strike (player weapon target)
+  "WEAPON's blow landed on TARGET: its enchantment strikes too, if PLAYER can pay."
+  (let ((spell (getf (enchantments player) weapon)))
+    (when (and spell (<= (enchant-cost spell) (mana player)))
+      (decf (mana player) (enchant-cost spell))
+      (let* ((loc (location target))
+             (at (vec (vx loc) (+ (vy loc) (* 0.5 (sprite-height target))) (vz loc))))
+        (apply-self-effects spell player player)
+        (strike-with-spell spell target (feet player) player at)
+        (play-impact spell at (container player))))))
 
 (defun update-weapons (player dt)
   "Run the swing and the weapon switch. Called from the player's tick while not frozen."
@@ -424,15 +452,28 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 (defparameter *weapon-slot-active-border* (vec4 0.95 0.78 0.30 1))
 (defparameter *weapon-icon-dim* 0.45 "Brightness of the icons of the weapons not asked for.")
 
+(defparameter *enchant-dim* 0.4 "Brightness of an enchanted weapon's border while mana can't pay for a blow.")
+
 (define-shader-entity weapon-slot (hud-element vertex-entity transformed-entity)
   ((vertex-array :initform (// 'hexmaw 'hud-quad))
-   (active :initform NIL :accessor active)))
+   (active :initform NIL :accessor active)
+   (enchanted :initform NIL :accessor enchanted
+              :documentation "True while its weapon is enchanted: the border is ENCHANT-COLOR.")
+   (enchant-color :initform (vec4 1 1 1 1) :reader enchant-color)))
 
 (defmethod render :before ((slot weapon-slot) (program shader-program))
   (let ((active (active slot)))
     (setf (uniform program "back_color") (if active *weapon-slot-active-color* *weapon-slot-color*))
-    (setf (uniform program "border_color") (if active *weapon-slot-active-border* *weapon-slot-border*))
-    (setf (uniform program "border_width") (if active 2.0 1.0))))
+    (setf (uniform program "border_color") (cond ((enchanted slot) (enchant-color slot))
+                                                 (active *weapon-slot-active-border*)
+                                                 (T *weapon-slot-border*)))
+    (setf (uniform program "border_width") (if (or active (enchanted slot)) 2.0 1.0))))
+
+(defun spell-tint (spell color brightness)
+  "Set vec4 COLOR to SPELL's look's colour (*SPELL-LOOKS*), brightest channel at BRIGHTNESS."
+  (destructuring-bind (r g b) (fourth (assoc (effects-look (spell-effects spell)) *spell-looks*))
+    (let ((k (/ brightness (max r g b))))
+      (setf (vx color) (* k r) (vy color) (* k g) (vz color) (* k b) (vw color) 1.0))))
 
 (define-class-shader (weapon-slot :vertex-shader)
   "layout (location = TRIAL_V_UV) in vec2 in_uv;
@@ -481,7 +522,21 @@ void main(){
 
 (defclass weapon-bar (entity listener)
   ((name :initform :weapon-bar)
-   (slots :initform () :accessor slots :documentation "(weapon slot icon label) per weapon.")))
+   (slots :initform () :accessor slots :documentation "(weapon slot icon label) per weapon.")
+   (spell-label :initform (make-hud-text "" 'spell-label) :reader spell-label
+                :documentation "The spell the hands cast and its cost, right of the slots.")
+   (shown-spell :initform NIL :accessor shown-spell)))
+
+(define-shader-entity spell-label (hud-text) ())
+
+(defmethod hud-shown-p ((label spell-label))
+  (and (call-next-method) *player* (eq :hands (wanted-weapon *player*))))
+
+(defun weapon-enchantment (player weapon)
+  "The spell WEAPON's blows carry: the sword's slot shows its shield's if it has none."
+  (let ((enchantments (enchantments player)))
+    (or (getf enchantments weapon)
+        (and (eq weapon :sword) (getf enchantments :shield)))))
 
 (defun add-weapon-bar (container)
   (let ((bar (make-instance 'weapon-bar)))
@@ -495,6 +550,7 @@ void main(){
     ;; Slot, icon and number overlap: entered back to front, and placed at depths to match.
     (loop for (nil . parts) in (slots bar)
           do (dolist (part parts) (enter part container)))
+    (enter (spell-label bar) container)
     bar))
 
 (define-handler (weapon-bar tick) ()
@@ -518,4 +574,18 @@ void main(){
                    (vy (scaling icon)) (float icon-h 0f0))
              (place slot x y -0.2)
              (place icon (+ x pad) (+ y pad) -0.1)
-             (place label (+ x pad) (- (+ y slot-h) pad +glyph-height+)))))
+             (place label (+ x pad) (- (+ y slot-h) pad +glyph-height+))
+             (let ((spell (and *player* (weapon-enchantment *player* weapon))))
+               (setf (enchanted slot) (and spell T))
+               (when spell
+                 (spell-tint spell (enchant-color slot)
+                             (if (<= (enchant-cost spell) (mana *player*)) 1.0 *enchant-dim*)))))
+    ;; The spell the hands cast, right of the quickslot (inventory.lisp), clear of the
+    ;; hands, re-uploaded only when it changes.
+    (let ((spell (and *player* (current-spell *player*)))
+          (label (spell-label weapon-bar)))
+      (unless (eq spell (shown-spell weapon-bar))
+        (setf (shown-spell weapon-bar) spell
+              (text label) (if spell (format NIL "~a  ~d MP  (R)" (spell-title spell) (spell-cost spell)) "")))
+      (multiple-value-bind (qx qy) (quick-position)
+        (place label (+ qx (item-cell-size) *weapon-slot-gap*) (+ qy 2))))))

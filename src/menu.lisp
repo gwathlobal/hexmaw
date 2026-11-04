@@ -284,7 +284,19 @@ special variable VARIABLE to T or NIL as it is clicked; or (LABEL :SLIDER VARIAB
 title and its buttons.")
   (:method ((panel menu-panel)) ()))
 
+(defgeneric build-panel (panel)
+  (:documentation "Lay PANEL out and FINISH-STRUCTURE it, when it is made: by default a title
+over its lines and a column of its buttons."))
+
+(defgeneric panel-stale-p (panel)
+  (:documentation "True if PANEL, on screen, should be made again (the forge's, forge.lisp,
+after a change to what it shows). The menu controller remakes it.")
+  (:method ((panel menu-panel)) NIL))
+
 (defmethod initialize-instance :after ((panel menu-panel) &key)
+  (build-panel panel))
+
+(defmethod build-panel ((panel menu-panel))
   (let* ((buttons (panel-buttons panel))
          (lines (panel-lines panel))
          (rows (+ 1 (length buttons) (if lines 1 0)))
@@ -473,6 +485,7 @@ victory screens share."
                   ((eq *slot-menu* :load) 'load-menu)
                   (T 'main-menu)))
     (:loading 'loading-screen)
+    (:forge 'forge-panel)
     ;; After the fall (FALL-DEAD).
     (:dead (when (<= *death-panel-delay* (death-time *player*)) 'death-screen))
     (:victory 'victory-screen)
@@ -501,6 +514,11 @@ victory screens share."
         ;; No cast in progress, or its bolt would leave at the start of the next game.
         (cast-time player) NIL
         (pending-spell player) NIL
+        (statuses player) ()
+        (known-effects player) (copy-list *starting-effects*)
+        (spellbook player) (mapcar #'find-spell *starting-spells*)
+        (active-spell player) 0
+        (enchantments player) ()
         (eye player) *eye-height*
         (weapon-lower player) 0.0
         (run-time player) 0.0
@@ -660,7 +678,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))
         ;; Projectiles and impacts; effect sprites drawn on the HUD stay.
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup))))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup altar-sigil))))
           (push entity leftovers)))
       (mapc #'despawn leftovers))))
 
@@ -695,6 +713,7 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
            (*slot-menu* (close-slot-menu))
            ((eq *game-state* :map) (close-map))
            ((eq *game-state* :inventory) (close-inventory))
+           ((eq *game-state* :forge) (close-forge))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
     (:f5 (queue-menu-action 'quicksave))
@@ -714,6 +733,6 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
     (trial-alloy:hide-panel 'menu-panel))
   (let ((wanted (state-menu))
         (shown (trial-alloy:find-panel 'menu-panel)))
-    (unless (and shown (eq (type-of shown) wanted))
+    (unless (and shown (eq (type-of shown) wanted) (not (panel-stale-p shown)))
       (when shown (trial-alloy:hide-panel 'menu-panel))
       (when wanted (trial:show (make-instance wanted))))))

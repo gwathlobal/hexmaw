@@ -66,6 +66,7 @@ upstairs."
         (fill-pointer *pickup-spots*) 0
         (fill-pointer *pickups*) 0
         (fill-pointer *level-exits*) 0
+        (fill-pointer *level-altars*) 0
         *level-doorways* ()
         *arena* NIL)
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0))
@@ -77,7 +78,8 @@ upstairs."
       (let ((settings (level-settings *run-depth*)))
         (progv (mapcar #'car settings) (mapcar #'cdr settings)
           (generate-level container :seed (level-seed (current-run-seed) *run-depth* attempt)
-                                    :exit (run-level-property *run-depth* :exit))))))
+                                    :exit (run-level-property *run-depth* :exit)
+                                    :altar-chance (run-level-property *run-depth* :altar-chance))))))
 
 (defun level-needs-rebuilding-p ()
   "True if the level just built must have a way off it, or the boss's arena, and the
@@ -183,6 +185,13 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2
+          do (add-pickup container kind x 0 8.5))
+    ;; A spellforge altar in the north-west corner (forge.lisp): a stone 0.9 m high.
+    (add-box container -9.5 0 -9.5  -7.5 0.9 -8.5 :surface :dais)
+    (add-altar container (vec -8.5 0.9 -9.0))
+    ;; One of each glyph further west along the wall, past the lava pit's south edge.
+    (loop for kind in (glyph-kinds)
+          for x from -9 by 1
           do (add-pickup container kind x 0 8.5))
     (build-annex container)
     (build-boss-wing container)

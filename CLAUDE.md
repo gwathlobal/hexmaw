@@ -499,9 +499,24 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   tools/draw_blood.py data/sprites/blood/blood --gibs imp=art/gibs/strips/imp --gibs flesh=art/gibs/strips/flesh --gibs bones=art/gibs/strips/bones
   ```
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
-  projectile delivery, the player's `bolt`, the acolyte's `cinder` and the necromancer's
-  `grave-skull` and `grave-spikes`. A new effect kind is a method on `apply-effect`, for a
-  `creature` target and (in player.lisp, loaded later) a `player` one; where the effect came
+  projectile delivery, the player's `bolt` and `heal`, the acolyte's `cinder` and the necromancer's
+  `grave-skull` and `grave-spikes`. An effect has a kind, a magnitude range, a duration, an area, a
+  target type (`:self`, the caster; `:target`, what the delivery hits) and, for damage, an
+  `element`. `*effect-kinds*` says what each kind the spellforge offers is (its base cost, how its
+  duration counts: `:instant`, `:over-time` (magnitude per second) or `:status`, who it may strike,
+  and the forge's caps); `effect-cost` is base (by element for damage, `*element-costs*`) times the
+  average magnitude, times the duration's factor, times 1 + area, times `*touch-cost-scale*` for a
+  touch spell. The bolt is 14 and the creatures' spells cost what they did. An effect with an area
+  bursts where its spell strikes (`burst-spell`, over `burst-victims` in magic.lisp: every body
+  within it with a clear line, but the caster and those it spares), the impact drawn that much
+  bigger (`play-impact`, `*burst-size*`); a strike without a projectile (a touch, an enchanted
+  blow) goes through `strike-with-spell` and a `strike` source. A spell the player forged isn't in
+  `*spells*`: `spell-spec` and `spec-spell` turn one into plain data and back (a save keeps it so),
+  and its look is its element's or first effect's (`*spell-looks*`: the bolt's frames recoloured
+  into `data/sprites/spells/` by `tools/recolor_hue.py ... --from 30 --reach 60 --hue H --spread
+  0.5`; frost 200, shock 58 with `--spread 0.25`, drain 345, heal 110, arcane 285), each preloaded
+  by `preload-spells`. A new effect kind is a method on `apply-effect`, for a
+  `creature` target and (in player.lisp or magic.lisp, loaded later) a `player` one; where the effect came
   from and which way it pushes are `effect-origin` and `effect-direction` of its source (the
   projectile, or the circle), and `effect-unblockable-p` whether the player's shield counts
   (the circle's comes up from the floor). A projectile hits any live creature or the player except its
@@ -651,6 +666,34 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   other monster taken out of the level; a save made there doesn't load (its monsters don't match),
   so test saves on `(progn (start-level :generated) (setf *run-depth* 3))`. To enrage it,
   `(game (hurt (arena-boss *arena*) 255))`.
+- `src/magic.lisp`: what the forge's effects do, and statuses. An effect with a duration leaves a
+  `status` on an actor (the `afflicted` mixin, creature.lisp, on creatures and the player; `afflict`):
+  damage or health a second (`:damage`, `:heal`, dealt every `*status-tick*` through `burn` or
+  `hurt-player ... :shove NIL`, `status-blow`), a `:slow` (percent, `slow-factor` in `walking-speed`
+  and the player's walk, at most down to `*slowest*`), a `:ward` (points `hurt-player` takes off a
+  blow after the shield, `absorb-ward`). One of each kind; a second keeps the stronger and the longer.
+  `update-statuses` runs in each actor's tick and allocates nothing. A creature takes on its
+  status's element colour (`status-tint`, `*element-tints*`). Elements: frost also chills
+  (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` halves an element for a
+  class (acolyte fire, skeleton frost, gale wraith shock). Drain heals its caster `*drain-share*` of
+  what it took. Statuses are `saved-slots` (`(:status ...)` in a save).
+- `src/forge.lisp`: the spellforge, used at an altar (`add-altar`, pickups.lisp; `near-altar-p`, within
+  `*altar-reach*`; "E: Spellforge" shows there, hud.lisp). E opens it (`open-forge`, `*game-state*`
+  `:forge`, frozen; Esc or Leave closes it; `*forge-anywhere*` opens it anywhere in a debug version).
+  It works on a draft (`*forge-draft*`: a `forge-draft` of a sink, a delivery, `effect-draft`s) for a
+  sink: a spellbook slot (0 to `*spellbook-size*` - 1) or a weapon (`*forge-weapons*`). Effects and
+  elements are those the player knows (`known-effects`: `*starting-effects*`, damage, heal,
+  knockback and fire, plus what glyphs taught; `:area` unlocks area). The commands change the draft
+  and work from the REPL: `forge-select`, `forge-add-effect`, `forge-remove-effect`, `forge-cycle-kind`,
+  `forge-cycle-element`, `forge-cycle-delivery`, `forge-inscribe` (`draft-problem` says why not:
+  self delivery with something to strike, a delivery with nothing to, more than `*max-mana*`, a
+  weapon's more than `*max-enchant-effects*` or `*max-enchant-cost*` a blow), `forge-set-active`,
+  `forge-erase`. A draft's name is made from its effects (`draft-name`, "Frost Burst"). The screen is
+  `forge-panel`, a `menu-panel` that lays itself out (`build-panel`, menu.lisp): the sinks down the
+  left, the draft on the right, its sliders `forge-slider`s (a `menu-slider` with its own range and
+  value text). A structural command bumps `*forge-revision*` and the menu controller remakes the panel
+  (`panel-stale-p`); a slider only changes the draft and the readout and note (`alloy:value-data`s the
+  panel keeps). To look at it: `(game (setf *forge-anywhere* t) (open-forge))`, then `(forge-select :sword)`.
 - `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the
   amounts: `:herbs` +15 health and `:shard` +28 mana (2 bolts) restore at once; at full one stays
   where it is, below full it is taken and any excess lost (`restore-resource`). `:health-potion`
@@ -676,6 +719,16 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   on its third, 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
+  **Glyphs** are pickup kinds with `:teaches` (`:glyph-frost` .. `:glyph-area`): touched, they teach
+  the player an effect for the forge (`learn-glyph`: `known-effects`, a gold flash, a message), and
+  one already known stays. Each level of a run has `*glyphs-per-level*` (2), the run's six shuffled by
+  the run seed alone (`run-glyphs`), placed after the other pickups (`place-glyphs`, from a random
+  state of their own) on free spots, a reward spot first, so the other pickups keep their places. The
+  test level has one of each along the hall's south wall, west of the pickups. Sprites:
+  `tools/draw_glyphs.py data/sprites/pickups` (a rune tablet per glyph, and `altar-sigil`).
+  **Altars**: `add-altar` notes a point in `*level-altars*` (blocks.lisp; a blueprint's `altar`) and
+  hangs an `altar-sigil` over it with a lamp; `reset-run` keeps it. The test level has one on a dais
+  in the hall's north-west corner.
 - `src/inventory.lisp`: the inventory, the quickslot and the panel. `*item-kinds*` says what an item
   is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a stack, 5); a
   pickup's `:amount` must match its item's, since a level's budget counts it. A stack is a list `(kind
@@ -703,6 +756,10 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `hud-shown-p` decides whether an element draws (by default, not on the main menu). The
   frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
   on every screen, counting frames in its render and updating every `*fps-interval*`.
+  Right of the quickslot, clear of the casting hands (which draw over HUD text): the player's
+  statuses (`status-line`, rebuilt only when `status-line-key` changes) over the spell the hands
+  cast (`spell-label`, sword.lisp's weapon bar). `show-message` puts a line across the view for
+  `*message-time*` (a glyph's), and `forge-prompt` says "E: Spellforge" at an altar.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
   toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
   (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
@@ -790,6 +847,13 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
   whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
   to `*cast-release*`.
+- `src/sword.lisp` also has **enchantments**: a weapon's spell (`enchantments`, a plist from `:sword`,
+  `:spear` or `:shield` to a spell, made at the forge) goes with every blow of it that lands
+  (`enchant-strike`, from `swing-hit` and the bash), for `enchant-cost` mana (`*enchant-cost-scale*`
+  of the spell's cost) out of the pool; with too little left the blow is plain, and a miss costs
+  nothing. Its self effects land on the player. Its weapon slot's border takes the spell's colour,
+  dimmed while mana can't pay (`weapon-enchantment`, `spell-tint`). The hands cast `current-spell`,
+  the `spellbook`'s `active-spell` (R cycles it; `*starting-spells*` bolt and heal).
 - `src/sword.lisp`: the sword and weapon switching. The player holds one weapon (`*weapons*`:
   1 the sword, 2 the casting hands, 3 the spear, 4 the tornado, cast by the same hands with their
   fire recoloured: `hands`' `hand-weapon`, `data/sprites/hands/storm`, from
@@ -1919,7 +1983,9 @@ doorway; a reward spot holds a large one first and may take a jump (up to 1 m), 
 risk. `(check-kit)` reports one that can't be reached. No spots in flooded passages, streams or
 on `high-hall`'s perch, which the player can't jump to. `exit` is where the player leaves the
 level (`*level-exits*`, one per group like a spawn, on the storey's floor), which `(check-kit)`
-reports if no doorway reaches it. Characters with the same
+reports if no doorway reaches it. `altar` is a spellforge altar (`*level-altars*`, forge.lisp), one
+per group, on top of the `box` in its cells (`A box 0 0.9 dais, altar`; the town's blueprint uses it
+too). Characters with the same
 column merge into as few boxes as possible. No two faces may lie in one plane facing one
 way, or they flicker: so a wall gets no floor slab under it, and a wall or full-height box
 under a floor slab of the storey above stops 0.5 m short, under the slab. A doorway gets `connector_[<kind>_]<side>`,
@@ -2142,7 +2208,11 @@ needs `(setf *run-seed* NIL)` first.
 The way down is the `descent` block (1 × 2 cells, two storeys: a doorway at the top, a flight down,
 a landing in front of a painted arch, its stair going on into the dark; see "Level textures"). It is tagged only `descent`, so growth never picks it; `generate-level`
 puts its `:exit` on the deepest doorway still open when growth stops, by blocks from the start
-(`door-depth`, since there is no nav grid yet), just before the rest are plugged. Then `build-level`
+(`door-depth`, since there is no nav grid yet), just before the rest are plugged. After it, with the level's
+`:altar-chance` (0.4), the `shrine-altar` (`*altar-block*`: a 2 × 2 sanctum, a spellforge altar on
+a 0.9 m slab, tagged only `altar`) goes on a doorway between 30% and 70% of the deepest depth. That
+roll is the generator's last draw, so a level that doesn't roll one is the level it was; over seeds 1
+to 20 on level 1, 10 had one. The town (another branch) has the run's own altar. Then `build-level`
 asks `level-goal-reached-p` (an exit, or else the arena's doorway, wading and swimming where they
 must). If the player can't get there it
 empties the scene (`clear`) and tries the next seed, up to `*max-level-attempts*`; a loaded level is
@@ -2153,7 +2223,8 @@ Standing on the landing (`at-level-exit-p`: within `*exit-reach*` across and `*e
 floor, which leaves out the stair's last step and the room next door) runs `descend`. It adds a
 `level-record` to the player's `level-records` (monsters, slain, blocks, explored, seed), keeps
 `carried-state` (`*carried-slots*`: **a new slot that should survive the stairs needs adding there**,
-as well as to `saved-slots`), and rebuilds through `load-level`; `setup-scene` lays that state over
+as well as to `saved-slots`; what the player knows, the spellbook, the active spell and the
+enchantments are there), and rebuilds through `load-level`; `setup-scene` lays that state over
 the fresh player. It is one-way: the old level goes with its scene, along with anything in flight. No
 key or clearing is needed. `run-totals` adds the records to the level in play, for the death screen.
 On arriving, `level-banner` (hud.lisp) says "Level 2 of 3" for `*level-banner-time*` seconds of play,
@@ -2183,7 +2254,8 @@ hands, 3 for the spear and 4 for the tornado (or the mouse wheel to cycle them),
 attack (swing, thrust, or cast the bolt or the tornado), right button held to raise the shield (sword only; a left
 click while it's up bashes), Q to drink from the quickslot, I for the inventory (drag items with
 the left button; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to quicksave
-and F9 to quickload (generated levels only), F12 for a screenshot.
+and F9 to quickload (generated levels only), F12 for a screenshot. R cycles the spell the hands
+cast, and E at an altar opens the spellforge (see `src/forge.lisp`).
 
 To test combat without the mouse: `tools/hd '(game (player-cast *player* (quote bolt)))'`
 starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 s) later,

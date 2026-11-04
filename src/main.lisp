@@ -163,6 +163,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                   (:loading "building a level, world frozen")
                   (:map "map open, world frozen (close with (game (close-map)))")
                   (:inventory "inventory open, world frozen (close with (game (close-inventory)))")
+                  (:forge "spellforge open, world frozen (close with (game (close-forge)))")
                   (:dead "player dead, world frozen (leave with (game (exit-to-title)))")
                   (:victory "boss slain, run won, world frozen (leave with (game (exit-to-title)))")
                   (T "playing"))

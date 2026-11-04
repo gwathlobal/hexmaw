@@ -12,14 +12,29 @@
 (define-fx-animation pickup-health-potion "sprites/pickups/flask" :fps 5 :loop T :size (/ 38 64.0))
 (define-fx-animation pickup-shard "sprites/pickups/shard" :fps 5 :loop T :size (/ 28 64.0))
 (define-fx-animation pickup-mana-potion "sprites/pickups/mana-potion" :fps 5 :loop T :size (/ 38 64.0))
+;; Glyphs (tools/draw_glyphs.py): each teaches an effect for the spellforge (forge.lisp).
+(define-fx-animation glyph-frost "sprites/pickups/glyph-frost" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-shock "sprites/pickups/glyph-shock" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-slow "sprites/pickups/glyph-slow" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-drain "sprites/pickups/glyph-drain" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-ward "sprites/pickups/glyph-ward" :fps 4 :loop T :size (/ 30 64.0))
+(define-fx-animation glyph-area "sprites/pickups/glyph-area" :fps 4 :loop T :size (/ 30 64.0))
 
 (defparameter *pickup-kinds*
   '((:herbs :animation pickup-herbs :resource :health :amount 15)
     (:health-potion :animation pickup-health-potion :item :health-potion :resource :health :amount 40)
     (:shard :animation pickup-shard :resource :mana :amount 28)
-    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50))
+    (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50)
+    (:glyph-frost :animation glyph-frost :teaches :frost :name "Frost" :about "frost damage, which chills")
+    (:glyph-shock :animation glyph-shock :teaches :shock :name "Shock" :about "shock damage, which staggers")
+    (:glyph-slow :animation glyph-slow :teaches :slow :name "Slow" :about "slowing what it strikes")
+    (:glyph-drain :animation glyph-drain :teaches :drain :name "Drain" :about "taking health for your own")
+    (:glyph-ward :animation glyph-ward :teaches :ward :name "Ward" :about "a ward that takes blows for you")
+    (:glyph-area :animation glyph-area :teaches :area :name "Area" :about "bursting over an area"))
   "What each kind of pickup restores, and how much, at once or as the :ITEM it gives (keep :AMOUNT
-the item's, *ITEM-KINDS*: a level's budget counts it).")
+the item's, *ITEM-KINDS*: a level's budget counts it), or, a glyph, the effect it :TEACHES.")
+
+(defparameter *glyphs-per-level* 2 "Glyphs on each level of a run: three levels teach all six.")
 
 (defparameter *pickup-hover* 0.15 "Metres from the floor to the bottom of a pickup.")
 (defparameter *pickup-bob* 0.04 "Metres a pickup bobs up and down from its height.")
@@ -80,12 +95,24 @@ taken ones by their place here. BUILD-LEVEL empties it.")
 (defmethod collect-pickup ((pickup pickup) player)
   (let* ((kind (pickup-kind pickup))
          (resource (pickup-property kind :resource))
-         (item (pickup-property kind :item)))
-    (if item
-        (when (give-item player item)
-          (flash-resource player resource)
-          T)
-        (restore-resource player resource (pickup-property kind :amount)))))
+         (item (pickup-property kind :item))
+         (teaches (pickup-property kind :teaches)))
+    (cond (teaches (learn-glyph player kind))
+          (item
+           (when (give-item player item)
+             (flash-resource player resource)
+             T))
+          (T (restore-resource player resource (pickup-property kind :amount))))))
+
+(defun learn-glyph (player kind)
+  "Teach PLAYER the effect glyph KIND teaches. NIL, and it stays where it is, if they know it."
+  (let ((effect (pickup-property kind :teaches)))
+    (unless (member effect (known-effects player))
+      (setf (known-effects player) (append (known-effects player) (list effect)))
+      (flash-resource player :glyph)
+      (show-message (format NIL "Glyph of ~a: ~a. Forge it at an altar."
+                            (pickup-property kind :name) (pickup-property kind :about)))
+      T)))
 
 (defun touching-pickup-p (pickup player)
   (let* ((feet (feet player))
@@ -122,6 +149,28 @@ taken ones by their place here. BUILD-LEVEL empties it.")
   (dolist (i indices)
     (when (< i (length *pickups*))
       (setf (taken (aref *pickups* i)) T))))
+
+;;; Altars: where the spellforge (forge.lisp) is used. A blueprint's `altar` marks the top of
+;;; the stone it stands on (*LEVEL-ALTARS*, blocks.lisp); a sigil hangs over it, turning, with a
+;;; lamp, so it shows across a room. Here, beside the pickups, since RESET-RUN (menu.lisp) keeps
+;;; it as it keeps them.
+
+(define-fx-animation altar-sigil "sprites/pickups/altar-sigil" :fps 6 :loop T :size 0.75)
+
+(defparameter *altar-sigil-lift* 0.8 "Metres over the altar's top the middle of its sigil hangs.")
+(defparameter *altar-light-color* (vec 1.1 0.6 1.6))
+(defparameter *altar-light-radius* 5.0)
+
+(define-shader-entity altar-sigil (upright-fx) ())
+
+(defun add-altar (container top)
+  "An altar whose top is point TOP: noted in *LEVEL-ALTARS*, with its sigil and lamp."
+  (vector-push-extend (vcopy top) *level-altars*)
+  (let ((sigil (make-instance 'altar-sigil :animation (find-fx-animation 'altar-sigil)
+                                           :location (vec (vx top) (+ (vy top) *altar-sigil-lift*) (vz top)))))
+    (enter sigil container)
+    (add-lamp (location sigil) *altar-light-color* *altar-light-radius* :flicker 0.15)
+    sigil))
 
 ;;; Where they go.
 
@@ -221,8 +270,59 @@ from a random state of their own, so the level and its monsters don't change."
                            (if health-p :herbs :shard))
                        (vx p) (vy p) (vz p))))
 
+(defun glyph-kinds ()
+  (loop for (kind . properties) in *pickup-kinds*
+        when (getf properties :teaches) collect kind))
+
+(defun run-glyphs (depth)
+  "The glyphs level DEPTH of the run has: the run's glyphs, shuffled by its seed alone (never by
+what the player knows, so a load builds the same level), *GLYPHS-PER-LEVEL* to a level."
+  (let* ((random (sb-ext:seed-random-state (logxor (or *run-seed* 0) #x61F)))
+         (kinds (coerce (glyph-kinds) 'vector)))
+    ;; Fisher-Yates.
+    (loop for i from (1- (length kinds)) downto 1
+          do (rotatef (aref kinds i) (aref kinds (random (1+ i) random))))
+    (let ((start (* *glyphs-per-level* (1- depth))))
+      (coerce (subseq kinds (min start (length kinds)) (min (+ start *glyphs-per-level*) (length kinds)))
+              'list))))
+
+(defun place-glyphs (container)
+  "Put the level's glyphs on spots no pickup took, a reward spot first, in blocks with no
+pickup if there are any. After SCATTER-PICKUPS and from a random state of their own, so the
+other pickups and their places in *PICKUPS* (a save's taken ones) don't change."
+  (let* ((random (sb-ext:seed-random-state (logxor *last-level-seed* #x5EED)))
+         (*nav-hazards* :swim)
+         (seen (multiple-value-bind (i j k) (nav-nearest-fitting *spawn-point* *player-radius* *player-height*)
+                 (and i (nav-reached i j k *player-radius* *player-height* *step-height*))))
+         (start (map-block-at (vx *spawn-point*) (+ (vy *spawn-point*) 0.1) (vz *spawn-point*)))
+         (taken-at (loop for pickup across *pickups* collect (location pickup)))
+         (spots (when seen
+                  (loop for spot across *pickup-spots*
+                        for p = (getf spot :position)
+                        when (and (not (eq start (getf spot :block)))
+                                  (notany (lambda (at) (and (< (abs (- (vx at) (vx p))) 0.01)
+                                                            (< (abs (- (vz at) (vz p))) 0.01)))
+                                          taken-at)
+                                  (spot-reached-p spot seen))
+                          collect spot)))
+         (used (loop for spot across *pickup-spots*
+                     for p = (getf spot :position)
+                     when (some (lambda (at) (and (< (abs (- (vx at) (vx p))) 0.01)
+                                                  (< (abs (- (vz at) (vz p))) 0.01)))
+                                taken-at)
+                       collect (getf spot :block))))
+    (dolist (kind (run-glyphs *run-depth*))
+      (let ((spot (pick-spot spots '(:reward :floor) used random)))
+        (if spot
+            (let ((p (getf spot :position)))
+              (add-pickup container kind (vx p) (vy p) (vz p) :phase (random 10.0 random))
+              (setf spots (remove spot spots))
+              (push (getf spot :block) used))
+            (v:warn :hexmaw "No spot for the glyph ~(~a~)." kind))))))
+
 (defun place-pickups (container)
   "Put the level's pickups in. Last in BUILD-LEVEL: it asks the nav grid who can reach what."
   (case *level*
-    (:generated (scatter-pickups container))
+    (:generated (scatter-pickups container)
+     (place-glyphs container))
     (:gallery (fill-pickup-spots container))))

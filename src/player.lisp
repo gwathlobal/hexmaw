@@ -64,8 +64,12 @@ dive in, a shove), as an exponential.")
 (defparameter *death-roll-time* 0.7 "Seconds the view takes to roll over.")
 (defparameter *death-panel-delay* 1.2 "Seconds from death to the death screen (menu.lisp).")
 (defparameter *inventory-size* 20 "Cells in the player's inventory (inventory.lisp).")
+(defparameter *starting-effects* '(:damage :heal :knockback :fire)
+  "What the player can forge with at the start of a run; glyphs (pickups.lisp) teach the rest.")
+(defparameter *spellbook-size* 4 "Spells the player can carry, which the hands cast one at a time.")
+(defparameter *starting-spells* '(bolt heal) "The spellbook a run starts with, by name.")
 
-(defclass player (fps-camera whirlable)
+(defclass player (fps-camera whirlable afflicted)
   ((name :initform :player)
    (fov :initform 75.0)
    (near-plane :initform 0.05f0)
@@ -106,6 +110,15 @@ dive in, a shove), as an exponential.")
               :documentation "Seconds since the last cast began, or NIL before the first.")
    (pending-spell :initform NIL :accessor pending-spell
                   :documentation "Spell being cast, launched at *CAST-RELEASE*.")
+   (known-effects :initform (copy-list *starting-effects*) :accessor known-effects
+                  :documentation "Effect kinds and elements, and :AREA, the player can forge with.")
+   (spellbook :initform (mapcar #'find-spell *starting-spells*) :accessor spellbook
+              :documentation "The spells the hands can cast, at most *SPELLBOOK-SIZE*.")
+   (active-spell :initform 0 :accessor active-spell
+                 :documentation "Index in SPELLBOOK of the spell the hands cast.")
+   (enchantments :initform () :accessor enchantments
+                 :documentation "A plist from weapon (:SWORD, :SPEAR, :SHIELD) to the spell its
+blows carry (ENCHANT-STRIKE, sword.lisp).")
    (weapon :initform :hands :accessor weapon :documentation "Weapon on screen (sword.lisp).")
    (wanted-weapon :initform :hands :accessor wanted-weapon
                   :documentation "Weapon asked for; differs from WEAPON while switching.")
@@ -162,10 +175,11 @@ blow knocked it aside (BREAK-GUARD).")
         (yaw (vy (rotation player))))
     (vec (* (sin yaw) (cos pitch)) (- (sin pitch)) (- (* (cos yaw) (cos pitch))))))
 
-(defun player-cast (player name)
-  "Start casting spell NAME, if mana and the cooldown allow. The hands wind up and the
-spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it was cast."
-  (let* ((spell (find-spell name))
+(defun player-cast (player spell)
+  "Start casting SPELL, a spell or the name of one, if mana and the cooldown allow. The
+hands wind up and the spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns
+true if it was cast."
+  (let* ((spell (if (symbolp spell) (find-spell spell) spell))
          (cost (spell-cost spell)))
     (when (and (<= (cast-timer player) 0) (<= cost (mana player)))
       (decf (mana player) cost)
@@ -174,12 +188,31 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
             (pending-spell player) spell)
       T)))
 
+(defparameter *touch-reach* 1.6 "Metres a touch spell reaches, like a short blade.")
+(defparameter *touch-arc* 0.6 "Radians either side of the view a touch spell reaches.")
+
 (defun release-spell (player)
-  "Fire the pending spell from just below the eye toward where the player looks now."
-  (let* ((dir (look-direction player))
-         (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
-    (cast-spell (pending-spell player) origin dir (container player) :caster player)
-    (setf (pending-spell player) NIL)))
+  "Let the pending spell go: its effects on the caster land on PLAYER, then a projectile
+leaves from just below the eye toward where the player looks now, or a touch strikes the
+creature in reach (glancing off a shield that covers it, as a bash does)."
+  (let ((spell (pending-spell player)))
+    (setf (pending-spell player) NIL)
+    (apply-self-effects spell player player)
+    (case (spell-delivery spell)
+      (:self)
+      (:touch
+       (let ((target (swing-target player *touch-reach* *touch-arc*)))
+         (when target
+           (let ((at (vec (vx (location target)) (+ (vy (location target)) (* 0.5 (sprite-height target)))
+                          (vz (location target)))))
+             (if (shielded-p target (feet player))
+                 (block-hit target)
+                 (strike-with-spell spell target (feet player) player at))
+             (play-impact spell at (container player))))))
+      (T
+       (let* ((dir (look-direction player))
+              (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
+         (cast-spell spell origin dir (container player) :caster player))))))
 
 ;;; Clicks in a menu belong to the menu (menu.lisp), as does Esc.
 
@@ -196,9 +229,23 @@ spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns true if it wa
   (when (eq button :right)
     (setf (block-held player) NIL)))
 
+(defun current-spell (player)
+  "The spell the hands cast."
+  (let ((book (spellbook player)))
+    (and book (nth (mod (active-spell player) (length book)) book))))
+
+(defun cycle-spell (player &optional (step 1))
+  (let ((n (length (spellbook player))))
+    (when (< 0 n)
+      (setf (active-spell player) (mod (+ (active-spell player) step) n)))))
+
 (define-handler (player key-press) (key)
   (case key
     (:f12 (screenshot))
+    (:r (when (eq *game-state* :playing)
+          (cycle-spell player)))
+    (:e (when (and (eq *game-state* :playing) (forge-allowed-p player))
+          (open-forge)))
     (T (when (eq *game-state* :playing)
          (select-weapon player key)))))
 
@@ -485,6 +532,8 @@ and not the last step of the stair.")
         (pain player) (max 0.0 (- (pain player) dt))
         (restore-flash player) (max 0.0 (- (restore-flash player) dt))
         (guard-broken player) (max 0.0 (- (guard-broken player) dt)))
+  (when (statuses player)
+    (update-statuses player dt))
   (when (cast-time player)
     (incf (cast-time player) dt)
     (when (and (pending-spell player) (<= *cast-release* (cast-time player)))
@@ -512,7 +561,8 @@ and not the last step of the stair.")
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
                    (if (< iz 0.0) *backpedal-scale* 1.0)
-                   (if kind (liquid-property kind :speed) 1.0))))
+                   (if kind (liquid-property kind :speed) 1.0)
+                   (slow-factor player))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
     (whirl-transitions player dt)
@@ -708,9 +758,12 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
                  (setf (stamina player) 0.0
                        blocked NIL)
                  (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
+      ;; A ward (magic.lisp) takes what it can of what gets past the shield.
+      (setf amount (absorb-ward player amount))
       (incf (damage-taken player) (min amount (health player)))
       (decf (health player) amount)
-      (setf (pain player) *pain-time*)
+      (when (< 0 amount)
+        (setf (pain player) *pain-time*))
       (when shove
         (let ((k (if blocked *block-shove-scale* 1.0)))
           (shove-player player from (* k (if (eq shove T) *player-knockback* shove)) (and lift (* k lift))))
@@ -727,10 +780,6 @@ dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts 
          (< (- (vy feet) margin) (vy point) (+ (vy feet) *player-height* margin)))))
 
 ;; A creature's spell, hitting the player: the shove goes the way its source pushes.
-(defmethod apply-effect ((kind (eql :damage)) effect (target player) source)
-  (hurt-player target (roll (effect-magnitude effect)) (effect-origin source)
-               :unblockable (effect-unblockable-p source) :by (caster source)))
-
 (defmethod apply-effect ((kind (eql :knockback)) effect (target player) source)
   (let ((blocked (and (not (effect-unblockable-p source))
                       (shield-blocks-p target (effect-origin source)))))

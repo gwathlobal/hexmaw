@@ -92,7 +92,8 @@ they did after the save.")
 
 (defvar *game-state* :title
   "What the game is doing: :TITLE (main menu), :LOADING (building a level), :PLAYING,
-:PAUSED, :MAP (the automap, map-view.lisp), :INVENTORY (the inventory panel, inventory.lisp)
+:PAUSED, :MAP (the automap, map-view.lisp), :INVENTORY (the inventory panel, inventory.lisp),
+:FORGE (the spellforge at an altar, forge.lisp)
 or :DEAD (the player fell on a generated level, PLAYER-DIES, then the death screen). Menus
 (menu.lisp) change it; anything but :PLAYING
 freezes the world.")
@@ -129,6 +130,13 @@ creatures in development live; :GALLERY, every level block laid out (kit.lisp); 
    (pull :initform (vec 0 0 0) :reader pull :documentation "How fast, in m/s, vortices drag it this tick.")
    (pull-look :initform 0.0 :accessor pull-look :documentation "Seconds until it looks for a line to a vortex again.")
    (pull-clear :initform NIL :accessor pull-clear :documentation "True if it had a line to a vortex when it last looked.")))
+
+;;; Statuses (magic.lisp): what a spell leaves on an actor for a while, burning, slowed,
+;;; warded. The player and creatures alike carry them.
+
+(defclass afflicted ()
+  ((statuses :initform () :accessor statuses
+             :documentation "Its STATUSes (magic.lisp), at most one of each kind.")))
 
 (defun clear-whirl (actor)
   "ACTOR is neither held nor thrown by a vortex, and can be pulled at once."
@@ -180,7 +188,7 @@ this DT-second tick: a wall or body it hit fast enough hurts it, and the body to
       (hit-surface actor speed hit-x 0.0 hit-z :by by)
       (strike-body actor speed hit-x hit-z (* speed dt) :by by))))
 
-(define-shader-entity creature (billboard whirlable)
+(define-shader-entity creature (billboard whirlable afflicted)
   ((max-health :initarg :max-health :initform 30 :accessor max-health)
    (health :accessor health)
    (body-radius :initarg :body-radius :initform 0.35 :accessor body-radius
@@ -588,7 +596,8 @@ friction: on ice by the footing's, and while it walks there it climbs steps as i
 
 (defun walking-speed (creature)
   (* (if (hunting-p creature) (or (chase-speed creature) (walk-speed creature)) (walk-speed creature))
-     (if (afloat-p creature) *flounder-speed* 1.0)))
+     (if (afloat-p creature) *flounder-speed* 1.0)
+     (slow-factor creature)))
 
 ;;; Deep water (liquids.lisp): its surface is a floor on the nav grid, so a walker shoved
 ;;; in settles onto it like any floor, and is drawn sunk to the chest. Afloat it can't
@@ -1319,6 +1328,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
 
 (defun revive (creature)
   (clear-whirl creature)
+  (setf (statuses creature) ())
   (setf (alert creature) 0.0
         (bleeding creature) 0f0
         (gibbed creature) NIL
@@ -1412,6 +1422,8 @@ after the flinch, block and attack.")
         (s (/ (stagger creature) *stagger-time*)))
     (setf (vx tint) (vx *flash-color*) (vy tint) (vy *flash-color*) (vz tint) (vz *flash-color*)
           (vw tint) (* f (vw *flash-color*)))
+    (unless (dead creature)
+      (status-tint creature tint))
     (setf (texture creature) (body-texture creature))
     (setf (vx scale) (* (vx base) (+ 1 (* s *stagger-squash* 0.7)))
           (vy scale) (* (vy base) (- 1 (* s *stagger-squash*)))
@@ -1520,6 +1532,8 @@ after the flinch, block and attack.")
             (stirring creature) (max 0.0 (- (stirring creature) dt)))
       (when (and (slot-bans creature) (<= (slot-ban-timer creature) 0))
         (setf (slot-bans creature) ()))
+      (when (and (statuses creature) (not (dead creature)) (not (dormant-p creature)))
+        (update-statuses creature dt))
       ;; Held or thrown by a vortex, it moves and thinks no other way.
       (let ((held (whirl-step creature dt)))
         (unless held
