@@ -1,0 +1,6 @@
+Every Lisp library the game is built from, compiled into the executable (into Hexmaw.app's
+sbcl.core on macOS). The list is the same for every platform, so a few of them are used only
+on Windows, macOS or Linux, and a few only while building. Each entry gives the release in
+the pinned library dists, its systems, the licence its own definition states, and the
+licence text below that is its own. For the few releases that have no licence file, the
+text is their licence's standard one under the copyright their sources state.

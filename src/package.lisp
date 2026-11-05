@@ -9,5 +9,6 @@
    (#:presentations #:org.shirakumo.alloy.renderers.simple.presentations)
    (#:chroma #:org.shirakumo.alloy.chroma)
    (#:harmony #:org.shirakumo.fraf.harmony)
-   (#:mixed #:org.shirakumo.fraf.mixed))
+   (#:mixed #:org.shirakumo.fraf.mixed)
+   (#:command-line #:org.shirakumo.deploy.command-line))
   (:export #:main #:launch))

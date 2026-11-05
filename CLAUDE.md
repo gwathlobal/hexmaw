@@ -28,7 +28,8 @@ The process exits when the window closes.
 Every Lisp session on this project goes through `boot.lisp`:
 `sbcl --dynamic-space-size 4096 --no-userinit --load boot.lisp`. Trial needs at
 least 2 GB of heap. Dependencies come from the project-local Quicklisp in `.ql/`
-(Shirakumo dist, not checked in), and ASDF is limited to this folder because other
+(Shirakumo dist, not checked in; `tools/setup-ql` sets it up, with the two dists' versions
+pinned there), and ASDF is limited to this folder because other
 projects under `~/common-lisp/` ship conflicting copies of Trial's dependencies.
 
 A git worktree (`.claude/worktrees/<name>`) checks out the art from the main checkout's LFS
@@ -53,23 +54,61 @@ once it is up, so the user can tell the windows apart:
 ./build.sh
 ```
 
-Builds the game into `dist/` (gitignored), about 200 MB: `hexmaw`, the executable,
-the native libraries it loads (GLFW, evdev, and for sound libmixed, libvorbis and PipeWire's spa; PulseAudio and ALSA come from the system), and `pool/` with the assets: `pool/hexmaw/`
-is `data/` without the blueprints, beside Trial's own pools and the font cache. Copy `dist/`
-anywhere and run `dist/hexmaw`; it needs no SBCL, Quicklisp or source tree. It takes
-about 2.5 minutes and needs `patchelf` (`apt install patchelf`), which Deploy uses on the
-libraries it ships. It builds every block from its blueprint first, so the shipped `.glb`
-files are current.
+Builds the game into `dist/` (gitignored), about 240 MB, on Linux, Windows (under git-bash)
+or macOS (`tools/build-dist`): the executable (`hexmaw`, `hexmaw.exe`, or `Hexmaw.app` on
+macOS), the native libraries it loads, `pool/` with the assets (`pool/hexmaw/` is `data/`
+without the blueprints, beside Trial's own pools and the font cache), and the player's
+documents. Copy `dist/` anywhere and run the game from it; it needs no SBCL, Quicklisp or
+source tree. It takes about 2.5 minutes, needs `patchelf` on Linux (`apt install patchelf`),
+which Deploy uses on the libraries it ships, and builds every block from its blueprint
+first, so the shipped `.glb` files are current. The native libraries come prebuilt with
+their Lisp libraries, for every platform: GLFW, libmixed (with libsamplerate and pffft in
+it), cl-vorbis's decoder (stb_vorbis, though its file is `libvorbis-*`), and on Linux evdev
+and cl-mixed's PipeWire plugin; on Windows libmixed brings the MinGW runtime's two DLLs. The
+sound server, OpenGL and the gamepad interfaces are the system's. With no sound device Trial
+falls back to a dummy output, and the game runs silent.
 
 `asdf:make` does the dumping: `hexmaw.asd` sends it to Deploy's `deploy-op`, with
-`dist-main` (`src/dist.lisp`) as the entry point. The binary starts on the main menu with no
-eval server; `HEXMAW_EVAL_PORT=7272 dist/hexmaw` starts one, so `tools/hd` (given the
-same `HEXMAW_EVAL_PORT`) can drive a build. `HEXMAW_FULLSCREEN=1` works as with `run.sh`.
-Trial's log, `trial.log`, and F12 screenshots land beside the executable; an error that
-escapes shows a message box. Saves go to `$XDG_DATA_HOME/hexmaw/saves/` as in
-development; the binary works that folder out when it starts (`dist.lisp`'s boot hook),
-since `*save-directory*` was set on the build machine. The 4 GB heap is a limit kept from
-the build, not memory used.
+`dist-main` (`src/dist.lisp`) as the entry point. On macOS `tools/build-dist` runs Deploy's
+`macos-app-deploy-op` instead, which copies the SBCL runtime unchanged into
+`Contents/MacOS/Hexmaw` and dumps the image beside it as `sbcl.core` (libraries in
+`Contents/Frameworks/`, pools in `Contents/Resources/`), then signs the bundle ad hoc
+(`codesign -s -`), which Apple silicon needs; there is no developer signature or
+notarization. On Windows it builds under a copy of `sbcl.exe` with `data/icon/hexmaw.ico`
+written into it (`tools/exe-icon/`, Malgorod's), since `save-lisp-and-die` writes the running
+runtime and the icon can't be added after. `data/icon/` is made by `tools/make_icon.py` from
+the chosen take in `art/icon/` (`art/prompts/icon.txt`): the `.ico`, the bundle's `.icns`,
+and the window's 64 px PNG, set once the window is up (`set-window-icon`, main.lisp, around
+two bugs in this Trial's icon setting):
+
+```bash
+tools/gen_image.py art/icon/icon.png --prompt-file art/prompts/icon.txt --ref art/splash/maw-1.png --ref art/imp/turnaround.png --size 1024x1024 -n 3
+tools/make_icon.py art/icon/icon-2.png data/icon
+```
+
+The binary starts on the main menu with no eval server; `HEXMAW_EVAL_PORT=7272 dist/hexmaw`
+starts one, so `tools/hd` (given the same `HEXMAW_EVAL_PORT`) can drive a build.
+`HEXMAW_FULLSCREEN=1` works as with `run.sh`. With arguments it is Trial's command line
+instead (`command-line-toplevel`): `hexmaw version` (`0.1.0-<commit>`, `game-version`),
+`hexmaw check` (the critical files under `data/` and every library the build ships can be
+opened; `installation-problems`), `hexmaw selftest [--directory DIR]` (the window, the main
+menu, a generated level on seed `*selftest-seed*`, a screenshot into DIR, a clean quit; exit
+1 on a failure, 2 after `*selftest-timeout*`), and Trial's own `system` and `paths`. `check`
+and `selftest` print and save their report as `check.txt` and `selftest.txt` in the user
+directory, since `hexmaw.exe` has no console. Trial's own `help` errors in this version
+(deploy-command-line's console class).
+
+The user directory (`user-directory`, dev.lisp) is `~/.local/share/hexmaw/` on Linux and
+macOS and `%LOCALAPPDATA%\hexmaw\` on Windows (`uiop:xdg-data-home`). A build keeps
+everything it writes there: saves (`saves/`), F12 screenshots (`screenshots/`), the reports
+and `trial.log` (the boot hook sets `TRIAL_LOGFILE`; Trial would write it beside the
+executable, where a player may not be allowed to). In development they stay in the project.
+The boot hook works these out on the player's machine, since `*save-directory*` was set on
+the build machine. When running a build to test it, set `XDG_DATA_HOME` to a temporary
+folder (on Windows too, where uiop reads it first) so it doesn't touch the real one, and start
+it from another directory. An error that escapes shows a message box. The 4 GB heap is a
+limit kept from the build, not memory used. dev.lisp sets Trial's app name
+(`+app-system+`, "hexmaw") as it loads, so Trial's version and paths are Hexmaw's.
 
 A file the game reads at run time goes through `(data-path "sprites/...")`, a path under
 `data/`: in the binary it resolves to `pool/hexmaw/`. `root` is the project only in
@@ -78,6 +117,96 @@ binary blocks are never rebuilt (`hexmaw.blueprint:*build-blocks*` is NIL).
 
 The binary is a release version: the build hook sets `*debug-version*` (dev.lisp, T in
 development) to NIL, which hides the main menu's Debug level and Settings' Debug minimap.
+
+**What a build ships besides the game** (`*player-documents*`, `hexmaw-documents` deploy hook
+in dist.lisp, beside the executable or `Hexmaw.app`): `README.txt` (from
+`README-PLAYERS.txt`: running on each system, the controls, where files go, what to send
+back), `EULA.txt` (the player's licence: the assets licence's terms in a player's words,
+the code's zlib licence left whole, and the LGPL libraries' rights kept), `CHANGELOG.md`,
+`THIRD-PARTY-NOTICES.txt`, and `licenses/`: the code's zlib licence, `ASSETS-LICENSE.md`,
+the GPL, LGPL, OFL and GCC runtime exception texts, SBCL's `COPYING`, and `lgpl-source/`
+with the source of the three LGPL libraries (`*lgpl-systems*`), copied from the versions
+dumped. Never the repository's `README.md`, `CLAUDE.md` or `LICENSE` at the top: the release
+workflow fails an archive that has them.
+
+**`THIRD-PARTY-NOTICES.txt` is generated**: `tools/notices` writes it from the dependency
+tree (every `.asd`'s dependencies, `(:feature ...)` branches included, so one file covers all
+three platforms), one entry per release in the pinned dists with its licence text, after
+`notices/head.txt` (SBCL, the native libraries, the fonts, the LGPL libraries: written by
+hand) and before `notices/native/` (the native libraries' upstream licence texts). A release
+with no licence file of its own gets an entry in `notices/overrides.lisp` (copyright and a
+standard text, checked by hand). `tools/notices --check`, which CI runs on every platform,
+fails when the file is out of date, a release has no licence text, the image loaded a
+release the file lacks, or a release is copyleft and not in `*copyleft-allowed*`
+(tools/notices.lisp). Three are: text.editing and utilities.print-items (LGPLv3) and
+flexichain (LGPL 2.1 or later), which come with Alloy's text input (a hard dependency of
+Alloy's core); the build meets their terms by shipping their source and the notices'
+rebuild instructions, and the EULA says so. **A new dependency means `tools/notices` again
+and a commit of the file; a copyleft one is refused** unless it is added to the allowlist,
+`*lgpl-systems*` and `head.txt` with what it requires. Native libraries are in no `.asd`:
+one that changes needs `head.txt` and `notices/native/` by hand.
+
+## Releases
+
+`.github/workflows/ci.yml` runs on every push to master and every pull request, on Linux:
+the game's own compile (failing on any full warning or error except variables used in a
+file loaded before the one that defines them, which it names in a notice), `tools/notices
+--check`, `tools/build-dist`, and the build's `version`, `check` and `selftest` under Xvfb
+with Mesa. `release.yml` builds all three platforms (`ubuntu-22.04` for an old enough glibc,
+`windows-2022`, `macos-15`, Apple silicon), archives each as
+`hexmaw-<version>-<platform>.{tar.gz,zip}` (`linux-x86_64`, `windows-x86_64`, `macos-arm64`),
+unpacks it elsewhere and runs `version` and `check` from a third folder, and checks the
+documents are there and the repository's files aren't (and on Windows the exe's icon). The
+self-test must pass on Linux; on Windows (with Mesa's software OpenGL) and macOS, runners
+having no GPU, it is tried and reported without failing the run. Both workflows set up
+through `.github/actions/setup-lisp`: SBCL 2.4.10 (Homebrew's current on macOS), then
+`tools/setup-ql` and a cache over `.ql/` and the fasl cache. Checkouts take no LFS: the build
+reads only `data/`, and CI fails if the source art isn't pointer files. Third-party actions
+are pinned to commits.
+
+**Cutting a release: the version, the changelog and the tag are one act.** `:version` in
+`hexmaw.asd` is the source of truth, and a release needs all three to agree:
+
+1. `:version "X.Y.Z"` in `hexmaw.asd`;
+2. `CHANGELOG.md`'s newest heading reads `## <Month D, YYYY> vX.Y.Z`;
+3. a `vX.Y.Z` tag on that commit, pushed.
+
+`release.yml` fires on `v*` and checks the first two against the tag, failing the run before
+it builds on a mismatch. So: draft the player changelog and get it approved (below), then
+bump, write the entry, commit, `git tag vX.Y.Z`, `git push origin master`, then `git push
+origin vX.Y.Z` (master first, or the release builds a commit the remote doesn't have; the tag
+by name, since lightweight tags don't go with `--follow-tags`). The publish job makes a GitHub
+Release named "Hexmaw X.Y.Z" with the three archives, its notes the CHANGELOG entry plus
+`.github/release-install-notes.md`. **The repository is public, so a tag is public at once**,
+and a dispatch run's artifacts can be downloaded by anyone signed in to GitHub: run
+`release.yml` by hand (workflow_dispatch: everything but publishing) to get the three builds,
+play the Windows one on real Windows hardware before anything is tagged (ROADMAP Phase 1), and
+tag after.
+
+**The same tag pushes to itch.io**: the `itch` job, after the release, pushes each archive
+unpacked to the `windows-x86_64`, `linux-x86_64` and `macos-arm64` channels of
+`gwathlobal/hexmaw` with butler (pinned, fetched from itch's own host), `--userversion` the
+version, so butler sends only what changed. Its key, `BUTLER_API_KEY`, is an account-wide
+itch API key (its own, not Malgorod's, so either can be revoked alone), in the repository's
+`itch` environment, limited to `v*` tags with the author as required reviewer, so each push
+waits for approval; only that job uses the environment. Without the secret the job skips
+with a notice. Never add a `pull_request_target` workflow: it would hand secrets to forked
+code.
+
+**A save that stops loading is a minor version.** A release that bumps `*save-version*`
+(save.lisp) bumps the second number (`0.1.x` to `0.2.0`), never the third, and its CHANGELOG
+entry says, in a line of its own near the top, that saves from earlier builds won't load.
+
+**Two changelogs.** `internal-changelog.md` records every change worth recording, internal
+ones too, an entry in the commit that earns it under `## Unreleased`; cutting a release gives
+that section the release's date and version. It is never shipped. `CHANGELOG.md` is the
+player's: it ships in every build and is the release notes, so it holds only what a player
+would notice (fixes, gameplay, art and interface, running the game; not CI, tools, docs or
+refactors), short bullets in what the player can now do. At release time, draft its entry
+from the internal changelog's `## Unreleased` and `git log vPREV..HEAD`, **show it to the
+author and wait for approval before anything is bumped, committed, tagged or pushed**. A
+release with nothing for players still needs an entry ("Fixes and improvements behind the
+scenes"), since the workflow refuses a tag without one.
 
 ## Live reload: how changes reach the game
 

@@ -13,7 +13,33 @@
   (when *fullscreen*
     (apply-fullscreen (context main))))
 
+(defvar *window-icon-set* NIL "Whether this process has given the window its icon.")
+
+(defun set-window-icon ()
+  "Give the window data/icon/hexmaw-64.png (tools/make_icon.py) as its icon. Around two bugs
+in this Trial and its GLFW binding: (SETF ICON) on a pathname still expects LOAD-IMAGE's old
+multiple values, and the binding stores the pixels as C chars, so it fails, in the window
+thread, on any byte over 127, while Trial's RGBA-ICON takes only unsigned bytes. So the
+pixels go as signed bytes straight onto the window thread's queue, as (SETF ICON) of an
+RGBA-ICON would put them. An icon that won't load only logs."
+  (handler-case
+      (let* ((image (load-image (data-path "icon/hexmaw-64.png") T))
+             (bytes (org.shirakumo.fraf.imagine:image-data image))
+             (signed (make-array (length bytes) :element-type '(signed-byte 8))))
+        (dotimes (i (length bytes))
+          (let ((b (aref bytes i))) (setf (aref signed i) (if (< 127 b) (- b 256) b))))
+        (org.shirakumo.fraf.trial.glfw::push-event-queue
+         (org.shirakumo.fraf.trial.glfw::event-queue *context*) :set-icon
+         (list (list signed (org.shirakumo.fraf.imagine:image-w image)
+                     (org.shirakumo.fraf.imagine:image-h image)))))
+    (error (e) (v:warn :hexmaw "No window icon: ~a" e))))
+
 (defmethod setup-scene ((main main) scene)
+  ;; Once a process: the context lives as long as it. Between frames, since the first setup
+  ;; runs before the window exists. macOS ignores it (Hexmaw.app has its own).
+  (unless *window-icon-set*
+    (setf *window-icon-set* T)
+    (call-in-render-loop #'set-window-icon scene))
   (build-level scene)
   ;; A scene reload makes a fresh player; carry over where it stood and looked, unless
   ;; the reload starts a new run (START-LEVEL).

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Set up the project's own Quicklisp in .ql/ with the two dists the game is built against,
+# pinned here and nowhere else: the Quicklisp dist and the Shirakumo dist (Trial and its
+# libraries). README.md and CI (.github/actions/setup-lisp) both run this; bumping a dist is
+# one edit below, which also starts CI's cache afresh. The libraries themselves download the
+# first time boot.lisp loads the game.
+#
+#   tools/setup-ql
+#
+# Does nothing when .ql/ already has these versions, and replaces a dist that differs.
+# Runs under git-bash on Windows too: every path is relative or worked out in Lisp.
+QUICKLISP_DIST=2026-01-01
+SHIRAKUMO_DIST=2026.10.16-12.49.03
+
+quicklisp_url="http://beta.quicklisp.org/dist/quicklisp/$QUICKLISP_DIST/distinfo.txt"
+shirakumo_url="http://dist.shirakumo.org/shirakumo/$SHIRAKUMO_DIST/shirakumo.txt"
+
+cd "$(dirname "$0")/.." || exit 1
+set -euo pipefail
+
+dist_version() {  # the version line of an installed dist, or nothing
+  sed -n 's/^version: *//p' ".ql/dists/$1/distinfo.txt" 2>/dev/null | tr -d '\r'
+}
+
+if [ ! -f .ql/setup.lisp ]; then
+  curl -fsSL --retry 5 --retry-delay 4 -o quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+  sbcl --noinform --non-interactive --no-userinit --load quicklisp.lisp \
+       --eval "(quicklisp-quickstart:install :path \".ql/\" :dist-url \"$quicklisp_url\")"
+  rm -f quicklisp.lisp
+fi
+
+if [ "$(dist_version quicklisp)" = "$QUICKLISP_DIST" ] && [ "$(dist_version shirakumo)" = "$SHIRAKUMO_DIST" ]; then
+  echo "setup-ql: .ql/ has quicklisp $QUICKLISP_DIST and shirakumo $SHIRAKUMO_DIST"
+  exit 0
+fi
+
+sbcl --noinform --non-interactive --no-userinit --load .ql/setup.lisp \
+     --eval "(progn
+               (unless (equal (ignore-errors (ql-dist:version (ql-dist:dist \"quicklisp\"))) \"$QUICKLISP_DIST\")
+                 (ql-dist:install-dist \"$quicklisp_url\" :prompt NIL :replace T))
+               (unless (equal (ignore-errors (ql-dist:version (ql-dist:dist \"shirakumo\"))) \"$SHIRAKUMO_DIST\")
+                 (ql-dist:install-dist \"$shirakumo_url\" :prompt NIL :replace T)))"
+
+[ "$(dist_version quicklisp)" = "$QUICKLISP_DIST" ] && [ "$(dist_version shirakumo)" = "$SHIRAKUMO_DIST" ] || {
+  echo "setup-ql: .ql/ doesn't have the pinned dists after setting up" >&2; exit 1; }
+echo "setup-ql: .ql/ has quicklisp $QUICKLISP_DIST and shirakumo $SHIRAKUMO_DIST"

@@ -1,0 +1,128 @@
+name: CI
+
+# Linux only: the one platform where every check runs, the game's own compile, the notices,
+# a release build and its self-test. The Windows and macOS builds are made by the release
+# workflow, which can be run by hand (workflow_dispatch) to check them without a tag.
+#
+# The repository is public: this runs for pull requests from forks too, which GitHub gives
+# no secrets, and it needs none.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SBCL_VERSION: '2.4.10'
+
+jobs:
+  check:
+    name: Build and check (Linux)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      # .gitattributes pins the tree to LF; this states that independence of the runner
+      # image's settings, and has to come before the checkout.
+      - name: Keep line endings as committed
+        run: git config --global core.autocrlf false
+
+      # No LFS: the source art is in a private store, and the build reads only data/.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: false
+
+      - name: The source art is LFS pointers here
+        run: |
+          set -euo pipefail
+          # What the build must not need: if a real picture turns up, the checkout fetched
+          # from the private store, or something moved art into plain git.
+          head -c 40 art/splash/maw-1.png | grep -q 'git-lfs' \
+            || { echo "::error::art/splash/maw-1.png is not an LFS pointer"; exit 1; }
+
+      - uses: ./.github/actions/setup-lisp
+        with:
+          sbcl-version: ${{ env.SBCL_VERSION }}
+
+      # GLFW opens X11 itself; Mesa's llvmpipe gives Xvfb OpenGL 4.5. patchelf is Deploy's.
+      - name: Install the build's and the self-test's tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends patchelf xvfb \
+            libgl1 libglx-mesa0 libgl1-mesa-dri libx11-6 libxrandr2 libxinerama1 \
+            libxcursor1 libxi6 libxext6 libfontconfig1
+
+      - name: Compile the game, and fail on a warning
+        run: |
+          set -euo pipefail
+          # Only the game's two systems recompile: the libraries were compiled in the setup
+          # step, so a diagnostic here is the game's own.
+          sbcl --dynamic-space-size 4096 --noinform --no-userinit --non-interactive \
+               --eval '(defvar cl-user::*boot-system* :hexmaw-blueprints)' --load boot.lisp \
+               --eval '(asdf:load-system :hexmaw :force (list :hexmaw :hexmaw-blueprints))' \
+               < /dev/null 2>&1 | tee build.log
+          # A variable used in a file loaded before the one that defines it warns as
+          # undefined: the code still works, since the variable is special once loaded.
+          # Those are counted and named, not failed, until they are declared earlier; any
+          # other full warning or error fails.
+          other="$(grep -A1 -E 'caught (WARNING|ERROR)' build.log \
+                   | grep -vE 'caught (WARNING|ERROR)|^--$|undefined variable' || true)"
+          if grep -q 'caught ERROR' build.log || [ -n "$other" ]; then
+            echo "::error::the game's compile has warnings"
+            grep -nE -B 12 'caught (WARNING|ERROR)' build.log
+            exit 1
+          fi
+          forward="$(grep -oE 'undefined variable:? [A-Z:*-]+' build.log | sed -E 's/.* //' | sort -u | tr '\n' ' ')"
+          if [ -n "$forward" ]; then
+            echo "::notice::variables used before the file that defines them: $forward"
+          fi
+          echo "no other warnings; style warnings: $(grep -c 'caught STYLE-WARNING' build.log || true)"
+
+      - name: Check the third-party notices
+        run: tools/notices --check < /dev/null
+
+      - name: Build the executable
+        run: tools/build-dist < /dev/null
+
+      - name: Start a virtual display
+        run: |
+          set -euo pipefail
+          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
+          for _ in $(seq 1 30); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 1; done
+          [ -S /tmp/.X11-unix/X99 ] || { echo "::error::Xvfb did not come up"; exit 1; }
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Run the build's checks
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          exe="$GITHUB_WORKSPACE/dist/hexmaw"
+          # From another directory, so the build finds its files from where it is installed.
+          cd "$HOME"
+          "$exe" version
+          "$exe" check
+          # The window, the menu, a generated level, a screenshot and a clean quit. No sound
+          # card here: Trial falls back to its dummy output, as it would for a player.
+          "$exe" selftest --directory "$GITHUB_WORKSPACE/checks"
+          cat "$XDG_DATA_HOME/hexmaw/selftest.txt"
+          grep -q 'self-test passed' "$XDG_DATA_HOME/hexmaw/selftest.txt"
+        env:
+          # never a real ~/.local/share/hexmaw
+          XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
+          LIBGL_ALWAYS_SOFTWARE: '1'
+
+      - name: Keep the reports, the screenshot and the compile log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-checks
+          path: |
+            checks/
+            build.log
+            ${{ runner.temp }}/hexmaw-data/hexmaw/*.txt
+            ${{ runner.temp }}/hexmaw-data/hexmaw/trial.log
+          if-no-files-found: ignore
+          retention-days: 14

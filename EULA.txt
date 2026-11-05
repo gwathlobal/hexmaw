@@ -1,0 +1,57 @@
+HEXMAW - END-USER LICENCE
+
+Hexmaw (the "Game") is copyright (c) 2026 Vadim Murin. This licence is between you and the
+author, and covers a copy of the Game you downloaded from its itch.io page or from its
+release page on GitHub (https://github.com/gwathlobal/hexmaw/releases). By installing or
+playing the Game you accept it.
+
+1. WHAT YOU MAY DO
+
+   You may install the Game on any computer you use and play it, for free. You may stream
+   it, record it, and publish videos and screenshots of it, including on monetised
+   channels.
+
+2. WHAT YOU MAY NOT DO
+
+   You may not sell the Game, or put it up for download anywhere else: link to its page
+   instead. You may not use its art, sounds, music or levels, or anything made from them,
+   in another game, product or work, or offer them for others to use. These are the terms
+   of the Game's assets licence, ASSETS-LICENSE.md, in the licenses/ folder.
+
+   The Game's code is also published under the zlib licence (licenses/hexmaw-code-zlib.txt)
+   at https://github.com/gwathlobal/hexmaw, and nothing in this licence limits what that
+   licence allows you to do with the code.
+
+3. PROTOTYPE
+
+   The Game is a free prototype and unfinished. It may crash, lose a saved game, or change
+   in ways that stop an old save from loading. It may be withdrawn at any time.
+
+4. NOTHING IS SENT
+
+   The Game sends nothing anywhere. What it writes, saves and its log, stays on your
+   computer, in the folder README.txt names.
+
+5. OTHER PEOPLE'S SOFTWARE
+
+   The Game includes libraries and fonts by others, each under its own licence, listed in
+   THIRD-PARTY-NOTICES.txt. Nothing in this licence limits what those licences allow you.
+   In particular, for the libraries that file names as under the GNU Lesser General Public
+   License, you may change them and run the Game with your changes, and reverse-engineer
+   the Game to debug such changes; their source code is in licenses/lgpl-source/.
+
+6. NO WARRANTY
+
+   THE GAME IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+   INCLUDING THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NON-INFRINGEMENT. TO THE EXTENT THE LAW ALLOWS, THE AUTHOR IS NOT LIABLE FOR ANY DAMAGE
+   ARISING FROM THE GAME OR ITS USE. Some places do not allow these limits; where they do
+   not, they apply only as far as the law there permits, and nothing here takes away a
+   right you have as a consumer that cannot be waived.
+
+7. ENDING
+
+   This licence ends if you break it, and you must then delete the Game. You may end it at
+   any time by deleting the Game.
+
+Questions: open an issue at https://github.com/gwathlobal/hexmaw/issues
