@@ -9,6 +9,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## November 6, 2026 v0.1.0
 
+- **The release publishes the Windows archive.** The archives are uploaded as files of their
+  own (`archive: false`), but `download-artifact` unpacks any that is a zip, so the publish job
+  found `hexmaw-0.1.0-windows-x86_64` as a folder and failed before making the release; the
+  itch job would have failed on it too. Both download steps now pass `skip-decompress`.
+  Dispatch runs never reach the publish job, so only the first tag found it.
 - **Playable on software OpenGL.** A Windows VM with no 3D driver (Mesa's llvmpipe) ran the
   game at 2 to 3 fps; reproduced here at 4 (llvmpipe, 4 cores, 1280×720). Three causes: drawing
   every pixel; Trial's loop catching up every tick a slow frame took (27 a frame, 80 of 270 ms),

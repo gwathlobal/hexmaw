@@ -334,6 +334,9 @@ jobs:
           path: artifacts
           pattern: hexmaw-*
           merge-multiple: true
+          # Each archive was uploaded as itself (archive: false); without this the action
+          # unpacks one that is a zip, and the Windows .zip arrived as a folder.
+          skip-decompress: true
 
       - name: Write the release notes
         run: |
@@ -384,6 +387,9 @@ jobs:
           path: artifacts
           pattern: hexmaw-*
           merge-multiple: true
+          # Each archive was uploaded as itself (archive: false); without this the action
+          # unpacks one that is a zip, and the Windows .zip arrived as a folder.
+          skip-decompress: true
 
       # Each archive is pushed unpacked, one channel per platform: butler uploads only what
       # changed since the channel's last build, and the itch app patches an install. A
