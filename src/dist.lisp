@@ -12,6 +12,13 @@
   ;; A build is a release version: no debug level or debug minimap.
   (setf *debug-version* NIL))
 
+(deploy:define-hook (:deploy hexmaw-fonts -10) (directory)
+  ;; After Trial's and Alloy's hooks (priority 0) have copied their font caches. The menus
+  ;; draw in Jersey 15 (*menu-font*, menu.lisp); nothing draws in the Arial atlas Alloy
+  ;; ships, and its source isn't ours to vouch for, so it stays out of the build.
+  (dolist (file (directory (merge-pathnames "pool/**/Arial.*" directory)))
+    (delete-file file)))
+
 (deploy:define-hook (:boot hexmaw) ()
   ;; Found when the image was built, on the build machine; find it again on the player's.
   (setf *save-directory* (uiop:xdg-data-home "hexmaw/saves/")))

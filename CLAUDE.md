@@ -960,7 +960,15 @@ text `forge-note`s, which wrap (Alloy's
   the crosshair for `*pickup-note-time*` (`note-pickup`, the `pickup-banner`; the item's `:note`,
   else its name), pickups of one kind in quick succession adding up.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
-  toolkit) in their own pass, blended over the game in `setup-scene`. `*game-state*`
+  toolkit) in their own pass, blended over the game in `setup-scene`. Their font is Jersey 15
+  (OFL, `data/fonts/`, `*menu-font*`): the menu pass answers Alloy's `:default` request, which is
+  Arial in Alloy, with its MSDF atlas, and the build's `hexmaw-fonts` hook (dist.lisp) deletes the
+  Arial atlas Trial and Alloy copy in. Alloy scales a font by its baseline, so Jersey 15 draws
+  about 1.24 times as wide as Arial did at a size: the character counts that guess where text
+  wraps (`*forge-note-chars*`, `*forge-about-chars*`, `*forge-label-width*`, `*dialogue-wrap*`)
+  are set for it, and change with the font. To make the atlas again from the TTF:
+  `tools/hd '(org.shirakumo.alloy.renderers.opengl.msdf::cache-font (data-path "fonts/Jersey15.ttf") :cache-file (data-path "fonts/Jersey15.json"))'`.
+  `*game-state*`
   (`:title`, `:playing`, `:paused`, `:map`, `:inventory`, `:talk`, `:dead`, `:victory`, defined in creature.lisp) decides which is up;
   anything but `:playing` makes `frozen-p` true, which stops everything that moves.
   Transitions: `start-game` and `start-debug-level` (both `start-level`: set `*level*`

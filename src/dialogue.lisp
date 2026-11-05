@@ -166,7 +166,12 @@
 
 (defclass dialogue-panel (menu-panel) ())
 
-(defmethod panel-width ((panel dialogue-panel)) 640)
+(defparameter *title-char-width* 23
+  "UI units a character of a panel's title takes, about, in the menu font (Jersey 15 at 32).")
+
+(defmethod panel-width ((panel dialogue-panel))
+  ;; Wide enough for the title: "Corwin the Lamp, the quest giver" ran past 640.
+  (max 640 (+ 24 (* *title-char-width* (length (panel-title panel))))))
 
 (defmethod panel-title ((panel dialogue-panel))
   (let ((who *talk-target*))
@@ -194,9 +199,9 @@
              "You know every glyph I've ever had."))
         (T (greeting who))))
 
-(defparameter *dialogue-wrap* 56
-  "Most characters on one row of the dialogue's text: a row holds about 60 of the menu font's
-at the panel's width, and the font isn't fixed-width.")
+(defparameter *dialogue-wrap* 45
+  "Most characters on one row of the dialogue's text: a row holds about 48 of the menu font's
+(Jersey 15) at the panel's width, and the font isn't fixed-width.")
 
 (defun wrap-text (text &optional (width *dialogue-wrap*))
   "TEXT broken at spaces into rows of at most WIDTH characters (a longer word gets a row of its own)."

@@ -17,6 +17,13 @@ pixel or few taller than its row.")
 
 (define-shader-pass menu-ui (trial-alloy:base-ui) ())
 
+(defparameter *menu-font* "fonts/Jersey15.json"
+  "The menus' typeface: an MSDF atlas under data/, made from the OFL font beside it. Alloy's
+own default is Arial, which the build leaves out.")
+
+(defmethod simple:request-font ((ui menu-ui) (font (eql :default)) &key)
+  (simple:request-font ui (data-path *menu-font*)))
+
 (defvar *menu-ui* NIL "The menu pass, reused by every scene; see PERSISTENT-MENU-UI.")
 
 (defun persistent-menu-ui ()

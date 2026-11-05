@@ -27,9 +27,11 @@
 (defparameter *dust-per-mana* 1 "Arcane dust a spell costs to make for each mana a cast of it costs.")
 (defparameter *enchant-dust-scale* 3 "Arcane dust an enchantment costs for each mana a blow of it costs.")
 (defparameter *dust-refund* 0.5 "Fraction of its dust unweaving a spell or disenchanting a weapon gives back.")
-(defparameter *forge-label-width* 24 "Characters a left-column label may take; a longer one is cut.")
+;; The character counts here and in dialogue.lisp are guessed for the menu font, Jersey 15
+;; (*menu-font*, menu.lisp), which draws about 1.24 times as wide as Arial at a size.
+(defparameter *forge-label-width* 19 "Characters a left-column label may take; a longer one is cut.")
 (defparameter *forge-list-rows* 7 "Runes the Spells tab lists at a time; more page.")
-(defparameter *forge-note-chars* 62 "Characters a right-column line holds before it wraps.")
+(defparameter *forge-note-chars* 50 "Characters a right-column line holds before it wraps.")
 
 ;;; The draft.
 
@@ -702,7 +704,7 @@ border, a warm fill and a gold label, apart from the hover's orange."))
 
 ;;; What each effect does, under its dials: from the parameters, so it stays true when they're tuned.
 
-(defparameter *forge-about-chars* 74 "Characters an effect's explanation holds a row before it wraps.")
+(defparameter *forge-about-chars* 60 "Characters an effect's explanation holds a row before it wraps.")
 
 (defun resisters (element)
   "Who takes less of ELEMENT, as a phrase: \"acolytes take half\"."
