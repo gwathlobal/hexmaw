@@ -1748,12 +1748,15 @@ marimba ostinato, horn and clarinet, frame drum; rather jolly, kept for its curi
 **Composed music.** Music can also be written out as notes: `tools/compose_explore.py` and
 `tools/compose_combat.py` are pieces, each a function returning its notes plus its General MIDI
 instruments, and `tools/midi_music.py` (the shared part) writes them as MIDI, renders that through
-GStreamer's FluidSynth element and the TimGM6mb soundfont in `/usr/share/sounds/sf2/` (a small GM
-set, the sound of a 1990s wavetable card: "this is Daggerfall"), and finishes the loop with
+GStreamer's FluidSynth element and the FluidR3_GM soundfont, `/usr/share/sounds/sf2/FluidR3_GM.sf2`
+(`apt install fluid-soundfont-gm`, MIT), and finishes the loop with
 make_loop.py's loudness and encoding. It renders the piece twice and keeps the second pass, which
 opens with the first's reverb tails, so the join needs no crossfade; the beat is chosen so the
 loop is a whole number of samples and of FluidSynth's 64-sample blocks, and the two passes then
-correlate at 1.0000. A dense piece clips inside FluidSynth before the limiter can act, so a piece
+correlate at 1.0000 (the title at 0.9959: its tails differ a little from pass to pass). The tracks were
+first rendered with TimGM6mb, a smaller set with the sound of a 1990s wavetable card, and moved to
+FluidR3_GM on 2026-11-05 because TimGM6mb is GPL-2 and whether a rendering is bound by that is
+unsettled; GeneralUser GS was tried too. A dense piece clips inside FluidSynth before the limiter can act, so a piece
 passes its own synth `gain` (combat 0.4, exploration 0.8) and the run warns of any clipped samples.
 No credits, 17 s a render. `compose_title.py` is the main menu's: C minor at 75 BPM, 102 s, a
 horn theme, a choir, the theme on brass over an organ, a solo cello, all over a harp's arpeggio.

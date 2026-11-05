@@ -3,8 +3,8 @@
 A piece is a function from a random state to its notes, (part, beat from 0, beats long, MIDI
 note, velocity), its parts (General MIDI program and channel settings), its length in bars of
 4/4 and its beat in microseconds. RUN writes it as a format 1 MIDI file played twice in a row,
-renders that through GStreamer's FluidSynth element and a GM soundfont (TimGM6mb, a small set
-much like a 1990s wavetable card), and keeps the second pass as the loop: it opens with the
+renders that through GStreamer's FluidSynth element and a GM soundfont (FluidR3_GM, MIT, from
+Debian's fluid-soundfont-gm), and keeps the second pass as the loop: it opens with the
 first pass's reverb and release tails, just what the loop's own end leaves sounding, so it
 joins without a crossfade. The beat must make the loop a whole number of samples and of
 FluidSynth's 64-sample blocks (0.75 s or 0.5 s a beat with 32 bars, say), so both passes are
@@ -27,7 +27,7 @@ from make_loop import encode_loop, set_level, write_join  # noqa: E402
 
 PPQ = 480
 RATE = 44100
-SOUNDFONT = "/usr/share/sounds/sf2/TimGM6mb.sf2"
+SOUNDFONT = "/usr/share/sounds/sf2/FluidR3_GM.sf2"
 
 NOTE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 TRIADS = {"m": (0, 3, 7), "": (0, 4, 7)}
