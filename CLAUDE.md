@@ -932,13 +932,18 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `*forge-label-width*` (`fit-label`), each a `forge-choice` (a `menu-button` that draws the chosen
   one with a gold border, a warm fill and a gold label, `*forge-selected-color*` and the rest, apart
   from the hover's orange), the work on the right, its sliders `forge-slider`s (a
-  `menu-slider` with its own range and value text), under each effect its explanation (`effect-about`,
-built from the parameters: the kind's rule, the element's quirk, who resists it from
-`*element-resistances*`, what time and area change; a `forge-about`, smaller and dimmer), and its
-text `forge-note`s, which wrap (Alloy's
-  `:wrap`) in rows as tall as `note-lines` guesses. A structural command bumps `*forge-revision*` and
-  the menu controller remakes the panel (`panel-stale-p`); a slider only changes the draft and the
-  readout and note (`alloy:value-data`s the panel keeps). From the REPL: `(game (setf
+  `menu-slider` with its own range and value text), under the effects one explanation (`effect-about`,
+  built from the parameters: the kind's rule, the element's quirk, who resists it from
+  `*element-resistances*`, what time and area change; a `forge-about`, smaller and dimmer) of the
+  effect in hand, `*forge-about-index*`: the one whose controls last had the focus (each is an
+  `effect-control`, and a hover gives the focus) or that was last added or changed, its Effect button
+  drawn chosen (`forge-effect-button`). Three effects with an explanation under each didn't fit a
+  1280×720 screen. Its text `forge-note`s wrap (Alloy's `:wrap`) in rows as tall as `note-lines`
+  counts, breaking at spaces (`wrap-text`); **a row too short for its text draws none of it**, so the
+  explanation's box is as tall as the longest its effects can need with every dial at its top
+  (`about-lines`, `*forge-about-line*` a line), and the readout has two lines. A structural command
+  bumps `*forge-revision*` and the menu controller remakes the panel (`panel-stale-p`); a slider only
+  changes the draft and the readout, note and explanation (`alloy:value-data`s the panel keeps). From the REPL: `(game (setf
   *forge-anywhere* t) (open-forge))`, then `(forge-tab :enchant)`, `(forge-select :sword)`,
   `(forge-make)`, `(forge-destroy)` twice.
 - `src/elite.lisp`: elites, a deeper level's stronger monsters. A spawn on a generated level is

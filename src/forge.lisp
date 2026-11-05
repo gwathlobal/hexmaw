@@ -63,6 +63,9 @@ are only shown, to unweave or disenchant.")
 (defvar *forge-drafts* () "A plist from sink (:NEW or a weapon) to its draft, kept while the forge is left.")
 (defvar *forge-armed* NIL "The sink a first click of Unweave or Disenchant armed: a second does it.")
 (defvar *forge-page* 0 "The page of runes the Spells tab lists.")
+(defvar *forge-about-index* 0
+  "Which of the draft's effects the forge explains: the one whose controls last had the focus (a
+hover gives it), or that was last added or changed.")
 (defvar *forge-revision* 0 "Bumped whenever the forge's screen should be made again.")
 (defvar *forge-note* NIL "What the forge says under the readout: why it can't, or what it did.")
 
@@ -356,6 +359,7 @@ from the REPL, is the first one carried."
     (setf *forge-sink* sink
           *forge-armed* NIL
           *forge-note* NIL
+          *forge-about-index* 0
           *forge-draft* (and (editable-p player sink) (sink-draft player sink)))
     (forge-changed)
     sink))
@@ -378,11 +382,14 @@ from the REPL, is the first one carried."
                   (if (weapon-sink-p (draft-sink draft)) *max-enchant-effects* *max-spell-effects*)))
       (setf (draft-effects draft)
             (append (draft-effects draft)
-                    (list (clamp-effect (new-effect (if (member kind kinds) kind (first kinds))) player))))
+                    (list (clamp-effect (new-effect (if (member kind kinds) kind (first kinds))) player)))
+            *forge-about-index* (1- (length (draft-effects draft))))
       (forge-changed))))
 
 (defun forge-remove-effect (index)
   (setf (draft-effects *forge-draft*) (remove (nth index (draft-effects *forge-draft*)) (draft-effects *forge-draft*)))
+  (when (< index *forge-about-index*)
+    (decf *forge-about-index*))
   (forge-changed))
 
 (defun next-in (list item)
@@ -399,6 +406,7 @@ glyphs would teach more."
          (kinds (draft-kinds *forge-draft* player))
          (kind (next-in kinds (draft-kind effect)))
          (fresh (new-effect kind)))
+    (setf *forge-about-index* index)
     (when (eq kind (draft-kind effect))
       (let* ((strikes (draft-strikes-p *forge-draft*))
              (missing (loop for (k) in *effect-kinds*
@@ -420,6 +428,7 @@ glyphs would teach more."
 (defun forge-cycle-element (index &optional (player *player*))
   "The next element PLAYER knows; with no other, the note says which glyphs would teach more."
   (let ((effect (nth index (draft-effects *forge-draft*))))
+    (setf *forge-about-index* index)
     (when (eq :damage (draft-kind effect))
       (let ((next (next-in (known-elements player) (draft-element effect))))
         (if (eq next (draft-element effect))
@@ -591,7 +600,11 @@ call only arms it (*FORGE-ARMED*); a second does it."
    (readout :initform (make-instance 'alloy:value-data :value "") :reader readout
             :documentation "The draft's name and costs: a slider changes it.")
    (note :initform (make-instance 'alloy:value-data :value "") :reader note
-         :documentation "*FORGE-NOTE*, an armed Unweave's question, or why the draft can't be made.")))
+         :documentation "*FORGE-NOTE*, an armed Unweave's question, or why the draft can't be made.")
+   (about :initform (make-instance 'alloy:value-data :value "") :reader about
+          :documentation "The explanation of the effect *FORGE-ABOUT-INDEX* names.")
+   (effect-buttons :initform () :accessor effect-buttons
+                   :documentation "The effects' Effect buttons, redrawn when the one explained changes.")))
 
 (defmethod panel-title ((panel forge-panel)) "Spellforge")
 (defmethod panel-buttons ((panel forge-panel)) ())
@@ -612,9 +625,46 @@ call only arms it (*FORGE-ARMED*); a second does it."
       (and *forge-draft* (draft-problem *forge-draft*))
       ""))
 
+(defun forge-about-text ()
+  (let ((effects (and *forge-draft* (draft-effects *forge-draft*))))
+    (if effects
+        (effect-about (nth (max 0 (min *forge-about-index* (1- (length effects)))) effects))
+        "")))
+
 (defun refresh-readout (panel)
   (setf (alloy:value (readout panel)) (forge-readout-text)
-        (alloy:value (note panel)) (forge-note-text)))
+        (alloy:value (note panel)) (forge-note-text)
+        (alloy:value (about panel)) (forge-about-text)))
+
+(defun explain-effect (panel index)
+  "Show the explanation of the draft's effect INDEX, and mark its Effect button."
+  (unless (eql index *forge-about-index*)
+    (setf *forge-about-index* index)
+    (dolist (button (effect-buttons panel))
+      (alloy:mark-for-render button)))
+  (refresh-readout panel))
+
+(defclass effect-control ()
+  ((effect-index :initarg :effect-index :reader effect-index)
+   (effect-panel :initarg :effect-panel :reader effect-panel))
+  (:documentation "A control of one of the draft's effects: given the focus (a hover gives it), it
+has the forge explain that effect."))
+
+(defmethod (setf alloy:focus) :after (value (control effect-control))
+  (when value
+    (explain-effect (effect-panel control) (effect-index control))))
+
+(defclass forge-effect-button (effect-control forge-choice) ()
+  (:documentation "An effect's Effect button, drawn chosen while its effect is the one explained."))
+
+(defmethod selected-p ((button forge-effect-button))
+  (eql (effect-index button) *forge-about-index*))
+
+(defclass forge-effect-action (effect-control menu-button) ()
+  (:documentation "An effect's Element or Remove button."))
+
+(defclass forge-effect-slider (effect-control forge-slider) ()
+  (:documentation "One of an effect's dials."))
 
 (defun forge-row (parent sizes &optional (height *forge-row-height*))
   "A row of cells SIZES wide in PARENT, HEIGHT tall, a grid to enter widgets into by :COL."
@@ -660,14 +710,20 @@ border, a warm fill and a gold label, apart from the hover's orange."))
    :text alloy:text
    :pattern (if (selected-p alloy:renderable) *forge-selected-text* *menu-text-color*)))
 
-(defun forge-button (label action row col focus &key (selected NIL choice))
+(defun forge-button (label action row col focus &key (selected NIL choice) effect)
   "A button LABEL in ROW's cell COL that runs ACTION, a function, on the next tick. With
-:SELECTED, one of a set (FORGE-CHOICE), drawn chosen when it is true."
-  (let ((button (if choice
-                    (alloy:represent-with 'forge-choice (make-instance 'alloy:value-data :value label)
-                                          :focus-parent focus :selected selected)
-                    (alloy:represent-with 'menu-button (make-instance 'alloy:value-data :value label)
-                                          :focus-parent focus))))
+:SELECTED, one of a set (FORGE-CHOICE), drawn chosen when it is true. With :EFFECT, (PANEL
+INDEX), a control of that draft effect (EFFECT-CONTROL): its Effect button if :SELECTED is given
+too, which is drawn chosen while that effect is explained."
+  (let ((button (apply #'alloy:represent-with
+                       (cond ((and effect choice) 'forge-effect-button)
+                             (effect 'forge-effect-action)
+                             (choice 'forge-choice)
+                             (T 'menu-button))
+                       (make-instance 'alloy:value-data :value label)
+                       :focus-parent focus
+                       (append (when choice (list :selected selected))
+                               (when effect (list :effect-panel (first effect) :effect-index (second effect)))))))
     (alloy:enter button row :row 0 :col col)
     (alloy:on (alloy:activate button) ()
       (queue-menu-action action))
@@ -678,8 +734,9 @@ border, a warm fill and a gold label, apart from the hover's orange."))
                row :row 0 :col col))
 
 (defun note-lines (text &optional (chars *forge-note-chars*))
-  "Rows TEXT takes, wrapped at about CHARS characters a row."
-  (max 1 (ceiling (length text) chars)))
+  "Rows TEXT takes, broken at spaces into rows of about CHARS characters, as Alloy wraps it. A row
+too short for its text draws none of it, so count words, not characters."
+  (max 1 (length (wrap-text text chars))))
 
 (defun forge-note-row (parent data &optional (lines 1))
   "A row of wrapping text LINES rows tall, showing DATA, a string or an ALLOY:VALUE-DATA."
@@ -689,8 +746,9 @@ border, a warm fill and a gold label, apart from the hover's orange."))
                  row :row 0 :col 0)
     row))
 
-(defun forge-dial (panel label getter setter range step describe row col focus)
-  (let ((slider (alloy:represent-with 'forge-slider
+(defun forge-dial (panel label getter setter range step describe row col focus index)
+  "A dial of the draft's effect INDEX."
+  (let ((slider (alloy:represent-with 'forge-effect-slider
                                       (make-instance 'alloy:place-data
                                                      :getter getter
                                                      :setter (lambda (value)
@@ -698,13 +756,16 @@ border, a warm fill and a gold label, apart from the hover's orange."))
                                                                (setf *forge-note* NIL)
                                                                (refresh-readout panel)))
                                       :text label :range range :step step :grid step
-                                      :describe describe :focus-parent focus)))
+                                      :describe describe :focus-parent focus
+                                      :effect-panel panel :effect-index index)))
     (alloy:enter slider row :row 0 :col col)
     slider))
 
 ;;; What each effect does, under its dials: from the parameters, so it stays true when they're tuned.
 
-(defparameter *forge-about-chars* 60 "Characters an effect's explanation holds a row before it wraps.")
+(defparameter *forge-about-chars* 60
+  "Characters a line of an effect's explanation holds before it wraps: about 62 at its size, but
+Jersey 15 isn't fixed-width, so a little under.")
 
 (defun resisters (element)
   "Who takes less of ELEMENT, as a phrase: \"acolytes take half\"."
@@ -757,30 +818,51 @@ and who resists it, and what its time and area change."
    (alloy:margins 6 0 4 0)
    alloy:text
    :pattern *forge-about-color*
-   :size (alloy:un 16)
+   :size (alloy:un 15)
    :wrap T
-   :halign :start :valign :middle))
+   ;; From the top: the box is as tall as the longest explanation its effects can need.
+   :halign :start :valign :top))
 
 (presentations:define-update (presentations:default-look-and-feel forge-about)
   (:label
    :text alloy:text
    :pattern *forge-about-color*))
 
-(defun forge-about-row (parent text lines)
-  "An effect's explanation, LINES rows of small text."
-  (let ((row (forge-row parent '(T) (+ (* lines 20) 6))))
-    (alloy:enter (alloy:represent-with 'forge-about (make-instance 'alloy:value-data :value text))
-                 row :row 0 :col 0)
+(defparameter *forge-about-line* 28
+  "Height of a line of an explanation, in the units rows are measured in: Jersey 15 at size 15,
+with a little to spare. A row too short for its text draws none of it.")
+
+(defun forge-about-row (parent data lines)
+  "The explanation box, LINES lines of small text showing DATA, an ALLOY:VALUE-DATA."
+  (let ((row (forge-row parent '(T) (+ (* lines *forge-about-line*) 8))))
+    (alloy:enter (alloy:represent-with 'forge-about data) row :row 0 :col 0)
     row))
+
+(defun about-lines (effect player)
+  "Lines EFFECT's explanation can take whatever its dials say: with its longest time and its area
+on, since a dial changes the text but doesn't remake the panel."
+  (let ((kind (draft-kind effect)))
+    (note-lines (effect-about (make-instance 'effect-draft
+                                             :kind kind :element (draft-element effect) :magnitude 1
+                                             :duration (if (eq :instant (kind-property kind :timing)) 0
+                                                           (kind-property kind :duration))
+                                             :area (if (and (area-known-p player) (not (self-kind-p kind)))
+                                                       (kind-property kind :area)
+                                                       0)))
+                *forge-about-chars*)))
 
 (defun build-effect-rows (panel column effect index focus player)
   (let ((kind (draft-kind effect))
-        (row (forge-row column '(250 250 T))))
-    (forge-button (format NIL "Effect: ~:(~a~)" kind) (lambda () (forge-cycle-kind index)) row 0 focus)
+        (row (forge-row column '(250 250 T)))
+        (control (list panel index)))
+    (push (forge-button (format NIL "Effect: ~:(~a~)" kind) (lambda () (forge-cycle-kind index)) row 0 focus
+                        :selected NIL :effect control)
+          (effect-buttons panel))
     (if (eq kind :damage)
-        (forge-button (format NIL "Element: ~:(~a~)" (draft-element effect)) (lambda () (forge-cycle-element index)) row 1 focus)
+        (forge-button (format NIL "Element: ~:(~a~)" (draft-element effect)) (lambda () (forge-cycle-element index))
+                      row 1 focus :effect control)
         (forge-text (if (self-kind-p kind) "On you" "On what it strikes") row 1))
-    (forge-button "Remove" (lambda () (forge-remove-effect index)) row 2 focus)
+    (forge-button "Remove" (lambda () (forge-remove-effect index)) row 2 focus :effect control)
     (let ((dials (forge-row column '(220 220 T))))
       (forge-dial panel (if (member kind '(:slow)) "Slow" "Power")
                   (lambda () (draft-magnitude effect))
@@ -792,7 +874,7 @@ and who resists it, and what its time and area change."
                           (format NIL "~d%" top)
                           (format NIL "~d-~d~:[~;/s~]" (max 1 (ceiling (* *magnitude-spread* top))) top
                                   (and (eq :over-time (kind-property kind :timing)) (< 0 (draft-duration effect)))))))
-                  dials 0 focus)
+                  dials 0 focus index)
       (if (eq :instant (kind-property kind :timing))
           (forge-text "Instant" dials 1)
           (forge-dial panel "Time"
@@ -800,18 +882,15 @@ and who resists it, and what its time and area change."
                       (lambda (v) (setf (draft-duration effect) (round v)))
                       (cons (if (eq :status (kind-property kind :timing)) 1 0) (kind-property kind :duration)) 1
                       (lambda (v) (if (< 0 (round v)) (format NIL "~d s" (round v)) "at once"))
-                      dials 1 focus))
+                      dials 1 focus index))
       (if (and (area-known-p player) (not (self-kind-p kind)) (< 0 (kind-property kind :area)))
           (forge-dial panel "Area"
                       (lambda () (draft-area effect))
                       (lambda (v) (setf (draft-area effect) (/ (round (* 2 v)) 2)))
                       (cons 0 (kind-property kind :area)) 0.5
                       (lambda (v) (if (< 0 v) (format NIL "~,1f m" (/ (round (* 2 v)) 2)) "one"))
-                      dials 2 focus)
-          (forge-text (if (self-kind-p kind) "" "No area") dials 2)))
-    ;; What it does, and its element's quirk.
-    (let ((about (effect-about effect)))
-      (forge-about-row column about (note-lines about *forge-about-chars*)))))
+                      dials 2 focus index)
+          (forge-text (if (self-kind-p kind) "" "No area") dials 2)))))
 
 (defun shown-spell-lines (player sink)
   "What the forge says of a rune or an enchanted weapon it only shows."
@@ -836,7 +915,7 @@ and who resists it, and what its time and area change."
          (step (+ *forge-row-height* *forge-gap*))
          (backdrop (make-instance 'menu-backdrop
                                   :col-sizes `(T ,*forge-left-width* 24 ,*forge-right-width* T)
-                                  :row-sizes `(T ,(* 15 step) T)))
+                                  :row-sizes `(T ,(* 17 step) T)))
          (left (make-instance 'alloy:vertical-linear-layout
                               :min-size (alloy:size *forge-left-width* *forge-row-height*)
                               :cell-margins (alloy:margins 0 (/ *forge-gap* 2))))
@@ -885,13 +964,19 @@ and who resists it, and what its time and area change."
                (forge-text "Its blows carry it, for mana a blow" (forge-row right '(T)) 0)
                (forge-button (format NIL "Delivery: ~:(~a~)" (draft-delivery draft)) 'forge-cycle-delivery
                              (forge-row right '(T)) 0 focus))
+           (setf *forge-about-index* (max 0 (min *forge-about-index* (1- (length (draft-effects draft))))))
            (loop for effect in (draft-effects draft)
                  for index from 0
                  do (build-effect-rows panel right effect index focus player))
+           ;; What the effect in hand does: one box, as tall as the longest its effects can need.
+           (when (draft-effects draft)
+             (forge-about-row right (about panel)
+                              (loop for effect in (draft-effects draft) maximize (about-lines effect player))))
            (when (and (draft-kinds draft player)
                       (< (length (draft-effects draft)) (if weapon *max-enchant-effects* *max-spell-effects*)))
              (forge-button "Add an effect" 'forge-add-effect (forge-row right '(T)) 0 focus))
-           (forge-note-row right (readout panel) 1))
+           ;; The name and costs: two lines, since a three-effect name runs past one.
+           (forge-note-row right (readout panel) 2))
           (T
            (dolist (line (shown-spell-lines player sink))
              (forge-note-row right line (note-lines line)))))
