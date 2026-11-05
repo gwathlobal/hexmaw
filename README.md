@@ -5,6 +5,9 @@ assembled from hand-made blocks, spells are built at a spellforge, a settlement 
 down, and a boss waits at the bottom. Written in Common Lisp on
 [Trial](https://shirakumo.github.io/trial). Linux only for now.
 
+This is Hexmaw's free prototype. Much of it was made with generative AI: [AI.md](AI.md) says
+what and how.
+
 ## Running
 
 You need SBCL. The project keeps its own Quicklisp in `.ql/` (not in the repository), with
@@ -37,17 +40,19 @@ uses to drive the running game.
 This builds a standalone game into `dist/`, which runs without SBCL or the source tree. It
 needs `patchelf`.
 
-## Art and Git LFS
+## Art
 
-The source art under `art/`, the record of how every sprite and texture was made, is stored
-in Git LFS. The game itself only needs `data/`, which is plain git. To clone without
-downloading the pictures:
+The game's own sprites, textures, sounds and music are in `data/`, in plain git, and that is all
+the game needs. The generated source pictures they were cut from are under `art/` in Git LFS,
+kept in a private store for now: a clone has them as small pointer files and downloads nothing.
+Their prompts and `.prompt.json` records are here.
 
-```bash
-GIT_LFS_SKIP_SMUDGE=1 git clone <url>
-```
+## Licence
 
-Use `git lfs pull` later to fetch them.
+The code is under the zlib licence ([LICENSE](LICENSE)). The game's assets, everything in
+`data/`, `art/` and `audio/`, are not: you may build, play, stream and record the game, but not
+re-host, sell or reuse them ([ASSETS-LICENSE.md](ASSETS-LICENSE.md)). The name Hexmaw and its
+logo are not licensed.
 
 ## More
 

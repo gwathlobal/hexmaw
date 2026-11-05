@@ -1,5 +1,7 @@
 (asdf:defsystem hexmaw
   :description "First-person real-time roguelike POC."
+  :author "Vadim Murin"
+  :license "zlib (code); assets: see ASSETS-LICENSE.md"
   ;; asdf:make builds the standalone executable into dist/ (tools/build-dist, src/dist.lisp).
   ;; Deploy puts the build pathname under bin/, hence the ../.
   :defsystem-depends-on (:deploy)
