@@ -63,11 +63,14 @@ Click the window to take the mouse. Esc pauses and lets the mouse go; Esc again 
 In water, W swims where you look, Space goes up and C or Ctrl down; swim into a ledge at
 the surface to climb out. When you die, the run is over.
 
+Settings, on the main menu and the pause menu, has fullscreen, mouse sensitivity and the
+volumes, and Controls, where any of the keys above can be changed.
+
 
 WHERE THINGS GO
 
-Saves, screenshots, the log (trial.log) and the check and self-test reports go here, never
-into the game's own folder:
+Saves, your settings (settings.lisp), screenshots, the log (trial.log) and the check and
+self-test reports go here, never into the game's own folder:
 
   Windows        %LOCALAPPDATA%\hexmaw\
   Linux, macOS   ~/.local/share/hexmaw/
