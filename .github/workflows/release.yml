@@ -23,8 +23,9 @@ env:
   # itch.io's upload tool, fetched by the itch job from itch's own download host.
   BUTLER_VERSION: '15.32.0'
   ITCH_PROJECT: 'gwathlobal/hexmaw'
-  # Mesa's software OpenGL for Windows, tried for the self-test only: a runner has no GPU,
-  # only GDI's OpenGL 1.1. Never put into an archive.
+  # Mesa's software OpenGL (llvmpipe) for Windows, for the self-test only: a runner has no
+  # GPU, only GDI's OpenGL 1.1. Never put into an archive. The MinGW package: in 26.2.x the
+  # MSVC one has no OpenGL driver at all (a d3d12 build regression, its release notes say).
   MESA_WIN_VERSION: '26.2.6'
 
 jobs:
@@ -260,11 +261,18 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $dir = Join-Path $env:RUNNER_TEMP 'verify\${{ steps.package.outputs.name }}'
-          # Mesa's opengl32.dll beside the exe, in this unpacked copy only: Windows loads
-          # the one in the program's folder before the system's.
+          # Mesa's opengl32.dll (and libgallium_wgl.dll, the driver it loads) beside the exe,
+          # in this unpacked copy only: Windows loads the one in the program's folder before
+          # the system's.
           $v = $env:MESA_WIN_VERSION
-          curl.exe -fsSL --retry 5 --retry-delay 4 -o mesa.7z "https://github.com/pal1000/mesa-dist-win/releases/download/$v/mesa3d-$v-release-msvc.7z"
-          7z e mesa.7z "-o$dir" 'x64\*.dll' -y | Out-Null
+          curl.exe -fsSL --retry 5 --retry-delay 4 -o mesa.7z "https://github.com/pal1000/mesa-dist-win/releases/download/$v/mesa3d-$v-release-mingw.7z"
+          $mesa = Join-Path $env:RUNNER_TEMP 'mesa'
+          7z x mesa.7z "-o$mesa" 'x64\*.dll' -y | Out-Null
+          Copy-Item (Join-Path $mesa 'x64\*.dll') $dir
+          foreach ($f in 'opengl32.dll', 'libgallium_wgl.dll') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "Mesa's $f is not beside the exe" }
+          }
+          Get-ChildItem $dir -Filter *.dll | ForEach-Object { Write-Host "  $($_.Name)" }
           $env:GALLIUM_DRIVER = 'llvmpipe'
           $shots = Join-Path $env:GITHUB_WORKSPACE 'checks'
           $p = Start-Process -FilePath (Join-Path $dir 'hexmaw.exe') -ArgumentList @('selftest', '--directory', $shots) `
