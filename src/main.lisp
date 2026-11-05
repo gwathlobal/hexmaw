@@ -284,16 +284,6 @@ void main(){
           do (setf (aref frame at) (aref late k)))
     frame))
 
-;; Trial pools 64 of each input event. Its pool is a counter, not a free list (ACQUIRE-EVENT,
-;; event-loop.lisp): the input thread takes the next one while those before it wait in the
-;; scene's queue, which only drains in a tick. On a slow frame (software OpenGL) a quick mouse
-;; ran past 64, and then the input thread slept up to 10 ms an event and finally overwrote the
-;; last one, still queued. A pool the size of a few slow frames' worth of moves avoids that.
-;; Handlers still mustn't trust an event's OLD-POS (the player's MOUSE-MOVE says why).
-(define-event-pool mouse-move 512)
-(define-event-pool mouse-press 128)
-(define-event-pool mouse-release 128)
-
 (defparameter *max-ticks-per-frame* 5
   "The most ticks run between two frames. Trial's loop runs as many as the frame took (100 a
 second) before it draws, up to 10 s of them, so on a machine too slow to draw a frame in 50 ms

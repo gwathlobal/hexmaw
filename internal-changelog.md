@@ -7,16 +7,6 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
-- **Mouse look in a VM, and under slow frames.** In the QEMU/KVM Windows VM the view turned by
-  where the pointer was, not how it moved: virt-manager's USB tablet is an absolute pointer, and
-  GLFW's locked cursor warps it to the window's centre each poll. That one is the VM's to fix
-  (remove the Tablet device); README-PLAYERS.txt and CLAUDE.md say so. In the game: mouse look and
-  the map's drag turn from the last position they saw (`look-from`, `drag-from`), not the event's
-  `old-pos`, since Trial's event pool is a counter and refills an event still queued on a slow
-  frame, which turned the view by deltas that never came back; and the mouse events' pools hold
-  512 moves and 128 presses and releases, not 64, so the input thread no longer stalls 10 ms an
-  event past 64.
-
 - **Playable on software OpenGL.** A Windows VM with no 3D driver (Mesa's llvmpipe) ran the
   game at 2 to 3 fps; reproduced here at 4 (llvmpipe, 4 cores, 1280×720). Three causes: drawing
   every pixel; Trial's loop catching up every tick a slow frame took (27 a frame, 80 of 270 ms),

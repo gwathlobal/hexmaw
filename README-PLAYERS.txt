@@ -41,17 +41,6 @@ starts a game, takes a screenshot and closes again by itself, saying whether all
 worked. Both also save their answer, as check.txt and selftest.txt, in the game's folder
 for your files (see WHERE THINGS GO).
 
-In a virtual machine, or with no graphics driver
-  The game can draw in software, slowly. On Windows, take opengl32.dll and
-  libgallium_wgl.dll from Mesa's MinGW package (github.com/pal1000/mesa-dist-win), put
-  them beside hexmaw.exe, and set the environment variable GALLIUM_DRIVER to llvmpipe
-  before starting it. Settings' Render scale (1/2 or less) makes it playable.
-  Mouse look needs the virtual machine to give the game a mouse, not a pointer that
-  follows yours: with an absolute pointer the view turns by where your pointer is, not by
-  how it moves. In virt-manager (QEMU/KVM) remove the "Tablet" input device; the viewer
-  then takes the mouse when you click in it, and Ctrl+Alt lets it go. In VirtualBox turn
-  mouse integration off (Host+I). Over remote desktop mouse look doesn't work.
-
 
 PLAYING
 
