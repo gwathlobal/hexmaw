@@ -1166,10 +1166,19 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   one row is lit at a time. `panel-width` is the column's width (`*menu-width*`; the slot
   panels' is wider, for their labels). `panel-lines` adds `(label value)` rows of text
   between the title and the buttons (`menu-stat`, `*menu-stat-height*`; the death screen's stats).
-  The panel works out its column's height from its rows, a `*menu-row-gap*` per row and
-  `*menu-slack*`; too short, the last button hangs out of the column, and Alloy sends no click on
-  that strip to it (the death screen's button lost its bottom 18 px, the main menu's 8). After
-  changing row sizes, check no element sticks out of its parent's bounds.
+  **A panel's column is never sized from its rows.** Alloy sends a pointer event only to the
+  children of a layout that contains it, so a row hanging out of its column is drawn but can't be
+  clicked, and text measures taller than any guess (Jersey 15 at 20 is 35 px, at 32 is 55): the
+  old guessed height left the death screen's button 7 px of its 48 to click. So
+  `panel-backdrop` gives the column the whole height of the screen below `panel-top` (all of it
+  when centred), and the column lays its rows in it at their real sizes (`panel-align`: `:middle`
+  centred, `:end` from the top); the forge's two columns share one grid row as tall as the taller,
+  centred so. After changing a panel, open it and run `tools/hd '(game (menu-layout-problems))'`
+  (every element sticking out of its parent, and how much of a row can still be clicked) and
+  `tools/hd '(game (menu-click-problems))'` (the pointer moved over a 5 × 3 grid on each row,
+  through the menu pass, and the points Alloy doesn't call that row hovered at); NIL from both
+  means every row clicks wherever it is drawn. Check at 1280 × 720 and at a bigger window, where
+  Alloy's scale changes (`(game (trial:resize *context* 1920 1080))`: 1.25 from 1920 px across).
   Settings (`open-settings`, on both menus) covers the menu it came from while
   `*settings-open*` is true; Back or Esc (`close-settings`, which writes the settings file)
   returns to it. It has Fullscreen (`*fullscreen*`), Mouse sensitivity

@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Menu buttons click wherever they are drawn.** A panel's column had a guessed height (48 a
+  row, 30 a line of text, a slack of 10 that the grid's cell margins ate), and since Jersey 15 a
+  line measures 35 and the title 55, so the last rows hung out of the column, where Alloy sends no
+  click: the death and victory screens' only button took clicks on 7 px of its 48, the shop's and
+  every townsperson's Leave on about half, Controls' Reset and Back on 21 (a Windows
+  playtester's report; it happens on Linux the same, at any window size). The column now gets the
+  screen's whole free height and centres (or tops) its rows itself (`panel-backdrop`,
+  `panel-align`), the forge's two columns in one grid row; Controls' body was also 7 px wider than
+  its column. `menu-layout-problems` and `menu-click-problems` (menu.lisp) check the panel on
+  screen.
 - **A Windows build quits with TerminateProcess.** With Mesa's software OpenGL beside the
   exe (a VM with no 3D driver), the game could hang after its window closed, and Task
   Manager couldn't end it: an exit, even an abort one, goes through ExitProcess, which runs

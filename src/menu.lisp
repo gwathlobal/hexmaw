@@ -11,9 +11,6 @@
 (defparameter *menu-width* 320 "Width of the button column, in UI units (pixels at 1280×720).")
 (defparameter *menu-row-height* 48)
 (defparameter *menu-row-gap* 8)
-(defparameter *menu-slack* 10
-  "UI units of room a menu's column gets past its rows and gaps, for text that comes out a
-pixel or few taller than its row.")
 
 (define-shader-pass menu-ui (trial-alloy:base-ui) ())
 
@@ -318,30 +315,38 @@ after a change to what it shows). The menu controller remakes it.")
 (defmethod initialize-instance :after ((panel menu-panel) &key)
   (build-panel panel))
 
+(defun panel-backdrop (panel width &rest initargs)
+  "PANEL's backdrop, a grid whose middle column, WIDTH wide, takes the whole height of the screen
+below PANEL-TOP (or all of it, when centred), in its row PANEL-ROW. Nothing is sized from what
+the rows are guessed to need: text measures taller than its row (Jersey 15 at 20 is 35 px, at 32
+is 55), and a row pushed below its layout's bounds is drawn but never clicked, since Alloy sends
+a pointer event only to children of a layout that contains it."
+  (let ((top (panel-top panel))
+        (splash (panel-splash panel)))
+    (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
+           :col-sizes `(T ,width T)
+           :row-sizes (if (eq top T) '(T) `(,top T))
+           (append (when splash (list :splash splash)) initargs))))
+
+(defun panel-row (panel)
+  "The row of PANEL-BACKDROP's grid that holds PANEL's column."
+  (if (eq (panel-top panel) T) 0 1))
+
+(defun panel-align (panel)
+  "How a column of PANEL's lays its rows in its cell (PANEL-BACKDROP): centred, or from the top."
+  (if (eq (panel-top panel) T) :middle :end))
+
 (defmethod build-panel ((panel menu-panel))
   (let* ((buttons (panel-buttons panel))
          (lines (panel-lines panel))
-         (rows (+ 1 (length buttons) (if lines 1 0)))
-         (lines-height (* (length lines) *menu-stat-height*))
-         (splash (panel-splash panel))
-         ;; The column's height. Every row has half a gap above it and below it (the column's
-         ;; cell margins), so a gap per row; and the title's text and the stats' column come
-         ;; out a few pixels taller than their rows. Too short, the last button hangs out of
-         ;; the bottom of the column, and Alloy never sends a click on that strip to it.
-         (backdrop (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
-                                  :col-sizes `(T ,(panel-width panel) T)
-                                  :row-sizes `(,(panel-top panel)
-                                               ,(+ (* (- rows (if lines 1 0)) *menu-row-height*)
-                                                   lines-height
-                                                   (* rows *menu-row-gap*)
-                                                   *menu-slack*)
-                                               T)
-                                  (when splash (list :splash splash))))
+         ;; Every row has half a gap above it and below it (the column's cell margins).
          (column (make-instance 'alloy:vertical-linear-layout
+                                :align (panel-align panel)
                                 :min-size (alloy:size (panel-width panel) *menu-row-height*)
                                 :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
+         (backdrop (panel-backdrop panel (panel-width panel)))
          (focus (make-instance 'alloy:focus-list)))
-    (alloy:enter column backdrop :row 1 :col 1)
+    (alloy:enter column backdrop :row (panel-row panel) :col 1)
     (let ((title (panel-title panel)))
       (alloy:enter (alloy:represent title 'menu-title) column))
     (when lines
@@ -807,3 +812,88 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
       (setf *menu-refresh* NIL)
       (when shown (trial-alloy:hide-panel 'menu-panel))
       (when wanted (trial:show (make-instance wanted))))))
+
+;;; Checking a panel's layout. Alloy sends a pointer event only to the children of a layout that
+;;; contains it, so the part of a row outside its parent's bounds is drawn but can't be hovered
+;;; or clicked. Both checks look at the panel on screen; NIL means every row clicks wherever it
+;;; is drawn.
+
+(defun element-box (element)
+  "ELEMENT's bounds on screen, in pixels from the bottom left: (X Y W H)."
+  (multiple-value-bind (x y) (alloy::compute-global-position element)
+    (let ((bounds (alloy:bounds element)))
+      (list (alloy:to-px x) (alloy:to-px y) (alloy:pxw bounds) (alloy:pxh bounds)))))
+
+(defun element-name (element)
+  (if (typep element 'alloy:component)
+      (format NIL "~(~a~) ~s" (type-of element) (ignore-errors (princ-to-string (alloy:value element))))
+      (string-downcase (type-of element))))
+
+(defun box-clip (box within)
+  "The part of BOX inside WITHIN, both (X Y W H); NIL if none."
+  (destructuring-bind (x y w h) box
+    (destructuring-bind (x2 y2 w2 h2) within
+      (let ((left (max x x2)) (bottom (max y y2))
+            (right (min (+ x w) (+ x2 w2))) (top (min (+ y h) (+ y2 h2))))
+        (when (and (< left right) (< bottom top))
+          (list left bottom (- right left) (- top bottom)))))))
+
+(defun menu-layout-problems (&optional (panel (trial-alloy:find-panel 'menu-panel)))
+  "Every element of PANEL whose box sticks out of its parent's by more than half a pixel: its
+name, its box, its parent's, and for a row the player clicks, how much of its height can be
+clicked (what lies inside every layout around it)."
+  (let ((problems ()))
+    (when panel
+      (alloy:with-unit-parent (alloy:layout-element panel)
+        (labels ((walk (element parent clip)
+                   (let* ((box (element-box element))
+                          (visible (if clip (box-clip box clip) box)))
+                     (when (and parent (< 0 (third box)) (< 0 (fourth box))
+                                (destructuring-bind (x y w h) box
+                                  (destructuring-bind (px py pw ph) parent
+                                    (or (< (+ x 0.5) px) (< (+ y 0.5) py)
+                                        (< (+ px pw 0.5) (+ x w)) (< (+ py ph 0.5) (+ y h))))))
+                       (push (list* (element-name element) :box (mapcar #'round box) :parent (mapcar #'round parent)
+                                    (when (typep element 'menu-focusable)
+                                      (list :clickable (format NIL "~d of ~d px high"
+                                                               (round (if visible (fourth visible) 0))
+                                                               (round (fourth box))))))
+                             problems))
+                     (when (typep element 'alloy:layout)
+                       (alloy:do-elements (child element)
+                         (walk child box (or visible (list 0 0 0 0))))))))
+          (walk (alloy:layout-element panel) NIL NIL))))
+    (nreverse problems)))
+
+(defun menu-rows (&optional (panel (trial-alloy:find-panel 'menu-panel)))
+  "PANEL's rows the player clicks (buttons, toggles, sliders, bindings), in layout order."
+  (let ((rows ()))
+    (labels ((walk (element)
+               (when (typep element 'menu-focusable) (push element rows))
+               (when (typep element 'alloy:layout)
+                 (alloy:do-elements (child element) (walk child)))))
+      (when panel (walk (alloy:layout-element panel))))
+    (nreverse rows)))
+
+(defun menu-click-problems (&optional (panel (trial-alloy:find-panel 'menu-panel)))
+  "Move the pointer, through the menu pass as the mouse does, over a 5 × 3 grid on each of PANEL's
+rows, from 2 pixels inside its edges to its middle, and list the rows and points (in pixels from
+the bottom left) where Alloy doesn't call that row hovered. It leaves the last row probed with the
+focus. Run it in (GAME ...)."
+  (let ((ui (trial-alloy:ui)) (problems ()) (last NIL)
+        ;; Each row the pointer reaches plays its hover sound otherwise.
+        (*muted* (cons :menu-hover *muted*)))
+    (when panel
+      (dolist (row (menu-rows panel))
+        (destructuring-bind (x y w h) (alloy:with-unit-parent (alloy:layout-element panel) (element-box row))
+          (when (and (< 2 w) (< 2 h))
+            (let ((misses (loop for py in (list (+ y 2) (+ y (* h 1/2)) (+ y h -2))
+                                nconc (loop for px in (list (+ x 2) (+ x (* w 1/4)) (+ x (* w 1/2)) (+ x (* w 3/4)) (+ x w -2))
+                                            for pos = (vec2 px py)
+                                            do (trial:handle (make-event 'mouse-move :pos pos :old-pos (or last pos)) ui)
+                                               (setf last pos)
+                                            unless (alloy:hovered-p row)
+                                              collect (list (round (vx pos)) (round (vy pos)))))))
+              (when misses
+                (push (list (element-name row) :box (mapcar #'round (list x y w h)) :missed misses) problems)))))))
+    (nreverse problems)))
