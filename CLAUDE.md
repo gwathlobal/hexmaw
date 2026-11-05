@@ -169,7 +169,10 @@ any exit through ExitProcess runs every DLL's shutdown, and Mesa's hung there wa
 thread already killed, leaving a process Task Manager can't end. With no sound device the game plays silent (`start-sound`, main.lisp), and at quit
 the sound server's thread is stopped but its memory isn't freed (`finalize` on
 `harmony:server`): freeing it corrupted libmixed's heap on Windows after XAudio2 had failed. Both workflows set up
-through `.github/actions/setup-lisp`: SBCL 2.4.10 (Homebrew's current on macOS), then
+through `.github/actions/setup-lisp`: SBCL 2.4.10 on Linux, 2.6.9 for the Windows release
+(`SBCL_VERSION_WINDOWS`: 2.4.10's image dump there crashed on some commits and not others,
+whatever they changed, and 2.6.9's Linux binary needs a newer glibc than ubuntu-22.04's), and
+Homebrew's current on macOS, then
 `tools/setup-ql` and a cache over `.ql/` and the fasl cache. Checkouts take no LFS: the build
 reads only `data/`, and CI fails if the source art isn't pointer files. Third-party actions
 are pinned to commits.

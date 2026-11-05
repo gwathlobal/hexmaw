@@ -11,7 +11,7 @@ what and how.
 
 ## Running
 
-You need SBCL (2.4.10 is what the builds use). The project keeps its own Quicklisp in
+You need SBCL (2.4.10 is what the Linux builds use, 2.6.9 the Windows one). The project keeps its own Quicklisp in
 `.ql/` (not in the repository), with the Shirakumo dist for Trial. To set it up, with the two
 dist versions the game is built against:
 

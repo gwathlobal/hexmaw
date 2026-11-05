@@ -20,6 +20,10 @@ permissions:
 
 env:
   SBCL_VERSION: '2.4.10'
+  # Windows builds on a newer SBCL: 2.4.10's image dump there crashed on some commits and not
+  # others ("access violation in dynamic space"), whatever the change. Linux can't follow:
+  # 2.6.9's binary needs glibc 2.38, newer than ubuntu-22.04's.
+  SBCL_VERSION_WINDOWS: '2.6.9'
   # itch.io's upload tool, fetched by the itch job from itch's own download host.
   BUTLER_VERSION: '15.32.0'
   ITCH_PROJECT: 'gwathlobal/hexmaw'
@@ -60,7 +64,7 @@ jobs:
 
       - uses: ./.github/actions/setup-lisp
         with:
-          sbcl-version: ${{ env.SBCL_VERSION }}
+          sbcl-version: ${{ runner.os == 'Windows' && env.SBCL_VERSION_WINDOWS || env.SBCL_VERSION }}
 
       - name: Install the build's and the self-test's tools (Linux)
         if: runner.os == 'Linux'

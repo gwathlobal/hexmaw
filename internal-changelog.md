@@ -14,6 +14,15 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   there for one of its own. `quit-process` (dist.lisp) still runs Deploy's quit hooks and
   writes out the log and the streams, then ends the process without any DLL's shutdown
   (`terminate-process`), as do the self-test's watchdog and its start-up error exit.
+- **The Windows release builds on SBCL 2.6.9.** Under 2.4.10 its image dump crashed on CI
+  ("access violation in dynamic space") on some commits and not others, the same commit
+  alike on every re-run, whatever it changed: one that touched only Markdown failed. The same
+  commits dumped under 2.6.9. Linux stays on 2.4.10, whose binary runs on ubuntu-22.04's glibc
+  (2.6.9's needs 2.38). Release.yml's `SBCL_VERSION_WINDOWS`.
+- **The game's `impact` is its own.** The projectile's `impact` (spells.lisp) was Trial's
+  symbol, so its DEFUN replaced Trial's physics generic; a macOS build that loaded Trial's
+  rigidbody again then failed on it ("TRIAL:IMPACT already names an ordinary function").
+  `hexmaw` now shadows it.
 - **Builds for Linux, Windows and macOS, and a release pipeline.** The game has a version,
   `:version` in `hexmaw.asd` (0.1.0), which Trial reports with the commit as `0.1.0-<hash>`
   and the death and victory screens show under the seed. A build answers Trial's command

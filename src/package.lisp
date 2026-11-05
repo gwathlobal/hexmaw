@@ -1,6 +1,8 @@
 (defpackage #:hexmaw
   (:use #:cl+trial)
-  (:shadow #:main #:launch)
+  ;; IMPACT: a projectile's (spells.lisp), not Trial's physics generic, which our DEFUN
+  ;; replaced; a build that loaded Trial's rigidbody again then failed on it.
+  (:shadow #:main #:launch #:impact)
   (:local-nicknames
    (#:v #:org.shirakumo.verbose)
    (#:alloy #:org.shirakumo.alloy)
