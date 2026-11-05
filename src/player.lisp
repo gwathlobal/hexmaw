@@ -98,6 +98,10 @@ rest is found in the dungeon (loot.lisp). Every spell here must be one the spell
             :documentation "The footing (*FOOTINGS*) of the floor it stood on last tick, or NIL.")
    (eye :initform *eye-height* :accessor eye)
    (mouse-look :initform NIL :accessor mouse-look)
+   (look-from :initform (vec 0 0) :accessor look-from
+              :documentation "The pointer position mouse look last turned to (MOUSE-MOVE).")
+   (look-primed :initform NIL :accessor look-primed
+                :documentation "True once LOOK-FROM holds a position since the mouse was captured.")
    (health :initform *player-max-health* :accessor health)
    (pain :initform 0.0 :accessor pain :documentation "Seconds of the pain flash left.")
    (restore-flash :initform 0.0 :accessor restore-flash
@@ -205,11 +209,14 @@ blow knocked it aside (BREAK-GUARD).")
 
 (defun capture-mouse (player)
   (lock-cursor (context +main+))
-  (setf (mouse-look player) T))
+  ;; The first move after the lock is GLFW's virtual pointer, not a turn (MOUSE-MOVE).
+  (setf (look-primed player) NIL
+        (mouse-look player) T))
 
 (defun release-mouse (player)
   (show-cursor (context +main+))
-  (setf (mouse-look player) NIL))
+  (setf (look-primed player) NIL
+        (mouse-look player) NIL))
 
 (defun look-direction (player)
   "Unit vector the player is looking along, pitch included."
@@ -298,12 +305,21 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
 (define-handler (player key-release) (key)
   (player-release player key))
 
-(define-handler (player mouse-move) (old-pos pos)
+;; The turn is from the position the last move turned to (LOOK-FROM), not the event's OLD-POS.
+;; Trial's event pool hands out by a counter, so while events wait in the queue (a slow frame)
+;; the input thread can refill one not yet handled: it is seen twice with the newer position
+;; and the older is lost. With OLD-POS each such event turned by a delta that never came back;
+;; from LOOK-FROM the turns always add up to where the pointer is now.
+(define-handler (player mouse-move) (pos)
   (when (mouse-look player)
-    (let ((rot (rotation player)))
-      ;; Mouse Y grows upward here, while positive pitch looks down; hence the minus.
-      (setf (vx rot) (max -1.55 (min 1.55 (- (vx rot) (* (mouse-sensitivity) (- (vy pos) (vy old-pos)))))))
-      (setf (vy rot) (mod (+ (vy rot) (* (mouse-sensitivity) (- (vx pos) (vx old-pos)))) #.(float (* 2 pi) 0f0))))))
+    (let ((rot (rotation player))
+          (from (look-from player)))
+      (when (look-primed player)
+        ;; Mouse Y grows upward here, while positive pitch looks down; hence the minus.
+        (setf (vx rot) (max -1.55 (min 1.55 (- (vx rot) (* (mouse-sensitivity) (- (vy pos) (vy from)))))))
+        (setf (vy rot) (mod (+ (vy rot) (* (mouse-sensitivity) (- (vx pos) (vx from)))) #.(float (* 2 pi) 0f0))))
+      (v<- from pos)
+      (setf (look-primed player) T))))
 
 (defmethod body-feet ((player player)) (feet player))
 (defmethod body-radius ((player player)) *player-radius*)

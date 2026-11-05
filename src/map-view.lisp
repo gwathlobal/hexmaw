@@ -212,7 +212,11 @@ isn't on that storey or is behind the camera. CLIP is a scratch vec4."
    (shown-hint :initform NIL :accessor shown-hint :documentation "The storey and what's past it, as the hint shows them.")
    (block-labels :initform () :accessor map-labels)
    (exit-labels :initform () :accessor map-exit-labels)
-   (clip :initform (vec4 0 0 0 1) :reader map-clip)))
+   (clip :initform (vec4 0 0 0 1) :reader map-clip)
+   (drag-from :initform (vec 0 0) :reader drag-from
+              :documentation "The pointer position the last move dragged from (MOUSE-MOVE).")
+   (drag-primed :initform NIL :accessor drag-primed
+                :documentation "True once DRAG-FROM holds a position since the map opened.")))
 
 (defvar *map-view* NIL "The current scene's MAP-VIEW.")
 
@@ -260,6 +264,7 @@ shows and the player's own."
     (play-sound :map-open)
     (setf *game-state* :map)
     (release-mouse *player*)
+    (setf (drag-primed *map-view*) NIL)
     (centre-map *map-view*)))
 
 (defun close-map ()
@@ -285,12 +290,18 @@ shows and the player's own."
         (step-map-storey (if (< 0 delta) 1 -1))
         (zoom-map (map-camera map-view) (expt *map-zoom-step* (- (signum delta)))))))
 
-(define-handler (map-view mouse-move) (old-pos pos)
+;; From the position the last move saw (DRAG-FROM), not the event's OLD-POS, for the reason
+;; the player's MOUSE-MOVE gives: a refilled pooled event would otherwise drag the map astray.
+(define-handler (map-view mouse-move) (pos)
   (when (eq *game-state* :map)
-    (let ((camera (map-camera map-view))
-          (dx (- (vx pos) (vx old-pos)))
-          ;; Mouse Y grows upward.
-          (dy (- (vy pos) (vy old-pos))))
+    (let* ((camera (map-camera map-view))
+           (from (drag-from map-view))
+           (primed (drag-primed map-view))
+           (dx (if primed (- (vx pos) (vx from)) 0.0))
+           ;; Mouse Y grows upward.
+           (dy (if primed (- (vy pos) (vy from)) 0.0)))
+      (v<- from pos)
+      (setf (drag-primed map-view) T)
       (cond ((retained :left)
              (turn-map camera (* *map-drag-turn* dx) (- (* *map-drag-turn* dy))))
             ((retained :right)

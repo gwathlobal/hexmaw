@@ -163,7 +163,11 @@ MinGW package of `pal1000/mesa-dist-win`: in 26.2.x the MSVC one has no OpenGL d
 macOS a runner offers no OpenGL at all, so there it is tried and reported without failing.
 The same Mesa files beside `hexmaw.exe` (`opengl32.dll`, `libgallium_wgl.dll`, and
 `GALLIUM_DRIVER=llvmpipe`) run the game in a Windows VM with no 3D driver, such as QEMU/KVM's,
-slowly; without that variable this Mesa crashes a few seconds in. A build ends its process
+slowly; without that variable this Mesa crashes a few seconds in. Mouse look there needs a
+relative mouse: virt-manager's default USB tablet is an absolute pointer, and GLFW's locked
+cursor (`:cursor-disabled`) warps it to the window's centre each poll, so every move read as
+"pointer minus centre". Remove the VM's Tablet device (README-PLAYERS.txt says so); nothing
+in the game can make mouse look of absolute positions. A build ends its process
 with TerminateProcess (`terminate-process`, dist.lisp), after the quit hooks and the log:
 any exit through ExitProcess runs every DLL's shutdown, and Mesa's hung there waiting for a
 thread already killed, leaving a process Task Manager can't end. With no sound device the game plays silent (`start-sound`, main.lisp), and at quit
