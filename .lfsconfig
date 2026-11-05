@@ -1,0 +1,3 @@
+[lfs]
+	url = ssh://git@github.com/gwathlobal/hexmaw-art.git
+	fetchexclude = /art/**

@@ -1546,8 +1546,12 @@ generated image's `.prompt.json`, frames files, and the source images themselves
 generators don't give the same picture twice, so the chosen take is the only copy of it.
 Images under `art/` are in **Git LFS**
 (`.gitattributes`): a commit holds a small pointer, the picture lives in `.git/lfs/objects/`
-and, once pushed, on GitHub's LFS server, and a clone downloads only the pictures of the
-commit it checks out. `data/`, what the game ships, is plain git: the build reads it. git-lfs
+and, once pushed, in the LFS store of the private repository `gwathlobal/hexmaw-art`, not the
+public one (`.lfsconfig`'s `lfs.url`). `.lfsconfig` also has `lfs.fetchexclude = /art/**`, so a
+stranger's clone keeps the pointers and downloads nothing: public downloads would count against
+the account's 10 GiB a month. The author's checkout overrides it once, `git config
+lfs.fetchexclude ""` (worktrees share that config), and then fetches and checks out art as ever.
+`data/`, what the game ships, is plain git: the build reads it. git-lfs
 must be installed (`apt install git-lfs`, then `git lfs install` once); after that `git add`,
 `commit` and `checkout` work as ever, and the files on disk are real PNGs.
 
