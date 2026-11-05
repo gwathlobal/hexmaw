@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A Windows build quits with TerminateProcess.** With Mesa's software OpenGL beside the
+  exe (a VM with no 3D driver), the game could hang after its window closed, and Task
+  Manager couldn't end it: an exit, even an abort one, goes through ExitProcess, which runs
+  every DLL's shutdown after killing the other threads, and `libgallium_wgl.dll`'s waited
+  there for one of its own. `quit-process` (dist.lisp) still runs Deploy's quit hooks and
+  writes out the log and the streams, then ends the process without any DLL's shutdown
+  (`terminate-process`), as do the self-test's watchdog and its start-up error exit.
 - **Builds for Linux, Windows and macOS, and a release pipeline.** The game has a version,
   `:version` in `hexmaw.asd` (0.1.0), which Trial reports with the commit as `0.1.0-<hash>`
   and the death and victory screens show under the seed. A build answers Trial's command

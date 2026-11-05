@@ -163,7 +163,10 @@ MinGW package of `pal1000/mesa-dist-win`: in 26.2.x the MSVC one has no OpenGL d
 macOS a runner offers no OpenGL at all, so there it is tried and reported without failing.
 The same Mesa files beside `hexmaw.exe` (`opengl32.dll`, `libgallium_wgl.dll`, and
 `GALLIUM_DRIVER=llvmpipe`) run the game in a Windows VM with no 3D driver, such as QEMU/KVM's,
-slowly. With no sound device the game plays silent (`start-sound`, main.lisp), and at quit
+slowly; without that variable this Mesa crashes a few seconds in. A build ends its process
+with TerminateProcess (`terminate-process`, dist.lisp), after the quit hooks and the log:
+any exit through ExitProcess runs every DLL's shutdown, and Mesa's hung there waiting for a
+thread already killed, leaving a process Task Manager can't end. With no sound device the game plays silent (`start-sound`, main.lisp), and at quit
 the sound server's thread is stopped but its memory isn't freed (`finalize` on
 `harmony:server`): freeing it corrupted libmixed's heap on Windows after XAudio2 had failed. Both workflows set up
 through `.github/actions/setup-lisp`: SBCL 2.4.10 (Homebrew's current on macOS), then

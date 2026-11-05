@@ -98,18 +98,29 @@ called in a thread of its own once the game is up (the self-test)."
     (stop-eval-server)
     (quit-process *exit-code*)))
 
+(defun terminate-process (code)
+  "End the process with CODE at once. On Windows even an abort exit goes through ExitProcess,
+which runs every DLL's shutdown after killing the other threads; Mesa's software OpenGL
+(libgallium_wgl.dll beside the exe, in a VM) then waits in its exit handler for a thread
+that is already gone, forever, and a process that has begun to exit can't be killed from
+Task Manager either. TerminateProcess runs no DLL's shutdown."
+  #+win32
+  (sb-alien:alien-funcall
+   (sb-alien:extern-alien "TerminateProcess" (function sb-alien:int (sb-alien:unsigned 64) sb-alien:unsigned-int))
+   (sb-alien:alien-funcall (sb-alien:extern-alien "GetCurrentProcess" (function (sb-alien:unsigned 64))))
+   code)
+  (sb-ext:exit :code code :abort T))
+
 (defun quit-process (code)
   "End the process with CODE once the game is done: Deploy's quit hooks, the log and the
-streams written out, then an abort exit. Deploy's own quit exits through the C runtime, which
-on Windows runs every library's DLL shutdown, and with XAudio2's threads still alive (the
-sound server is stopped, not freed, at quit: main.lisp) the game hung there after its window
-closed. An abort exit runs none of that; it is what the self-test's watchdog already used to
-end a stuck game on Windows."
+streams written out, then TERMINATE-PROCESS. Deploy's own quit exits through the C runtime,
+which on Windows runs every library's DLL shutdown, and the game hung there after its window
+closed."
   (ignore-errors (deploy:run-hooks :quit))
   (ignore-errors (v:remove-global-controller))
   (ignore-errors (finish-output *standard-output*))
   (ignore-errors (finish-output *error-output*))
-  (sb-ext:exit :code code :abort T))
+  (terminate-process code))
 
 
 ;;; Reports: what `hexmaw check` and `hexmaw selftest` found, printed and saved in the user
@@ -240,7 +251,7 @@ end a stuck game on Windows."
                                      (reverse (cons (format NIL "self-test FAILED: ~:[no answer~;the game didn't quit~] within ~d s"
                                                             (selftest-verdict-p) *selftest-timeout*)
                                                     (or *selftest-lines* (list (build-description)))))))
-                      (sb-ext:exit :code 2 :abort T))
+                      (terminate-process 2))
                     :name "hexmaw selftest watchdog")
     ;; An error that would stop the game (no OpenGL context, say) ends the test at once, with
     ;; its reason in the report, instead of waiting behind Trial's error box until the
@@ -249,6 +260,6 @@ end a stuck game on Windows."
                             (ignore-errors
                              (push (format NIL "self-test FAILED: ~a" e) *selftest-lines*)
                              (write-report "selftest.txt" (reverse *selftest-lines*)))
-                            (sb-ext:exit :code 1 :abort T))))
+                            (terminate-process 1))))
       (let ((org.shirakumo.fraf.trial::*inhibit-standalone-error-handler* T))
         (play-dist (lambda () (selftest-script directory)))))))
