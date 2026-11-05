@@ -103,12 +103,11 @@ called in a thread of its own once the game is up (the self-test)."
 which runs every DLL's shutdown after killing the other threads; Mesa's software OpenGL
 (libgallium_wgl.dll beside the exe, in a VM) then waits in its exit handler for a thread
 that is already gone, forever, and a process that has begun to exit can't be killed from
-Task Manager either. TerminateProcess runs no DLL's shutdown."
+Task Manager either. TerminateProcess runs no DLL's shutdown. It goes through SBCL's own
+routines, already in its image: with foreign symbols of our own here, the Windows dump on
+CI crashed (\"access violation in dynamic space\"), though not on a local build."
   #+win32
-  (sb-alien:alien-funcall
-   (sb-alien:extern-alien "TerminateProcess" (function sb-alien:int (sb-alien:unsigned 64) sb-alien:unsigned-int))
-   (sb-alien:alien-funcall (sb-alien:extern-alien "GetCurrentProcess" (function (sb-alien:unsigned 64))))
-   code)
+  (sb-win32::terminate-process (sb-win32::get-current-process) code)
   (sb-ext:exit :code code :abort T))
 
 (defun quit-process (code)
