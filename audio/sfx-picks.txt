@@ -53,7 +53,7 @@ imp-claw 8
 acolyte-alert 9
 knight-alert 4
 ogre-land 5 gain=12
-bolt-cast 1
+bolt-cast 5
 bolt-flight 1
 footstep-snow 4
 ice-slide 1
