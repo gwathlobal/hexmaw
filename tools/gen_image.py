@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate or restyle an image with OpenAI's image models and save it into the project.
 
-  tools/gen_image.py art/imp/walk-front.png --prompt-file art/prompts/imp-walk.txt \\
-      --ref "art/imp/Pixel Demon Character Turnaround.png" --size 1536x1024
+  tools/gen_image.py art/imp/pose.png --prompt-file art/prompts/imp-pose.txt \\
+      --ref art/imp/turnaround.png --size 1536x1024
 
 The prompt is --prompt TEXT or --prompt-file PATH (keep prompts worth repeating in files).
 --ref images (repeatable) go along as references: a design reference, a turnaround sheet

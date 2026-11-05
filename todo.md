@@ -13,5 +13,5 @@ Both are placeholders that will do for now.
   cast's rest frames instead. The hands still use wide pixels (`*hands-stretch*`); the
   sword no longer does.
 
-The 3D pipeline (`art/sword.blend`, `tools/blender_sword.py`) gives correct poses. What's
+The 3D pipeline (`art/sword/sword.blend`, `tools/blender_sword.py`) gives correct poses. What's
 missing is a restyle with a clean pixel grid and a consistent palette across frames.

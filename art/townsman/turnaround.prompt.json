@@ -3,7 +3,7 @@
   "prompt_file": "art/prompts/townsman-turnaround.txt",
   "refs": [
     "art/townsman/design.png",
-    "Pixel Demon Character Turnaround.png",
+    "art/imp/turnaround.png",
     "art/acolyte/turnaround-2.png"
   ],
   "mask": null,

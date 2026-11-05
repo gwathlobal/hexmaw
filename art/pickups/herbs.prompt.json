@@ -2,7 +2,7 @@
   "prompt": "A sprite sheet of one healing pickup for a 1990s first-person dark fantasy dungeon game, in the same chunky hand-pixelled style, outlines and shading as the attached references, and at the same art pixel size as the small red vial in the attached pickup sheet. Flat solid magenta (#FF00FF) background. Cyan (#00FFFF) lines one pixel wide separate the cells. No text, no shadows on the ground, no glow painted into the background.\n\nTwo rows, two columns: all four cells show the same item, from the same front view, and read left to right, top to bottom they are a looping glint animation (a small white highlight travels across the leaves, the item itself does not move or change size).\n\nThe item: a small bundle of healing herbs standing upright, a handful of crimson-red leaves and sprigs on pale green stems, tied round the middle with a loop of tan twine, the cut stems fanning out a little below the knot. The leaves are vivid blood red so it reads as health from across a dark room. No glass, no bottle, no stopper, no liquid, no pot: it must not look like a potion.\n\nThe item is centred in its cell with its base near the bottom of the cell and clear magenta all round it. Nothing crosses a cyan line. The item is about as tall as the small red vial in the attached pickup sheet, and fills only part of its cell.\n",
   "prompt_file": "art/prompts/healing-herbs.txt",
   "refs": [
-    "Pixel Demon Character Turnaround.png",
+    "art/imp/turnaround.png",
     "art/pickups/sheet-2.png"
   ],
   "mask": null,

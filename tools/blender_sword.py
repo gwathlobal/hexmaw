@@ -2,14 +2,14 @@
 tools/render_sword.py, set up in a .blend you can pose by hand, rendered toon-shaded
 with Freestyle outlines.
 
-  tools/blender -b --python tools/blender_sword.py -- build art/sword.blend
-  tools/blender -b --python tools/blender_sword.py -- render art/sword.blend art/sword-blender
+  tools/blender -b --python tools/blender_sword.py -- build art/sword/sword.blend
+  tools/blender -b --python tools/blender_sword.py -- render art/sword/sword.blend art/sword-blender
 
 build writes the .blend from render_sword.POSES (it won't overwrite one unless given
 --force: after the first build the poses live in the .blend). update swaps the meshes
 in an existing .blend for render_sword's current model, keeping the rig and its keys:
 
-  tools/blender -b --python tools/blender_sword.py -- update art/sword.blend
+  tools/blender -b --python tools/blender_sword.py -- update art/sword/sword.blend
 
 reframe adds pixels (at the .blend's resolution) to the frame's left, top, right and
 bottom edges, negative to take them away. The picture keeps its scale and everything
@@ -17,7 +17,7 @@ in it stays put; only the frame's edges move. In the game the strip's bottom-rig
 corner sits on the screen's, so growing the right edge moves the hand left on screen,
 and growing the left or top only adds room for the swing:
 
-  tools/blender -b --python tools/blender_sword.py -- reframe art/sword.blend 240 400 0 0
+  tools/blender -b --python tools/blender_sword.py -- reframe art/sword/sword.blend 240 400 0 0
 
 render writes, for every frame of the .blend's range (--height H renders H pixels
 tall instead of the .blend's resolution, the width in proportion: a quarter of the

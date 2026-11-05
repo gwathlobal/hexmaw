@@ -28,7 +28,6 @@ __pycache__/
 # Stacked animation sheets (tools/stack_views.py), rebuilt from the per-view sheets;
 # tools/slice_views.py slices without writing them
 /art/**/*-sheet.png
-/art/imp/Imp * Sheet.png
 
 # tools/make_texture.py's 3 x 3 previews, written beside the source on every run
 /art/**/*-tiled.png

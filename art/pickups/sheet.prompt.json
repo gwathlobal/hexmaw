@@ -2,7 +2,7 @@
   "prompt": "A sprite sheet of four magic potion pickups for a 1990s first-person dark fantasy dungeon game, in the same chunky hand-pixelled style, outlines and shading as the attached demon reference. Flat solid magenta (#FF00FF) background. Cyan (#00FFFF) lines one pixel wide separate the cells. No text, no shadows on the ground, no glow painted into the background.\n\nFour rows, four columns: each row is one item, shown from the same front view in every column, and the four columns are a looping glint animation (a small white highlight travels across the item, the item itself does not move or change size).\n\nRow 1, small red vial: a small round-bellied glass vial filled with glowing crimson liquid, a dark cork stopper in its short neck.\n\nRow 2, large red flask: the same round-bellied shape but much bigger and fatter, glowing crimson liquid, a gold band round the neck and a gold stopper.\n\nRow 3, small blue shard: a single jagged faceted crystal shard standing upright, glowing cobalt blue with pale blue facets, no glass and no stopper.\n\nRow 4, large blue crystal: a big cluster of three faceted cobalt-blue crystals rising from a small gold mount, glowing, clearly bigger than the shard.\n\nThe red items are round and the blue items are angular, so they read apart by shape alone. Each item is centred in its cell with its base near the bottom of the cell and clear magenta all round it. Nothing crosses a cyan line.\n",
   "prompt_file": "art/prompts/pickups.txt",
   "refs": [
-    "Pixel Demon Character Turnaround.png"
+    "art/imp/turnaround.png"
   ],
   "mask": null,
   "backend": "codex",

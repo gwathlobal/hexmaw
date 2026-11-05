@@ -11,7 +11,7 @@
 ;;; give each its timing and blow, by the weapon's keyword.
 ;;;
 ;;; The sword is one HUD sprite against the bottom-right corner. Its strip
-;;; (data/sprites/sword, from "Sword Sheet.png") holds a 4-frame idle loop (a glint
+;;; (data/sprites/sword, from art/sword/restyle.png) holds a 4-frame idle loop (a glint
 ;;; running up the blade) followed by an 8-frame slash: rest, wind-up, the cut with
 ;;; its swoosh arc, recovery. It sways while walking. The hit lands at the start of
 ;;; *SWING-HIT-FRAME*: the nearest creature inside the swing's reach and arc takes

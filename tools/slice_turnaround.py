@@ -18,7 +18,7 @@ source pixels under each sprite pixel: generated sheets are noisy below their pi
 grid, and picking one source pixel turns that into speckle. --colors N then maps the
 whole atlas onto one N-colour palette taken from its own pixels.
 
-  tools/slice_turnaround.py "Pixel Demon Character Turnaround.png" data/sprites/imp/turnaround \\
+  tools/slice_turnaround.py art/imp/turnaround.png data/sprites/imp/turnaround \\
       --height 96 --mirror back-quarter
 """
 

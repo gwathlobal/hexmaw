@@ -6,7 +6,7 @@ Rows don't need to line up between each other, cells can differ in size, and a
 cell left empty (often the tail of the last row) is skipped. Frames are read in
 reading order and handed out to the animations named on the command line:
 
-  tools/slice_frames.py "Bolt Spell Sheet.webp" data/sprites/bolt --pixel 5 flight:5 burst:7
+  tools/slice_frames.py art/spells/bolt.webp data/sprites/bolt --pixel 5 flight:5 burst:7
 
 writes, for each animation,
 

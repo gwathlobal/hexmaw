@@ -3,7 +3,7 @@
   "prompt_file": "art/prompts/status-burn.txt",
   "refs": [
     "art/status/shock-2.png",
-    "Bolt Spell Sheet.webp"
+    "art/spells/bolt.webp"
   ],
   "mask": null,
   "backend": "codex",
