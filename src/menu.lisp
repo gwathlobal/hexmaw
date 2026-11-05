@@ -187,7 +187,9 @@ throat, under the upper fangs of its splash.")
 (defparameter *menu-slider-step* 0.05 "What a slider moves by on a key or a wheel notch, of its 0 to 1.")
 
 (defclass menu-slider (menu-focusable alloy:ranged-slider)
-  ((text :initarg :text :initform "" :accessor alloy:text))
+  ((text :initarg :text :initform "" :accessor alloy:text)
+   (describe :initarg :describe :initform NIL :reader slider-describe
+             :documentation "A function of the value giving the text at the right, or NIL for a percentage."))
   (:default-initargs :range '(0.0 . 1.0) :step *menu-slider-step* :grid *menu-slider-step*)
   (:documentation "A row the size of a button that is a slider from 0 to 1: filled from the left
 as far as its value, its label at the left and the value as a percentage at the right. A click
@@ -230,7 +232,10 @@ or drag anywhere on it sets the value, and left and right move it while it has t
    :text (alloy:text alloy:renderable)
    :pattern *menu-text-color*)
   (:value
-   :text (format NIL "~d%" (round (* 100 (alloy:slider-unit alloy:renderable))))
+   :text (let ((describe (slider-describe alloy:renderable)))
+           (if describe
+               (funcall describe (alloy:value alloy:renderable))
+               (format NIL "~d%" (round (* 100 (alloy:slider-unit alloy:renderable))))))
    :pattern *menu-text-color*))
 
 ;; A slider sizes itself to its border; this one fills its row as a button does.
@@ -285,14 +290,20 @@ or drag anywhere on it sets the value, and left and right move it while it has t
 (defgeneric panel-buttons (panel)
   (:documentation "A list of rows, each (LABEL ACTION), a button: ACTION is a function name,
 called on the next tick after a click; (LABEL :TOGGLE VARIABLE), a checkbox that sets the
-special variable VARIABLE to T or NIL as it is clicked; or (LABEL :SLIDER VARIABLE), a slider
-(MENU-SLIDER) that sets VARIABLE from 0.0 to 1.0 as it moves."))
+special variable VARIABLE to T or NIL as it is clicked; or (LABEL :SLIDER VARIABLE [DESCRIBE]), a
+slider (MENU-SLIDER) that sets VARIABLE from 0.0 to 1.0 as it moves, its value shown as a
+percentage or, with DESCRIBE, as that function of it writes it. A toggle or
+slider tells SETTING-CHANGED of each change."))
 (defgeneric panel-lines (panel)
   (:documentation "A list of (LABEL VALUE) strings, rows of text (MENU-STAT) between PANEL's
 title and its buttons.")
   (:method ((panel menu-panel)) ()))
 
-(defparameter *back-actions* '(resume-game close-settings close-slot-menu)
+(defgeneric setting-changed (variable)
+  (:documentation "Called after a toggle or slider row has set VARIABLE (settings.lisp).")
+  (:method ((variable symbol)) NIL))
+
+(defparameter *back-actions* '(resume-game close-settings close-slot-menu close-controls)
   "Menu actions that go back, playing :MENU-BACK rather than :MENU-SELECT.")
 
 (defgeneric build-panel (panel)
@@ -342,21 +353,24 @@ after a change to what it shows). The menu controller remakes it.")
         (loop for (label value) in lines
               do (let ((label label))
                    (alloy:enter (alloy:represent label 'menu-stat :value value) stats)))))
-    (loop for (label action variable) in buttons
+    (loop for (label action variable describe) in buttons
           ;; REPRESENT binds to the variable itself, so each button needs its own.
           do (let ((label label)
                    (action action)
                    (variable variable))
                (case action
                  ((:toggle :slider)
-                  (alloy:represent-with (if (eq action :toggle) 'menu-toggle 'menu-slider)
-                                        (make-instance 'alloy:place-data
-                                                       :getter (lambda () (symbol-value variable))
-                                                       :setter (lambda (value)
-                                                                 (unless (eql value (symbol-value variable))
-                                                                   (play-sound (if (eq action :toggle) :menu-select :menu-slider)))
-                                                                 (setf (symbol-value variable) value)))
-                                        :text label :layout-parent column :focus-parent focus))
+                  (apply #'alloy:represent-with
+                         (if (eq action :toggle) 'menu-toggle 'menu-slider)
+                         (make-instance 'alloy:place-data
+                                        :getter (lambda () (symbol-value variable))
+                                        :setter (lambda (value)
+                                                  (unless (eql value (symbol-value variable))
+                                                    (play-sound (if (eq action :toggle) :menu-select :menu-slider)))
+                                                  (setf (symbol-value variable) value)
+                                                  (setting-changed variable)))
+                         :text label :layout-parent column :focus-parent focus
+                         (when describe (list :describe describe))))
                  (T
                   (let ((button (alloy:represent label 'menu-button :layout-parent column :focus-parent focus)))
                     (alloy:on (alloy:activate button) ()
@@ -457,17 +471,24 @@ victory screens share."
 
 (defvar *settings-open* NIL
   "True while the settings panel covers the main or pause menu, which Back returns to.")
+(defvar *controls-open* NIL
+  "True while the Controls screen (settings.lisp) covers Settings, which Back returns to.")
 
 (defclass settings-menu (menu-panel) ())
 (defmethod panel-title ((panel settings-menu)) "Settings")
 ;; Over the main menu it keeps the main menu's picture, rather than showing the level.
 (defmethod panel-splash ((panel settings-menu)) (when (eq *game-state* :title) "title"))
 (defmethod panel-top ((panel settings-menu)) (if (eq *game-state* :title) *title-menu-top* T))
+;; Wide enough for "Mouse sensitivity" and its value.
+(defmethod panel-width ((panel settings-menu)) 380)
 (defmethod panel-buttons ((panel settings-menu))
-  `(("Music volume" :slider *music-volume*)
+  `(("Fullscreen" :toggle *fullscreen*)
+    ("Mouse sensitivity" :slider *mouse-sensitivity-setting* sensitivity-text)
+    ("Music volume" :slider *music-volume*)
     ("Sound volume" :slider *sound-volume*)
     ("Show FPS" :toggle *show-fps*)
     ,@(when *debug-version* '(("Debug minimap" :toggle *map-debug*)))
+    ("Controls" open-controls)
     ("Back" close-settings)))
 
 (defvar *slot-menu* NIL
@@ -500,7 +521,8 @@ victory screens share."
 (defun state-menu ()
   "The panel class that belongs on screen in the current state, or NIL."
   (case *game-state*
-    (:title (cond (*settings-open* 'settings-menu)
+    (:title (cond (*controls-open* 'controls-menu)
+                  (*settings-open* 'settings-menu)
                   ((eq *slot-menu* :load) 'load-menu)
                   (T 'main-menu)))
     (:loading 'loading-screen)
@@ -510,7 +532,8 @@ victory screens share."
     (:victory 'victory-screen)
     ;; Talking to one of the townsfolk (dialogue.lisp).
     (:talk (when *talk-target* 'dialogue-panel))
-    (:paused (cond (*settings-open* 'settings-menu)
+    (:paused (cond (*controls-open* 'controls-menu)
+                   (*settings-open* 'settings-menu)
                    ((eq *slot-menu* :save) 'save-menu)
                    ((eq *slot-menu* :load) 'load-menu)
                    (T 'pause-menu)))))
@@ -570,6 +593,7 @@ the build holds the frame.")
   "Put the loading screen up, then rebuild the scene with a fresh player at its spawn point.
 SETUP-SCENE starts play."
   (setf *settings-open* NIL
+        *controls-open* NIL
         *slot-menu* NIL
         *pending-load* NIL
         *new-run* T
@@ -646,6 +670,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
 (defun show-title ()
   (setf *game-state* :title
         *settings-open* NIL
+        *controls-open* NIL
         *slot-menu* NIL
         *save-note* NIL)
   (when *player* (release-mouse *player*)))
@@ -656,6 +681,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
 
 (defun close-settings ()
   (play-sound :menu-back)
+  (save-settings-file)
   (setf *settings-open* NIL))
 
 (defun open-save-menu ()
@@ -736,10 +762,13 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
           :documentation "True until the first tick. The menu pass outlives scenes, so a new
 scene's controller rebuilds whatever panel it finds, picking up changed panel code.")))
 
-(define-handler (menu-controller key-press) (key)
-  (case key
+(define-handler (menu-controller key-press) (key (repeat trial::repeat))
+  (case (if *capturing* :capture key)
+    ;; The Controls screen waits for an input to bind (settings.lisp).
+    (:capture (unless repeat (capture-input key)))
     (:escape
-     (cond (*settings-open* (close-settings))
+     (cond (*controls-open* (close-controls))
+           (*settings-open* (close-settings))
            (*slot-menu* (close-slot-menu))
            ((eq *game-state* :map) (close-map))
            ((eq *game-state* :inventory) (close-inventory))
@@ -747,10 +776,16 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
            ((eq *game-state* :forge) (close-forge))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
-    (:f5 (queue-menu-action 'quicksave))
-    (:f9 (queue-menu-action 'quickload))))
+    (T (case (input-action key :global)
+         (:quicksave (queue-menu-action 'quicksave))
+         (:quickload (queue-menu-action 'quickload))))))
+
+(define-handler (menu-controller mouse-press) (button)
+  (when *capturing*
+    (capture-input (mouse-input button))))
 
 (define-handler (menu-controller tick) ()
+  (update-capture)
   (let ((action *menu-action*))
     (when action
       (setf *menu-action* NIL)

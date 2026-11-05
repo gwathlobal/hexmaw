@@ -5,6 +5,14 @@
   (:default-initargs
    :context '(:title "Hexmaw" :width 1280 :height 720)))
 
+(defmethod initialize-instance :after ((main main) &key)
+  ;; On the main thread, where GLFW wants it: makes Trial's monitor objects of GLFW's. Going
+  ;; fullscreen at a monitor's own resolution (APPLY-FULLSCREEN) asks the primary one's video
+  ;; mode, which only Trial's class answers; asked of GLFW's, it kills the game.
+  (list-monitors (context main))
+  (when *fullscreen*
+    (apply-fullscreen (context main))))
+
 (defmethod setup-scene ((main main) scene)
   (build-level scene)
   ;; A scene reload makes a fresh player; carry over where it stood and looked, unless
@@ -202,16 +210,18 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                 active (length *runtime-errors*)))
       "not running"))
 
-(defparameter *fullscreen* NIL
-  "Start fullscreen. HEXMAW_FULLSCREEN=1 turns it on for one run.")
-
 (defun launch (&rest args)
+  ;; The player's settings (settings.lisp), before the window and the player exist.
+  (load-settings-file)
+  (when (eql 1 (env-integer "HEXMAW_FULLSCREEN"))
+    (setf *fullscreen* T))
   ;; Trial's default settings are fullscreen at monitor resolution. Override in
   ;; memory only: saving would write ~/.config/shirakumo/trial/settings.lisp,
-  ;; which every Trial game shares.
+  ;; which every Trial game shares. The window opens as a window, and goes
+  ;; fullscreen at the monitor's own resolution once it is up (MAIN's
+  ;; INITIALIZE-INSTANCE), as Settings' checkbox puts it.
   (let ((org.shirakumo.fraf.trial::*save-settings* NIL))
-    (setf (setting :display :fullscreen)
-          (or *fullscreen* (eql 1 (env-integer "HEXMAW_FULLSCREEN")))))
+    (setf (setting :display :fullscreen) NIL))
   (apply #'trial:launch 'main args))
 
 (defun dev-launch ()

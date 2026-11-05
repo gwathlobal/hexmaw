@@ -368,7 +368,7 @@ or a burn's every tick (magic.lisp), are the same assault.")
   (let ((target (and (eq *game-state* :playing) *player* (interact-target *player*))))
     (unless (eq target (prompt-target director))
       (setf (prompt-target director) target
-            *interact-prompt* (and target (format NIL "[E] ~a" (interact-label target)))))))
+            *interact-prompt* (and target (format NIL "[~a] ~a" (action-key :interact) (interact-label target)))))))
 
 (defun nearest-guard (point)
   (let ((best NIL) (best-d 0.0))

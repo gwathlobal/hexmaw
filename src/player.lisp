@@ -18,7 +18,9 @@
 (defparameter *step-height* 0.45)
 (defparameter *player-radius* 0.3)
 (defparameter *player-height* 1.8)
-(defparameter *mouse-sensitivity* 0.0025)
+(defparameter *mouse-sensitivity* 0.0025
+  "Radians a pixel of mouse movement turns the view, at the middle of Settings' slider
+(MOUSE-SENSITIVITY, settings.lisp).")
 (defparameter *player-max-health* 100)
 (defparameter *max-mana* 50.0)
 (defparameter *max-stamina* 100.0)
@@ -262,34 +264,46 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
 
 ;;; Clicks in a menu belong to the menu (menu.lisp), as does Esc.
 
-(define-handler (player mouse-press) (button)
-  (when (eq *game-state* :playing)
-    (cond ((not (mouse-look player))
-           (capture-mouse player))
-          ((eq button :left)
-           (player-attack player))
-          ((eq button :right)
-           (setf (block-held player) T)))))
+(defun player-press (player input)
+  "What a press of INPUT, a key or a mouse button (input.lisp), does in play."
+  (let ((action (input-action input :play :global)))
+    (if (eq action :screenshot)
+        (screenshot)
+        (when (eq *game-state* :playing)
+          (case action
+            (:attack (player-attack player))
+            (:block (setf (block-held player) T))
+            ;; Talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
+            (:interact (player-interact player))
+            (T (let ((slot (position action *hotbar-slots*)))
+                 (when slot (select-slot player slot)))))))))
 
-(define-handler (player mouse-release) (button)
-  (when (eq button :right)
+(defun player-release (player input)
+  (when (member input (action-inputs :block))
     (setf (block-held player) NIL)))
 
-(define-handler (player key-press) (key)
-  (case key
-    (:f12 (screenshot))
-    ;; E: talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
-    (:e (when (eq *game-state* :playing)
-          (player-interact player)))
-    (T (when (eq *game-state* :playing)
-         (select-weapon player key)))))
+(define-handler (player mouse-press) (button)
+  (when (eq *game-state* :playing)
+    (if (mouse-look player)
+        (player-press player (mouse-input button))
+        (capture-mouse player))))
+
+(define-handler (player mouse-release) (button)
+  (player-release player (mouse-input button)))
+
+(define-handler (player key-press) (key (repeat trial::repeat))
+  (unless repeat
+    (player-press player key)))
+
+(define-handler (player key-release) (key)
+  (player-release player key))
 
 (define-handler (player mouse-move) (old-pos pos)
   (when (mouse-look player)
     (let ((rot (rotation player)))
       ;; Mouse Y grows upward here, while positive pitch looks down; hence the minus.
-      (setf (vx rot) (max -1.55 (min 1.55 (- (vx rot) (* *mouse-sensitivity* (- (vy pos) (vy old-pos)))))))
-      (setf (vy rot) (mod (+ (vy rot) (* *mouse-sensitivity* (- (vx pos) (vx old-pos)))) #.(float (* 2 pi) 0f0))))))
+      (setf (vx rot) (max -1.55 (min 1.55 (- (vx rot) (* (mouse-sensitivity) (- (vy pos) (vy old-pos)))))))
+      (setf (vy rot) (mod (+ (vy rot) (* (mouse-sensitivity) (- (vx pos) (vx old-pos)))) #.(float (* 2 pi) 0f0))))))
 
 (defmethod body-feet ((player player)) (feet player))
 (defmethod body-radius ((player player)) *player-radius*)
@@ -578,9 +592,9 @@ and not the last step of the stair.")
   (update-weapons player dt)
   (let* ((dt (min dt 0.05))
          (yaw (vy (rotation player)))
-         (crouching (or (retained :left-control) (retained :c)))
-         (ix (- (if (retained :d) 1.0 0.0) (if (retained :a) 1.0 0.0)))
-         (iz (- (if (retained :w) 1.0 0.0) (if (retained :s) 1.0 0.0)))
+         (crouching (held-p :crouch))
+         (ix (- (if (held-p :strafe-right) 1.0 0.0) (if (held-p :strafe-left) 1.0 0.0)))
+         (iz (- (if (held-p :forward) 1.0 0.0) (if (held-p :back) 1.0 0.0)))
          (wx (+ (* iz (sin yaw)) (* ix (cos yaw))))
          (wz (+ (* iz (- (cos yaw))) (* ix (sin yaw))))
          (wlen (sqrt (+ (* wx wx) (* wz wz))))
@@ -593,7 +607,7 @@ and not the last step of the stair.")
                      (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
-         (running (and (retained :left-shift) (< 0.0 wlen) (not crouching) (= 0.0 raise)
+         (running (and (held-p :run) (< 0.0 wlen) (not crouching) (= 0.0 raise)
                        (not (winded player)) (not (whirl player))))
          ;; The raised shield slows the player to a walk and below.
          (speed (* (cond (crouching *crouch-speed*)
@@ -623,7 +637,7 @@ and not the last step of the stair.")
             (water
              (setf (footing player) NIL)
              (swim player water dt ix iz
-                   (- (if (retained :space) 1.0 0.0) (if crouching 1.0 0.0))
+                   (- (if (held-p :jump) 1.0 0.0) (if crouching 1.0 0.0))
                    running yaw))
             (T (walk player dt wx wz wlen speed kind crouching)))
       (note-impacts player vx0 vy0 vz0 dt)
@@ -728,7 +742,7 @@ at SPEED, out of liquid KIND if any."
                (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
              (incf (vx vel) dvx)
              (incf (vz vel) dvz))))
-    (when (and (grounded player) (retained :space) (not crouching)
+    (when (and (grounded player) (held-p :jump) (not crouching)
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
       (play-sound :jump)

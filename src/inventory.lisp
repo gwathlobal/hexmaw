@@ -35,7 +35,8 @@ budget, so keep the two the same. A weapon's :WEAPON is what it puts in the play
 
 (defparameter *inventory-columns* 5 "Cells across the panel; *INVENTORY-SIZE* decides the rows.")
 (defparameter *inventory-padding* 8 "Pixels between the panel's edge and what's in it.")
-(defparameter *inventory-hint* "Drag onto 1-9 or Q to bind" "The panel's hint with no item under the pointer.")
+(defparameter *inventory-hint* "Drag onto ~a or ~a to bind"
+  "The panel's hint with no item under the pointer, given the hotbar's keys and the quickslot's.")
 (defparameter *inventory-back-color* (vec4 0.20 0.16 0.13 0.92))
 (defparameter *tooltip-lines* 14 "Most lines an item's tooltip shows.")
 (defparameter *tooltip-width* 36 "Characters a tooltip line holds; a longer one wraps (WRAP-TEXT, hud.lisp).")
@@ -505,13 +506,15 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
                                                    :icon (make-instance 'item-icon)
                                                    :number (make-hud-text))
                :reader quick-cell)
-   (quick-key :initform (make-hud-text "Q") :reader quick-key)
+   (quick-key :initform (make-hud-text) :reader quick-key)
+   (key-revision :initform NIL :accessor key-revision
+                 :documentation "The *BINDINGS-REVISION* the keys shown were named for.")
    (hot-cells :initform (loop for i from 0 below *hotbar-size*
                               collect (make-instance 'item-cell :slot (nth i *hotbar-slots*)
                                                                 :frame (make-instance 'weapon-slot)
                                                                 :icon (make-instance 'item-icon :animation (find-fx-animation 'weapon-icons))
                                                                 :number (make-hud-text)
-                                                                :key (make-hud-text (princ-to-string (1+ i)))))
+                                                                :key (make-hud-text)))
               :reader hot-cells)
    (spell-label :initform (make-hud-text "" 'spell-label) :reader spell-label
                 :documentation "The spell in hand and its cost, right of the quickslot.")
@@ -585,9 +588,25 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
   (+ *inventory-padding* *inventory-padding*
      (- (* (+ (item-cell-size) *weapon-slot-gap*) *inventory-columns*) *weapon-slot-gap*)))
 
+(defun hotbar-keys-text ()
+  "The hotbar's keys for a hint: \"1-9\" while they run 1 to 9, else each slot's."
+  (let ((keys (loop for slot in *hotbar-slots* collect (action-key slot))))
+    (if (equal keys '("1" "2" "3" "4" "5" "6" "7" "8" "9"))
+        "1-9"
+        (format NIL "~{~a~^ ~}" keys))))
+
+(defvar *hint-lines* (cons NIL NIL)
+  "The *BINDINGS-REVISION* and hint size HINT-LINES last wrapped the hint for, and its lines.")
+
 (defun hint-lines ()
-  "*INVENTORY-HINT* wrapped to the panel's width (WRAP-TEXT, hud.lisp)."
-  (wrap-text *inventory-hint* (floor (- (bag-panel-width) *inventory-padding* *inventory-padding*) *glyph-width*)))
+  "*INVENTORY-HINT* wrapped to the panel's width (WRAP-TEXT, hud.lisp): asked every tick, so
+wrapped again only when the bindings or the panel's width change."
+  (let ((key (+ *bindings-revision* (* 65536 (bag-panel-width)))))
+    (unless (eql key (car *hint-lines*))
+      (setf *hint-lines*
+            (cons key (wrap-text (format NIL *inventory-hint* (hotbar-keys-text) (action-key :drink))
+                                 (floor (- (bag-panel-width) *inventory-padding* *inventory-padding*) *glyph-width*)))))
+    (cdr *hint-lines*)))
 
 (defun panel-box ()
   "The panel's corner and size: on the left, right above the quickslot, tall enough for its
@@ -650,13 +669,15 @@ title, its cells and its hint's lines."
     (setf *game-state* :playing)
     (when *player* (capture-mouse *player*))))
 
-(define-handler (inventory-view key-press) (key)
-  (case *game-state*
-    (:playing (case key
-                (:i (open-inventory))
-                (:q (when *player*
-                      (play-sound (if (use-quickslot *player*) :potion-drink :refused))))))
-    (:inventory (when (eq key :i) (close-inventory)))))
+(define-handler (inventory-view key-press) (key (repeat trial::repeat))
+  (unless repeat
+    (let ((action (input-action key :play)))
+      (case *game-state*
+        (:playing (case action
+                    (:inventory (open-inventory))
+                    (:drink (when *player*
+                              (play-sound (if (use-quickslot *player*) :potion-drink :refused))))))
+        (:inventory (when (eq action :inventory) (close-inventory)))))))
 
 (define-handler (inventory-view mouse-scroll) (delta)
   ;; Wheel down (negative delta) for the next kind, up for the previous one.
@@ -727,7 +748,7 @@ title, its cells and its hint's lines."
       (let ((key (and stack (stack-key *player* stack))))
         (unless (eql key (shown-key cell))
           (setf (shown-key cell) key
-                (text (cell-key cell)) (if key (princ-to-string (1+ key)) "")))))
+                (text (cell-key cell)) (if key (action-key (nth key *hotbar-slots*)) "")))))
     (place frame x y frame-z)
     (place icon (+ x pad) (+ y pad) icon-z)
     ;; The count in the bottom-right corner, right-aligned.
@@ -785,8 +806,19 @@ is re-uploaded only when the stack under the pointer changes."
               when (shown line)
                 do (place line (+ x pad) (- top pad +glyph-height+ (* i step)) -0.01))))))
 
+(defun name-keys (view)
+  "Name the quickslot's and the hotbar's keys as bound, and have the bag cells name theirs again."
+  (setf (key-revision view) *bindings-revision*
+        (text (quick-key view)) (action-key :drink))
+  (dolist (cell (hot-cells view))
+    (setf (text (cell-key cell)) (action-key (cell-slot cell))))
+  (dolist (cell (bag-cells view))
+    (setf (shown-key cell) :stale)))
+
 (define-handler (inventory-view tick) ()
   (when *player*
+    (unless (eql (key-revision inventory-view) *bindings-revision*)
+      (name-keys inventory-view))
     (let* ((view inventory-view)
            (open (eq *game-state* :inventory))
            (x (vx (pointer view)))

@@ -14,7 +14,11 @@ brief where they differ.
 
 Opens the game window and an eval server on `127.0.0.1:7171` (`HEXMAW_EVAL_PORT` to
 change it). `HEXMAW_SWANK_PORT=4005 ./run.sh` also starts Swank for an editor.
-The game opens in a 1280×720 window; `HEXMAW_FULLSCREEN=1 ./run.sh` starts it fullscreen.
+The game opens in a 1280×720 window, or fullscreen when Settings says so;
+`HEXMAW_FULLSCREEN=1 ./run.sh` starts it fullscreen. The settings (and so the key bindings)
+are read from `settings.lisp` beside the saves (`src/settings.lisp`), which a run of
+`./run.sh` shares with every checkout and the build; `XDG_DATA_HOME=/some/dir ./run.sh`
+gives it settings and saves of its own, for tests that change them.
 It starts on the main menu with the world frozen, the test level behind it. Start game
 starts a run of generated levels (`start-game`; see "A run" below); Debug level plays the greybox test level, where the
 creatures in development live (`start-debug-level`). `HEXMAW_SKIP_MENU=1 ./run.sh` starts
@@ -188,6 +192,22 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
 ## Layout and conventions
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
+- `src/input.lisp`: key bindings. Every key and mouse button the game reacts to is an
+  action's input in `*bindings*` (a `defvar`, so a reload keeps a rebinding; the defaults and
+  each action's label and contexts are `*actions*`). An input is a key's keyword as Trial
+  names it, or `:mouse-left`, `:mouse-right`, `:mouse-middle`, `:mouse-4` and on. Handlers
+  ask `(input-action key :play)` (or `:map`, or `:global` for quicksave, quickload and the
+  screenshot) what a press means, and ticks ask `(held-p :forward)`. What is held is
+  `*held*`, kept by a Trial mapping function (`note-input`) from every event, not Trial's
+  `retained`, which files the arrow key `:left` and the mouse button `:left` together.
+  `rebind` binds an action to one input and takes it from any action in an overlapping
+  context (`contexts-overlap-p`: `:global` overlaps everything, so Q can be Drink in play and
+  Turn on the map). Esc, the mouse wheel, Shift + wheel and the map's mouse drags are fixed.
+  `*bindings-revision*` counts the changes, so the HUD's key names (the hotbar's corners,
+  the quickslot's, the inventory's hint, the map's hint, the "[E]" prompt) follow them:
+  `key-label` names an input in full ("Left Shift", "Mouse left"), `key-short-label` and
+  `action-key` for the HUD ("LShift", "LMB"). A new key the game reacts to is an action in
+  `*actions*`, a row in `*controls-pages*` (settings.lisp), and a handler asking for it.
 - `src/greybox.lisp`: level geometry (`greybox` entity, fog, `add-box`, `*solids*`), its
   textures and surfaces (see "Level textures" below), and `lit-entity`, the shader mixin
   whose `light_at` lights the level and billboards from the `lamp-block` uniform buffer.
@@ -1004,11 +1024,16 @@ text `forge-note`s, which wrap (Alloy's
   that strip to it (the death screen's button lost its bottom 18 px, the main menu's 8). After
   changing row sizes, check no element sticks out of its parent's bounds.
   Settings (`open-settings`, on both menus) covers the menu it came from while
-  `*settings-open*` is true; Back or Esc (`close-settings`) returns to it. It has Music and
-  Sound volume (`*music-volume*`, `*sound-volume*`, music.lisp), Show
-  FPS (`*show-fps*`, in memory only, kept across reloads) and, in a debug version
-  (`*debug-version*`), Debug minimap (`*map-debug*`: the automap shows every block, creature
-  markers and block names). The main menu's Debug level and Boss fight are also debug-version only.
+  `*settings-open*` is true; Back or Esc (`close-settings`, which writes the settings file)
+  returns to it. It has Fullscreen (`*fullscreen*`), Mouse sensitivity
+  (`*mouse-sensitivity-setting*`, shown as `sensitivity-text` writes it), Music and Sound
+  volume (`*music-volume*`, `*sound-volume*`, music.lisp), Show FPS (`*show-fps*`), Controls
+  (`open-controls`) and, in a debug version (`*debug-version*`), Debug minimap (`*map-debug*`:
+  the automap shows every block, creature markers and block names, not kept in the file).
+  The rows' variables are in `src/settings.lisp`. A toggle or slider row calls
+  `setting-changed` with its variable after each change (Fullscreen's method switches the
+  window), and a slider row's optional fourth element is a function writing its value
+  (`describe`; a percentage without). The main menu's Debug level and Boss fight are also debug-version only.
   Load game (both menus) and Save game (the pause menu, on a generated level only) cover it
   the same way while `*slot-menu*` is `:load` or `:save`: a row per slot in `*save-slots*`
   (1 to 3, then the quicksave), labelled by `slot-info`, and Back (`close-slot-menu`). After
@@ -1019,6 +1044,32 @@ text `forge-note`s, which wrap (Alloy's
   "Splash screens" below); NIL, the pause menu's, dims the game behind it instead. `panel-top` places the menu from the top
   of the screen (T, the default, centres it; the main menu's `*title-menu-top*` puts it
   in the maw's throat, under the upper fangs of its splash).
+- `src/settings.lisp` (after forge.lisp, whose row helpers it uses): the settings file and the
+  Controls screen. **The settings file** is `settings.lisp` in the folder above
+  `*save-directory*` (`settings-file`: `$XDG_DATA_HOME/hexmaw/`, `%LOCALAPPDATA%\hexmaw\` on
+  Windows; it follows `*save-directory*`, so the build's boot hook covers it), a plist written
+  by `save-settings-file` (on closing Settings or Controls, after each rebinding or reset) and
+  read by `load-settings-file`, which `launch` (main.lisp) calls before the window opens. It
+  keeps `*settings-variables*` (fullscreen, mouse sensitivity, the volumes, Show FPS; a new
+  setting is a `defvar` there and a row in `settings-menu`) and `:bindings`. A value of the wrong
+  kind is ignored with a warning, an action the file doesn't name keeps its default
+  (`merge-bindings`), and a file that can't be read leaves the defaults. Trial's own settings file
+  isn't used: every Trial game shares it. **Fullscreen** (`apply-fullscreen`) is Trial's `show`
+  on the context: the monitor's own resolution, or a `*window-size*` window. The window always
+  opens as a window and goes fullscreen once it is up (`main`'s `initialize-instance`); a resize
+  has the menu controller make the panel again, since Alloy left its rows uneven.
+  **Mouse sensitivity** (`mouse-sensitivity`, what the player's `mouse-move` turns a pixel) is
+  `*mouse-sensitivity*` times `*mouse-sensitivity-span*` (4) to the power of 2u − 1, u the
+  slider: ¼× to 4×, 1× at the middle. **Controls** (`controls-menu`, while `*controls-open*`,
+  over Settings; Back or Esc, `close-controls`) has a page of `*controls-pages*` at a time, two
+  columns of `binding-row`s, a note line and Reset to defaults (`reset-controls`). A click on a
+  row queues `begin-capture`, so `*capturing*` (input.lisp) holds the action; the next key or
+  mouse press reaches `capture-input` (from the menu controller's `key-press` and
+  `mouse-press`), which binds it (`rebind`; the note says what was taken from what) or, for Esc,
+  cancels. `*capturing*` stays `:done` until every input is let go (`update-capture`, from the
+  controller's tick): meanwhile `input-action` answers NIL and the panel's buttons ignore
+  clicks, so the press bound does nothing else. To drive it: `(game (open-settings)
+  (open-controls) (begin-capture :jump))`, then `(game (issue (scene +main+) 'key-press :key :q))`.
 - `src/music.lisp`: music, through Harmony (`trial-harmony`; `main` is its `main`, which starts
   the sound server: PulseAudio here). In play the `music-director` (entered by `add-music` in
   `setup-scene`, which stages every track's voice) plays the level's playlist at random
@@ -1233,8 +1284,10 @@ taller needs a jump (0.45 m is also the most a block can rise per step in level 
 On a step the camera holds its height and eases to the new one.
 
 To test movement without a mouse or keyboard (in play, not on a menu), hold keys from the eval server:
-`tools/hd '(game (setf (vy (rotation *player*)) 0.0 (retained :w) t))'`, wait, then
-`(setf (retained :w) nil)` and check `tools/hd status`. Yaw 0 faces −Z, π/2 faces +X.
+`tools/hd '(game (setf (vy (rotation *player*)) 0.0 (input-held :w) t))'`, wait, then
+`(setf (input-held :w) nil)` and check `tools/hd status`. Yaw 0 faces −Z, π/2 faces +X. Hold
+the input the action is bound to (input.lisp): W while Forward is W. A press goes through the
+event: `(issue (scene +main+) 'key-press :key :e)` and `'key-release`.
 
 ## Creature movement
 
@@ -2730,8 +2783,9 @@ start in a straight line (seed 27: 6.7 m, a storey up), so the boss's spawn igno
 clearance. Bosses (before the riftwalker joined `*boss-kinds*`, which changed every seed's draw):
 necromancer 20, gale wraith 19, knight 17, ogre 12, imp 11, acolyte 11, harpy 10.
 
-Controls: click the window to capture the mouse, Esc to pause (release the mouse, open
-the pause menu) and Esc again to resume. WASD, Shift to run,
+Controls (the defaults, which Settings → Controls rebinds; `src/input.lisp`): click the window
+to capture the mouse, Esc to pause (release the mouse, open the pause menu) and Esc again to
+resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
 down; swim into a ledge at the surface to climb out), 1 to 9 for what the hotbar holds (at the
 start 1 the sword, 2 the fire bolt, 3 heal; whatever is found goes on the next free key), the mouse wheel to change the

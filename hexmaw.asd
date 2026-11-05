@@ -12,6 +12,7 @@
   :pathname "src/"
   :components ((:file "package")
                (:file "dev")
+               (:file "input")
                (:file "greybox")
                (:file "automap")
                (:file "rooms")
@@ -50,6 +51,7 @@
                (:file "menu")
                (:file "dialogue")
                (:file "forge")
+               (:file "settings")
                (:file "loot")
                (:file "music")
                (:file "map-view")

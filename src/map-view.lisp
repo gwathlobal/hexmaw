@@ -9,10 +9,10 @@
 ;;; above the shown one and darkens those below. With the debug minimap (MAP-DEBUG-P) every block shows, with a
 ;;; marker on each creature and each block's name.
 ;;;
-;;; Controls: left drag rotates, right drag pans, the wheel zooms; WASD pan, Q and E
-;;; turn, R and F tilt, + and - zoom, Page Up and Page Down (or Shift and the wheel) change
-;;; the storey within those explored, Space centres on the player, M or Esc (menu.lisp)
-;;; closes. The storey above the shown one is a stippled ghost (automap.lisp).
+;;; Controls (the defaults; input.lisp's bindings): left drag rotates, right drag pans, the
+;;; wheel zooms; WASD pan, Q and E turn, R and F tilt, + and - zoom, Page Up and Page Down (or
+;;; Shift and the wheel) change the storey within those explored, Space centres on the player,
+;;; M or Esc (menu.lisp) closes. The storey above the shown one is a stippled ghost (automap.lisp).
 
 (defparameter *map-background* (vec 0.035 0.04 0.06) "The map screen's clear colour.")
 (defparameter *map-arrow-color* (vec4 1.0 0.85 0.2 1))
@@ -174,14 +174,17 @@
   (or (revealed (label-block label)) (map-debug-p)))
 
 (defparameter *map-hint*
-  "Storey ~d~a    Drag: turn  Right drag: pan  Wheel: zoom  PgUp/PgDn/Shift+wheel: storey  Space: centre  M: close")
+  "Storey ~d~a    Drag: turn  Right drag: pan  Wheel: zoom  ~a/~a/Shift+wheel: storey  ~a: centre  ~a: close"
+  "The map's hint line: the storey, what lies above and below, and the keys bound (input.lisp).")
 
 (defun map-hint-text (storey above below)
   (format NIL *map-hint* storey
           (cond ((and above below) ", more above and below")
                 (above ", more above")
                 (below ", more below")
-                (T ""))))
+                (T ""))
+          (action-key :map-storey-up) (action-key :map-storey-down)
+          (action-key :map-centre) (action-key :map)))
 
 (defun place-map-label (label camera clip)
   "Put LABEL over its block's floor on the shown storey, or off screen when its block
@@ -265,14 +268,15 @@ shows and the player's own."
     (setf *game-state* :playing)
     (when *player* (capture-mouse *player*))))
 
-(define-handler (map-view key-press) (key)
+(define-handler (map-view key-press) (key (repeat trial::repeat))
+  ;; A held key repeats a storey step, not an open or close.
   (case *game-state*
-    (:playing (when (eq key :m) (open-map)))
-    (:map (case key
-            (:m (close-map))
-            (:page-up (step-map-storey 1))
-            (:page-down (step-map-storey -1))
-            (:space (centre-map map-view))))))
+    (:playing (when (and (not repeat) (eq (input-action key :play) :map)) (open-map)))
+    (:map (case (input-action key :map)
+            (:map (unless repeat (close-map)))
+            (:map-storey-up (step-map-storey 1))
+            (:map-storey-down (step-map-storey -1))
+            (:map-centre (centre-map map-view))))))
 
 (define-handler (map-view mouse-scroll) (delta)
   (when (and (eq *game-state* :map) (/= 0 delta))
@@ -297,11 +301,12 @@ shows and the player's own."
 
 (defun steer-map (camera dt)
   "Move CAMERA by the keys held, over DT seconds."
-  (flet ((axis (plus minus) (- (if (retained plus) 1.0 0.0) (if (retained minus) 1.0 0.0))))
+  (flet ((axis (plus minus) (- (if (held-p plus) 1.0 0.0) (if (held-p minus) 1.0 0.0))))
     (let ((pan (* *map-key-pan* (map-distance camera) dt)))
-      (pan-map camera (* pan (axis :w :s)) (* pan (axis :d :a))))
-    (turn-map camera (* *map-key-turn* dt (axis :q :e)) (* *map-key-turn* dt (axis :r :f)))
-    (let ((zoom (+ (axis :minus :equal) (axis :kp-subtract :kp-add))))
+      (pan-map camera (* pan (axis :forward :back)) (* pan (axis :strafe-right :strafe-left))))
+    (turn-map camera (* *map-key-turn* dt (axis :map-turn-right :map-turn-left))
+              (* *map-key-turn* dt (axis :map-tilt-up :map-tilt-down)))
+    (let ((zoom (axis :map-zoom-out :map-zoom-in)))
       (unless (= 0 zoom)
         (zoom-map camera (expt *map-key-zoom* (* zoom dt)))))))
 
@@ -327,7 +332,8 @@ shows and the player's own."
         (let* ((storey *map-focus-storey*)
                (above (and high (< storey high)))
                (below (and low (< low storey)))
-               (key (+ (* 4 storey) (if above 1 0) (if below 2 0))))
+               ;; A rebinding (*BINDINGS-REVISION*) changes the keys it names.
+               (key (+ (* 4 storey) (if above 1 0) (if below 2 0) (* 4096 *bindings-revision*))))
           ;; Re-uploading text costs a buffer update, so only when it changes.
           (unless (eql key (shown-hint map-view))
             (setf (shown-hint map-view) key
