@@ -157,8 +157,15 @@ with Mesa. `release.yml` builds all three platforms (`ubuntu-22.04` for an old e
 `hexmaw-<version>-<platform>.{tar.gz,zip}` (`linux-x86_64`, `windows-x86_64`, `macos-arm64`),
 unpacks it elsewhere and runs `version` and `check` from a third folder, and checks the
 documents are there and the repository's files aren't (and on Windows the exe's icon). The
-self-test must pass on Linux; on Windows (with Mesa's software OpenGL) and macOS, runners
-having no GPU, it is tried and reported without failing the run. Both workflows set up
+self-test must pass on Linux (Xvfb and Mesa) and on Windows, where a runner has only GDI's
+OpenGL 1.1, with Mesa's software OpenGL copied beside the exe in the test's copy only (the
+MinGW package of `pal1000/mesa-dist-win`: in 26.2.x the MSVC one has no OpenGL driver). On
+macOS a runner offers no OpenGL at all, so there it is tried and reported without failing.
+The same Mesa files beside `hexmaw.exe` (`opengl32.dll`, `libgallium_wgl.dll`, and
+`GALLIUM_DRIVER=llvmpipe`) run the game in a Windows VM with no 3D driver, such as QEMU/KVM's,
+slowly. With no sound device the game plays silent (`start-sound`, main.lisp), and at quit
+the sound server's thread is stopped but its memory isn't freed (`finalize` on
+`harmony:server`): freeing it corrupted libmixed's heap on Windows after XAudio2 had failed. Both workflows set up
 through `.github/actions/setup-lisp`: SBCL 2.4.10 (Homebrew's current on macOS), then
 `tools/setup-ql` and a cache over `.ql/` and the fasl cache. Checkouts take no LFS: the build
 reads only `data/`, and CI fails if the source art isn't pointer files. Third-party actions

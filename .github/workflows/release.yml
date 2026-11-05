@@ -232,10 +232,11 @@ jobs:
         env:
           XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
 
-      # The window, the menu, a generated level, a screenshot and a clean quit. It must pass
-      # on Linux (Xvfb and Mesa). On Windows and macOS a runner has no GPU, so there it is
-      # tried, with Mesa's software OpenGL on Windows, and reported without failing the
-      # run; the game is judged on real hardware there. Make it fail once it is seen to pass.
+      # The window, the menu, a generated level, a screenshot and a clean quit. A runner has
+      # no GPU: on Linux it runs under Xvfb with Mesa, on Windows with Mesa's software OpenGL
+      # beside the exe, and both must pass. A macOS runner offers no OpenGL pixel format at
+      # all ("NSGL: Failed to find a suitable pixel format"), so there it is tried and
+      # reported without failing the run. The game is judged on real hardware all the same.
       - name: Self-test (Linux, macOS)
         if: runner.os != 'Windows'
         continue-on-error: ${{ runner.os != 'Linux' }}
@@ -257,7 +258,6 @@ jobs:
 
       - name: Self-test (Windows, software OpenGL)
         if: runner.os == 'Windows'
-        continue-on-error: true
         timeout-minutes: 10
         shell: pwsh
         run: |
