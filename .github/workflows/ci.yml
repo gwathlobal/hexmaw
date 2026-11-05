@@ -107,7 +107,6 @@ jobs:
           # The window, the menu, a generated level, a screenshot and a clean quit. No sound
           # card here: Trial falls back to its dummy output, as it would for a player.
           "$exe" selftest --directory "$GITHUB_WORKSPACE/checks"
-          cat "$XDG_DATA_HOME/hexmaw/selftest.txt"
           grep -q 'self-test passed' "$XDG_DATA_HOME/hexmaw/selftest.txt"
           if grep -q 'FAILED' "$XDG_DATA_HOME/hexmaw/selftest.txt"; then exit 1; fi
         env:

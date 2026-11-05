@@ -171,9 +171,12 @@ called in a thread of its own once the game is up (the self-test)."
 
 (defvar *selftest-lines* () "What the self-test has found so far, newest first.")
 
+(defun selftest-verdict-p ()
+  "Whether the self-test has said whether it passed."
+  (find-if (lambda (line) (uiop:string-prefix-p "self-test " line)) *selftest-lines*))
+
 (defun selftest-script (directory)
   "Drive the running game through the self-test, then close it. Writes selftest.txt."
-  (setf *selftest-lines* (list (build-description)))
   (symbol-macrolet ((lines *selftest-lines*))
     (flet ((note (format &rest args) (push (apply #'format NIL format args) lines)))
       (handler-case
@@ -213,7 +216,8 @@ called in a thread of its own once the game is up (the self-test)."
 (command-line:define-command selftest (&key ((directory :directory :d) NIL pathname "Where to save the screenshot; the user directory if not given."))
   :help "Open the window, show the main menu, play a generated level for a moment, take a screenshot and quit, saying whether all of that worked."
   (let ((directory (or directory (user-directory))))
-    (setf *exit-code* 1)
+    (setf *exit-code* 1
+          *selftest-lines* (list (build-description)))
     (bt:make-thread (lambda ()
                       (sleep *selftest-timeout*)
                       ;; What it found, then why it gave up: still running the test, or the
@@ -221,9 +225,17 @@ called in a thread of its own once the game is up (the self-test)."
                       (ignore-errors
                        (write-report "selftest.txt"
                                      (reverse (cons (format NIL "self-test FAILED: ~:[no answer~;the game didn't quit~] within ~d s"
-                                                            (find "self-test passed" *selftest-lines* :test #'string=)
-                                                            *selftest-timeout*)
+                                                            (selftest-verdict-p) *selftest-timeout*)
                                                     (or *selftest-lines* (list (build-description)))))))
                       (sb-ext:exit :code 2 :abort T))
                     :name "hexmaw selftest watchdog")
-    (play-dist (lambda () (selftest-script directory)))))
+    ;; An error that would stop the game (no OpenGL context, say) ends the test at once, with
+    ;; its reason in the report, instead of waiting behind Trial's error box until the
+    ;; watchdog. Only on this thread: the game's other threads keep Trial's handler.
+    (handler-bind ((error (lambda (e)
+                            (ignore-errors
+                             (push (format NIL "self-test FAILED: ~a" e) *selftest-lines*)
+                             (write-report "selftest.txt" (reverse *selftest-lines*)))
+                            (sb-ext:exit :code 1 :abort T))))
+      (let ((org.shirakumo.fraf.trial::*inhibit-standalone-error-handler* T))
+        (play-dist (lambda () (selftest-script directory)))))))

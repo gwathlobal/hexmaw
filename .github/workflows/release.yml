@@ -248,7 +248,6 @@ jobs:
           exe="$dir/hexmaw"; [ "${RUNNER_OS}" = "macOS" ] && exe="$dir/Hexmaw.app/Contents/MacOS/Hexmaw"
           cd "$HOME"
           "$exe" selftest --directory "$GITHUB_WORKSPACE/checks" || true
-          cat "$XDG_DATA_HOME/hexmaw/selftest.txt"
           # Passed, and quit: a hang at quit adds a FAILED line after the pass.
           grep -q 'self-test passed' "$XDG_DATA_HOME/hexmaw/selftest.txt"
           if grep -q 'FAILED' "$XDG_DATA_HOME/hexmaw/selftest.txt"; then exit 1; fi
