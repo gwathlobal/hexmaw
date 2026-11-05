@@ -169,9 +169,12 @@ called in a thread of its own once the game is up (the self-test)."
   (let ((target (+ *render-frame* count)))
     (wait-until (lambda () (<= target *render-frame*)) 60 (format NIL "~d frames" count))))
 
+(defvar *selftest-lines* () "What the self-test has found so far, newest first.")
+
 (defun selftest-script (directory)
   "Drive the running game through the self-test, then close it. Writes selftest.txt."
-  (let ((lines (list (build-description))))
+  (setf *selftest-lines* (list (build-description)))
+  (symbol-macrolet ((lines *selftest-lines*))
     (flet ((note (format &rest args) (push (apply #'format NIL format args) lines)))
       (handler-case
           (progn
@@ -213,9 +216,14 @@ called in a thread of its own once the game is up (the self-test)."
     (setf *exit-code* 1)
     (bt:make-thread (lambda ()
                       (sleep *selftest-timeout*)
-                      (ignore-errors (write-report "selftest.txt"
-                                                   (list (build-description)
-                                                         (format NIL "self-test FAILED: no answer within ~d s" *selftest-timeout*))))
+                      ;; What it found, then why it gave up: still running the test, or the
+                      ;; test done and the game not quitting.
+                      (ignore-errors
+                       (write-report "selftest.txt"
+                                     (reverse (cons (format NIL "self-test FAILED: ~:[no answer~;the game didn't quit~] within ~d s"
+                                                            (find "self-test passed" *selftest-lines* :test #'string=)
+                                                            *selftest-timeout*)
+                                                    (or *selftest-lines* (list (build-description)))))))
                       (sb-ext:exit :code 2 :abort T))
                     :name "hexmaw selftest watchdog")
     (play-dist (lambda () (selftest-script directory)))))

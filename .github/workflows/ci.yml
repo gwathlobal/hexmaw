@@ -109,6 +109,7 @@ jobs:
           "$exe" selftest --directory "$GITHUB_WORKSPACE/checks"
           cat "$XDG_DATA_HOME/hexmaw/selftest.txt"
           grep -q 'self-test passed' "$XDG_DATA_HOME/hexmaw/selftest.txt"
+          if grep -q 'FAILED' "$XDG_DATA_HOME/hexmaw/selftest.txt"; then exit 1; fi
         env:
           # never a real ~/.local/share/hexmaw
           XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data

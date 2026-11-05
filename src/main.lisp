@@ -19,6 +19,13 @@ box. With no sound, play on silently."
       (v:warn :hexmaw "No sound, playing on without: ~a" e)
       (org.shirakumo.fraf.trial.harmony:initialize-audio-backend main :dummy))))
 
+(defmethod finalize :around ((server harmony:server))
+  ;; At quit, when Trial finalizes the sound server last of all: stop its thread, but leave its
+  ;; memory to the process's end. Freeing it corrupted libmixed's heap on Windows, after XAudio2
+  ;; had failed and the dummy output had taken over, and the game hung instead of quitting.
+  (ignore-errors (mixed:end server))
+  server)
+
 ;; The one :AFTER method MAIN may have: another would replace it.
 (defmethod initialize-instance :after ((main main) &key)
   (start-sound main)

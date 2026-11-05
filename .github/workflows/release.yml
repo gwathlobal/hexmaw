@@ -248,7 +248,9 @@ jobs:
           cd "$HOME"
           "$exe" selftest --directory "$GITHUB_WORKSPACE/checks" || true
           cat "$XDG_DATA_HOME/hexmaw/selftest.txt"
+          # Passed, and quit: a hang at quit adds a FAILED line after the pass.
           grep -q 'self-test passed' "$XDG_DATA_HOME/hexmaw/selftest.txt"
+          if grep -q 'FAILED' "$XDG_DATA_HOME/hexmaw/selftest.txt"; then exit 1; fi
         env:
           XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
           LIBGL_ALWAYS_SOFTWARE: '1'
@@ -279,17 +281,21 @@ jobs:
                  -Wait -PassThru -WorkingDirectory $env:USERPROFILE -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP 'selftest.out')
           $report = Join-Path $env:XDG_DATA_HOME 'hexmaw\selftest.txt'
           Get-Content $report -ErrorAction SilentlyContinue | Write-Host
-          if (-not (Select-String -Quiet -Path $report -Pattern 'self-test passed')) {
+          # Passed, and quit: a hang at quit adds a FAILED line after the pass.
+          if (-not (Select-String -Quiet -Path $report -Pattern 'self-test passed') -or
+              (Select-String -Quiet -Path $report -Pattern 'FAILED')) {
             throw "the self-test did not pass (exit $($p.ExitCode))"
           }
         env:
           XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
 
+      # As the file itself (archive: false), not zipped again: a download of the Windows
+      # build was a zip in a zip.
       - name: Upload the archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ steps.package.outputs.name }}
           path: ${{ steps.package.outputs.archive }}
+          archive: false
           if-no-files-found: error
           retention-days: 30
 
@@ -347,7 +353,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          ls -l artifacts
+          ls -lR artifacts
+          # Uploaded as the files themselves (archive: false), so each lands as itself.
+          v="${GITHUB_REF_NAME#v}"
+          for f in "hexmaw-$v-linux-x86_64.tar.gz" "hexmaw-$v-windows-x86_64.zip" "hexmaw-$v-macos-arm64.tar.gz"; do
+            [ -f "artifacts/$f" ] || { echo "::error::no artifacts/$f to publish"; exit 1; }
+          done
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Hexmaw ${GITHUB_REF_NAME#v}" \
