@@ -265,12 +265,11 @@ captured may be a click, and it reaches the panel too."
            (body-height (+ *menu-stat-height* (* *controls-rows* row-step) (* 2 *controls-row-gap*)))
            ;; No cell margins: the body's columns take the whole WIDTH.
            (backdrop (panel-backdrop panel width :cell-margins (alloy:margins 0)))
-           (column (make-instance 'alloy:vertical-linear-layout
-                                  :align (panel-align panel)
-                                  :min-size (alloy:size width *menu-row-height*)
-                                  :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
+           (column (panel-column panel
+                                 :min-size (alloy:size width *menu-row-height*)
+                                 :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
            (focus (make-instance 'alloy:focus-list)))
-      (alloy:enter column backdrop :row (panel-row panel) :col 1)
+      (alloy:enter column backdrop :row 0 :col 1)
       (alloy:enter (alloy:represent "Controls" 'menu-title) column)
       (let ((row (forge-row column '(T T) *menu-row-height*)))
         (loop for (name) in *controls-pages*

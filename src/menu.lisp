@@ -316,37 +316,55 @@ after a change to what it shows). The menu controller remakes it.")
   (build-panel panel))
 
 (defun panel-backdrop (panel width &rest initargs)
-  "PANEL's backdrop, a grid whose middle column, WIDTH wide, takes the whole height of the screen
-below PANEL-TOP (or all of it, when centred), in its row PANEL-ROW. Nothing is sized from what
-the rows are guessed to need: text measures taller than its row (Jersey 15 at 20 is 35 px, at 32
-is 55), and a row pushed below its layout's bounds is drawn but never clicked, since Alloy sends
-a pointer event only to children of a layout that contains it."
-  (let ((top (panel-top panel))
-        (splash (panel-splash panel)))
+  "PANEL's backdrop, a grid whose middle column, WIDTH wide, is the screen's whole height, for
+PANEL's column (PANEL-COLUMN) in row 0. Nothing is sized from what the rows are guessed to need:
+text measures taller than its row (Jersey 15 at 20 is 35 px, at 32 is 55), and a row pushed out
+of its layout's bounds is drawn but never clicked, since Alloy sends a pointer event only to
+children of a layout that contains it."
+  (let ((splash (panel-splash panel)))
     (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
-           :col-sizes `(T ,width T)
-           :row-sizes (if (eq top T) '(T) `(,top T))
+           :col-sizes `(T ,width T) :row-sizes '(T)
            (append (when splash (list :splash splash)) initargs))))
 
-(defun panel-row (panel)
-  "The row of PANEL-BACKDROP's grid that holds PANEL's column."
-  (if (eq (panel-top panel) T) 0 1))
+(defclass menu-column (alloy:vertical-linear-layout)
+  ((top :initarg :top :initform NIL :reader column-top
+        :documentation "UI units from its top to its first row, or NIL to centre its rows."))
+  (:documentation "A panel's column of rows, as tall as the screen (PANEL-BACKDROP): its rows
+centred, or from TOP down, as far as they leave room, so a panel too tall for its TOP rises
+rather than hanging off the screen."))
 
-(defun panel-align (panel)
-  "How a column of PANEL's lays its rows in its cell (PANEL-BACKDROP): centred, or from the top."
-  (if (eq (panel-top panel) T) :middle :end))
+(defmethod alloy:refit :after ((column menu-column))
+  ;; Laid from the very top (:END), then moved down to TOP as far as the rows fit. A move
+  ;; keeps each row's size, so it lays out nothing again.
+  (when (and (column-top column) (alloy:layout-tree column))
+    (alloy:with-unit-parent column
+      (let* ((height (alloy:pxh (alloy:bounds column)))
+             (rows (alloy:pxh (alloy:suggest-size (alloy:bounds column) column)))
+             (shift (max 0.0 (min (alloy:to-px (alloy:un (column-top column))) (- height rows)))))
+        (when (< 0 shift)
+          (alloy:do-elements (row column)
+            (let ((bounds (alloy:bounds row)))
+              (setf (alloy:bounds row)
+                    (alloy:px-extent (alloy:pxx bounds) (- (alloy:pxy bounds) shift)
+                                     (alloy:pxw bounds) (alloy:pxh bounds))))))))))
+
+(defun panel-column (panel &rest initargs)
+  "PANEL's column (a MENU-COLUMN), centred or under PANEL-TOP, made with INITARGS."
+  (let ((top (panel-top panel)))
+    (apply #'make-instance 'menu-column
+           :align (if (eq top T) :middle :end) :top (unless (eq top T) top)
+           initargs)))
 
 (defmethod build-panel ((panel menu-panel))
   (let* ((buttons (panel-buttons panel))
          (lines (panel-lines panel))
          ;; Every row has half a gap above it and below it (the column's cell margins).
-         (column (make-instance 'alloy:vertical-linear-layout
-                                :align (panel-align panel)
-                                :min-size (alloy:size (panel-width panel) *menu-row-height*)
-                                :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
+         (column (panel-column panel
+                               :min-size (alloy:size (panel-width panel) *menu-row-height*)
+                               :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
          (backdrop (panel-backdrop panel (panel-width panel)))
          (focus (make-instance 'alloy:focus-list)))
-    (alloy:enter column backdrop :row (panel-row panel) :col 1)
+    (alloy:enter column backdrop :row 0 :col 1)
     (let ((title (panel-title panel)))
       (alloy:enter (alloy:represent title 'menu-title) column))
     (when lines

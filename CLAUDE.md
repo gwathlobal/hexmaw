@@ -1202,10 +1202,11 @@ real time instead.
   children of a layout that contains it, so a row hanging out of its column is drawn but can't be
   clicked, and text measures taller than any guess (Jersey 15 at 20 is 35 px, at 32 is 55): the
   old guessed height left the death screen's button 7 px of its 48 to click. So
-  `panel-backdrop` gives the column the whole height of the screen below `panel-top` (all of it
-  when centred), and the column lays its rows in it at their real sizes (`panel-align`: `:middle`
-  centred, `:end` from the top); the forge's two columns share one grid row as tall as the taller,
-  centred so. After changing a panel, open it and run `tools/hd '(game (menu-layout-problems))'`
+  `panel-backdrop` gives the column (`panel-column`, a `menu-column`) the screen's whole height,
+  and the column lays its rows in it at their real sizes: centred, or from `panel-top` down as far
+  as they leave room, so a panel too tall for its top rises instead of hanging off the screen
+  (Settings over the main menu at 1280 × 720). The forge's two columns share one grid row as tall
+  as the taller, centred so. After changing a panel, open it and run `tools/hd '(game (menu-layout-problems))'`
   (every element sticking out of its parent, and how much of a row can still be clicked) and
   `tools/hd '(game (menu-click-problems))'` (the pointer moved over a 5 × 3 grid on each row,
   through the menu pass, and the points Alloy doesn't call that row hovered at); NIL from both

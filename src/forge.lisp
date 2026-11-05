@@ -928,7 +928,7 @@ on, since a dial changes the text but doesn't remake the panel."
          (focus (make-instance 'alloy:focus-list)))
     ;; FORGE-SELECT bumped the revision; this panel is the one for it.
     (setf (slot-value panel 'revision) *forge-revision*)
-    (alloy:enter frame backdrop :row (panel-row panel) :col 1)
+    (alloy:enter frame backdrop :row 0 :col 1)
     (alloy:enter sides frame)
     (alloy:enter left sides :row 0 :col 0)
     (alloy:enter right sides :row 0 :col 2)

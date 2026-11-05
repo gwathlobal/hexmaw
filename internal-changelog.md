@@ -23,8 +23,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   click: the death and victory screens' only button took clicks on 7 px of its 48, the shop's and
   every townsperson's Leave on about half, Controls' Reset and Back on 21 (a Windows
   playtester's report; it happens on Linux the same, at any window size). The column now gets the
-  screen's whole free height and centres (or tops) its rows itself (`panel-backdrop`,
-  `panel-align`), the forge's two columns in one grid row; Controls' body was also 7 px wider than
+  screen's whole height and centres its rows itself, or lays them from the panel's top as far
+  as they fit (`panel-backdrop`, `menu-column`), the forge's two columns in one grid row; Controls' body was also 7 px wider than
   its column. `menu-layout-problems` and `menu-click-problems` (menu.lisp) check the panel on
   screen.
 - **A Windows build quits with TerminateProcess.** With Mesa's software OpenGL beside the
