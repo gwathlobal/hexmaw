@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+## November 6, 2026 v0.1.0
+
 - **Playable on software OpenGL.** A Windows VM with no 3D driver (Mesa's llvmpipe) ran the
   game at 2 to 3 fps; reproduced here at 4 (llvmpipe, 4 cores, 1280×720). Three causes: drawing
   every pixel; Trial's loop catching up every tick a slow frame took (27 a frame, 80 of 270 ms),
