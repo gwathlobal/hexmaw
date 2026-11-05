@@ -96,7 +96,20 @@ called in a thread of its own once the game is up (the self-test)."
     (bt:make-thread script :name "hexmaw script"))
   (unwind-protect (launch)
     (stop-eval-server)
-    (deploy:quit *exit-code*)))
+    (quit-process *exit-code*)))
+
+(defun quit-process (code)
+  "End the process with CODE once the game is done: Deploy's quit hooks, the log and the
+streams written out, then an abort exit. Deploy's own quit exits through the C runtime, which
+on Windows runs every library's DLL shutdown, and with XAudio2's threads still alive (the
+sound server is stopped, not freed, at quit: main.lisp) the game hung there after its window
+closed. An abort exit runs none of that; it is what the self-test's watchdog already used to
+end a stuck game on Windows."
+  (ignore-errors (deploy:run-hooks :quit))
+  (ignore-errors (v:remove-global-controller))
+  (ignore-errors (finish-output *standard-output*))
+  (ignore-errors (finish-output *error-output*))
+  (sb-ext:exit :code code :abort T))
 
 
 ;;; Reports: what `hexmaw check` and `hexmaw selftest` found, printed and saved in the user
@@ -151,7 +164,7 @@ called in a thread of its own once the game is up (the self-test)."
                           (list (if problems
                                     (format NIL "~d problem~:p found." (length problems))
                                     "All data files and libraries present."))))
-    (deploy:quit (if problems 1 0))))
+    (quit-process (if problems 1 0))))
 
 ;;; The self-test: the window, the main menu, a generated level, a screenshot, a clean quit.
 
