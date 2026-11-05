@@ -13,6 +13,19 @@
   "True in development: the main menu offers the debug level and Settings the debug
 minimap. The standalone build (dist.lisp) sets it to NIL, a release version.")
 
+;; Trial names its version, settings and paths after this system (VERSION, CONFIG-DIRECTORY).
+(setf +app-system+ "hexmaw")
+
+(defun game-version ()
+  "The version and commit, as \"0.1.0-b96e25d\": hexmaw.asd's :version and the checkout's
+commit, fixed when a build is made (Trial's build hook)."
+  (version :app))
+
+(defun user-directory ()
+  "Where the game writes on the player's machine: saves, reports, screenshots and the log.
+~/.local/share/hexmaw/ on Linux and macOS, %LOCALAPPDATA%\\hexmaw\\ on Windows."
+  (uiop:xdg-data-home "hexmaw/"))
+
 (defun root ()
   "The project folder, or the executable's in a standalone build (dist.lisp)."
   (if (deploy:deployed-p)
@@ -302,7 +315,9 @@ position and view."
   (unless (visible-p (context +main+))
     (error "The game window is minimised, so nothing is being drawn. ~
             Restore it (tools/hd '(show-window)') and try again."))
-  (let ((file (merge-pathnames (or file (format NIL "screenshots/~a.png" (timestamp))) (root))))
+  ;; A build's own folder may not be writable (an unpacked Program Files, a translocated app).
+  (let ((file (merge-pathnames (or file (format NIL "screenshots/~a.png" (timestamp)))
+                               (if (deploy:deployed-p) (user-directory) (root)))))
     (ensure-directories-exist file)
     (call-in-game (lambda () (capture (or *output-pass* *render-pass*) :file file)))
     (namestring file)))

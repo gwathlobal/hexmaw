@@ -1,0 +1,113 @@
+THIRD-PARTY NOTICES
+
+Hexmaw is built from other people's software and fonts as well as its own, each under its
+own licence, listed in this file. Their licences ask that these notices travel with every
+copy of the game, so this file ships beside the executable. The licence texts this file
+names are in the licenses/ folder beside it.
+
+Hexmaw's own code is under the zlib licence (licenses/hexmaw-code-zlib.txt). Its assets,
+the pictures, sounds, music and levels, are not: see licenses/ASSETS-LICENSE.md.
+
+This file is written by tools/notices from the game's dependencies; notices/ in the source
+holds the parts written by hand.
+
+
+==========================================================================
+LIBRARIES UNDER THE GNU LESSER GENERAL PUBLIC LICENSE
+
+Three of the Lisp libraries compiled into the executable are under the GNU LGPL. They come
+in with Alloy, the user-interface toolkit the menus are drawn with, which uses them for
+editing text:
+
+  text.editing           LGPL version 3. By Jan Moringen.
+  utilities.print-items  LGPL version 3. By Jan Moringen.
+  flexichain             LGPL version 2.1 or, at your option, any later version. By Robert
+                         Strandh and Matthieu Villeneuve. Hexmaw uses it under version 3.
+
+You have every right the LGPL gives you over these three, whatever EULA.txt says:
+
+- Their source code, exactly the versions compiled into this copy of the game, is in
+  licenses/lgpl-source/, one folder each.
+- You may change them and run the game with your changes. Hexmaw's own source code is
+  public under the zlib licence at https://github.com/gwathlobal/hexmaw, and a release's
+  tag (v0.1.0 and so on, the version CHANGELOG.md gives) is the code of that release. To
+  rebuild: tools/setup-ql installs the exact library versions the game is built against
+  into .ql/, put your changed library in their place under .ql/dists/, and run ./build.sh.
+  README.md in the source says what else the build needs.
+- You may reverse-engineer the game to debug such changes.
+
+The licence texts are licenses/LGPL-3.0.txt and licenses/GPL-3.0.txt (LGPL version 3 is
+written as additional permissions on top of the GPL), and licenses/LGPL-2.1.txt.
+
+
+==========================================================================
+STEEL BANK COMMON LISP (SBCL) - http://www.sbcl.org/
+
+The compiler the game is built with, and the runtime inside every Hexmaw executable.
+
+SBCL is derived from CMU CL, which was released into the public domain. Changes since the
+fork are public domain where possible and under the FreeBSD licence where not. Credit must
+be kept for the parts under BSD-style licences: the LOOP macro (Copyright (c) 1986
+Massachusetts Institute of Technology, and Symbolics, Inc.), the PCL implementation of CLOS
+(Copyright (c) 1985-1991 Xerox Corporation), work by Gerd Moellmann, and the CityHash mix
+function in hopscotch.c (MIT licence). The full text is licenses/SBCL-COPYING.txt.
+
+ASDF and UIOP, which come with SBCL and of which UIOP stays in the executable, are under the
+MIT licence: Copyright (c) 2001-2019 Daniel Barlow and contributors. The MIT licence's text
+is with the native libraries' below.
+
+
+==========================================================================
+NATIVE LIBRARIES
+
+The game loads these beside the executable (inside Hexmaw.app on macOS). Each is shipped
+unaltered as its Lisp library builds it. Their licence texts follow at the end of this file,
+under NATIVE LIBRARIES: LICENCE TEXTS.
+
+  GLFW, windows and input (libglfw-*). zlib licence. Copyright (c) 2002-2006 Marcus
+    Geelnard, Copyright (c) 2006-2019 Camilla Löwy. https://www.glfw.org/
+  libmixed, audio mixing (libmixed-*). zlib licence, Copyright (c) 2017 Yukari Hafner. It
+    has compiled into it:
+      libsamplerate 0.2.2, resampling. BSD 2-clause licence. Copyright (c) 2012-2016 Erik
+        de Castro Lopo. https://libsndfile.github.io/libsamplerate/
+      pffft, Fourier transforms. A BSD-style licence. Copyright (c) 2013 Julien Pommier,
+        (c) 2019 Hayati Ayguen, (c) 2020 Dario Mambro, and (c) 2004 the University
+        Corporation for Atmospheric Research for the FFTPACK it is based on.
+  stb_vorbis, Ogg Vorbis decoding (libvorbis-*, built by cl-vorbis). By Sean Barrett,
+    public domain, or the MIT licence where that isn't possible. http://nothings.org/
+  PipeWire output (pipewire-spa-*, Linux only). cl-mixed's own glue, under zlib like
+    cl-mixed (Copyright (c) 2017 Yukari Hafner), built on PipeWire's SPA headers, MIT
+    licence, Copyright (c) 2018 Wim Taymans. https://pipewire.org/
+  libevdev, gamepads (libevdev-*, Linux only). MIT licence. Copyright (c) 2013 Red Hat,
+    Inc., Copyright (c) 2013 David Herrmann. https://www.freedesktop.org/wiki/Software/libevdev/
+  The MinGW-w64 runtime, used by libmixed (Windows only):
+      libgcc_s_seh-1.dll, from GCC. GPL version 3 with the GCC Runtime Library Exception,
+        version 3.1, which lets a program compiled with GCC ship its runtime under the
+        program's own terms. licenses/GPL-3.0.txt and licenses/GCC-exception-3.1.txt.
+      libwinpthread-1.dll, threads. MIT licence, Copyright (c) 2011 mingw-w64 project, with
+        parts under a BSD 3-clause licence, Copyright (c) 2010 Lockless Inc.
+
+The system's own libraries (OpenGL, the sound server: PulseAudio, PipeWire or ALSA on Linux,
+WASAPI on Windows, CoreAudio on macOS; the gamepad interfaces) are not shipped.
+
+
+==========================================================================
+FONTS
+
+Under the SIL Open Font License, version 1.1 (licenses/OFL-1.1.txt). The game ships them as
+pictures of their letters (an atlas each), drawn from the fonts.
+
+  Jersey 15, the menus. Copyright 2023 The Soft Type Project Authors
+    (https://github.com/scfried/soft-type-jersey).
+  Noto Sans Mono, the HUD. Copyright 2022 The Noto Project Authors
+    (https://github.com/notofonts/latin-greek-cyrillic). Shipped by Alloy.
+  PromptFont, button prompts. Copyright Yukari Hafner (https://shinmera.com/promptfont).
+    Shipped by Alloy.
+
+
+==========================================================================
+MUSIC
+
+Three of the tracks were rendered through FluidSynth with the FluidR3_GM soundfont, by Frank
+Wen and contributors, under the MIT licence. A recording made with a soundfont is not a copy
+of it; it is named here as thanks.

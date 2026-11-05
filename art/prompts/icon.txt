@@ -1,0 +1,15 @@
+An application icon for a dark-fantasy dungeon game called Hexmaw, in the same chunky
+pixel-art style as the reference pictures: hand-placed pixels, hard edges, a limited warm
+palette, no anti-aliased gradients, no text and no letters.
+
+The subject: a fanged stone maw seen head-on, the mouth of a dungeon carved in the rock, as
+in the title picture: a ring of long jagged stone fangs above and below around a pitch-black
+throat, with one glowing red rune carved in the rock above it. Nothing else: no figures, no
+monsters, no torches, no frame or border, no background scene.
+
+It must read at 16 by 16 pixels: one bold silhouette filling the square edge to edge, the
+black throat large in the middle, the fangs a few strong shapes, high contrast between the
+pale grey-brown stone and the black, the red rune small and bright.
+
+Square, 1024 by 1024, the maw on a plain flat magenta (#FF00FF) background, which will be
+cut away.

@@ -1,20 +1,64 @@
 #!/usr/bin/env bash
-# Build the standalone game into dist/: the executable, the foreign libraries it loads,
-# and the asset pools under dist/pool/ (src/dist.lisp). Copy dist/ anywhere and run
-# dist/hexmaw; it needs no SBCL, Quicklisp or source tree.
+# Build the standalone game into dist/: the executable, the foreign libraries it loads, the
+# asset pools under pool/ (src/dist.lisp), and the player's documents: README.txt, EULA.txt,
+# CHANGELOG.md, THIRD-PARTY-NOTICES.txt and licenses/. Copy dist/ anywhere and run the game
+# from it; it needs no SBCL, Quicklisp or source tree.
 #
 #   tools/build-dist
 #
-# Every block is built from its blueprint first, so the shipped .glb files are current.
+# Linux: dist/hexmaw. Windows (under git-bash): dist/hexmaw.exe. macOS: dist/Hexmaw.app, with
+# the documents beside it. Every block is built from its blueprint first, so the shipped .glb
+# files are current.
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root" || exit 1
+
+case "$(uname -s)" in
+  Linux)                platform=linux ;;
+  Darwin)               platform=macos ;;
+  MINGW*|MSYS*|CYGWIN*) platform=windows ;;
+  *) echo "build-dist: don't know how to build on $(uname -s)" >&2; exit 1 ;;
+esac
+
 # Deploy patches the shipped libraries' sonames with patchelf.
-command -v patchelf >/dev/null || { echo "build-dist: needs patchelf (apt install patchelf)" >&2; exit 1; }
+if [ "$platform" = linux ]; then
+  command -v patchelf >/dev/null || { echo "build-dist: needs patchelf (apt install patchelf)" >&2; exit 1; }
+fi
+
+case "$platform" in
+  # A bundle: the SBCL runtime as it is, the image beside it as sbcl.core (Deploy's
+  # macos-app-deploy-op), so the runtime keeps the signature Apple silicon needs.
+  macos) dump='(progn (setf deploy::*macos-app-icon* (merge-pathnames "data/icon/hexmaw.icns" (asdf:system-source-directory :hexmaw))) (asdf:operate (quote deploy::macos-app-deploy-op) :hexmaw))'
+         exe=dist/Hexmaw.app/Contents/MacOS/Hexmaw ;;
+  windows) dump='(asdf:make :hexmaw)'; exe=dist/hexmaw.exe ;;
+  *) dump='(asdf:make :hexmaw)'; exe=dist/hexmaw ;;
+esac
+
+lisp=(sbcl)
+if [ "$platform" = windows ]; then
+  # The icon has to be in the runtime the image is saved from (tools/exe-icon/): build
+  # under an iconed copy of sbcl.exe, started with SBCL's own core.
+  copy="$(sbcl --noinform --no-userinit --non-interactive --load tools/exe-icon/iconed-runtime.lisp < /dev/null)" || exit 1
+  runtime="$(sed -n 's/^runtime //p' <<< "$copy" | tr -d '\r')"
+  core="$(sed -n 's/^core //p' <<< "$copy" | tr -d '\r')"
+  [ -n "$runtime" ] && [ -n "$core" ] || { echo "build-dist: no iconed runtime: $copy" >&2; exit 1; }
+  runtime="$(cygpath -u "$runtime")"  # git-bash runs it; sbcl reads the core's native name
+  trap 'rm -f "$runtime"' EXIT
+  lisp=("$runtime" --core "$core")
+fi
+
 rm -rf dist
-sbcl --dynamic-space-size 4096 --noinform --no-userinit --non-interactive \
+"${lisp[@]}" --dynamic-space-size 4096 --noinform --no-userinit --non-interactive \
      --load boot.lisp \
      --eval '(mapc (function hexmaw.blueprint:ensure-block) (hexmaw.blueprint:blueprint-names))' \
-     --eval '(asdf:make :hexmaw)' || exit 1
+     --eval "$dump" || exit 1
 rmdir bin 2>/dev/null  # Deploy reaches dist/ through bin/ (hexmaw.asd)
-[ -x dist/hexmaw ] || { echo "build-dist: no dist/hexmaw was written" >&2; exit 1; }
-echo "Built $root/dist ($(du -sh dist | cut -f1)); run dist/hexmaw"
+[ -e "$exe" ] || { echo "build-dist: no $exe was written" >&2; exit 1; }
+
+if [ "$platform" = macos ]; then
+  # Not a developer signature (there is none): an ad-hoc one, which Apple silicon needs on
+  # every library it loads, after Deploy has rewritten their paths. Gatekeeper still
+  # quarantines a downloaded copy (README-PLAYERS.txt).
+  codesign --force --deep --sign - dist/Hexmaw.app || exit 1
+fi
+
+echo "Built $root/dist ($(du -sh dist | cut -f1)), $("$exe" version 2>/dev/null | cut -d' ' -f1); run $exe"

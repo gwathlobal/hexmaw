@@ -425,7 +425,9 @@ victory screens share."
           (list "Monsters slain" (format NIL "~d of ~d" (getf totals :slain) (getf totals :monsters)))
           (list "Areas explored" (format NIL "~d of ~d" (getf totals :explored) (getf totals :blocks)))
           (list "Damage taken" (format NIL "~d" (round (damage-taken *player*))))
-          (list "Run seed" (format NIL "~d" (current-run-seed))))))
+          (list "Run seed" (format NIL "~d" (current-run-seed)))
+          ;; A seed builds the same levels only on the same version.
+          (list "Version" (game-version)))))
 
 (defun death-stats ()
   "The run as the death screen tells it, as PANEL-LINES rows."

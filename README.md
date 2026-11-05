@@ -3,21 +3,20 @@
 A first-person, real-time roguelike: Daggerfall's dungeons with Hexen's combat. Levels are
 assembled from hand-made blocks, spells are built at a spellforge, a settlement waits partway
 down, and a boss waits at the bottom. Written in Common Lisp on
-[Trial](https://shirakumo.github.io/trial). Linux only for now.
+[Trial](https://shirakumo.github.io/trial). Builds for Linux, Windows and macOS (Apple
+silicon) are on the [Releases](https://github.com/gwathlobal/hexmaw/releases) page.
 
 This is Hexmaw's free prototype. Much of it was made with generative AI: [AI.md](AI.md) says
 what and how.
 
 ## Running
 
-You need SBCL. The project keeps its own Quicklisp in `.ql/` (not in the repository), with
-the Shirakumo dist for Trial. To set it up once, with the two dist versions the game is
-developed against:
+You need SBCL (2.4.10 is what the builds use). The project keeps its own Quicklisp in
+`.ql/` (not in the repository), with the Shirakumo dist for Trial. To set it up, with the two
+dist versions the game is built against:
 
 ```bash
-curl -O https://beta.quicklisp.org/quicklisp.lisp
-sbcl --non-interactive --no-userinit --load quicklisp.lisp --eval '(quicklisp-quickstart:install :path ".ql/" :dist-url "http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt")' --eval '(ql-dist:install-dist "http://dist.shirakumo.org/shirakumo/2026.10.16-12.49.03/shirakumo.txt" :prompt nil)'
-rm quicklisp.lisp
+tools/setup-ql
 ```
 
 The first `./run.sh` then downloads the libraries.
@@ -37,8 +36,9 @@ uses to drive the running game.
 ./build.sh
 ```
 
-This builds a standalone game into `dist/`, which runs without SBCL or the source tree. It
-needs `patchelf`.
+This builds a standalone game into `dist/`, which runs without SBCL or the source tree, on
+Linux, on macOS and on Windows under git-bash. On Linux it needs `patchelf`.
+`.github/workflows/release.yml` builds all three on GitHub Actions; a `v*` tag publishes them.
 
 ## Art
 

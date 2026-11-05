@@ -1,0 +1,393 @@
+name: Release
+
+# Pushing a v* tag builds every platform, publishes a GitHub Release, and pushes the three
+# builds to itch.io. Running this by hand (workflow_dispatch) does everything but publish,
+# so the whole pipeline can be checked without a tag: its archives are the run's artifacts.
+#
+# The repository is public, so a tag's release is public at once, and a dispatch run's
+# artifacts can be downloaded by anyone signed in to GitHub. Tag only a build that has been
+# played on real hardware ("Releases" in CLAUDE.md).
+#
+# SBCL images can't be cross-compiled, so there is one job per platform.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SBCL_VERSION: '2.4.10'
+  # itch.io's upload tool, fetched by the itch job from itch's own download host.
+  BUTLER_VERSION: '15.32.0'
+  ITCH_PROJECT: 'gwathlobal/hexmaw'
+  # Mesa's software OpenGL for Windows, tried for the self-test only: a runner has no GPU,
+  # only GDI's OpenGL 1.1. Never put into an archive.
+  MESA_WIN_VERSION: '26.2.6'
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ubuntu-22.04 rather than the newest image on purpose: the binary can't run on a
+          # glibc older than the one it was built against.
+          - os: ubuntu-22.04
+            platform: linux-x86_64
+          - os: windows-2022
+            platform: windows-x86_64
+          # Apple silicon. macos-15-intel is the last x86_64 image if an Intel build is ever
+          # wanted.
+          - os: macos-15
+            platform: macos-arm64
+    steps:
+      # .gitattributes pins the tree to LF; this states that independence of the runner
+      # image's settings, and has to come before the checkout.
+      - name: Keep line endings as committed
+        run: git config --global core.autocrlf false
+
+      # No LFS: the source art is in a private store, and the build reads only data/.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: false
+
+      - uses: ./.github/actions/setup-lisp
+        with:
+          sbcl-version: ${{ env.SBCL_VERSION }}
+
+      - name: Install the build's and the self-test's tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends patchelf xvfb \
+            libgl1 libglx-mesa0 libgl1-mesa-dri libx11-6 libxrandr2 libxinerama1 \
+            libxcursor1 libxi6 libxext6 libfontconfig1
+
+      - name: Work out the version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(grep -m1 -oE ':version "[^"]+"' hexmaw.asd)"
+          version="${version#:version \"}"
+          version="${version%\"}"
+          [ -n "$version" ] || { echo "::error::no :version in hexmaw.asd"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version from hexmaw.asd: $version"
+          # A tag that doesn't match the version in the system definition is a release
+          # tagged without bumping hexmaw.asd: stop before building.
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            if [ "$tag" != "$version" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match :version $version in hexmaw.asd"
+              exit 1
+            fi
+            # The release notes are the newest CHANGELOG entry, so a tag made without one
+            # would publish the previous version's. An entry is a "## " heading; an
+            # "Unreleased" one is skipped, by the same rule the publish job uses.
+            newest="$(awk '
+              { sub(/\r$/, "") }
+              /^## / { sub(/^## /, "")
+                       if ($0 ~ /^Unreleased[[:space:]]*$/) next
+                       print; exit }' CHANGELOG.md)"
+            case "$newest" in
+              *"v$version"*) echo "CHANGELOG's newest entry is \"$newest\"" ;;
+              *) echo "::error::CHANGELOG.md's newest entry is \"$newest\", which is not v$version"
+                 exit 1 ;;
+            esac
+          fi
+
+      - name: Build the executable
+        shell: bash
+        run: tools/build-dist < /dev/null
+
+      - name: Check the third-party notices
+        shell: bash
+        run: tools/notices --check < /dev/null
+
+      - name: Stage and archive the release
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="hexmaw-${{ steps.version.outputs.version }}-${{ matrix.platform }}"
+          # tools/build-dist stages dist/ as a complete copy of the game: the executable (or
+          # Hexmaw.app), its libraries and pools, and the player's documents and licenses/.
+          # The release is that folder under its versioned name.
+          mv dist "$name"
+          mkdir -p out
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            7z a -tzip "out/$name.zip" "$name" > /dev/null
+            echo "archive=out/$name.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "out/$name.tar.gz" "$name"
+            echo "archive=out/$name.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          ls -l out
+
+      - name: Start a virtual display (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
+          for _ in $(seq 1 30); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 1; done
+          [ -S /tmp/.X11-unix/X99 ] || { echo "::error::Xvfb did not come up"; exit 1; }
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      # Unpacked somewhere else and run from a third folder: what proves that the archive
+      # carries everything and the game finds it from wherever it was unpacked.
+      - name: Verify the archive (Linux, macOS)
+        if: runner.os != 'Windows'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          verify="${RUNNER_TEMP}/verify"
+          rm -rf "$verify" && mkdir -p "$verify"
+          tar -xzf "${{ steps.package.outputs.archive }}" -C "$verify"
+          dir="$verify/${{ steps.package.outputs.name }}"
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            exe="$dir/Hexmaw.app/Contents/MacOS/Hexmaw"
+            [ -f "$dir/Hexmaw.app/Contents/Resources/Hexmaw.icns" ] || { echo "::error::Hexmaw.app has no icon"; exit 1; }
+            codesign --verify --deep --verbose=2 "$dir/Hexmaw.app"
+          else
+            exe="$dir/hexmaw"
+          fi
+          cd "$HOME"
+          reported="$("$exe" version)"
+          echo "$reported"
+          case "$reported" in
+            "${{ steps.version.outputs.version }}"*) ;;
+            *) echo "::error::the build reports '$reported', not version ${{ steps.version.outputs.version }}"; exit 1 ;;
+          esac
+          "$exe" check
+          grep -q 'All data files and libraries present' "$XDG_DATA_HOME/hexmaw/check.txt"
+          # The player's documents, and none of the repository's.
+          for f in README.txt EULA.txt CHANGELOG.md THIRD-PARTY-NOTICES.txt licenses/LGPL-3.0.txt \
+                   licenses/lgpl-source; do
+            [ -e "$dir/$f" ] || { echo "::error::the archive has no $f"; exit 1; }
+          done
+          for f in README.md CLAUDE.md ROADMAP.md LICENSE art src; do
+            [ ! -e "$dir/$f" ] || { echo "::error::the archive carries the repository's $f"; exit 1; }
+          done
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
+
+      - name: Verify the archive (Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $verify = Join-Path $env:RUNNER_TEMP 'verify'
+          Remove-Item -Recurse -Force $verify -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $verify | Out-Null
+          7z x "${{ steps.package.outputs.archive }}" "-o$verify" | Out-Null
+          $dir = Join-Path $verify '${{ steps.package.outputs.name }}'
+          $exe = Join-Path $dir 'hexmaw.exe'
+          # hexmaw.exe is a GUI-subsystem program: nothing waits for one. -Wait -PassThru
+          # gets its exit code, and a redirected handle reaches it with no console.
+          function Invoke-Hexmaw([string[]]$arguments, $outFile) {
+            $p = Start-Process -FilePath $exe -ArgumentList $arguments -Wait -PassThru `
+                   -WorkingDirectory $env:USERPROFILE -RedirectStandardOutput $outFile
+            Get-Content $outFile -ErrorAction SilentlyContinue | Write-Host
+            return $p.ExitCode
+          }
+          $code = Invoke-Hexmaw @('version') (Join-Path $env:RUNNER_TEMP 'version.txt')
+          if ($code -ne 0) { throw "hexmaw.exe version exited with $code" }
+          $reported = Get-Content (Join-Path $env:RUNNER_TEMP 'version.txt') -Raw
+          if ($reported -notlike '${{ steps.version.outputs.version }}*') {
+            throw "the build reports '$reported', not version ${{ steps.version.outputs.version }}"
+          }
+          $code = Invoke-Hexmaw @('check') (Join-Path $env:RUNNER_TEMP 'check.txt')
+          if ($code -ne 0) { throw "hexmaw.exe check exited with $code (files or libraries missing from the archive)" }
+          $saved = Join-Path $env:XDG_DATA_HOME 'hexmaw'
+          if (-not (Select-String -Quiet -Path (Join-Path $saved 'check.txt') -Pattern 'All data files and libraries present')) {
+            throw "check did not save its report as $saved\check.txt"
+          }
+          foreach ($f in 'README.txt', 'EULA.txt', 'CHANGELOG.md', 'THIRD-PARTY-NOTICES.txt', 'licenses\LGPL-3.0.txt', 'licenses\lgpl-source') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "the archive has no $f" }
+          }
+          foreach ($f in 'README.md', 'CLAUDE.md', 'ROADMAP.md', 'LICENSE', 'art', 'src') {
+            if (Test-Path (Join-Path $dir $f)) { throw "the archive carries the repository's $f" }
+          }
+          # And its icon, asked the way Explorer asks: tools/build-dist writes it into the
+          # runtime by hand, and an executable that lost it still runs.
+          Add-Type -Namespace Win32 -Name Shell -MemberDefinition @'
+          [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+          public static extern uint ExtractIconEx(string file, int index, IntPtr[] large, IntPtr[] small, uint n);
+          '@
+          $icons = [Win32.Shell]::ExtractIconEx($exe, -1, $null, $null, 0)
+          if ($icons -lt 1) { throw "hexmaw.exe has no icon" }
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
+
+      # The window, the menu, a generated level, a screenshot and a clean quit. It must pass
+      # on Linux (Xvfb and Mesa). On Windows and macOS a runner has no GPU, so there it is
+      # tried, with Mesa's software OpenGL on Windows, and reported without failing the
+      # run; the game is judged on real hardware there. Make it fail once it is seen to pass.
+      - name: Self-test (Linux, macOS)
+        if: runner.os != 'Windows'
+        continue-on-error: ${{ runner.os != 'Linux' }}
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/verify/${{ steps.package.outputs.name }}"
+          exe="$dir/hexmaw"; [ "${RUNNER_OS}" = "macOS" ] && exe="$dir/Hexmaw.app/Contents/MacOS/Hexmaw"
+          cd "$HOME"
+          "$exe" selftest --directory "$GITHUB_WORKSPACE/checks" || true
+          cat "$XDG_DATA_HOME/hexmaw/selftest.txt"
+          grep -q 'self-test passed' "$XDG_DATA_HOME/hexmaw/selftest.txt"
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
+          LIBGL_ALWAYS_SOFTWARE: '1'
+
+      - name: Self-test (Windows, software OpenGL)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'verify\${{ steps.package.outputs.name }}'
+          # Mesa's opengl32.dll beside the exe, in this unpacked copy only: Windows loads
+          # the one in the program's folder before the system's.
+          $v = $env:MESA_WIN_VERSION
+          curl.exe -fsSL --retry 5 --retry-delay 4 -o mesa.7z "https://github.com/pal1000/mesa-dist-win/releases/download/$v/mesa3d-$v-release-msvc.7z"
+          7z e mesa.7z "-o$dir" 'x64\*.dll' -y | Out-Null
+          $env:GALLIUM_DRIVER = 'llvmpipe'
+          $shots = Join-Path $env:GITHUB_WORKSPACE 'checks'
+          $p = Start-Process -FilePath (Join-Path $dir 'hexmaw.exe') -ArgumentList @('selftest', '--directory', $shots) `
+                 -Wait -PassThru -WorkingDirectory $env:USERPROFILE -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP 'selftest.out')
+          $report = Join-Path $env:XDG_DATA_HOME 'hexmaw\selftest.txt'
+          Get-Content $report -ErrorAction SilentlyContinue | Write-Host
+          if (-not (Select-String -Quiet -Path $report -Pattern 'self-test passed')) {
+            throw "the self-test did not pass (exit $($p.ExitCode))"
+          }
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/hexmaw-data
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+          retention-days: 30
+
+      # The screenshot is the thing to look at when a platform is in doubt: it shows what
+      # that machine drew.
+      - name: Upload this platform's reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checks-${{ matrix.platform }}
+          path: |
+            checks/
+            ${{ runner.temp }}/hexmaw-data/hexmaw/*.txt
+            ${{ runner.temp }}/hexmaw-data/hexmaw/trial.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    name: Publish the GitHub Release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # for CHANGELOG.md, which the notes are made from
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+          pattern: hexmaw-*
+          merge-multiple: true
+
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          # The newest released CHANGELOG entry, its "## " heading down to the next one, so
+          # what a release says it changed and what the changelog says can't drift apart.
+          # awk reads the file itself rather than a pipe, and exits once it has the entry.
+          awk '
+            { sub(/\r$/, "") }
+            /^## /   { if (printing) exit
+                       if ($0 ~ /^## Unreleased[[:space:]]*$/) next
+                       printing = 1 }
+            printing { print }' CHANGELOG.md > entry.md
+          [ -s entry.md ] || { echo "::error::found no entry in CHANGELOG.md"; exit 1; }
+          { cat entry.md; echo; cat .github/release-install-notes.md; } > notes.md
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ls -l artifacts
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Hexmaw ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            artifacts/*
+
+  itch:
+    name: Push to itch.io
+    # After the GitHub Release, so itch never has a version the release page doesn't; only
+    # for a tag. The key is an account-wide itch API key, so it lives in the "itch"
+    # environment (limited to v* tags, with the author as required reviewer), which only
+    # this job uses.
+    needs: [build, publish]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: itch
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+          pattern: hexmaw-*
+          merge-multiple: true
+
+      # Each archive is pushed unpacked, one channel per platform: butler uploads only what
+      # changed since the channel's last build, and the itch app patches an install. A
+      # channel is made by its first push; its display name is set once, by hand, on the
+      # project's page.
+      - name: Push the builds
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUTLER_API_KEY}" ]; then
+            echo "::notice::no BUTLER_API_KEY in the itch environment: nothing pushed to itch"
+            exit 0
+          fi
+          curl -fsSL --retry 5 --retry-delay 4 -o butler.zip \
+            "https://broth.itch.zone/butler/linux-amd64/${BUTLER_VERSION}/archive/default"
+          mkdir -p butler && unzip -o -q butler.zip -d butler && rm butler.zip
+          chmod +x butler/butler
+          butler/butler -V
+          version="${GITHUB_REF_NAME#v}"
+          ls -l artifacts
+          for platform in windows-x86_64 linux-x86_64 macos-arm64; do
+            name="hexmaw-$version-$platform"
+            rm -rf "staging/$platform" && mkdir -p "staging/$platform"
+            case "$platform" in
+              windows-*) unzip -q "artifacts/$name.zip" -d "staging/$platform" ;;
+              *)         tar -xzf "artifacts/$name.tar.gz" -C "staging/$platform" ;;
+            esac
+            butler/butler push "staging/$platform/$name" "${ITCH_PROJECT}:$platform" \
+              --userversion "$version"
+          done
