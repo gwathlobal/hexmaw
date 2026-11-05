@@ -331,6 +331,36 @@ driver (a foreign `ioctl`, the swap) shows only in `:time` mode. Frozen world (h
 GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching they were
 11.9 and 20.0 ms.
 
+The frame counter also splits a frame: "tick 1.3 ms x5.0" is the time in ticks and how many
+ran before the frame, "draw" the time in `main`'s render, swap included (`*frame-timing*`,
+kept by `main`'s `update` and `render`).
+
+**Passes.** A frame is three passes (`setup-scene`, main.lisp): `game-pass`, the world, at the
+render scale's share of the window (`render-size`, settings.lisp); `menu-ui`, Alloy's, which
+draws only while a panel is up (`main`'s update sets its `active-p`); and `hud-pass`, at the
+window's size and what reaches the screen. It draws the world pass's picture as its background
+(`world-backdrop`, nearest filtering, `late-rank` -1, so first), every `hud-element` (they draw
+there only, `object-renderable-p`; the hands and weapons with them, so they stay sharp), and
+the menu pass's picture over all (`menu-overlay`, rank 100). Both are `layer-quad`s, which
+must be `renderable` or the pass never sets their samplers. A pass that reads full-window
+pictures back costs: the compose pass that once laid three of them over each other cost 40 ms
+a frame under software OpenGL.
+
+**Slow machines.** A Windows VM with no 3D driver runs Mesa's software OpenGL (llvmpipe); so can
+this machine, which has Mesa beside NVIDIA's driver:
+
+```bash
+__GLX_VENDOR_LIBRARY_NAME=mesa LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe LP_NUM_THREADS=4 taskset -c 0-3 ./run.sh
+```
+
+There drawing every pixel is the whole cost (the lamps sent matter less: 128 to none took 190
+ms to 118), so Settings' Render scale is the lever. At 1280×720 on seed 12345: 4 fps before
+these changes (190 ms drawing and 27 ticks, 80 ms, catching up each frame); now 11 fps at full
+scale, 28 at ½, 37 at ⅓, 44 at ¼. Trial's loop runs every tick a frame took before it draws, up
+to 10 s of them, so a slow frame brought more ticks and the next was slower: past
+`*max-ticks-per-frame*` (5) the rest are dropped (`main`'s update) and the game runs slower than
+real time instead.
+
 ## Layout and conventions
 
 - `src/dev.lisp`: eval server, reload, runtime-error guard, screenshots. Dev only.
@@ -572,9 +602,9 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   `swim-liquid-at` asks for it. Its surface is a `water-surface` (not lava's fullbright
   `liquid-surface`; both are `liquid-sheet`s): lit through `light_at` like a floor, from below
   as a ceiling, see-through (`*water-alpha*`), no depth written and both faces drawn. So it
-  must be drawn after everything it covers: its `late-rank` is 0, and the game's pass
-  (`game-pass`, main.lisp) moves what has one to the end of each frame, by rank, since Trial
-  draws in hash-table order. The underwater tint (hud.lisp) is rank 1, after it. A water box whose top meets a ceiling gets no surface. With the camera
+  must be drawn after everything it covers: its `late-rank` is 0, and the game's passes
+  (`layer-pass`, main.lisp) move what has one to the end of each frame, by rank (below 0 to its
+  start), since Trial draws in hash-table order. The underwater tint (hud.lisp) is rank 1, after it. A water box whose top meets a ceiling gets no surface. With the camera
   in water (`*eye-underwater*`, set by `place-camera`) the fog and clear colour are the
   water's (`*underwater-fog-color*` and the rest; `fog-color`, greybox.lisp), and the whole
   view, the hands too, is multiplied by `*underwater-tint*` (a blue; `underwater-tint`,
@@ -1110,7 +1140,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
 - `src/hud.lisp`: HP, mana and stamina (SP) bars in the lower-left corner, an AIR bar over them while
   breath is short (`breath-element`; `hud-top` moves up a row with it), and the red pain flash over
   the view (`pain-flash`, from the player's `pain`). HUD pieces are `hud-element`
-  entities drawn in pixel coordinates (origin bottom left) at the near plane; place them
+  entities drawn in pixel coordinates (origin bottom left) at the near plane, in the HUD pass at
+  the window's size whatever the render scale (see "Passes" under "Per-frame code"); place them
   on whole pixels, since a half-pixel position drops an edge row. Overlapping elements
   take a depth in `place` (below 0 is further back). `hud-top` is where the bars end.
   `hud-shown-p` decides whether an element draws (by default, not on the main menu). The
@@ -1127,7 +1158,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   the crosshair for `*pickup-note-time*` (`note-pickup`, the `pickup-banner`; the item's `:note`,
   else its name), pickups of one kind in quick succession adding up.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
-  toolkit) in their own pass, blended over the game in `setup-scene`. Their font is Jersey 15
+  toolkit) in their own pass, which draws only while a panel is up, laid over the game by the
+  HUD pass (`menu-overlay`, main.lisp). Their font is Jersey 15
   (OFL, `data/fonts/`, `*menu-font*`): the menu pass answers Alloy's `:default` request, which is
   Arial in Alloy, with its MSDF atlas, and the build's `hexmaw-fonts` hook (dist.lisp) deletes the
   Arial atlas Trial and Alloy copy in. Alloy scales a font by its baseline, so Jersey 15 draws
@@ -1172,7 +1204,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   changing row sizes, check no element sticks out of its parent's bounds.
   Settings (`open-settings`, on both menus) covers the menu it came from while
   `*settings-open*` is true; Back or Esc (`close-settings`, which writes the settings file)
-  returns to it. It has Fullscreen (`*fullscreen*`), Mouse sensitivity
+  returns to it. It has Fullscreen (`*fullscreen*`), Render scale (`*render-scale-setting*`: the
+  world drawn at a whole fraction of the window, full to a quarter, `render-divisor`), Mouse sensitivity
   (`*mouse-sensitivity-setting*`, shown as `sensitivity-text` writes it), Music and Sound
   volume (`*music-volume*`, `*sound-volume*`, music.lisp), Show FPS (`*show-fps*`), Controls
   (`open-controls`) and, in a debug version (`*debug-version*`), Debug minimap (`*map-debug*`:
@@ -1401,7 +1434,8 @@ GPU; seed 11 (caves, 586 boxes, 38 lava pools) 3.6 ms, 2.9 GPU. Before batching 
   also needs floor under its wall's thickness: without it the nav grid has no cell there,
   and no creature can path through it (the player just steps over the gap), and
   `check-reachable` warns.
-- `src/main.lisp`: `main`, `setup-scene`, `status`, `launch`, `dev-launch`.
+- `src/main.lisp`: `main`, `setup-scene` and its passes, the tick cap, `status`, `launch`,
+  `dev-launch`.
 - `src/dist.lisp`: the standalone build's entry point (`dist-main`) and its Deploy hooks; see
   "Standalone build" above.
 

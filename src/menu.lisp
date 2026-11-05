@@ -485,6 +485,7 @@ victory screens share."
 (defmethod panel-width ((panel settings-menu)) 380)
 (defmethod panel-buttons ((panel settings-menu))
   `(("Fullscreen" :toggle *fullscreen*)
+    ("Render scale" :slider *render-scale-setting* render-scale-text)
     ("Mouse sensitivity" :slider *mouse-sensitivity-setting* sensitivity-text)
     ("Music volume" :slider *music-volume*)
     ("Sound volume" :slider *sound-volume*)

@@ -130,27 +130,132 @@ RGBA-ICON would put them. An icon that won't load only logs."
   (add-sounds scene)
   ;; The automap screen (map-view.lisp), after the player: its camera mustn't become the scene's.
   (add-map-view scene)
-  ;; The game draws into one pass and the menus (Alloy) into another; the blend
-  ;; puts the menus on top and is what reaches the screen.
-  (let ((ui (persistent-menu-ui))
-        (blend (make-instance 'blend-pass)))
+  ;; The world draws into one pass, at the render scale (settings.lisp), and the menus (Alloy)
+  ;; into another. The HUD pass draws at the window's size, so its text stays sharp: the world
+  ;; scaled up behind it, the HUD, then the menus over everything. It is what reaches the screen.
+  (let ((ui (persistent-menu-ui)))
     (setf *render-pass* (make-instance 'game-pass)
-          *output-pass* blend)
-    (connect (port *render-pass* 'color) (port blend 'a-pass) scene)
-    (connect (port ui 'color) (port blend 'b-pass) scene))
+          *hud-pass* (make-instance 'hud-pass)
+          *output-pass* *hud-pass*)
+    (connect (port *render-pass* 'color) (port *hud-pass* 'world-layer) scene)
+    (connect (port ui 'color) (port *hud-pass* 'ui-layer) scene))
+  (enter (make-instance 'world-backdrop) scene)
+  (enter (make-instance 'menu-overlay) scene)
   ;; A loaded game: the save over the level just built from its seed (save.lisp).
   (when *pending-load*
     (restore-run scene)))
 
-(define-shader-pass game-pass (render-pass) ()
-  (:documentation "The pass the world draws into: Trial's, but with what has a LATE-RANK (see-through
-water, then whole-screen tints) moved to the end of the frame, by rank, else in the order it came."))
+(define-shader-pass layer-pass (render-pass) ()
+  (:documentation "A pass of the scene's objects: Trial's, but with what has a LATE-RANK moved, by
+rank, to the start of the frame (below 0: the world behind the HUD) or its end (see-through
+water, then whole-screen tints, then the menus), else in the order it came."))
+
+(define-shader-pass game-pass (layer-pass)
+  ((color :port-type output :attachment :color-attachment0 :reader color
+          :texspec (:width (render-size width) :height (render-size height)
+                    :min-filter :nearest :mag-filter :nearest))
+   (depth :port-type output :attachment :depth-stencil-attachment :reader depth
+          :texspec (:width (render-size width) :height (render-size height))))
+  (:documentation "The world, at the render scale's share of the window, scaled up without smoothing
+behind the HUD (WORLD-BACKDROP). Drawing every pixel is most of a frame's cost on a slow or
+software renderer, so a smaller world is the one setting that makes a large difference there."))
+
+(define-shader-pass hud-pass (layer-pass)
+  ((world-layer :port-type input)
+   (ui-layer :port-type input))
+  (:documentation "The window: the world pass's picture (WORLD-BACKDROP), the HUD (HUD-ELEMENT) and
+the hands and weapons over it, and the menu pass's over all (MENU-OVERLAY). Drawing the HUD
+straight onto the world spares a pass that reads three pictures the window's size back, which
+under software OpenGL cost 40 ms a frame at 1280x720."))
+
+(defmethod object-renderable-p ((element hud-element) (pass game-pass)) NIL)
+(defmethod object-renderable-p ((object renderable) (pass hud-pass)) NIL)
+(defmethod object-renderable-p ((element hud-element) (pass hud-pass)) T)
+
+;; A preloaded class is entered into every pass (Trial builds its program there): only into the
+;; one that draws it, or every world shader is built twice.
+(defmethod enter :around ((class shader-entity-class) (pass game-pass))
+  (unless (subtypep class 'hud-element)
+    (call-next-method)))
+
+(defmethod enter :around ((class shader-entity-class) (pass hud-pass))
+  (when (subtypep class 'hud-element)
+    (call-next-method)))
+
+(defmethod render :before ((pass hud-pass) target)
+  ;; It runs after the menu pass, whose renderer sets its own blending.
+  (gl:enable :blend)
+  (gl:blend-func :src-alpha :one-minus-src-alpha))
+
+;;; A pass's picture drawn over the whole window by the HUD pass, which binds it as LAYER.
+
+;; RENDERABLE: without it the pass draws it without preparing its program for the pass, and
+;; the sampler never gets the layer's texture unit.
+(define-shader-entity layer-quad (hud-element renderable)
+  ((vertex-array :initform (// 'trial 'fullscreen-square) :accessor vertex-array)))
+
+(defmethod stage :after ((quad layer-quad) (area staging-area))
+  (stage (vertex-array quad) area))
+
+;; On the map screen too, whose camera draws only what MAP-DRAWN-P allows.
+(defmethod map-drawn-p ((quad layer-quad)) T)
+
+(defmethod render ((quad layer-quad) (program shader-program))
+  ;; Over everything, and leaving the depth the HUD's elements sort themselves by.
+  (with-pushed-features
+    (disable-feature :depth-test)
+    (with-depth-mask NIL
+      (render (vertex-array quad) program))))
+
+(define-class-shader (layer-quad :vertex-shader)
+  "layout (location = TRIAL_V_LOCATION) in vec3 position;
+layout (location = TRIAL_V_UV) in vec2 in_uv;
+out vec2 layer_uv;
+
+void main(){
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+  layer_uv = in_uv;
+}")
+
+(define-shader-entity world-backdrop (layer-quad) ()
+  (:documentation "The world pass's picture, the window's background, each of its pixels a square
+of the window's (nearest filtering) at a render scale below 1."))
+
+(defmethod hud-shown-p ((backdrop world-backdrop)) T)
+(defmethod late-rank ((backdrop world-backdrop)) -1)
+
+(define-class-shader (world-backdrop :fragment-shader)
+  "uniform sampler2D world_layer;
+in vec2 layer_uv;
+out vec4 color;
+
+void main(){
+  color = vec4(texture(world_layer, layer_uv).rgb, 1.0);
+}")
+
+(define-shader-entity menu-overlay (layer-quad) ()
+  (:documentation "The menu pass's picture over everything, while a panel is up. Otherwise the menu
+pass doesn't draw at all (MAIN's UPDATE): an empty one still cost a pass the window's size."))
+
+(defmethod hud-shown-p ((overlay menu-overlay))
+  (and *menu-ui* (active-p *menu-ui*)))
+
+(defmethod late-rank ((overlay menu-overlay)) 100)
+
+(define-class-shader (menu-overlay :fragment-shader)
+  "uniform sampler2D ui_layer;
+in vec2 layer_uv;
+out vec4 color;
+
+void main(){
+  color = texture(ui_layer, layer_uv);
+}")
 
 (defvar *late-entries* (make-array 32 :adjustable T :fill-pointer 0)
-  "Scratch for GAME-PASS's SORT-FRAME, kept so a frame allocates nothing.")
+  "Scratch for LAYER-PASS's SORT-FRAME, kept so a frame allocates nothing.")
 
-(defmethod sort-frame ((pass game-pass) frame)
-  (let ((late *late-entries*) (j 0))
+(defmethod sort-frame ((pass layer-pass) frame)
+  (let ((late *late-entries*) (j 0) (early 0))
     (setf (fill-pointer late) 0)
     ;; A stable partition in place: each entry is a cons (object . program) the frame reuses.
     (loop for i from 0 below (length frame)
@@ -158,7 +263,7 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
           do (if (late-rank (car entry))
                  (vector-push-extend entry late)
                  (progn (setf (aref frame j) entry) (incf j))))
-    ;; The late ones by rank: an insertion sort, stable, and they are few.
+    ;; The ranked ones by rank: an insertion sort, stable, and they are few.
     (loop for i from 1 below (length late)
           for entry = (aref late i)
           for rank = (late-rank (car entry))
@@ -166,14 +271,38 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
                    while (< rank (late-rank (car (aref late k))))
                    do (setf (aref late (1+ k)) (aref late k))
                    finally (setf (aref late (1+ k)) entry)))
-    (loop for entry across late
-          do (setf (aref frame j) entry) (incf j))
+    ;; Those below 0 go first: the rest move up to make room for them.
+    (loop while (and (< early (length late)) (< (late-rank (car (aref late early))) 0))
+          do (incf early))
+    (when (< 0 early)
+      (loop for k downfrom (1- j) to 0
+            do (setf (aref frame (+ k early)) (aref frame k)))
+      (loop for k from 0 below early
+            do (setf (aref frame k) (aref late k))))
+    (loop for k from early below (length late)
+          for at from (+ j early)
+          do (setf (aref frame at) (aref late k)))
     frame))
+
+(defparameter *max-ticks-per-frame* 5
+  "The most ticks run between two frames. Trial's loop runs as many as the frame took (100 a
+second) before it draws, up to 10 s of them, so on a machine too slow to draw a frame in 50 ms
+each frame came with more ticks to catch up, which made it slower still: under software OpenGL
+(Mesa's llvmpipe on 4 cores) 27 ticks a frame took 80 of every 270 ms. Past this many the rest
+are dropped, and the game runs slower than real time instead, as old games did below their
+frame rate.")
+
+(defvar *frame-ticks* 0 "Ticks run since the last frame was drawn.")
 
 (defmethod update :around ((main main) tt dt fc)
   (setf *game-thread* (bt:current-thread))
-  (handler-bind ((error (lambda (e) (guard-runtime-error e :update))))
-    (call-next-method)))
+  (when (< *frame-ticks* *max-ticks-per-frame*)
+    (incf *frame-ticks*)
+    (let ((start (get-internal-real-time)))
+      (handler-bind ((error (lambda (e) (guard-runtime-error e :update))))
+        (call-next-method))
+      (incf (aref *frame-timing* 0) (- (get-internal-real-time) start))
+      (incf (aref *frame-timing* 2)))))
 
 (defmethod update :after ((main main) tt dt fc)
   ;; Hit-stop runs out only in play, so a menu opened mid-hit doesn't eat it.
@@ -184,7 +313,11 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
   (when *render-pass*
     (let ((clear (clear-color *render-pass*))
           (color (if (eq *game-state* :map) *map-background* (fog-color))))
-      (setf (vx clear) (vx color) (vy clear) (vy color) (vz clear) (vz color) (vw clear) 1.0))))
+      (setf (vx clear) (vx color) (vy clear) (vy color) (vz clear) (vz color) (vw clear) 1.0)))
+  ;; The menu pass draws only while a panel is up: an empty one still cost a whole-window pass
+  ;; a frame (25 of 190 ms under software OpenGL). MENU-OVERLAY shows it.
+  (when *menu-ui*
+    (setf (active-p *menu-ui*) (and (trial-alloy:find-panel 'menu-panel) T))))
 
 (defmethod render :before ((main main) target)
   (incf *render-frame*)
@@ -193,8 +326,11 @@ water, then whole-screen tints) moved to the end of the frame, by rank, else in 
     (gather-lights)))
 
 (defmethod render :around ((main main) target)
-  (handler-bind ((error (lambda (e) (guard-runtime-error e :render))))
-    (call-next-method)))
+  (setf *frame-ticks* 0)
+  (let ((start (get-internal-real-time)))
+    (handler-bind ((error (lambda (e) (guard-runtime-error e :render))))
+      (call-next-method))
+    (incf (aref *frame-timing* 1) (- (get-internal-real-time) start))))
 
 (defun level-status ()
   "Which level the player is on and where it is left by, for STATUS."

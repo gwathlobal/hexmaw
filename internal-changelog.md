@@ -7,6 +7,17 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Playable on software OpenGL.** A Windows VM with no 3D driver (Mesa's llvmpipe) ran the
+  game at 2 to 3 fps; reproduced here at 4 (llvmpipe, 4 cores, 1280×720). Three causes: drawing
+  every pixel; Trial's loop catching up every tick a slow frame took (27 a frame, 80 of 270 ms),
+  which made the next frame slower; and two passes the window's size that did little (an empty
+  menu pass, 25 ms, and the blend over it). Settings has a Render scale (full to ¼, the world
+  scaled up without smoothing; the HUD, hands and menus stay sharp in a pass of their own); a
+  frame runs at most `*max-ticks-per-frame*` (5) ticks; the menu pass draws only while a panel is
+  up, and the HUD pass, which draws the world as its background and the menus over all, is what
+  reaches the screen. Now 11 fps at full scale, 28 at ½, 44 at ¼. The frame counter shows tick
+  and draw time.
+
 - **A Windows build quits with TerminateProcess.** With Mesa's software OpenGL beside the
   exe (a VM with no 3D driver), the game could hang after its window closed, and Task
   Manager couldn't end it: an exit, even an abort one, goes through ExitProcess, which runs

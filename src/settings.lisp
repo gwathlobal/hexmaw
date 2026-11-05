@@ -63,10 +63,43 @@ mouse event, and EXPT allocates.")
             (svref cache 2) (float (* *mouse-sensitivity* (sensitivity-factor)) 0f0)))
     (svref cache 2)))
 
+;;; Render scale: the world drawn at a whole fraction of the window, each of its pixels
+;;; shown as a square of the screen's (the game pass, main.lisp). The HUD and menus stay at
+;;; the window's size. Under software OpenGL (Mesa's llvmpipe, 4 cores, 1280×720) a frame took
+;;; 190 ms at full size, 52 at a half and 23 at a quarter: drawing every pixel is the cost.
+
+(defvar *render-scale-setting* 1.0
+  "Settings' render scale slider, 0 to 1: the window's size at 1, down to *SMALLEST-RENDER-SCALE*
+of it at 0, a whole fraction each step (RENDER-DIVISOR).")
+
+(defparameter *smallest-render-scale* 4
+  "The most the world is shrunk: a quarter of the window across, as Hexen's 320×200 was of a
+screen.")
+
+(defun render-divisor (&optional (setting *render-scale-setting*))
+  "What the window's size is divided by for the world: 1, 2, 3 .. *SMALLEST-RENDER-SCALE*."
+  (max 1 (round (+ 1 (* (- *smallest-render-scale* 1) (- 1.0 setting))))))
+
+(defun render-size (size)
+  "The world's size in pixels for a window SIZE pixels across (the game pass's texspec)."
+  (max 1 (ceiling size (render-divisor))))
+
+(defun render-scale-text (setting)
+  (let ((divisor (render-divisor setting)))
+    (if (= divisor 1)
+        "Full"
+        (format NIL "1/~d" divisor))))
+
+(defmethod setting-changed ((variable (eql '*render-scale-setting*)))
+  ;; The passes' textures are made for a size; the same size again makes the world's anew.
+  (when *context*
+    (resize (scene +main+) (width *context*) (height *context*))))
+
 ;;; The settings file.
 
 (defparameter *settings-variables*
   '((:fullscreen *fullscreen* :boolean)
+    (:render-scale *render-scale-setting* :fraction)
     (:mouse-sensitivity *mouse-sensitivity-setting* :fraction)
     (:music-volume *music-volume* :fraction)
     (:sound-volume *sound-volume* :fraction)

@@ -8,7 +8,8 @@
 (defvar *eval-server* NIL)
 (defvar *game-thread* NIL)
 (defvar *render-pass* NIL "The pass the game world draws into.")
-(defvar *output-pass* NIL "The last pass, what reaches the screen: the world with the menus over it.")
+(defvar *hud-pass* NIL "The pass the HUD draws into, over the world.")
+(defvar *output-pass* NIL "The last pass, what reaches the screen: the world with the HUD and the menus over it.")
 (defvar *debug-version* T
   "True in development: the main menu offers the debug level and Settings the debug
 minimap. The standalone build (dist.lisp) sets it to NIL, a release version.")

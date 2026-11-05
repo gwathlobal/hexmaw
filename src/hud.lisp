@@ -140,6 +140,11 @@ line of its own. Lines after the first keep the first's indent."
 (defvar *show-fps* NIL "Show the frame counter. The settings menu (menu.lisp) toggles it.")
 (defparameter *fps-interval* 0.5 "Seconds of frames the counter averages over between updates.")
 
+(defvar *frame-timing* (make-array 3 :element-type '(unsigned-byte 62) :initial-element 0)
+  "Since the counter last updated: internal time spent in ticks (MAIN's UPDATE), in rendering
+(MAIN's RENDER), and the ticks run. Kept by main.lisp, shown by the frame counter, so a slow
+machine shows whether the frame goes to drawing or to the fixed step catching up.")
+
 (define-shader-entity fps-display (hud-text)
   ((frames :initform 0 :accessor frames)
    (since :initform 0 :accessor since :documentation "Internal real time the count started.")))
@@ -156,7 +161,16 @@ line of its own. Lines after the first keep the first's indent."
     (when (<= *fps-interval* elapsed)
       ;; A longer gap means the counter was hidden: start over rather than show it.
       (when (< elapsed (* 2 *fps-interval*))
-        (setf (text display) (format NIL "~d FPS" (round (frames display) elapsed))))
+        (let ((timing *frame-timing*)
+              (frames (frames display))
+              (ms (/ 1000.0 internal-time-units-per-second)))
+          (setf (text display)
+                (format NIL "~d FPS  tick ~,1f ms x~,1f  draw ~,1f ms"
+                        (round frames elapsed)
+                        (/ (* ms (aref timing 0)) frames)
+                        (/ (aref timing 2) frames)
+                        (/ (* ms (aref timing 1)) frames)))))
+      (fill *frame-timing* 0)
       (setf (frames display) 0
             (since display) now))))
 
