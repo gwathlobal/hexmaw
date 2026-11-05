@@ -203,20 +203,13 @@
   "Most characters on one row of the dialogue's text: a row holds about 48 of the menu font's
 (Jersey 15) at the panel's width, and the font isn't fixed-width.")
 
-(defun wrap-text (text &optional (width *dialogue-wrap*))
-  "TEXT broken at spaces into rows of at most WIDTH characters (a longer word gets a row of its own)."
-  (let ((rows ()) (row ""))
-    (dolist (word (uiop:split-string text :separator " "))
-      (cond ((zerop (length row)) (setf row word))
-            ((< width (+ (length row) 1 (length word))) (push row rows) (setf row word))
-            (T (setf row (concatenate 'string row " " word)))))
-    (when (plusp (length row)) (push row rows))
-    (nreverse rows)))
-
 (defun prose-lines (text &optional label)
-  "TEXT, after LABEL and a colon, as stat rows of text alone, left-aligned and wrapped."
-  (loop for row in (wrap-text (if label (format NIL "~a: ~a" label text) text))
-        collect (list row "")))
+  "TEXT, after LABEL and a colon, as stat rows of text alone, left-aligned and wrapped at
+*DIALOGUE-WRAP* (WRAP-TEXT, hud.lisp); no rows for no text."
+  (let ((text (if label (format NIL "~a: ~a" label text) text)))
+    (unless (string= text "")
+      (loop for row in (wrap-text text *dialogue-wrap*)
+            collect (list row "")))))
 
 (defmethod panel-lines ((panel dialogue-panel))
   (let ((who *talk-target*))
