@@ -80,6 +80,10 @@ under NATIVE LIBRARIES: LICENCE TEXTS.
     licence, Copyright (c) 2018 Wim Taymans. https://pipewire.org/
   libevdev, gamepads (libevdev-*, Linux only). MIT licence. Copyright (c) 2013 Red Hat,
     Inc., Copyright (c) 2013 David Herrmann. https://www.freedesktop.org/wiki/Software/libevdev/
+  Zstandard, used by the SBCL runtime to read its compressed image (libzstd.*.dylib,
+    macOS only, copied from Homebrew's SBCL). BSD licence (Zstandard also offers GPL
+    version 2; Hexmaw takes the BSD one). Copyright (c) Meta Platforms, Inc. and
+    affiliates. https://facebook.github.io/zstd/
   The MinGW-w64 runtime, used by libmixed (Windows only):
       libgcc_s_seh-1.dll, from GCC. GPL version 3 with the GCC Runtime Library Exception,
         version 3.1, which lets a program compiled with GCC ship its runtime under the

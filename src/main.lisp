@@ -3,9 +3,25 @@
 (defclass main (org.shirakumo.fraf.trial.harmony:main)
   ()
   (:default-initargs
-   :context '(:title "Hexmaw" :width 1280 :height 720)))
+   :context '(:title "Hexmaw" :width 1280 :height 720)
+   ;; Sound is set up below instead.
+   :initialize-audio NIL))
 
+(defun start-sound (main)
+  "Set up sound, as Trial's Harmony MAIN would (its :INITIALIZE-AUDIO is off). Trial falls back
+to a silent output on any failure only when compiled as a release (:trial-release), which
+this build isn't: otherwise just on DEVICE-NOT-FOUND. A Windows machine with no sound device
+fails otherwise (XAudio2: \"Element not found\"), and the game stopped at start behind an error
+box. With no sound, play on silently."
+  (handler-case (apply #'org.shirakumo.fraf.trial.harmony:initialize-audio-backend main NIL
+                       (org.shirakumo.fraf.trial.harmony:server-initargs main))
+    (error (e)
+      (v:warn :hexmaw "No sound, playing on without: ~a" e)
+      (org.shirakumo.fraf.trial.harmony:initialize-audio-backend main :dummy))))
+
+;; The one :AFTER method MAIN may have: another would replace it.
 (defmethod initialize-instance :after ((main main) &key)
+  (start-sound main)
   ;; On the main thread, where GLFW wants it: makes Trial's monitor objects of GLFW's. Going
   ;; fullscreen at a monitor's own resolution (APPLY-FULLSCREEN) asks the primary one's video
   ;; mode, which only Trial's class answers; asked of GLFW's, it kills the game.

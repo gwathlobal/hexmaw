@@ -161,7 +161,9 @@ jobs:
             exe="$dir/hexmaw"
           fi
           cd "$HOME"
-          reported="$("$exe" version)"
+          # The last line: inside Hexmaw.app the SBCL runtime starts from a separate
+          # sbcl.core, and prints its banner first (only to a terminal; the Finder shows none).
+          reported="$("$exe" version | tail -n 1)"
           echo "$reported"
           case "$reported" in
             "${{ steps.version.outputs.version }}"*) ;;
