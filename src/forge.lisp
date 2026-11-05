@@ -912,10 +912,13 @@ on, since a dial changes the text but doesn't remake the panel."
                    (forge-select (default-sink player tab) player)))
          (draft *forge-draft*)
          (weapon (weapon-sink-p sink))
-         (step (+ *forge-row-height* *forge-gap*))
-         (backdrop (make-instance 'menu-backdrop
-                                  :col-sizes `(T ,*forge-left-width* 24 ,*forge-right-width* T)
-                                  :row-sizes `(T ,(* 17 step) T)))
+         ;; The two columns side by side in one row as tall as the taller, so their tops are
+         ;; level, and that row centred in a cell the screen's height (PANEL-BACKDROP).
+         (backdrop (panel-backdrop panel (+ *forge-left-width* 24 *forge-right-width*)
+                                   :cell-margins (alloy:margins 0)))
+         (frame (make-instance 'alloy:vertical-linear-layout :align :middle :cell-margins (alloy:margins 0)))
+         (sides (make-instance 'alloy:grid-layout :col-sizes `(,*forge-left-width* 24 ,*forge-right-width*)
+                                                  :row-sizes '(T)))
          (left (make-instance 'alloy:vertical-linear-layout
                               :min-size (alloy:size *forge-left-width* *forge-row-height*)
                               :cell-margins (alloy:margins 0 (/ *forge-gap* 2))))
@@ -925,8 +928,10 @@ on, since a dial changes the text but doesn't remake the panel."
          (focus (make-instance 'alloy:focus-list)))
     ;; FORGE-SELECT bumped the revision; this panel is the one for it.
     (setf (slot-value panel 'revision) *forge-revision*)
-    (alloy:enter left backdrop :row 1 :col 1)
-    (alloy:enter right backdrop :row 1 :col 3)
+    (alloy:enter frame backdrop :row (panel-row panel) :col 1)
+    (alloy:enter sides frame)
+    (alloy:enter left sides :row 0 :col 0)
+    (alloy:enter right sides :row 0 :col 2)
     ;; The tabs, the dust, and what the player holds.
     (alloy:enter (alloy:represent "Spellforge" 'menu-title) left)
     (let ((row (forge-row left '(T T))))

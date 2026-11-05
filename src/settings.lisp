@@ -263,19 +263,14 @@ captured may be a click, and it reaches the panel too."
            (row-step (+ *controls-row-height* *controls-row-gap*))
            ;; The heading, the rows, and room for the columns' cell margins.
            (body-height (+ *menu-stat-height* (* *controls-rows* row-step) (* 2 *controls-row-gap*)))
-           ;; Title, tabs, note, body and footer, each with a gap, as BUILD-PANEL counts them.
-           (height (+ (* 3 *menu-row-height*) (- *forge-row-height* 10) body-height
-                      (* 5 *menu-row-gap*) *menu-slack*))
-           (splash (panel-splash panel))
-           (backdrop (apply #'make-instance (if splash 'splash-backdrop 'menu-backdrop)
-                            :col-sizes `(T ,width T)
-                            :row-sizes `(T ,height T)
-                            (when splash (list :splash splash))))
+           ;; No cell margins: the body's columns take the whole WIDTH.
+           (backdrop (panel-backdrop panel width :cell-margins (alloy:margins 0)))
            (column (make-instance 'alloy:vertical-linear-layout
+                                  :align (panel-align panel)
                                   :min-size (alloy:size width *menu-row-height*)
                                   :cell-margins (alloy:margins 0 (/ *menu-row-gap* 2))))
            (focus (make-instance 'alloy:focus-list)))
-      (alloy:enter column backdrop :row 1 :col 1)
+      (alloy:enter column backdrop :row (panel-row panel) :col 1)
       (alloy:enter (alloy:represent "Controls" 'menu-title) column)
       (let ((row (forge-row column '(T T) *menu-row-height*)))
         (loop for (name) in *controls-pages*
