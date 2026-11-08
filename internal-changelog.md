@@ -7,6 +7,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A sleeping Warded boss no longer hums across its whole level.** Its ward's loop played from
+  the moment the level was built, and past `*sound-max-distance*` (50 m) a sound gets no
+  quieter, so on the run's last level the hum was heard from anywhere. `update-ward` (boss.lisp)
+  holds it only once the boss is awake (`dormant-p`).
 - **Bosses and elites walk with strides their size.** A walk frame came every `stride` metres
   whatever size the creature was drawn, so a boss (1.6 times its kind and more) cycled its legs
   1.6 times too fast in short, skittering steps, and an elite (1.15) a little. `stride-length`

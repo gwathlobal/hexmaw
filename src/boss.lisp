@@ -822,9 +822,12 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
                                         :colors *ward-colors* :spin 0.15 :twist 0.05 :arc (ward-arc boss))
             (ward boss) ward)
       (enter ward (container boss)))
+    ;; Not while it sleeps: past *SOUND-MAX-DISTANCE* a sound gets no quieter, so a sleeping
+    ;; boss's hum was heard all over its level.
     (setf (ward-sound boss)
           (hold-loop (ward-sound boss)
-                     (and ward (container boss) (has-power-p boss :warded) (not (dead boss)) :ward-hum)
+                     (and ward (container boss) (has-power-p boss :warded) (not (dead boss))
+                          (not (dormant-p boss)) :ward-hum)
                      (location boss) k))
     (when ward
       (let* ((loc (location boss))
