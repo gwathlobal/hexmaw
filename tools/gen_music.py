@@ -13,6 +13,13 @@ unless --force is given, and <stem>.prompt.json records the prompt and options.
 
 --length is 10 to 300 seconds. Tracks are instrumental unless --vocals is given.
 
+--plan FILE sends a composition plan instead: JSON with "model_id" (music_v2_5 takes "chunks",
+each a "text" with its section name in brackets and directions in braces, a "duration_ms" of 3 to
+120 s that the model keeps to, and "positive_styles"; music_v1 takes "sections") and
+"composition_plan". The chunks set the length; keep it instrumental in the styles, since
+force_instrumental only goes with a prompt. audio/prompts/music-trailer-plan.json is the
+trailer's, timed to its cut.
+
 The key is gen_sfx.py's ($ELEVENLABS_API_KEY or ~/.config/elevenlabs/api_key), with the
 Music permission, on a paid plan (the free one refuses music). Music costs about 12 credits
 a second (a 60 s track took about 715), against about 10 for sound effects.
@@ -38,6 +45,8 @@ def main():
     prompt = ap.add_mutually_exclusive_group(required=True)
     prompt.add_argument("--prompt", "-p")
     prompt.add_argument("--prompt-file", "-f", type=Path)
+    prompt.add_argument("--plan", type=Path,
+                        help="a composition plan (JSON) of timed sections in place of a prompt")
     ap.add_argument("--length", "-l", type=float, default=60, help="seconds, 10 to 300")
     ap.add_argument("--vocals", action="store_true", help="allow vocals")
     ap.add_argument("--rate", type=int, default=44100, choices=[16000, 22050, 24000, 44100],
@@ -50,18 +59,23 @@ def main():
 
     if args.out.suffix.lower() not in FORMATS:
         ap.error(f"output must end in one of {', '.join(FORMATS)}")
-    if not 10 <= args.length <= 300:
+    if not args.plan and not 10 <= args.length <= 300:
         ap.error("--length is 10 to 300 seconds")
     outs = output_paths(args.out, args.n)
     taken = [p for p in outs if p.exists()]
     if taken and not args.force:
         ap.error(f"{taken[0]} exists (pass --force to overwrite)")
-    text = (args.prompt if args.prompt is not None else args.prompt_file.read_text()).strip()
-
     fmt = "mp3_44100_128" if args.out.suffix.lower() == ".mp3" else f"pcm_{args.rate}"
     url = f"{API}?output_format={fmt}"
-    body = {"prompt": text, "music_length_ms": int(args.length * 1000), "model_id": args.model,
-            "force_instrumental": not args.vocals}
+    if args.plan:
+        # A plan's sections set the length, and its styles, not a flag, keep it instrumental.
+        text = args.plan.read_text()
+        plan = json.loads(text)
+        body = {"composition_plan": plan["composition_plan"], "model_id": plan.get("model_id", args.model)}
+    else:
+        text = (args.prompt if args.prompt is not None else args.prompt_file.read_text()).strip()
+        body = {"prompt": text, "music_length_ms": int(args.length * 1000), "model_id": args.model,
+                "force_instrumental": not args.vocals}
     if args.dry_run:
         print(f"POST {url}, {args.n} time(s)")
         print(json.dumps(body, indent=2))
@@ -78,8 +92,9 @@ def main():
         ids.append(request_id)
         print(path)
     meta_path = args.out.with_name(f"{args.out.stem}.prompt.json")
+    source = args.prompt_file or args.plan
     meta_path.write_text(json.dumps({
-        "prompt": text, "prompt_file": str(args.prompt_file) if args.prompt_file else None,
+        "prompt": text, "prompt_file": str(source) if source else None,
         **{k: v for k, v in body.items() if k != "prompt"}, "output_format": fmt, "n": args.n,
         "created": int(time.time()), "request_ids": ids, "seconds": lengths}, indent=2) + "\n")
     print(f"{len(outs)} track(s) in {time.monotonic() - start:.0f} s, "

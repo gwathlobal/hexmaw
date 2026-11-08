@@ -1,0 +1,134 @@
+{
+  "prompt": "{\n  \"model_id\": \"music_v2_5\",\n  \"composition_plan\": {\n    \"chunks\": [\n      {\n        \"text\": \"[Intro] {near silence: a low string tremolo on E and a soft heartbeat drum, rising; a reverse cymbal swells into the next section's first beat}\",\n        \"duration_ms\": 3000,\n        \"positive_styles\": [\n          \"instrumental\",\n          \"dark fantasy orchestral game music\",\n          \"1990s General MIDI orchestral soundtrack through a wavetable sound card, slightly synthetic and punchy\",\n          \"E minor\",\n          \"160 BPM\",\n          \"tense, ominous\"\n        ],\n        \"negative_styles\": [\n          \"vocals\",\n          \"lyrics\",\n          \"singing\",\n          \"modern cinematic trailer sound\",\n          \"electric guitar\",\n          \"synth pads\",\n          \"dubstep\"\n        ]\n      },\n      {\n        \"text\": \"[The signs]\\n{a huge orchestra hit with taiko, timpani and a crash on the very first beat, held a moment, then a snare roll}\\n{a driving battle groove: grinding cellos in eighths, contrabasses and bass drum on every beat}\\n{low brass stabs, a tense high string figure, a hit with a crash every fourth bar}\",\n        \"duration_ms\": 13125,\n        \"positive_styles\": [\n          \"instrumental\",\n          \"driving orchestral battle music\",\n          \"grinding cello ostinato\",\n          \"taiko and timpani\",\n          \"low brass stabs\",\n          \"160 BPM\",\n          \"E minor\"\n        ],\n        \"negative_styles\": [\n          \"vocals\",\n          \"lyrics\",\n          \"modern cinematic trailer sound\",\n          \"electric guitar\"\n        ]\n      },\n      {\n        \"text\": \"[The signs, rising] {the same drive, stronger: a heroic horn theme enters over it, a choir holding chords, more hits; ends with one final hit and a dead stop}\",\n        \"duration_ms\": 13500,\n        \"positive_styles\": [\n          \"instrumental\",\n          \"driving orchestral battle music\",\n          \"heroic horn theme\",\n          \"choir chords\",\n          \"160 BPM\",\n          \"E minor\"\n        ],\n        \"negative_styles\": [\n          \"vocals\",\n          \"lyrics\",\n          \"modern cinematic trailer sound\",\n          \"electric guitar\"\n        ]\n      },\n      {\n        \"text\": \"[Forge your spells]\\n{a breath: one bar of silence with a rising choir swell and a reverse cymbal}\\n{then a brighter, faster montage: snare on the off-beats, the string figure an octave up}\\n{the horn theme on full brass, a hit every two bars; it stops on a hit}\",\n        \"duration_ms\": 15375,\n        \"positive_styles\": [\n          \"instrumental\",\n          \"triumphant orchestral montage\",\n          \"full brass theme\",\n          \"snare drive\",\n          \"160 BPM\",\n          \"E minor rising to G major\"\n        ],\n        \"negative_styles\": [\n          \"vocals\",\n          \"lyrics\",\n          \"modern cinematic trailer sound\",\n          \"electric guitar\"\n        ]\n      },\n      {\n        \"text\": \"[The maw waits]\\n{one deep boom, then only a low drone and a slow heartbeat that quickens}\\n{a dissonant string tremolo and growling low brass creep in; a sharp stinger near the middle}\\n{a huge final hit about three quarters through, then near silence, only the drone dying away}\",\n        \"duration_ms\": 10125,\n        \"positive_styles\": [\n          \"instrumental\",\n          \"dark suspense\",\n          \"low drone\",\n          \"heartbeat drum\",\n          \"dissonant tremolo strings\",\n          \"horror stingers\"\n        ],\n        \"negative_styles\": [\n          \"vocals\",\n          \"lyrics\",\n          \"melody\",\n          \"electric guitar\",\n          \"modern cinematic trailer sound\"\n        ]\n      },\n      {\n        \"text\": \"[Hexmaw] {the main theme, slow and grand, on horns and brass over choir and full strings, timpani roll into it; ends on a huge E minor chord that rings out}\",\n        \"duration_ms\": 6000,\n        \"positive_styles\": [\n          \"instrumental\",\n          \"majestic dark fantasy main theme\",\n          \"horns and choir\",\n          \"maestoso\",\n          \"E minor\",\n          \"final chord ringing out\"\n        ],\n        \"negative_styles\": [\n          \"vocals\",\n          \"lyrics\",\n          \"fade-in\",\n          \"modern cinematic trailer sound\",\n          \"electric guitar\"\n        ]\n      }\n    ]\n  }\n}\n",
+  "prompt_file": "audio/prompts/music-trailer-plan.json",
+  "composition_plan": {
+    "chunks": [
+      {
+        "text": "[Intro] {near silence: a low string tremolo on E and a soft heartbeat drum, rising; a reverse cymbal swells into the next section's first beat}",
+        "duration_ms": 3000,
+        "positive_styles": [
+          "instrumental",
+          "dark fantasy orchestral game music",
+          "1990s General MIDI orchestral soundtrack through a wavetable sound card, slightly synthetic and punchy",
+          "E minor",
+          "160 BPM",
+          "tense, ominous"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "singing",
+          "modern cinematic trailer sound",
+          "electric guitar",
+          "synth pads",
+          "dubstep"
+        ]
+      },
+      {
+        "text": "[The signs]\n{a huge orchestra hit with taiko, timpani and a crash on the very first beat, held a moment, then a snare roll}\n{a driving battle groove: grinding cellos in eighths, contrabasses and bass drum on every beat}\n{low brass stabs, a tense high string figure, a hit with a crash every fourth bar}",
+        "duration_ms": 13125,
+        "positive_styles": [
+          "instrumental",
+          "driving orchestral battle music",
+          "grinding cello ostinato",
+          "taiko and timpani",
+          "low brass stabs",
+          "160 BPM",
+          "E minor"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "modern cinematic trailer sound",
+          "electric guitar"
+        ]
+      },
+      {
+        "text": "[The signs, rising] {the same drive, stronger: a heroic horn theme enters over it, a choir holding chords, more hits; ends with one final hit and a dead stop}",
+        "duration_ms": 13500,
+        "positive_styles": [
+          "instrumental",
+          "driving orchestral battle music",
+          "heroic horn theme",
+          "choir chords",
+          "160 BPM",
+          "E minor"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "modern cinematic trailer sound",
+          "electric guitar"
+        ]
+      },
+      {
+        "text": "[Forge your spells]\n{a breath: one bar of silence with a rising choir swell and a reverse cymbal}\n{then a brighter, faster montage: snare on the off-beats, the string figure an octave up}\n{the horn theme on full brass, a hit every two bars; it stops on a hit}",
+        "duration_ms": 15375,
+        "positive_styles": [
+          "instrumental",
+          "triumphant orchestral montage",
+          "full brass theme",
+          "snare drive",
+          "160 BPM",
+          "E minor rising to G major"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "modern cinematic trailer sound",
+          "electric guitar"
+        ]
+      },
+      {
+        "text": "[The maw waits]\n{one deep boom, then only a low drone and a slow heartbeat that quickens}\n{a dissonant string tremolo and growling low brass creep in; a sharp stinger near the middle}\n{a huge final hit about three quarters through, then near silence, only the drone dying away}",
+        "duration_ms": 10125,
+        "positive_styles": [
+          "instrumental",
+          "dark suspense",
+          "low drone",
+          "heartbeat drum",
+          "dissonant tremolo strings",
+          "horror stingers"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "melody",
+          "electric guitar",
+          "modern cinematic trailer sound"
+        ]
+      },
+      {
+        "text": "[Hexmaw] {the main theme, slow and grand, on horns and brass over choir and full strings, timpani roll into it; ends on a huge E minor chord that rings out}",
+        "duration_ms": 6000,
+        "positive_styles": [
+          "instrumental",
+          "majestic dark fantasy main theme",
+          "horns and choir",
+          "maestoso",
+          "E minor",
+          "final chord ringing out"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "fade-in",
+          "modern cinematic trailer sound",
+          "electric guitar"
+        ]
+      }
+    ]
+  },
+  "model_id": "music_v2_5",
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794158037,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    61.1,
+    61.1
+  ]
+}

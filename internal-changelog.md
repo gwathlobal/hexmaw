@@ -7,6 +7,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Music from a composition plan.** `tools/gen_music.py --plan FILE` sends ElevenLabs a plan of
+  timed sections (`music_v2_5`'s chunks, each its text, styles and length) in place of a prompt,
+  so a track can be written to a cut: `audio/prompts/music-trailer-plan.json` is the trailer's,
+  six sections on its join cards and cuts at 160 BPM, and its take 2 is the trailer's score.
 - **The rift's sound lands on its flash.** `rift-blink` (take 14) is a low hum swelling for half
   a second into a bright burst at 0.55 s, while the flash where something steps through a rift
   lasts 0.43 s, so the burst came after it was gone. It now starts 0.42 s in (`start=0.42` in
