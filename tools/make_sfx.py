@@ -14,6 +14,8 @@ tools/gen_sfx.py writes them. audio/sfx-picks.txt says which to use, one line a 
   tornado 4 even          take 4 with its slow swells evened out (EVEN_OUT): a steady loop
   step-heavy 8 lowcut=120 take 8 with what is under 120 Hz rolled off (LOW_CUT) before leveling,
                           so the part speakers play is what gets brought up
+  rift-blink 14 start=0.42  take 14 from 0.42 s on, faded in over START_FADE: a take whose event
+                          comes late (a swell before the burst) lands on what the game shows
 
 A clip with takes and no line uses take 1, so every generated clip is in the game until it
 is chosen. Each take is trimmed of the silence before and after it (not a loop's: it is cut
@@ -66,7 +68,7 @@ def read_table():
 
 
 def read_picks():
-    """{clip: ([takes], gain dB, even, lowcut Hz or None)} from audio/sfx-picks.txt."""
+    """{clip: ([takes], gain dB, even, lowcut Hz or None, start s)} from audio/sfx-picks.txt."""
     picks = {}
     if not PICKS.exists():
         return picks
@@ -74,10 +76,12 @@ def read_picks():
         words = line.split("#")[0].split()
         if not words:
             continue
-        takes, gain, even, lowcut = [], 0.0, False, None
+        takes, gain, even, lowcut, start = [], 0.0, False, None, 0.0
         for w in words[1:]:
             if w.startswith("gain="):
                 gain = float(w[5:])
+            elif w.startswith("start="):
+                start = float(w[6:])
             elif w.startswith("lowcut="):
                 lowcut = float(w[7:])
             elif w == "even":
@@ -86,7 +90,7 @@ def read_picks():
                 takes.append(int(w))
             else:
                 sys.exit(f"{PICKS}:{n}: what is {w!r}?")
-        picks[words[0]] = (takes or [1], gain, even, lowcut)
+        picks[words[0]] = (takes or [1], gain, even, lowcut, start)
     return picks
 
 
@@ -209,6 +213,9 @@ def low_cut(x, rate, cutoff, loop=False):
     return high_pass(np.concatenate([x, np.zeros((int(0.2 * rate), x.shape[1]))]), rate, cutoff)
 
 
+START_FADE = 0.03
+
+
 def fade_in(x, rate, seconds=0.003):
     """X faded in over its first SECONDS: a generated take may start mid-sound, which clicks."""
     n = max(1, min(len(x), int(seconds * rate)))
@@ -217,10 +224,11 @@ def fade_in(x, rate, seconds=0.003):
     return x
 
 
-def make_clip(path, positional, loop, level, gain, even=False, lowcut=None):
+def make_clip(path, positional, loop, level, gain, even=False, lowcut=None, start=0.0):
     x, rate = read_wav(path)
     if not loop:
-        x = fade_in(trim(x, rate), rate)
+        x = trim(x, rate)
+        x = fade_in(x[int(start * rate):], rate, START_FADE) if start else fade_in(x, rate)
     if positional and x.shape[1] > 1:
         x = x.mean(1, keepdims=True)
     if lowcut:
@@ -295,7 +303,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for clip in wanted:
         positional, loop = table[clip]
-        takes, gain, even, lowcut = picks.get(clip, ([1], 0.0, False, None))
+        takes, gain, even, lowcut, start = picks.get(clip, ([1], 0.0, False, None, 0.0))
         paths = [take_path(clip, n) for n in takes]
         if None in paths:
             print(f"{clip}: no takes", file=sys.stderr)
@@ -310,7 +318,7 @@ def main():
         files, seconds = [], []
         for i, path in enumerate(paths, 1):
             name = f"{clip}.ogg" if len(paths) == 1 else f"{clip}-{i}.ogg"
-            x, rate = make_clip(path, positional, loop, args.level, gain, even, lowcut)
+            x, rate = make_clip(path, positional, loop, args.level, gain, even, lowcut, start)
             encode(x, rate, OUT / name)
             files.append(name)
             seconds.append(round(len(x) / rate, 3))

@@ -91,4 +91,4 @@ riftwalker-pain 4
 rift-cast 4
 rift-flight 3
 rift-impact 6
-rift-blink 14
+rift-blink 14 start=0.42

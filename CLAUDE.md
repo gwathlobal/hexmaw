@@ -1939,7 +1939,8 @@ duration, takes and `--loop` from `audio/sfx.md`), gitignored like the music's. 
 of each goes in `audio/sfx-picks.txt` (`imp-pain 2`; several takes are variants played in
 turn, `gain=-3` evens one out, `even` flattens a loop that swells and fades within itself,
 `lowcut=120` rolls off the sub-bass of a heavy thud before leveling, which otherwise counts it and
-leaves the part speakers play tiny; take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
+leaves the part speakers play tiny, `start=0.42` starts a take that far in, for one whose burst
+comes after a swell, late on what the game shows; take 1 without a line), and `tools/make_sfx.py [CLIP...]` trims,
 levels (the loudest 100 ms at -14 dBFS RMS, peaks under -1 through make_loop.py's limiter),
 downmixes positional clips to mono (the `:effect` space mixer takes only mono) and encodes them
 to `data/sfx/<clip>.ogg` (`<clip>-1.ogg` ... for variants), listing them in

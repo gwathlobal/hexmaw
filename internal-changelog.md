@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The rift's sound lands on its flash.** `rift-blink` (take 14) is a low hum swelling for half
+  a second into a bright burst at 0.55 s, while the flash where something steps through a rift
+  lasts 0.43 s, so the burst came after it was gone. It now starts 0.42 s in (`start=0.42` in
+  `audio/sfx-picks.txt`, a new flag of `tools/make_sfx.py`, faded in over 30 ms; the picker keeps
+  it), 0.4 s long with its burst 0.1 to 0.3 s in.
 - **A new ice cave, `ice-sheet`.** Every other ice cave sinks its frozen pond 0.2 m inside a
   snow shore, which stops a skating monster at its ledge; this one, 2 × 3 cells and narrow, has
   its ice flush to the rock, snow only at its four doorways (north and south on opposite cells)
