@@ -2740,7 +2740,7 @@ The stone caves (`cave`, `grotto`, `cavern`, `cave-passage`, `cave-bend`, `cave-
 `ice-rock` and a floor of `snow` (both grip), frozen ponds of slippery ice sunk 0.2 m
 (`pit 0.2, floor ice`, 45° shores of snow) and icicles (`box 3 top ice-rock` in octagons,
 or diamonds down to 2.2 m in the 3 m corridors), and all their doorways are `ice` (`+ door ice`): `ice-grotto` (a pond
-with a diamond column), `ice-lake` (nearly all rink, icicles over it), `ice-cavern` (4 × 3:
+with a diamond column), `ice-lake` (nearly all rink, icicles over it), `ice-sheet` (2 × 3 cells, narrow, its ice flush with the rock, no shore, snow only at the doorways: a blow sends a monster skating into the walls), `ice-cavern` (4 × 3:
 pillars, one in a pond, a slippery ice shelf, icicles), `frost-shrine` (octagonal: an acolyte on an octagonal dais of ice, a pond, two columns), `ice-niche` (1 × 1, a monster on ice; what fits behind a gate when nothing bigger
 does), and the corridors `ice-passage` (45°), `ice-bend` and `ice-chute` (three cells of
 ice, winding 45° at a time). The ice gates, `ice-gate` and `ice-gate-bend` (tagged `corridor ice-gate`), are half

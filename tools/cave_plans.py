@@ -439,6 +439,23 @@ def ice_lake():
     return g
 
 
+def ice_sheet():
+    # One sheet of ice from wall to wall, snow only at each doorway to stop on: no shore, so
+    # what is knocked across it slides into the rock. Narrow, 2 by 3 cells, so its side walls
+    # are near, its north and south doorways on opposite cells; icicles hang over it.
+    g = blank(2, 3)
+    put(g, 0, 1, '++++++'); put(g, 12, 9, '++++++'); down(g, 0, 5, '+++'); down(g, 15, 5, '+++')
+    outline(g, L=[1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 5, 7], R=[9, 11, 13, 15, 15, 15, 15, 15, 15, 15, 15, 15], fill='_')
+    fill(g, [1], range(1, 7), '.'); fill(g, [11], range(9, 15), '.')
+    fill(g, [5, 6, 7], [1, 2], '.'); fill(g, [5, 6, 7], [13, 14], '.')
+    hang_over(g, 2, L=[9, 7, 7, 9], R=[11, 13, 13, 11])
+    hang_over(g, 7, L=[5, 3, 3, 5], R=[7, 9, 9, 7])
+    put(g, 6, 7, 'kk'); put(g, 3, 4, 'mm'); put(g, 9, 11, 'mm'); g[0][7] = 'T'; g[12][8] = 'T'
+    put(g, 9, 3, '&&'); put(g, 1, 2, '$$'); put(g, 11, 11, '$$')
+    pond_rock(g)
+    return g
+
+
 def ice_cavern():
     g = blank(4, 3)
     put(g, 0, 9, '++++++'); put(g, 12, 17, '++++++'); down(g, 0, 5, '+++'); down(g, 31, 5, '+++')
@@ -528,7 +545,7 @@ PLANS = {
     'river': river, 'river-ford': river_ford, 'river-bend': river_bend, 'river-cavern': river_cavern,
     'stream': stream, 'stream-bend': stream_bend, 'river-narrows': river_narrows,
     'lava-spring': lava_spring, 'lava-sink': lava_sink, 'stream-spring': stream_spring,
-    'ice-grotto': ice_grotto, 'ice-lake': ice_lake, 'ice-cavern': ice_cavern,
+    'ice-grotto': ice_grotto, 'ice-lake': ice_lake, 'ice-sheet': ice_sheet, 'ice-cavern': ice_cavern,
     'ice-passage': ice_passage, 'ice-bend': ice_bend, 'ice-gate': ice_gate, 'ice-gate-bend': ice_gate_bend,
     'ice-chute': ice_chute, 'ice-niche': ice_niche, 'frost-shrine': frost_shrine,
 }

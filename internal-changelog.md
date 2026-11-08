@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A new ice cave, `ice-sheet`.** Every other ice cave sinks its frozen pond 0.2 m inside a
+  snow shore, which stops a skating monster at its ledge; this one, 2 × 3 cells and narrow, has
+  its ice flush to the rock, snow only at its four doorways (north and south on opposite cells)
+  and icicles over it, so a blow sends a monster sliding into the walls. Drawn by
+  `tools/cave_plans.py` (`ice_sheet`), tagged `room`, weight 0.5; `check-kit` is clean, with
+  ogres too. A new block changes what seeds grow: seed 12345's last level no longer has the hall
+  the trailer's knight and ogre were filmed in (the trailer's takes leave it out,
+  `*generator-blocks*`).
 - **Knockback on ice carries and hurts.** On ice a creature's walk and a blow's knockback share
   its momentum, so a hunter kept steering through the push (`skid-path`), braking it within a
   metre or two, and counted as walking, so the wall it was thrown into never hurt it. Now it is

@@ -1,0 +1,39 @@
+; A cave whose floor is one sheet of ice from wall to wall, snow only at its doorways to stop
+; on: no shore to catch on, so a blow sends a monster skating into the rock. Narrow, its side
+; walls near; icicles hang low over it. Its plan is drawn by tools/cave_plans.py.
+cells 2 3
+tags room
+weight 0.5
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice                                        ; ice caves join only ice caves and gates
+  _ floor ice                                       ; the sheet, flush with the snow
+  < diagonal /, floor ice                           ; 45-degree ice-rock standing on it
+  > diagonal \, floor ice
+  v box 3 top ice-rock                              ; icicles, hanging from 4 m to 3 m
+  A diagonal / ice-rock 3 top
+  B diagonal \ ice-rock 3 top
+  x box 3 top ice-rock, floor ice                   ; the same over the ice
+  P diagonal / ice-rock 3 top, floor ice
+  Q diagonal \ ice-rock 3 top, floor ice
+  k floor ice, spawn any south                      ; monsters on the ice
+  m floor ice, spawn any south 30
+  $ pickup floor
+  & floor ice, pickup reward
+
+plan 0
+#++++++T########
+#.$$...__>>#####
+#______PPxx\\###
+#___mm_xxxxxx\\#
+#______QQxxPP__#
++..__________..+
++..____kk____..+
++..PPxxQQ____..+
+#__xxxxxx______#
+#\\&&xxPP__mm__#
+###>>__________#
+#####>>__..$$..#
+########T++++++#
