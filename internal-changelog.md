@@ -7,6 +7,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Bosses and elites walk with strides their size.** A walk frame came every `stride` metres
+  whatever size the creature was drawn, so a boss (1.6 times its kind and more) cycled its legs
+  1.6 times too fast in short, skittering steps, and an elite (1.15) a little. `stride-length`
+  (creature.lisp) is the stride at `size-scale`, for the walk's frame and the footsteps timed
+  from it.
+
 ## November 6, 2026 v0.1.0
 
 - **The release publishes the Windows archive.** The archives are uploaded as files of their

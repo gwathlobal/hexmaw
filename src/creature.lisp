@@ -513,9 +513,14 @@ DEFINE-CREATURE-SOUNDS gives a class its own.")
 (defparameter *creature-step-volume* 0.9)
 (defparameter *creature-step-reach* 25.0 "Metres from the player within which a creature's footsteps play.")
 
+(defun stride-length (creature)
+  "Metres CREATURE walks per walk frame: its STRIDE, at the size it is drawn (a boss or an elite
+is its kind's art drawn bigger, so its steps are longer)."
+  (* (stride creature) (size-scale creature)))
+
 (defun creature-steps (creature)
   "A footstep (its :STEP clip) every two walk frames, from the distance walked: two to a cycle."
-  (let ((n (floor (walk-distance creature) (* 2 (stride creature)))))
+  (let ((n (floor (walk-distance creature) (* 2 (stride-length creature)))))
     (unless (= n (step-count creature))
       (when (and (< (step-count creature) n) (creature-walking-p creature) (not (afloat-p creature))
                  *player* (< (vdistance (location creature) (location *player*)) *creature-step-reach*))
@@ -1657,7 +1662,7 @@ after the flinch, block and attack.")
           ((creature-walking-p creature)
            ;; The frame follows the distance walked, so feet don't skate.
            (show-view-frame creature (walk-animation creature)
-                            (floor (walk-distance creature) (stride creature)) s)))
+                            (floor (walk-distance creature) (stride-length creature)) s)))
     (let ((d (dead creature)))
       (cond ((null d))
             ((gibbed creature)
