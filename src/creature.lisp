@@ -664,12 +664,17 @@ by its KNOCKBACK-SCALE."
   "Metres per second of knockback above which a creature can't walk or lunge: shoved, it is
 carried until it slows, rather than walking straight back through the push.")
 
+(defun walk-top-speed (creature footing)
+  "The fastest CREATURE's own walk carries it on FOOTING (NIL for a floor that grips)."
+  (* (walking-speed creature) (if footing (footing-property footing :top-speed) 1.0)))
+
 (defun shoved-p (creature)
-  "True while knockback carries CREATURE too fast for its own feet. Not on ice, where its
-momentum is its walk."
-  (and (not (footing creature))
-       (let ((kb (momentum creature)))
-         (< (* *shove-hold-speed* *shove-hold-speed*) (+ (expt (vx kb) 2) (expt (vz kb) 2))))))
+  "True while knockback carries CREATURE too fast for its own feet. On ice, where its momentum
+is its walk too, while it goes faster than its walk reaches there: a blow sent it."
+  (let* ((kb (momentum creature))
+         (footing (footing creature))
+         (hold (if footing (walk-top-speed creature footing) *shove-hold-speed*)))
+    (< (* hold hold) (+ (expt (vx kb) 2) (expt (vz kb) 2)))))
 
 (defun slide (creature dt)
   "Move by its momentum for DT seconds, stopping at solids and bodies, then slow it by
@@ -684,8 +689,11 @@ friction: on ice by the footing's, and while it walks there it climbs steps as i
             (hit-z (if z-blocked (vz kb) 0.0)))
         (when x-blocked (setf (vx kb) 0.0))
         (when z-blocked (setf (vz kb) 0.0))
-        ;; Knocked into something hard; its own walk on ice doesn't count.
-        (unless walking
+        ;; Knocked into something hard. Its own walk on ice doesn't count, but on ice a blow's
+        ;; knockback and the walk share the momentum and it walks on: faster than its walk
+        ;; reaches there, the rest came from the blow.
+        (when (or (not walking)
+                  (< (walk-top-speed creature footing) (sqrt (+ (* hit-x hit-x) (* hit-z hit-z)))))
           (hit-across creature hit-x hit-z dt))))
     (if footing
         (footing-drag kb footing dt (not walking))
@@ -854,10 +862,10 @@ by a body it slides along it, and stopped dead by another creature's it steps ro
 for *SIDESTEP-TIME* (the other way if that side is shut too); a hunter stopped by one
 standing still plans afresh instead, round it (STANDING-BODIES), unless it just did.
 Blocked for *STUCK-TIME*, it gives up the path. On ice it skids instead (SKID-PATH)."
-  (when (footing creature)
-    (return-from walk-path (skid-path creature dt)))
   (when (shoved-p creature)
     (return-from walk-path))
+  (when (footing creature)
+    (return-from walk-path (skid-path creature dt)))
   (let* ((loc (location creature))
          (target (first (path creature)))
          (dx (- (vx target) (vx loc)))

@@ -483,8 +483,8 @@ real time instead.
   knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
-  whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`,
-  not on ice) it neither walks nor lunges, so a hunter doesn't walk straight back through a push. A killing blow and
+  whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`;
+  on ice, over what its walk reaches there, `walk-top-speed`) it neither walks nor lunges, so a hunter doesn't walk straight back through a push. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
   is the ranged one (`attack-spell`), with a cast, flinch and death but no walk: it glides
   in the standing pose, its robe hiding its feet. Its death burns, so it has a `death-glow`:

@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Knockback on ice carries and hurts.** On ice a creature's walk and a blow's knockback share
+  its momentum, so a hunter kept steering through the push (`skid-path`), braking it within a
+  metre or two, and counted as walking, so the wall it was thrown into never hurt it. Now it is
+  `shoved-p` on ice while faster than its walk reaches there (`walk-top-speed`: walk speed times
+  the footing's `:top-speed`), sliding on the ice's drag alone, and a hit faster than its walk
+  could carry it is an impact (`slide`). A Force burst at the forge's cap throws an imp about
+  4 m across ice against 2 before.
 - **A sleeping Warded boss no longer hums across its whole level.** Its ward's loop played from
   the moment the level was built, and past `*sound-max-distance*` (50 m) a sound gets no
   quieter, so on the run's last level the hum was heard from anywhere. `update-ward` (boss.lisp)
