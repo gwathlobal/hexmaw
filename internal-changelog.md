@@ -8,9 +8,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 ## Unreleased
 
 - **A waterfall made of the water's own texture.** Its white streaks were hashed lanes of solid
-  white an eighth of a metre wide, crude beside the textured water around them. The sheet is now
-  two layers of the water texture stretched eight times down its length and pouring at two
-  speeds, their brightest texels whitened, more of them toward the foot.
+  white an eighth of a metre wide, crude beside the textured water around them, and the texture
+  stretched eight times was still blocky. The sheet is now two layers of the water texture,
+  only twice as long down its length and rippling across like the surface, pouring at two speeds
+  and averaged, their brightest texels softly whitened, more toward the foot: the surface's grain.
 - **Climbing out onto a ledge just under the water.** A swimmer climbed out only onto a ledge
   standing over the surface, so a creek ford's sill (0.15 m under it) and a waterfall's lip
   stopped them dead, and only the banks could be climbed. `ledge-ahead-p` now also takes a ledge

@@ -46,8 +46,9 @@ uniform float falls_bottom;
 out vec4 color;
 
 vec3 falls_layer(float u, float v, float speed, float shift){
-  // The water's own texture stretched eight times down its length, pouring down at SPEED.
-  vec2 st = vec2(u + shift, (v + time * speed) * 0.125);
+  // The water's own texture, twice as long down its length, pouring down at SPEED and
+  // rippling across as the surface does.
+  vec2 st = vec2(u + shift + 0.05 * sin(v * 2.3 + time * 1.7), (v + time * speed) * 0.5);
   return texture(surface_texture, st * texels_per_metre / vec2(textureSize(surface_texture, 0))).rgb;
 }
 
@@ -57,13 +58,13 @@ void main(){
   // Two layers falling at different speeds, so the pattern never repeats as one sheet.
   vec3 a = falls_layer(u, v, falls_speed, 0.0);
   vec3 b = falls_layer(u, v, falls_speed * 1.37, 1.7);
-  vec3 c = max(a, b) * 1.15;
+  vec3 c = (a + b) * 0.62;
   // White water: the texture's own brightest texels whitened, more of them toward the foot,
   // so the foam keeps the pixel shapes of the water around it.
   float foot = smoothstep(falls_bottom + 1.5, falls_bottom, v);
   float bright = max(dot(a, vec3(0.3333)), dot(b, vec3(0.3333)));
-  float foam = step(0.29 - 0.1 * foot, bright);
-  c = mix(c, vec3(0.74, 0.8, 0.83), (0.4 + 0.3 * foot) * foam);
+  float foam = smoothstep(0.24 - 0.08 * foot, 0.36 - 0.08 * foot, bright);
+  c = mix(c, vec3(0.74, 0.8, 0.83), (0.35 + 0.35 * foot) * foam);
   // Lit on the side it is seen from.
   vec3 n = vec3(-falls_axis.y, 0.0, falls_axis.x);
   if(dot(n, camera_position - v_world_position) < 0.0) n = -n;

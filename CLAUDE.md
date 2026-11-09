@@ -631,9 +631,10 @@ real time instead.
 - `src/waterfall.lisp`: waterfalls, where a creek drops a storey (a blueprint's `falls Y0 Y1`,
   empties `falls_<n>_lo` and `_hi`, `add-waterfall` from `place-block`). The sheet is a
   `waterfall`, a `liquid-sheet` standing across the drop's longer side: two layers of the water
-  texture stretched eight times down its length, pouring down at `*falls-speed*` and 1.37 times
-  it, their brightest texels whitened (more toward its foot) so the white water keeps the water's
-  own pixel shapes (hashed lanes of solid white, the first try, looked crude beside it), lit on the side it is seen from, see-through
+  texture, twice as long down its length and rippling across as the surface does, pouring down at
+  `*falls-speed*` and 1.37 times it, averaged, their brightest texels softly whitened (more
+  toward its foot), so it has the surface's grain: hashed lanes of solid white, and then the
+  texture stretched eight times, looked blocky beside the water around it, lit on the side it is seen from, see-through
   (`*falls-alpha*`), `late-rank` 0.2. `add-waterfall` looks within `*spill-reach*` either side
   of the drop for the pool it pours from, stands the sheet at the drop's far edge from it, and
   lays a spill (a `water-surface` at the pool's height) from the pool's edge over the lip to the
