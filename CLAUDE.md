@@ -3026,7 +3026,8 @@ enchantments are there), and rebuilds through `load-level`; `setup-scene` lays t
 the fresh player. It is one-way: the old level goes with its scene, along with anything in flight. No
 key or clearing is needed. `run-totals` adds the records to the level in play, for the death screen.
 On arriving, `level-banner` (hud.lisp) says "Level 2 of 3" for `*level-banner-time*` seconds of play,
-and the automap labels a revealed exit "Stairs down" (`exit-label`). `tools/hd status` gives the level
+and the automap labels a revealed exit "Stairs down" (`exit-label`), over the exit's point rather than its
+block's middle (`label-point`: the town's is in a recess off the plaza). `tools/hd status` gives the level
 and the exit's position. To go down at once: `(game (v<- (feet *player*) (car (aref *level-exits* 0))))`;
 to walk the stair, stand at the `descent` connector in `*level-doorways*` and hold W.
 
@@ -3100,7 +3101,9 @@ grow corridors into a small wing, the undercroft: `*settlement-level*` asks for 
 included, with no networks and crypts, cells and corridors only (`:settings`, laid over the level's
 generator settings by `level-settings`), and `level-needs-rebuilding-p` tries another seed when the
 wing has fewer than `:min-wing` rooms (`*last-wing-rooms*`). The way on is the town's own `exit`,
-at the back of the recess north of the plaza, before a painted `descent-arch`. Over run seeds 21 to
+at the back of the recess north of the plaza, before a painted `descent-arch`, lit by a torch on each
+side wall in front of the landing: unlit, the recess read as a dark gap and was missed. The player
+arrives in the plaza facing it, 11 m off. Over run seeds 21 to
 32 the wing had 5 to 7 rooms and 10 to 19 monsters, and no level warned.
 
 `make-settlement` draws its faction, condition and name from the level's seed when it is built

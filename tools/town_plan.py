@@ -68,12 +68,14 @@ fill('x', 10, 10, 16, 17); fill('x', 11, 11, 48, 49); fill('x', 21, 21, 12, 13);
 fill('$', 22, 22, 22, 23); fill('$', 2, 2, 60, 61); fill('$', 20, 20, 60, 61); fill('$', 22, 22, 2, 3)
 # Arrival in the plaza.
 fill('@', 12, 13, 31, 32)
-# Torches: on the outer walls and either side of the recess.
+# Torches: on the outer walls, either side of the recess, and a pair inside it, just in front of
+# the landing, so the arch shows from the plaza: unlit, the recess was a dark gap the player missed.
 for (r, c) in ((0, 4), (0, 17), (0, 42), (0, 56), (6, 0), (14, 0), (6, W-1), (14, W-1),
                (H-1, 6), (H-1, 14), (H-1, 24), (H-1, 39), (H-1, 52)):
     g[r][c] = 'T'
 g[5][20] = 'T'          # temple side of the recess wall, inside the temple
 g[3][35] = 'T'          # hall side of the recess wall
+g[3][25] = 'T'; g[3][30] = 'T'   # inside the recess, either side of the landing
 plan0 = [''.join(row) for row in g]
 p1 = [[' '] * W for _ in range(H)]
 for c in range(W):

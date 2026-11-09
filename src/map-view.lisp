@@ -159,7 +159,9 @@
 (define-shader-entity map-text (map-overlay hud-text) ())
 
 (define-shader-entity map-label (map-text)
-  ((labelled :initarg :block :reader label-block)))
+  ((labelled :initarg :block :reader label-block)
+   (point :initarg :at :initform NIL :reader label-point
+          :documentation "Where across the block it stands, or NIL for the block's middle.")))
 
 (defmethod map-drawn-p ((label map-label))
   (map-debug-p))
@@ -187,13 +189,16 @@
           (action-key :map-centre) (action-key :map)))
 
 (defun place-map-label (label camera clip)
-  "Put LABEL over its block's floor on the shown storey, or off screen when its block
-isn't on that storey or is behind the camera. CLIP is a scratch vec4."
+  "Put LABEL over its block's floor on the shown storey, at its point or the block's middle, or
+off screen when its block isn't on that storey or is behind the camera. CLIP is a scratch vec4."
   (let* ((block (label-block label))
+         (point (label-point label))
          (low (map-block-low block)) (high (map-block-high block))
          (floor (* *map-focus-storey* hexmaw.blueprint:*storey-height*))
          (y (max (+ (vy low) 0.5) floor)))
-    (vsetf clip (* 0.5 (+ (vx low) (vx high))) y (* 0.5 (+ (vz low) (vz high))) 1.0)
+    (if point
+        (vsetf clip (vx point) y (vz point) 1.0)
+        (vsetf clip (* 0.5 (+ (vx low) (vx high))) y (* 0.5 (+ (vz low) (vz high))) 1.0))
     (n*m (view-projection camera) clip)
     (if (and (< (vy low) (+ floor *map-cut-height*)) (< floor (vy high)) (< 0.1 (vw clip)))
         (let ((x (* (+ 0.5 (* 0.5 (/ (vx clip) (vw clip)))) (width *context*)))
@@ -220,16 +225,17 @@ isn't on that storey or is behind the camera. CLIP is a scratch vec4."
   "Enter the map screen's camera, overlays and controller into CONTAINER. After the
 level is built: there is a label per block."
   (let ((view (make-instance 'map-view)))
-    (flet ((label (class block text color)
-             (make-instance class :block block :text text
+    (flet ((label (class block text color &optional at)
+             (make-instance class :block block :text text :at at
                                   :font-size (float +glyph-height+ 0f0)
                                   :foreground color :background (vec4 0 0 0 0))))
       (setf (map-labels view)
             (loop for block across *map-blocks*
                   collect (label 'map-label block (map-block-name block) *hud-text-color*))
             (map-exit-labels view)
-            (loop for (nil . block) across *level-exits*
-                  collect (label 'exit-label block "Stairs down" *exit-label-color*))))
+            ;; At the exit itself: the town's is in a recess off its plaza, not at the middle.
+            (loop for (at . block) across *level-exits*
+                  collect (label 'exit-label block "Stairs down" *exit-label-color* at))))
     (dolist (entity (list* (map-camera view) (map-arrow view) (map-markers view) (map-hint view)
                            (append (map-labels view) (map-exit-labels view))))
       (enter entity container))
