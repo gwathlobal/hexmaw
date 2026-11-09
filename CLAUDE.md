@@ -542,6 +542,8 @@ real time instead.
 - `src/kit.lisp`: the kit (`kit-blocks`, every `.glb` in `data/blocks/`) and the gallery level
   that lays it out (`build-kit-gallery`, `kit-goto`).
 - `src/generate.lisp`: the level generator (`generate-level`); see "Generated levels" below.
+- `src/levelcheck.lisp`: building levels and blocks with no window, for `tools/levelcheck`
+  (`build-level-alone`, `sweep-levels`, `kit-report`); see "Level sweeps" under "Generated levels".
 - `src/run.lisp`: a run's levels and what carries between them; see "A run" below.
 - `src/save.lisp`: saving and loading generated runs, one file per slot in `*save-directory*`
   (`$XDG_DATA_HOME/hexmaw/saves/`, usually `~/.local/share/hexmaw/saves/`:
@@ -2623,7 +2625,7 @@ they are entered on their own too; `(clrhash *blocks*)` and a reset re-read them
 
 A blueprint, `data/blueprints/<name>.txt`, draws a block top-down in text; `tools/blueprint`
 builds it into `data/blocks/<name>.glb` (`tools/blueprint chamber stair` builds those,
-`--check` only checks), and the game builds a block whose blueprint is newer when it
+`--check` only checks, `--stale` builds only those newer than their `.glb`), and the game builds a block whose blueprint is newer when it
 loads it, so after editing one `tools/hd reset` shows it. It builds with the blueprint code loaded in it: after changing src/blueprint.lisp, `tools/hd reload-system` first, or a blueprint using something new fails to build in the game (a runtime error every frame, and an empty level) even though `tools/blueprint` builds it. Errors give `file:line:col`.
 `chamber.txt`:
 
@@ -2819,8 +2821,8 @@ and is hurt (see "Impacts"). `ice-hall` is an ordinary dungeon room with an ice
 floor, outside all this. Ice never meets lava: `ice-bridge` (the forge frozen, ice up to its
 lava channel) has no tags, so the generator leaves it out, until water can fill its channel.
 Every piece must let the player walk between all its doorways (drops don't
-count), or the generator builds places that are a one-way trip. `(check-kit)` checks it, for
-every block or a list of names: it builds each alone (`*level*` `:block`, `*check-block*`)
+count), or the generator builds places that are a one-way trip. `(check-kit)` checks it (or,
+with no game, `tools/levelcheck --kit`: see "Level sweeps"), for every block or a list of names: it builds each alone (`*level*` `:block`, `*check-block*`)
 and reports what's wrong (`block-problems`): ordinary doorways that don't reach each other,
 a doorway or bank that leads to no other doorway, a river end that doesn't join both banks,
 a monster that can't reach the first doorway, a high block the ogre can't walk between all
@@ -2993,6 +2995,56 @@ own size and step from a cell its body fits where it lives (`stranded-creatures`
 too, as a chase does when there's no dry way, and through deep water: no creature swims,
 but one beyond a flooded run or across a canal waits there for the player, who does). Each
 doorway or creature that fails logs a warning.
+
+### Level sweeps
+
+`tools/levelcheck` builds levels and blocks with no window: each worker is a plain SBCL process
+(`boot.lisp`, so a worktree needs its `.ql` link) with no context, GL, music or sound, no eval
+server, settings or saves, so several run at once, beside any game, and in CI. It works because
+`build-level` needs no context: what it enters into its container are objects that only load
+onto the GPU when a scene is staged. So `build-level-alone` (levelcheck.lisp) builds into a bare
+`trial:scene`, and the levels are the game's for those seeds: over run seeds 1 to 10, every level
+of each (40), the layout, every count, the creatures and pickups in order and every warning
+matched a live game's. **Keep it so: nothing `build-level` calls may need the context**
+(`preload`, GL calls, `+main+`'s scene, sounds belong in `setup-scene` or in ticks and render
+methods). CI's sweep fails when one does. The level's state is global, so `build-level-alone`
+refuses to run in a game: there a sweep still goes through `tools/hd` and `reload-scene`.
+
+```bash
+tools/levelcheck                                   # run seeds 1-10, every level of each
+tools/levelcheck --runs 1-100 --depths 1,2 --jobs 6
+tools/levelcheck --kit                             # check-kit, every block alone
+tools/levelcheck --runs 1-30 --json > /tmp/levels.jsonl
+tools/levelcheck --runs 1-3 --kit --strict         # what CI runs
+```
+
+A run seed is what `*level-seed*` fixes, so `--runs 5` is the run a game started with seed 5
+plays. The report is a line per level (seed, rooms, blocks, monsters and elites, pickups, the
+health, mana, gold and dust they hold, its networks, the town or boss, seconds), its warnings
+under it (`--notes` adds the generator's info lines: networks, the pickup budget, hoards), then
+each depth's averages and ranges (the settlement's level apart) and how often each network
+appears, and the findings by class. `--json` prints the records instead, one object a line
+(`level-report`: also monster and pickup kinds, `stranded` classes, `unreachable` doorways,
+`ice_joins`, `attempts`, a `layout` digest that changes when any cell's block does, and
+`creature_order` and `pickup_order` digests), for a script to count from. What the checks found
+comes from `*last-level-checks*`, which `build-level` keeps, not from the warnings' text.
+`--strict` exits 1 on a worker error, a kit problem, a doorway the player can't walk to, a
+stranded creature other than an ogre (they are expected: see "The ogre"), an ice gate joined
+wrong, a doorway opening onto nothing, or a level kept after `*max-level-attempts*` seeds; other
+warnings are reported only.
+
+Use it for every sweep over seeds: the figures in this file (rooms, monsters and pickups per
+level, how often each network appears and how its arms end, stranded creatures, the exit and
+arena always reachable), pickup and loot budgets, `--kit` after changing blueprints or
+`block-problems`, and a sweep of 50 to 100 runs before merging generator or kit work. A worker
+takes about 10 s to load the game, then 0.3 to 2 s a level (1.1 on average over 40; the town's
+level is the quickest); `--jobs` (4 by default) splits the runs between workers, about 430 MB
+each. Run seeds 1 to 10 take 24 s with 4 workers, against 80 s through `reload-scene` in a live
+game; `--kit` takes 5 s for 143 blocks. The driver first builds stale blueprints
+(`tools/blueprint --stale`), so workers never write blocks (`*build-blocks*` is NIL in them); and
+when the fasls are older than the sources it starts one worker and lets it compile before the
+others, which would otherwise write the same fasls at once. From Lisp, in a process with no game:
+`(sweep-levels :runs '(1 2) :depths '(1))` and `(kit-report)` return the records as hash tables.
 
 ## A run
 

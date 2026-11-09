@@ -81,6 +81,11 @@ jobs:
           fi
           echo "no other warnings; style warnings: $(grep -c 'caught STYLE-WARNING' build.log || true)"
 
+      # A few runs' levels and every block alone, built with no window (tools/levelcheck): fails
+      # on a bug the checks find, or if building a level comes to need the GL context.
+      - name: Sweep generated levels and the kit
+        run: tools/levelcheck --runs 1-3 --kit --strict --jobs 2 < /dev/null
+
       - name: Check the third-party notices
         run: tools/notices --check < /dev/null
 

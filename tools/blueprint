@@ -5,6 +5,7 @@
 #   tools/blueprint                 build every blueprint
 #   tools/blueprint chamber stair   build these
 #   tools/blueprint --check         only check them
+#   tools/blueprint --stale         build only those newer than their .glb
 #
 # The game also rebuilds a block whose blueprint is newer when it loads it, so after
 # editing a blueprint `tools/hd reset` is enough.

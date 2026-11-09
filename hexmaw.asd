@@ -63,6 +63,7 @@
                (:file "kit")
                (:file "generate")
                (:file "save")
+               (:file "levelcheck")
                (:file "main")
                (:file "dist"))
   :depends-on (:hexmaw-blueprints
