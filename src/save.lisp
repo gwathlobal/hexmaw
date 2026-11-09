@@ -277,6 +277,9 @@ status auras, which come back from their statuses."
         :map (revealed-block-indices)
         ;; The seed places the pickups again; a save older than them has none taken.
         :pickups (taken-pickup-indices)
+        ;; What those indices name, so a save from before the pickups were scattered another
+        ;; way doesn't mark the wrong ones taken (SAVE-MATCHES-LEVEL-P).
+        :pickup-kinds (built-pickup-kinds)
         ;; What imps dropped (imp.lisp), which the seed doesn't place.
         :drops (dropped-pickups)
         ;; Whether the gate has dropped behind the player (boss.lisp).
@@ -377,12 +380,19 @@ status auras, which come back from their statuses."
                       :settlement (getf (getf save :settlement) :built)
                       :entry (getf save :level)))
 
+(defun built-pickup-kinds ()
+  "The kinds of the pickups the level was built with, in order: what a save's taken indices name."
+  (loop for i from 0 below (min *built-pickups* (length *pickups*))
+        collect (pickup-kind (aref *pickups* i))))
+
 (defun save-matches-level-p (save)
-  "True if the level just built is the one SAVE was made on."
+  "True if the level just built is the one SAVE was made on: the same cells and creatures, and the
+same pickups, which a save older than :PICKUP-KINDS can't tell, so its level starts fresh."
   (let ((built (getf save :creatures)))
     (and (equal (getf save :layout) (level-layout))
          (equal (loop for c in built unless (getf c :summoned) collect (getf c :class))
-                (map 'list #'type-of *creatures*)))))
+                (map 'list #'type-of *creatures*))
+         (equal (getf save :pickup-kinds '(:none)) (built-pickup-kinds)))))
 
 (defun restore-effect (record scene)
   (let* ((state (getf record :state))
@@ -452,7 +462,7 @@ status auras, which come back from their statuses."
   (let ((save *pending-load*))
     (setf *pending-load* NIL)
     (cond ((not (save-matches-level-p save))
-           (v:warn :hexmaw "This save's level has changed since (the blocks or generator differ); starting it fresh.")
+           (v:warn :hexmaw "This save's level has changed since (the blocks, generator or pickups differ); starting it fresh.")
            NIL)
           (T
            (handler-case (progn (restore-saved-objects save scene)

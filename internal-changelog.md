@@ -7,6 +7,18 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Gold and dust on every level, and far fewer potions.** Gold and arcane dust are placed after the
+  health and mana pickups, on the spots they leave, and over run seeds 1 to 30 half of a run's first
+  levels had neither (run seed 5's first among them), the settlement's two thirds. `scatter-pickups`
+  now leaves `*pile-spots*` (3) of them, and piles grow to hold the whole budget, so every one of
+  the 120 levels gets all its gold and dust. Health and mana pickups were budgeted per monster (10
+  and 15), which imp packs had doubled, and half of them were potions: a run handed out 66 potions,
+  1,780 health and 2,670 mana to a 100-health, 50-mana player, who reached the boss with the bag
+  full. They now restore `*health-per-monster-health*` (0.09) and `*mana-per-monster-health*` (0.18)
+  of the monsters' total health (`monster-health`), and every 3rd is a potion: a run has 25 potions,
+  810 health and 1,590 mana, the health about half of what a rough estimate of the fights takes. A
+  save keeps the built pickups' kinds (`:pickup-kinds`), and one whose pickups differ, an older save
+  too, starts its level fresh rather than marking the wrong ones taken, so `*save-version*` stays 4.
 - **Level sweeps without a window.** `tools/levelcheck` builds generated levels and kit blocks in
   plain SBCL processes, with no window, GL, music or sound, several at once: `build-level` already
   needed no context, so `build-level-alone` (new `src/levelcheck.lisp`) builds into a bare scene,
