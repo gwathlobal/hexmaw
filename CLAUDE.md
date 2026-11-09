@@ -1107,7 +1107,7 @@ real time instead.
 - `src/inventory.lisp`: the inventory, the hotbar, the quickslot and the panel. `*item-kinds*` says
   what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
   stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
-  5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, nothing uses it yet) 999.
+  5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, the settlement's coin) 999.
   Weapons and spells are items too: `:sword` and `:spear` (`:weapon`, what they put in hand), a stack
   `(:sword 1 enchantment)` (`stack-enchantment`, each weapon its own; `(:sword 1)` is plain), and
   `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
@@ -1177,13 +1177,13 @@ real time instead.
   frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
   on every screen, counting frames in its render and updating every `*fps-interval*`.
   Right of the quickslot: the spell in hand (`spell-label`, inventory.lisp). The hands, like the
-  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). The purse
-  (`gold-text`) is in the lower-right corner.
-  `show-message` puts a line across the view for `*message-time*` (a glyph's, a gold find, the
-  watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
+  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). Gold has
+  no label of its own: it is stacks in the bag.
+  `show-message` puts a line across the view for `*message-time*` (a glyph's, kill gold the bag
+  had no room for, the watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
   what the player looks at or stands at (`prompt-line`; a new string only when it changes, so the
   tick tells by EQ). A pickup of a
-  counted item (dust's pile) puts "+25 arcane dust" just above
+  counted item (dust's pile, gold's, a kill's gold) puts "+25 arcane dust" just above
   the crosshair for `*pickup-note-time*` (`note-pickup`, the `pickup-banner`; the item's `:note`,
   else its name), pickups of one kind in quick succession adding up.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
@@ -3197,13 +3197,18 @@ player has sacked the town (`refusing-p`):
   `*quest-reputation*`.
 
 `price` is `*base-prices*`, `*price-depth-step*` dearer per depth, by the faction's multiplier and
-`(1 - standing / 400)`. **Gold** (`gold`, a player slot) comes from `:gold` pickups, which
+`(1 - standing / 400)`. **Gold** is the bag's `:gold` item, in stacks of 999 (`gold` is its total,
+`kind-total`; `spend` takes it with `take-item`, and a sale or a quest's reward needs `item-room`
+for its coins, or is refused). It comes from `:gold` pickups, which
 `place-gold` scatters on the spots health, mana, the relic and the glyphs left (`*gold-per-monster*`,
 on at most `*gold-spot-share*` of them but one at least, since arcane dust comes after and its piles
 grow to fill fewer spots), in piles of `*gold-pile*` coins (`pickup-count`, as dust's; bigger where its
-share of spots is too few, so a level gets its whole budget: 200 to 370), and from
-kills (`*kill-gold*` by class, straight into the purse through `creature-died`), both
-`*gold-depth-step*` more per depth (`gold-scale`). **Reputation** (`reputation`, a plist by faction,
+share of spots is too few, so a level gets its whole budget: 200 to 370; `gold-coins` scales a
+pile as it is placed), and from kills (`*kill-gold*` by class, straight into the bag through
+`creature-died`), both `*gold-depth-step*` more per depth (`gold-scale`). A pile (gold's or dust's)
+the bag can't hold all of leaves a pile of the rest, and kill gold that doesn't fit falls where the
+monster died (`drop-loot`, kept in a save's `:drops` with its count). An older save's purse, a
+player slot of its own, comes back through `(setf gold)` into the bag. **Reputation** (`reputation`, a plist by faction,
 -100 to 100) moves prices, greetings and the watch's patience (`*patient-reputation*`).
 
 **The watch** (`report-crime`): `hurt` and `burn` take `:by` (who struck, through `harmed` and

@@ -344,7 +344,8 @@ from the guard's, among the cells SEEN (NAV-REACHED) they can get to."
               (let ((stack (make-hoard-loot random))
                     (coins (random-range *hoard-gold* random)))
                 (add-loot container stack (vx item) (vy item) (vz item) :phase (random 10.0 random))
-                (add-pickup container :gold (vx gold) (vy gold) (vz gold) :phase (random 10.0 random) :count coins)
+                (add-pickup container :gold (vx gold) (vy gold) (vz gold) :phase (random 10.0 random)
+                                                         :count (gold-coins coins))
                 (v:info :hexmaw "~a at ~a guards ~a and ~d gold." (type-of guard) (home guard) (loot-title stack) coins))
               (v:warn :hexmaw "No floor the player can reach behind ~a at ~a for its hoard."
                       (type-of guard) (home guard))))))))

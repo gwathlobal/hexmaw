@@ -59,7 +59,7 @@ their values."
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     block-raise bash-time bash-pending guard-broken run-time damage-taken level-records
-    gold reputation max-health max-mana max-stamina blessed
+    reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells wanted-slot enchantments))
 
 (defmethod saved-slots append ((actor afflicted))

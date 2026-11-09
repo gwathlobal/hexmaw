@@ -175,7 +175,6 @@ blow knocked it aside (BREAK-GUARD).")
               :documentation "What killed the player: a creature's type, :LAVA or :DROWNING.")
    (death-time :initform 0.0 :accessor death-time
                :documentation "Seconds since the player died (*GAME-STATE* :DEAD).")
-   (gold :initform 0 :accessor gold :documentation "Coin, from pickups and kills, spent in the settlement.")
    (reputation :initform () :accessor reputation
                :documentation "Standing with each faction (*FACTIONS*), a plist from -100 to 100.")
    (max-health :initform *player-max-health* :accessor max-health :documentation "Raised by the trainer.")
