@@ -53,6 +53,9 @@ dive in, a shove), as an exponential.")
 (defparameter *swim-waist* 0.9 "Metres above the feet that must be in water to swim.")
 (defparameter *float-eye* 0.15 "Metres above the surface the eye floats at.")
 (defparameter *climb-out-height* 0.8 "The highest a ledge may stand over the surface for the player to climb out onto it.")
+(defparameter *climb-out-depth* 0.3
+  "The deepest a ledge's top may lie under the surface for the player to climb onto it: a ford's
+sill, 0.15 m under, or a waterfall's lip. Deeper, the player swims over it.")
 (defparameter *climb-speed* 3.0 "Metres per second a climb out rises.")
 (defparameter *climb-time* 1.0 "Seconds a climb out may take before it gives up.")
 (defparameter *breath-time* 20.0 "Seconds the player can stay under water.")
@@ -428,12 +431,13 @@ which walking would otherwise cancel: the drag moves it but stays out of its vel
 
 (defun ledge-ahead-p (player surface yaw)
   "True if a ledge stands ahead of PLAYER no more than *CLIMB-OUT-HEIGHT* over the water's
-SURFACE, with room to stand on it."
+SURFACE, or no more than *CLIMB-OUT-DEPTH* under it (a ford's sill, a waterfall's lip), with
+room to stand on it."
   (let* ((feet (feet player))
          (reach (+ *player-radius* 0.35))
          (x (+ (vx feet) (* reach (sin yaw))))
          (z (- (vz feet) (* reach (cos yaw)))))
-    (and (solid-overlapping x surface z 0.05 *climb-out-height*)
+    (and (solid-overlapping x (- surface *climb-out-depth*) z 0.05 (+ *climb-out-depth* *climb-out-height*))
          (not (solid-overlapping x (+ surface *climb-out-height*) z *player-radius* *player-height*)))))
 
 (defun swim (player water dt ix iz up running yaw)
@@ -602,8 +606,8 @@ and not the last step of the stair.")
          ;; A jump from a liquid stays slowed until it lands outside one.
          (kind (if (grounded player)
                    (let ((now (and liquid (liquid-kind liquid))))
-                     (when (and (eq now :lava) (not (eq (wading player) :lava)))
-                       (play-sound :lava-step))
+                     (when (and now (not (eq (wading player) now)) (liquid-property now :step-sound))
+                       (play-sound (liquid-property now :step-sound)))
                      (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))

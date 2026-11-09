@@ -1,0 +1,67 @@
+; A cavern with a creek through it, a rock arch over it 0.6 m above the banks, steps up
+; to it either side, and doorways onto both banks. A swimmer passes under the arch.
+; Its plans are drawn by tools/cave_plans.py.
+cells 3 4
+storeys 2
+tags room creek cave
+weight 1
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  B door creek                       ; a creek's doorway: bank
+  C door creek, open                 ; and its open middle, over the water
+  : open, box 0.3 0.6 cave-floor     ; the arch's deck
+  S stairs east 0 0.6 cave-floor
+  Z stairs west 0 0.6 cave-floor
+  & water, pickup reward
+  i spawn any east
+  j spawn any west
+  m spawn any east 30
+  M spawn any west 30
+
+plan 0
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+###########<<~~~~<<#####
+###########~~~~~~#######
+###########~~&&~~#######
+###########~~~~~~#######
+###########>>~~~~>>#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+
+plan 1
+#########BBBBCCCCCCBBBB#
+#######//....      ....#
+#####//......      ....#
+###//........      ....#
+#//..ii....        .MM.#
+w..........      ......#
+w..........      ......T
+w..........      ......#
+T..........        ....#
+#\\....mm....      ....e
+###\\........      ....e
+#####\\......      ....e
+#######\\..SS::::::ZZ..#
+#########..SS::::::ZZ..#
+#########....      ....#
+#########....      .jj.#
+#########BBBBCCCCCCBBBB#

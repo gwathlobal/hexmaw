@@ -1,0 +1,54 @@
+; Where a creek wells up from under the rock into a pool; the banks join round its head,
+; and doorways go on north and west.
+; Its plans are drawn by tools/cave_plans.py.
+cells 3 3
+storeys 2
+tags room creek-end cave
+weight 0.5
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  B door creek                       ; a creek's doorway: bank
+  C door creek, open                 ; and its open middle, over the water
+  & water, pickup reward
+  i spawn any east
+  m spawn any east 30
+
+plan 0
+########################
+#############~&&~#######
+#############~~~~#######
+###########<<~~~~>>#####
+###########~~~~~~~~#####
+###########~~~~~~~~#####
+###########~~~~~~~~#####
+###########>>~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+
+plan 1
+#########nnnnnn#########
+#####//............\\###
+###//.......mm.......\\#
+#//........        ....#
+T..........        ....#
+w..........        ....#
+w....ii....        ....#
+w..........        ....#
+#\\..........      ....#
+###\\........      .mm.#
+#####\\......      ....T
+#######\\....      ....#
+#########BBBBCCCCCCBBBB#

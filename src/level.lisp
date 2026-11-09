@@ -79,6 +79,7 @@ empty. The annex's imp, the blocks' monsters and the arena's boss don't ask it."
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
         (fill-pointer *liquids*) 0
+        (fill-pointer *falls-points*) 0
         (fill-pointer *map-blocks*) 0
         (fill-pointer *pickup-spots*) 0
         (fill-pointer *pickups*) 0

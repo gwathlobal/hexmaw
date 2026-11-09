@@ -1,0 +1,52 @@
+; A creek from the south narrowing to a rill out north, by its east cell: the banks run out
+; and the last cell is water wall to wall.
+; Its plans are drawn by tools/cave_plans.py.
+cells 2 3
+storeys 2
+tags corridor creek cave
+weight 0.5
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  B door creek                       ; a creek's doorway: bank
+  C door creek, open                 ; and its open middle, over the water
+  - door rill, open                  ; a rill's doorway: all open, over the water
+
+plan 0
+#########~~~~~~#
+#########~~~~~~#
+#########~~~~~~#
+#########~~~~~~#
+#########~~~~~~#
+#######<<~~~~<<#
+#####<<~~~~<<###
+###<<~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+
+plan 1
+#########------#
+#########      #
+#########      #
+#########      #
+#########      #
+#######((      #
+#####((      ..#
+###//      ....#
+#//..      ....#
+#....      ....T
+T....      ....#
+#....      ....#
+#BBBBCCCCCCBBBB#

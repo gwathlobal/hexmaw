@@ -133,6 +133,7 @@
 (:name "underwater" :files ("underwater.ogg") :seconds (4.0) :space NIL :loop T)
 (:name "ward-hum" :files ("ward-hum.ogg") :seconds (2.25) :space T :loop T)
 (:name "water-lap" :files ("water-lap.ogg") :seconds (4.0) :space T :loop T)
+(:name "waterfall" :files ("waterfall.ogg") :seconds (6.0) :space T :loop T)
 (:name "whirl-wind" :files ("whirl-wind.ogg") :seconds (3.0) :space NIL :loop T)
 (:name "winded" :files ("winded.ogg") :seconds (1.48) :space NIL :loop NIL)
 (:name "wraith-alert" :files ("wraith-alert.ogg") :seconds (1.48) :space T :loop NIL)

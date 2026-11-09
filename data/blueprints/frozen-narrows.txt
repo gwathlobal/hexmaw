@@ -1,4 +1,4 @@
-; A frozen river from the south narrowing to a rill out north, by its east cell: the banks
+; A frozen river from the south narrowing to a slide out north, by its east cell: the banks
 ; run out and the last cell is ice wall to wall.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 2 3
@@ -17,7 +17,7 @@ legend
   ] diagonal \ floor -0.4 0, pit 0.4, floor ice
   < diagonal /, pit 0.4, floor ice                  ; 45-degree ice-rock standing on the ice
   > diagonal \, pit 0.4, floor ice
-  | door rill, pit 0.4, floor ice                   ; a rill's doorway: ice wall to wall
+  | door slide, pit 0.4, floor ice                  ; a slide's doorway: ice wall to wall
 
 plan 0
 #########||||||#

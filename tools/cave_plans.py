@@ -18,7 +18,7 @@ A blueprint's header and legend are written by hand; this replaces the rows afte
 - doorways: put strings on the border. A wide river doorway is `RRRR======RRRR` on a north or
   south face and `RR===RR` on an east or west one; a stream's, all lava, `------` and `---`;
   an ice cave's `++++++` and `+++`; a frozen river's `FFFFffffffFFFF` and `FFfffFF` (bank, then
-  its sunken ice), a rill's `||||||` and `|||`.
+  its sunken ice), a slide's `||||||` and `|||`.
 - pickup spots: put `$$` (floor) or `&&` (reward) where the blueprint's legend says what they are.
 
 Ice caves: their floor is snow, and a frozen pond (`_`) is sunk 0.2 m into it, a REGION with
@@ -26,6 +26,15 @@ POND's shore pairs. POND_ROCK turns rock pairs beside it into `<` and `>`, stand
 HANG_OVER hangs icicles that keep the pond under them, HANG_DIAMOND hangs a diamond of ice
 from a corridor's ceiling, and FROST_LINE turns an ice gate from rock to ice along a 45-degree
 line across the way, a drift of snow over the join. Nothing in a cave is a rectangle.
+
+Water caves (the creek, a cave river of water) are two storeys, so their specs return a plan
+per storey, `{0: g0, 1: g1}`: the water fills the lower one, the banks are the upper one's
+floor. CHANNEL draws the river's outline in both, open (` `) above and water (`~`) below, each
+45-degree pair below rock standing in the water (`<`, `>`) whose top is the bank's floor; CARVE
+cuts water into the lower storey's rock alone, under a bank; WATER_ROCK turns a rock pair above
+with the channel beside it into rock over water (`(`, `)` above, `<`, `>` below). CREEK_DOOR
+and RILL_DOOR draw a doorway in both: its banks and open middle above, the water through the
+wall under it.
 
 Then `tools/blueprint NAME` builds the block, and in the game `(check-kit '("NAME"))` checks
 its doorways and monsters reach each other.
@@ -43,8 +52,14 @@ HANG = {'/': 'A', '\\': 'B'}
 POND = {'/': '[', '\\': ']'}
 WIDE_NS, WIDE_EW = 'RRRR======RRRR', 'RR===RR'
 NARROW_NS, NARROW_EW = '------', '---'
+
+
+WATER_ROCK = {'/': '<', '\\': '>'}
+OPEN = {'/': ' ', '\\': ' '}
+CREEK_NS, CREEK_EW = ('BBBBCCCCCCBBBB', '####~~~~~~####'), ('BBCCCBB', '##~~~##')
+RILL_NS, RILL_EW = ('------', '~~~~~~'), ('---', '~~~')
 FROZEN_NS, FROZEN_EW = 'FFFFffffffFFFF', 'FFfffFF'
-RILL_NS, RILL_EW = '||||||', '|||'
+SLIDE_NS, SLIDE_EW = '||||||', '|||'
 
 
 def blank(wide, deep):
@@ -205,6 +220,52 @@ def octagon_pillar(g, r, c):
 def diamond(g, r, c):
     put(g, r, c, '1122')
     put(g, r + 1, c, '3344')
+
+
+def carve(g, r0, L, R, fill, pairs):
+    """REGION's shape cut into anything, rock too: every cell in it FILL, its pairs PAIRS."""
+    for r, a, b, lp, rp in edges(L, R, r0):
+        for c in range(a, b):
+            g[r][c] = fill
+        for p in (lp, rp):
+            if p:
+                g[r][p[0]] = g[r][p[0] + 1] = pairs[p[1]]
+
+
+def channel(g0, g1, r0, L, R):
+    """A creek's channel: open in the upper plan G1, water in the lower plan G0."""
+    region(g1, r0, L, R, ' ', OPEN)
+    carve(g0, r0, L, R, '~', WATER_ROCK)
+
+
+def water_rock(g0, g1):
+    """Rock pairs in G1 with the open channel beside them stand in the water: rock over the
+    water above (`(`, `)`), rock in it below (`<`, `>`)."""
+    rows, cols = len(g1), len(g1[0])
+    for r in range(rows):
+        c = 0
+        while c < cols - 1:
+            ch = g1[r][c]
+            if ch in '/\\' and g1[r][c + 1] == ch:
+                around = [g1[r][c - 1] if c > 0 else '#', g1[r][c + 2] if c + 2 < cols else '#']
+                around += [g1[rr][cc] for rr in (r - 1, r + 1) if 0 <= rr < rows for cc in (c, c + 1)]
+                if ' ' in around:
+                    g1[r][c] = g1[r][c + 1] = '(' if ch == '/' else ')'
+                    g0[r][c] = g0[r][c + 1] = WATER_ROCK[ch]
+                c += 2
+            else:
+                c += 1
+
+
+def creek_door(g0, g1, r, c, down=False, rill=False):
+    """A creek's doorway (or a rill's) at row R, column C, across or (DOWN) along the border."""
+    above, below = (RILL_EW if down else RILL_NS) if rill else (CREEK_EW if down else CREEK_NS)
+    (down_ if down else put)(g1, r, c, above)
+    (down_ if down else put)(g0, r, c, below)
+
+
+def down_(g, r, c, s):
+    down(g, c, r, s)
 
 
 # The caves. Each returns its plan.
@@ -541,8 +602,178 @@ def frost_shrine():
     return g
 
 
+# Water caves: the creek. Two storeys: the water below, the banks above.
+
+def creek():
+    g0, g1 = blank(2, 2), blank(2, 2)
+    creek_door(g0, g1, 0, 1); creek_door(g0, g1, 8, 1); down(g1, 0, 5, 'www')
+    outline(g1, L=[1] * 8, R=[15, 15, 15, 13, 13, 15, 15, 15])
+    channel(g0, g1, 1, L=[5] * 8, R=[11] * 8)
+    # Under the west bank the water reaches back into the rock, a hollow with a reward.
+    carve(g0, 2, L=[5, 3, 3, 5], R=[11] * 4, fill='~', pairs=WATER_ROCK)
+    put(g0, 3, 3, '&&'); put(g1, 2, 2, '$$'); g1[2][0] = 'T'; g1[6][15] = 'T'
+    return {0: g0, 1: g1}
+
+
+def creek_bend():
+    g0, g1 = blank(3, 3), blank(3, 3)
+    creek_door(g0, g1, 12, 9); creek_door(g0, g1, 1, 23, down=True); down(g1, 0, 5, 'www')
+    outline(g1, L=[9] * 12, R=[23] * 12)
+    fill(g1, (5, 6, 7), range(1, 9), '.')
+    channel(g0, g1, 3, L=[17, 15, 13, 13, 13, 13, 13, 13, 13, 13], R=[23, 23, 23, 23, 21, 19, 19, 19, 19, 19])
+    # The outer bank is undercut.
+    carve(g0, 8, L=[19, 19, 19, 19], R=[19, 21, 21, 19], fill='~', pairs=WATER_ROCK)
+    put(g0, 9, 19, '&&'); put(g1, 9, 10, '$$'); g1[0][12] = 'T'; g1[10][23] = 'T'
+    return {0: g0, 1: g1}
+
+
+def creek_ford():
+    g0, g1 = blank(2, 3), blank(2, 3)
+    creek_door(g0, g1, 5, 0, down=True); creek_door(g0, g1, 5, 15, down=True)
+    put(g1, 0, 1, 'nnnnnn'); put(g1, 12, 9, 'ssssss')
+    outline(g1, L=[1] * 12, R=[7, 9, 11, 13, 15, 15, 15, 15, 15, 15, 15, 15])
+    channel(g0, g1, 7, L=[1] * 4, R=[15] * 4)
+    # The ford: shallows across the channel over a sill of rock, where walkers cross.
+    fill(g1, (7, 8, 9), range(6, 10), ',')
+    fill(g0, (7, 8, 9), range(6, 10), '#')
+    put(g1, 2, 2, '$$'); g1[3][0] = 'T'; g1[12][4] = 'T'
+    return {0: g0, 1: g1}
+
+
+def creek_cavern():
+    g0, g1 = blank(3, 4), blank(3, 4)
+    creek_door(g0, g1, 0, 9); creek_door(g0, g1, 16, 9); down(g1, 0, 5, 'www'); down(g1, 23, 9, 'eee')
+    outline(g1, L=[9, 7, 5, 3, 1, 1, 1, 1, 1, 3, 5, 7, 9, 9, 9, 9], R=[23] * 16)
+    channel(g0, g1, 1, L=[13, 13, 13, 13, 11, 11, 11, 11, 13, 13, 13, 13, 13, 13, 13, 13],
+            R=[19, 19, 19, 19, 17, 17, 17, 17, 19, 19, 19, 19, 19, 19, 19, 19])
+    # A rock arch over the river, its deck 0.6 m over the banks, two steps up to it either
+    # side: a swimmer passes under it.
+    fill(g1, (12, 13), range(13, 19), ':')
+    fill(g1, (12, 13), range(11, 13), 'S'); fill(g1, (12, 13), range(19, 21), 'Z')
+    put(g1, 4, 5, 'ii'); put(g1, 15, 20, 'jj'); put(g1, 9, 7, 'mm'); put(g1, 4, 20, 'MM')
+    put(g0, 6, 13, '&&'); g1[8][0] = 'T'; g1[6][23] = 'T'
+    water_rock(g0, g1)
+    return {0: g0, 1: g1}
+
+
+def creek_narrows():
+    g0, g1 = blank(2, 3), blank(2, 3)
+    creek_door(g0, g1, 12, 1); creek_door(g0, g1, 0, 9, rill=True)
+    outline(g1, L=[9, 9, 9, 9, 9, 7, 5, 3, 1, 1, 1, 1], R=[15] * 12)
+    channel(g0, g1, 1, L=[9, 9, 9, 9, 9, 7, 5, 5, 5, 5, 5, 5], R=[15, 15, 15, 15, 15, 13, 11, 11, 11, 11, 11, 11])
+    water_rock(g0, g1)
+    put(g1, 7, 3, '//')  # the west bank's tip, dry
+    g1[10][0] = 'T'; g1[9][15] = 'T'
+    return {0: g0, 1: g1}
+
+
+def rill():
+    # Water wall to wall: no bank, so it is swum.
+    g0, g1 = blank(1, 2), blank(1, 2)
+    creek_door(g0, g1, 0, 1, rill=True); creek_door(g0, g1, 8, 1, rill=True); down(g1, 0, 5, 'www')
+    outline(g1, L=[1] * 8, R=[7] * 8, fill=' ')
+    carve(g0, 1, L=[1] * 8, R=[7] * 8, fill='~', pairs=WATER_ROCK)
+    g1[2][7] = 'T'
+    return {0: g0, 1: g1}
+
+
+def rill_sump():
+    # The rill dives under the rock for 3 m, its water up to the rock, and comes up again.
+    g0, g1 = blank(1, 3), blank(1, 3)
+    creek_door(g0, g1, 0, 1, rill=True); creek_door(g0, g1, 12, 1, rill=True)
+    outline(g1, L=[1] * 12, R=[7] * 12, fill=' ')
+    carve(g0, 1, L=[1] * 12, R=[7] * 12, fill='~', pairs=WATER_ROCK)
+    fill(g1, (5, 6, 7), range(1, 7), '#'); fill(g0, (5, 6, 7), range(1, 7), 'X')
+    # The rock closes in at 45 degrees on one side of each of the sump's mouths, leaving 2 m.
+    put(g1, 4, 1, '\\\\'); put(g1, 8, 5, '\\\\')
+    water_rock(g0, g1)
+    g1[2][0] = 'T'; g1[10][7] = 'T'
+    return {0: g0, 1: g1}
+
+
+def creek_spring():
+    g0, g1 = blank(3, 3), blank(3, 3)
+    creek_door(g0, g1, 12, 9); put(g1, 0, 9, 'nnnnnn'); down(g1, 0, 5, 'www')
+    # The east bank runs straight up into the room, so both banks join round the pool's head.
+    outline(g1, L=[7, 5, 3, 1, 1, 1, 1, 1, 3, 5, 7, 9], R=[19, 21, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23])
+    channel(g0, g1, 3, L=[13, 11, 11, 11, 11, 13, 13, 13, 13, 13], R=[17, 19, 19, 19, 19, 19, 19, 19, 19, 19])
+    # The spring wells up from under the rock at the pool's head.
+    carve(g0, 1, L=[13, 13, 13], R=[17, 17, 17], fill='~', pairs=WATER_ROCK)
+    put(g1, 6, 5, 'ii'); put(g1, 2, 12, 'mm'); put(g1, 9, 20, 'mm'); put(g0, 1, 14, '&&')
+    g1[4][0] = 'T'; g1[10][23] = 'T'
+    water_rock(g0, g1)
+    return {0: g0, 1: g1}
+
+
+def rill_spring():
+    g0, g1 = blank(2, 2), blank(2, 2)
+    creek_door(g0, g1, 8, 9, rill=True); put(g1, 0, 1, 'nnnnnn'); down(g1, 0, 5, 'www')
+    outline(g1, L=[1] * 8, R=[11, 13, 15, 15, 15, 15, 15, 15])
+    # The rill comes in wall to wall for 3 m before the pool opens out.
+    channel(g0, g1, 2, L=[9, 7, 7, 9, 9, 9, 9], R=[13, 15, 15, 15, 15, 15, 15])
+    fill(g1, (5, 6, 7), [8], '#')
+    water_rock(g0, g1)
+    g1[2][0] = 'T'
+    return {0: g0, 1: g1}
+
+
+def creek_sink(sump=False):
+    g0, g1 = blank(3, 3), blank(3, 3)
+    creek_door(g0, g1, 0, 9); down(g1, 0, 5, 'www'); down(g1, 23, 5, 'eee')
+    outline(g1, L=[1] * 10 + [3, 5], R=[23] * 10 + [21, 19])
+    # The river spreads into a pool and runs on under the rock, under the walk that joins the banks.
+    channel(g0, g1, 1, L=[13, 13, 13, 11, 9, 9, 11], R=[19] * 7)
+    if sump:
+        # Down a passage under the rock to an underwater doorway: a flooded run goes on.
+        carve(g0, 7, L=[11, 9, 9, 9, 9, 9], R=[19, 17, 15, 15, 15, 15], fill='~', pairs=WATER_ROCK)
+        put(g0, 12, 9, 'uuuuuu')
+    else:
+        # To a dead end, a hollow with a reward on its floor.
+        carve(g0, 7, L=[11, 11, 13, 13], R=[19, 19, 17, 17], fill='~', pairs=WATER_ROCK)
+        put(g0, 9, 14, '&&')
+    put(g1, 9, 4, 'ii'); put(g1, 3, 20, 'mm'); put(g1, 10, 18, '$$')
+    g1[0][5] = 'T'; g1[9][23] = 'T'; g1[8][0] = 'T'
+    water_rock(g0, g1)
+    return {0: g0, 1: g1}
+
+
+def creek_falls():
+    # Three storeys: the upper river's water in storey 1, its banks in storey 2; over a lip it
+    # falls into a pool in storey 0, the lower river's banks in storey 1. A rock stair joins the
+    # upper west bank to the lower; the lip is a walk across the top of the falls, and a ford
+    # below joins the lower banks.
+    g0, g1, g2 = blank(3, 3), blank(3, 3), blank(3, 3)
+    creek_door(g1, g2, 0, 9); creek_door(g0, g1, 12, 9)
+    # Upper river, storey 2: banks either side of the channel, a landing west to the stair.
+    outline(g2, L=[7, 7, 7, 7, 7, 7, 9], R=[21, 23, 23, 23, 23, 23, 21])
+    channel(g1, g2, 1, L=[13] * 6, R=[19] * 6)
+    fill(g2, [1], range(3, 7), '.'); fill(g2, range(2, 10), range(3, 7), ' ')
+    fill(g2, (6, 7), range(13, 19), ' ')  # open over the lip and the drop
+    # The lip, a metre wide, holds the upper water: its top just under the surface.
+    fill(g1, [6], range(13, 19), 'L')
+    # Storey 1: the stair, the lower banks, the falls' sheet.
+    fill(g1, range(2, 10), range(3, 7), 'S')
+    fill(g1, (10, 11), range(3, 9), '.')
+    outline_rows = {7: (9, 23), 8: (9, 23), 9: (9, 23), 10: (9, 23), 11: (9, 23)}
+    for r, (a, b) in outline_rows.items():
+        fill(g1, [r], range(a, b), '.')
+    channel(g0, g1, 7, L=[13] * 6, R=[19] * 6)
+    fill(g1, [7], range(13, 19), 'F')
+    # The plunge pool spreads under the banks.
+    carve(g0, 7, L=[11, 9, 11], R=[21, 23, 21], fill='~', pairs=WATER_ROCK)
+    # The ford: shallows over a sill of rock across the lower river.
+    fill(g1, (9, 10), range(13, 19), ','); fill(g0, (9, 10), range(13, 19), '#')
+    put(g0, 8, 11, '&&')
+    # Chamfered corners: the lower river's north-east, the landing's south-west, the upper
+    # river's north-east and south corners.
+    put(g1, 7, 21, '\\\\'); put(g1, 11, 3, '\\\\')
+    g2[3][23] = 'T'; g1[9][23] = 'T'; g1[12][6] = 'T'
+    return {0: g0, 1: g1, 2: g2}
+
+
+
 # The frozen river, the ice caves' own: a river's channel of ice sunk 0.4 m between banks of
-# snow, and the rill, ice wall to wall. Its doorways are `FFFFffffffFFFF` and `FFfffFF` (bank,
+# snow, and the slide, ice wall to wall. Its doorways are `FFFFffffffFFFF` and `FFfffFF` (bank,
 # then sunken ice) and `||||||` and `|||`; the banks open onto the ice caves by ice doorways.
 
 def frozen_river():
@@ -596,7 +827,7 @@ def frozen_narrows():
     g = blank(2, 3)
     # A one-cell doorway sits in one cell, so the river narrows toward the east one: the
     # banks run out and its last cell is ice wall to wall.
-    put(g, 12, 1, FROZEN_NS); put(g, 0, 9, RILL_NS)
+    put(g, 12, 1, FROZEN_NS); put(g, 0, 9, SLIDE_NS)
     outline(g, L=[9, 9, 9, 9, 9, 7, 5, 3, 1, 1, 1, 1], R=[15] * 12)
     region(g, 1, L=[9, 9, 9, 9, 9, 7, 5, 5, 5, 5, 5, 5], R=[15, 15, 15, 15, 15, 13, 11, 11, 11, 11, 11, 11],
            fill='_', pairs=POND)
@@ -606,18 +837,18 @@ def frozen_narrows():
     return g
 
 
-def rill():
+def frozen_slide():
     # Ice wall to wall, sunk: no bank to stop on, so it is taken at a slide.
     g = blank(1, 2)
-    put(g, 0, 1, RILL_NS); put(g, 8, 1, RILL_NS); down(g, 0, 5, '+++')
+    put(g, 0, 1, SLIDE_NS); put(g, 8, 1, SLIDE_NS); down(g, 0, 5, '+++')
     outline(g, L=[1] * 8, R=[7] * 8, fill='_')
     g[2][7] = 'T'
     return g
 
 
-def rill_bend():
+def frozen_slide_bend():
     g = blank(2, 2)
-    put(g, 8, 9, RILL_NS); down(g, 0, 1, RILL_EW)
+    put(g, 8, 9, SLIDE_NS); down(g, 0, 1, SLIDE_EW)
     outline(g, L=[1] * 8, R=[15] * 8, fill='_')
     fill(g, range(4, 8), range(1, 9), '#')
     # 45-degree rock on the bend's outer and inner corners: what slides round it meets them.
@@ -655,11 +886,11 @@ def frozen_sink():
     return g
 
 
-def rill_spring():
+def frozen_slide_spring():
     g = blank(2, 2)
-    put(g, 8, 9, RILL_NS); put(g, 0, 1, '++++++'); down(g, 0, 5, '+++')
+    put(g, 8, 9, SLIDE_NS); put(g, 0, 1, '++++++'); down(g, 0, 5, '+++')
     outline(g, L=[1] * 8, R=[11, 13, 15, 15, 15, 15, 15, 15])
-    # The rill comes in wall to wall for 3 m before the pool opens out.
+    # The slide comes in wall to wall for 3 m before the pool opens out.
     region(g, 2, L=[9, 7, 7, 9, 9, 9, 9], R=[13, 15, 15, 15, 15, 15, 15], fill='_', pairs=POND)
     fill(g, (5, 6, 7), [8], '#')
     pond_rock(g)
@@ -677,9 +908,14 @@ PLANS = {
     'ice-grotto': ice_grotto, 'ice-lake': ice_lake, 'ice-sheet': ice_sheet, 'ice-cavern': ice_cavern,
     'ice-passage': ice_passage, 'ice-bend': ice_bend, 'ice-gate': ice_gate, 'ice-gate-bend': ice_gate_bend,
     'ice-chute': ice_chute, 'ice-niche': ice_niche, 'frost-shrine': frost_shrine,
+    'creek': creek, 'creek-bend': creek_bend, 'creek-ford': creek_ford, 'creek-cavern': creek_cavern,
+    'creek-narrows': creek_narrows, 'rill': rill, 'rill-sump': rill_sump, 'creek-spring': creek_spring,
+    'rill-spring': rill_spring, 'creek-sink': creek_sink, 'creek-sink-sump': lambda: creek_sink(sump=True),
+    'creek-falls': creek_falls,
     'frozen-river': frozen_river, 'frozen-ford': frozen_ford, 'frozen-bend': frozen_bend,
-    'frozen-cavern': frozen_cavern, 'frozen-narrows': frozen_narrows, 'rill': rill, 'rill-bend': rill_bend,
-    'frozen-spring': frozen_spring, 'frozen-sink': frozen_sink, 'rill-spring': rill_spring,
+    'frozen-cavern': frozen_cavern, 'frozen-narrows': frozen_narrows, 'frozen-slide': frozen_slide,
+    'frozen-slide-bend': frozen_slide_bend, 'frozen-slide-spring': frozen_slide_spring,
+    'frozen-sink': frozen_sink, 'frozen-spring': frozen_spring,
 }
 
 
@@ -692,7 +928,14 @@ def main(args):
             print('%s: no such cave plan; there are %s' % (name, ', '.join(PLANS)), file=sys.stderr)
             status = 1
             continue
-        rows = ["".join(r) for r in PLANS[name]()]
+        plans = PLANS[name]()
+        if not isinstance(plans, dict):
+            plans = {0: plans}
+        rows = []
+        for k in sorted(plans):
+            if k:
+                rows += ['', 'plan %d' % k]
+            rows += ["".join(r) for r in plans[k]]
         path = os.path.join(ROOT, 'data', 'blueprints', name + '.txt')
         lines = open(path).read().split('\n')
         start = lines.index('plan 0') + 1

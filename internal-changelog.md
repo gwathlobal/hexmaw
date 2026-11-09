@@ -7,30 +7,67 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
-- **A frozen river in the ice caves.** A fifth network, `:frozen`: the lava river made of ice, a
-  3 m channel of slick ice sunk 0.4 m between 2 m snow banks under icicles, and the rill, ice wall
-  to wall. Its doorway kinds are `frozen` (7 × 3.5 m) and `rill` (3 × 3.5 m), and its banks open
+- **A frozen river in the ice caves.** A sixth network, `:frozen`: the lava river made of ice, a
+  3 m channel of slick ice sunk 0.4 m between 2 m snow banks under icicles, and the slide, ice wall
+  to wall. Its doorway kinds are `frozen` (7 × 3.5 m) and `slide` (3 × 3.5 m), and its banks open
   onto the ice caves through `ice` doorways, so it lives wholly in the ice wing and never meets
   lava. It burns nothing; its risk is control. The channel is the fastest road in the game, but
   it stops only on snow: bends carry a sliding player into the outer rock, and a monster struck
   on it skates into the walls. Ten blocks drawn by `tools/cave_plans.py`, nine with mirrors:
-  `frozen-river`, `frozen-ford`, `frozen-bend`, `frozen-cavern`, `frozen-narrows`, `rill`,
-  `rill-bend`, and the ends `frozen-spring`, `frozen-sink`, `rill-spring`. `*frozen-length*`
+  `frozen-river`, `frozen-ford`, `frozen-bend`, `frozen-cavern`, `frozen-narrows`, `frozen-slide`,
+  `frozen-slide-bend`, and the ends `frozen-spring`, `frozen-sink`, `frozen-slide-spring`
+  (`frozen-slide*` rather than `rill`, which the creek took first). `*frozen-length*`
   (4 to 7) and `*max-frozen-rivers*` (1). `check-kit` is clean on all of them, with ogres too.
   Over run seeds 1 to 150, every level (601), 132 levels had an ice wing and 35 of them a frozen
   river, 4.5 blocks on average (1 to 9), with no unreachable doorway, bad ice join, stranded
   creature but ogres, or doorway opening onto nothing.
-- **The network code is more general.** A banked doorway kind names what fills its middle (a
-  5th element in `*connector-kinds*`: `:lava`, `:open`, `:ice`; `middle-cell-p`), and each
-  `*networks*` entry names its `(level-map)` character (`network-char`), so a new family needs
-  no new branches.
+  Merged with the creek: over run seeds 1 to 60 (240 levels), 15 frozen rivers (4.1 blocks), no
+  warnings.
+- **Ice is a doorway's third liquid.** `kind-liquid` (the 5th element of `*connector-kinds*`) may
+  be `:ice` beside `:lava` and `:water`: a pit floored with ice, which `middle-cell-p` checks in a
+  doorway's middle and whose depth its plug reaches down to. `(level-map)` draws a frozen river's
+  blocks as `*`.
 - **Walkers keep off ice when they can.** `nav-flood` charges a step onto a slippery footing
   `*nav-ice-cost*` (1.5) times its length for walkers (`*nav-hazards*` `:avoid` and `:wade`), so
   paths keep to a frozen river's banks and cross it the short way. Straight walks and flyers are
   unchanged.
 - New kit blocks change what each seed grows, so an older save on a generated level starts fresh
   with the usual warning.
-
+- **A waterfall made of the water's own texture.** Its white streaks were hashed lanes of solid
+  white an eighth of a metre wide, crude beside the textured water around them, and the texture
+  stretched eight times was still blocky. The sheet is now two layers of the water texture,
+  only twice as long down its length and rippling across like the surface, pouring at two speeds
+  and averaged, their brightest texels softly whitened, more toward the foot: the surface's grain.
+- **Climbing out onto a ledge just under the water.** A swimmer climbed out only onto a ledge
+  standing over the surface, so a creek ford's sill (0.15 m under it) and a waterfall's lip
+  stopped them dead, and only the banks could be climbed. `ledge-ahead-p` now also takes a ledge
+  up to `*climb-out-depth*` (0.3 m) under the surface.
+- **No gap at the top of a waterfall.** The sheet hung in the middle of the metre-wide opening it
+  pours through, so from above the dark drop showed either side of it and the lip was bare rock.
+  `add-waterfall` now finds the pool it pours from (within `*spill-reach*`), stands the sheet at
+  the opening's far edge, and lays a spill of water at the pool's height from the pool over the
+  lip to the sheet's top.
+- **The creek, a cave river of water.** A fifth network (`:creek`, doorways `creek` and `rill`,
+  `*creek-length*` 4 to 8, `*max-creeks*` 1, `%` in `(level-map)`): rock caves with deep water a
+  storey down between 45° banks, built like the lava river but two storeys (three for the falls).
+  Twelve blocks, all drawn by `tools/cave_plans.py`, which now writes a plan per storey: `creek`,
+  `creek-bend`, `creek-ford`, `creek-cavern`, `creek-narrows`, `creek-falls`, `rill`,
+  `rill-sump`, and the ends `creek-spring`, `rill-spring`, `creek-sink` and `creek-sink-sump`,
+  whose underwater doorway starts a flooded run. No creature swims, so walkers cross only at the
+  fords' **shallows**, a new liquid kind (`:shallows`, a blueprint's `shallow`): a hand of water
+  level with the deep water beside it, waded by everything. **Waterfalls**
+  (`src/waterfall.lisp`, a blueprint's `falls`): a sheet of water pouring in lanes, foam churning
+  at its foot and a looping roar (`waterfall`, a new clip). `*connector-kinds*` gives each kind
+  with a middle its liquid (`kind-liquid`), which replaces the canal's special cases
+  (`under-channel-p`), and `check-kit` swims a block with a rill's doorway. A block may now have
+  doorways of two networks' kinds: the generator keeps a network per family, and leaves out a
+  block that would start another of a family already full. `check-kit` is clean.
+- **A level has a creek 56% of the time.** Its weights decided little (every level at full weight,
+  94% at half), so a network may carry a chance a level has one at all, rolled from the level's
+  seed on a random state of its own (`network-barred`): `*creek-chance*` 0.6, the creek's weights
+  halved. Over run seeds 1 to 100 (300 levels): 6.4 creek blocks on average, never two, every
+  doorway reachable, only ogres stranded; flooded runs on 27% of levels (11% before), the sink
+  starting them. Creek blocks cost 6.1 ms of GPU a frame against the canal's 6.5 (seed 17, level 4).
 - **Music from a composition plan.** `tools/gen_music.py --plan FILE` sends ElevenLabs a plan of
   timed sections (`music_v2_5`'s chunks, each its text, styles and length) in place of a prompt,
   so a track can be written to a cut: `audio/prompts/music-trailer-plan.json` is the trailer's,

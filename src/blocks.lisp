@@ -7,8 +7,8 @@
 ;;;  - Metres, +Y up, the block's origin at its centre on the floor. On the grid, a block
 ;;;    is whole 4 m cells across and whole 5 m storeys tall.
 ;;;  - Every mesh object is drawn and its bounding box is a solid, unless its name
-;;;    starts with "deco_" (drawn, no collision), "plug_" (see below), or "lava_" or
-;;;    "water_" (not drawn: a liquid's volume, liquids.lisp). One named
+;;;    starts with "deco_" (drawn, no collision), "plug_" (see below), or "lava_",
+;;;    "water_" or "shallows_" (not drawn: a liquid's volume, liquids.lisp). One named
 ;;;    "wedge_<n>_..." is that box with a vertical corner cut away along the diagonal
 ;;;    (n: 1 north-east, 2 north-west, 3 south-west, 4 south-east, as the block lies),
 ;;;    a 45° wall when the box is square; the mesh must be that shape.
@@ -51,7 +51,8 @@
 (defun liquid-name-kind (name)
   "The liquid kind a piece named NAME is the volume of, or NIL."
   (cond ((prefixp "lava_" name) :lava)
-        ((prefixp "water_" name) :water)))
+        ((prefixp "water_" name) :water)
+        ((prefixp "shallows_" name) :shallows)))
 
 (defun base-name (name)
   "NAME without a Blender duplicate's suffix, \".001\"."
@@ -172,7 +173,7 @@ to, in what follows an empty's \"spawn_\": \"any\", \"skip30_any\" or \"when-sac
 :BOUNDS), :BOUNDS (min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist
 of :NAME :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
   (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (pickups ()) (exits ()) (altars ()) (liquids ()) (tags ()) (weight 1.0)
-        (arrivals ()) (npcs ()) (zone-corners ())
+        (arrivals ()) (npcs ()) (zone-corners ()) (falls-corners ())
         (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
         (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (org.shirakumo.fraf.gltf:with-gltf (gltf path)
@@ -233,6 +234,10 @@ of :NAME :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it.
                                     :position (vcopy (tlocation transform))
                                     :yaw (rotation-yaw (trotation transform)))
                               npcs)))
+                     ((prefixp "falls_" name)
+                      ;; falls_<n>_lo and _hi, the corners of the box a waterfall pours through.
+                      (let ((parts (uiop:split-string name :separator "_")))
+                        (push (list (second parts) (third parts) (vcopy (tlocation transform))) falls-corners)))
                      ((prefixp "zone_" name)
                       ;; zone_<name>_<n>_lo and _hi, the corners of one box of the zone.
                       (let* ((parts (uiop:split-string name :separator "_")))
@@ -258,6 +263,10 @@ of :NAME :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it.
           :torches (nreverse torches) :pickups (nreverse pickups) :exits (nreverse exits)
           :altars (nreverse altars) :liquids (nreverse liquids)
           :arrivals (nreverse arrivals) :npcs (nreverse npcs)
+          :falls (loop for (n corner lo) in falls-corners
+                       when (string= corner "lo")
+                         collect (list lo (third (find-if (lambda (c) (and (string= (first c) n) (string= (second c) "hi")))
+                                                          falls-corners))))
           :zones (loop for (zone n corner lo) in zone-corners
                        when (string= corner "lo")
                          collect (let ((hi (fourth (find-if (lambda (c) (and (string= (first c) zone) (string= (second c) n)
@@ -596,6 +605,10 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
             (let ((a (world lo)) (b (world hi)))
               (add-liquid container (getf liquid :kind)
                           (vx a) (vy a) (vz a) (vx b) (vy b) (vz b)))))
+        (dolist (falls (getf def :falls))
+          (destructuring-bind (lo hi) falls
+            (let ((a (world lo)) (b (world hi)))
+              (add-waterfall container (vmin a b) (vmax a b)))))
         ;; After the solids, so ADD-TORCH finds the walls.
         (dolist (p (getf def :torches))
           (let ((w (world p)))

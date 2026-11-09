@@ -89,7 +89,7 @@ of the plug, if it is plugged."
   (first (doorway-probes connector)))
 
 (defun flooded-kind-p (kind)
-  "True if a doorway of KIND is lava wall to wall, no banks: a stream's."
+  "True if a doorway of KIND is liquid wall to wall, no banks: a stream's lava, a rill's water."
   (let ((spec (assoc kind hexmaw.blueprint:*connector-kinds* :test #'string-equal)))
     (and (fourth spec) (<= (second spec) (fourth spec)))))
 
@@ -235,7 +235,12 @@ without its leaps.")
 (defun block-problems (name)
   "What is wrong with block NAME, built alone as *LEVEL* :BLOCK, as a list of strings."
   (let* ((r *player-radius*) (h *player-height*) (step *step-height*)
-         (*nav-hazards* (cond ((some (lambda (c) (string-equal "underwater" (connector-kind c))) *level-doorways*)
+         ;; A block with a doorway under water or all liquid is checked swimming or wading, as
+         ;; it can only be crossed so; the rest dry, so a river's banks still walk dry.
+         (*nav-hazards* (cond ((some (lambda (c) (or (string-equal "underwater" (connector-kind c))
+                                                     (and (flooded-kind-p (connector-kind c))
+                                                          (eq :water (hexmaw.blueprint:kind-liquid (connector-kind c))))))
+                                     *level-doorways*)
                                :swim)
                               ((some (lambda (c) (flooded-kind-p (connector-kind c))) *level-doorways*)
                                :wade)
@@ -263,7 +268,7 @@ without its leaps.")
                                (notany (lambda (b) (and (not (eq (first a) (first b))) (joined a b))) probes))
                           (push (format NIL "~a leads to no other doorway" (label a)) problems))))
           (let ((ordinary (remove-if-not (lambda (p) (ordinary-p (first p))) probes))
-                (all-joined (intersection '(:river-end :canal-end :frozen-end) (block-tags name))))
+                (all-joined (intersection '(:river-end :canal-end :creek-end :frozen-end) (block-tags name))))
             (loop for a in (if all-joined probes ordinary)
                   do (loop for b in (if all-joined probes ordinary)
                            when (and (not (eq (first a) (first b))) (not (joined a b)))

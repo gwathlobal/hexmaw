@@ -17,7 +17,7 @@
 ;;; doorways (passages full of water, swum on one breath, a cistern at each end, whose
 ;;; ledges go on into the dungeon), and canals, through canal doorways (a river's, deep
 ;;; water in place of lava), and frozen rivers, the ice caves' own, through frozen doorways
-;;; (a river's with a sunken channel of ice in place of lava) and rill doorways (ice wall to
+;;; (a river's with a sunken channel of ice in place of lava) and slide doorways (ice wall to
 ;;; wall), whose banks open onto the ice caves by ice doorways. The first block of one comes in like any
 ;;; corridor or room, through an ordinary doorway, and starts a network with a target length
 ;;; in blocks. Its open network doorways are tried before any other, with pieces until the
@@ -46,18 +46,26 @@ short, so it is swum on one breath.")
 (defparameter *max-flooded-networks* 1 "How many flooded runs a level may start.")
 (defparameter *canal-length* '(3 6) "The fewest and most blocks a canal runs to before it ends.")
 (defparameter *max-canals* 1 "How many canals a level may start.")
+(defparameter *creek-length* '(4 8) "The fewest and most blocks a creek, a cave river of water, runs to before it ends.")
+(defparameter *max-creeks* 1 "How many creeks a level may start.")
+(defparameter *creek-chance* 0.6
+  "The chance a level may have a creek at all: from any of a level's many doorways some creek
+block nearly always fits, so its weights alone would put one on nearly every level.")
 (defparameter *frozen-length* '(4 7)
   "The fewest and most blocks a frozen river runs to before it ends: the ice wing is small.")
 (defparameter *max-frozen-rivers* 1 "How many frozen rivers a level may start.")
 (defparameter *networks*
-  '((:river ("river" "stream") :river :river-end *river-length* *max-rivers* #\~)
-    (:high ("high") :high :high-end *high-length* *max-high-networks* #\^)
-    (:flooded ("underwater") :flooded :cistern *flooded-length* *max-flooded-networks* #\=)
-    (:canal ("canal") :canal :canal-end *canal-length* *max-canals* #\-)
-    (:frozen ("frozen" "rill") :frozen-river :frozen-end *frozen-length* *max-frozen-rivers* #\*))
+  '((:river ("river" "stream") :river :river-end *river-length* *max-rivers*)
+    (:high ("high") :high :high-end *high-length* *max-high-networks*)
+    (:flooded ("underwater") :flooded :cistern *flooded-length* *max-flooded-networks*)
+    (:canal ("canal") :canal :canal-end *canal-length* *max-canals*)
+    (:creek ("creek" "rill") :creek :creek-end *creek-length* *max-creeks* *creek-chance*)
+    (:frozen ("frozen" "slide") :frozen-river :frozen-end *frozen-length* *max-frozen-rivers*))
   "The networks the generator grows: each family, the doorway kinds that join its blocks,
-the tags of its pieces and of its ends, the variables that hold its length in blocks and
-how many a level may start, and the character LEVEL-MAP draws its blocks with.")
+the tags of its pieces and of its ends, and the variables that hold its length in blocks and
+how many a level may start, and optionally the one that holds the chance a level may have one
+at all (rolled from the level's seed, NETWORK-BARRED). A block may have doorways of two families (a creek's sink with an
+underwater way on): it is then in a network of each.")
 (defparameter *start-clearance* 16.0
   "Metres round the player's start where no monster spawns: the start block's neighbours
 would see the player the moment the level begins.")
@@ -115,13 +123,27 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
   "The family of network block NAME is a piece or an end of, by its tags, or NIL."
   (first (find-if (lambda (spec) (intersection (list (third spec) (fourth spec)) (block-tags name))) *networks*)))
 
-(defun network-char (family) (seventh (assoc family *networks*)))
+(defun block-families (name)
+  "Every family of network block NAME is in: by its tags, and by its doorways' kinds."
+  (remove-duplicates
+   (remove NIL (list* (block-network name)
+                      (mapcar (lambda (c) (kind-network (getf c :kind))) (getf (find-block name) :connectors))))))
+
+(defun network-barred (seed)
+  "The families of network level SEED may not have: each with a chance (the seventh of its
+entry in *NETWORKS*) that the level's roll missed. Rolled on a random state of its own from the
+seed, so the generator's own draws are those it would make without it."
+  (let ((random (sb-ext:seed-random-state (logxor seed #xC4EE7))))
+    (loop for spec in *networks*
+          for chance = (and (seventh spec) (symbol-value (seventh spec)))
+          when (and chance (<= chance (random 1.0 random)))
+            collect (first spec))))
 
 (defun network-end-p (name family)
   (member (fourth (assoc family *networks*)) (block-tags name)))
 
 (defclass network ()
-  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER, :HIGH, :FLOODED, :CANAL or :FROZEN.")
+  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER, :HIGH, :FLOODED, :CANAL, :CREEK or :FROZEN.")
    (target :initarg :target :reader network-target :documentation "How many blocks it runs to.")
    (pieces :initform 0 :accessor network-pieces :documentation "How many blocks it has.")
    (ends :initform () :accessor network-ends :documentation "How each arm ended: :END, :JOIN or :PLUG."))
@@ -200,16 +222,18 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
          ;; Only blocks whose named monsters the level's pool has.
          (kit (remove-if-not #'block-fits-pool-p all))
          (cells (setf *level-cells* (make-hash-table :test 'equal)))
-         (frontier ()) (shut ()) (doors ()) (placed-rooms 0) (networks ()) (exit-placed NIL))
+         (frontier ()) (shut ()) (doors ()) (placed-rooms 0) (networks ()) (exit-placed NIL)
+         (barred (network-barred seed)))
     (when (< (length kit) (length all))
       (v:info :hexmaw "Generated level ~d: the pool leaves out ~{~a~^, ~}."
               seed (remove-if (lambda (n) (member n kit :test #'string=)) all)))
     (labels ((full-p (family)
-               ;; True once the level has as many networks of FAMILY as it may.
-               (<= (symbol-value (sixth (assoc family *networks*))) (count family networks :key #'network-family)))
+               ;; True once the level has as many networks of FAMILY as it may, or may have none.
+               (or (member family barred)
+                   (<= (symbol-value (sixth (assoc family *networks*))) (count family networks :key #'network-family))))
              (tagged (&rest tags)
                ;; Once the level has a family's networks, no ordinary doorway starts another.
-               (remove-if (lambda (n) (let ((family (block-network n))) (and family (full-p family))))
+               (remove-if (lambda (n) (some #'full-p (block-families n)))
                           (remove-if-not (lambda (n) (intersection tags (block-tags n))) kit)))
              (with-doorway (kind) (remove-if-not (lambda (n) (find kind (getf (find-block n) :connectors)
                                                                  :key (lambda (m) (getf m :kind)) :test #'string-equal))
@@ -226,23 +250,30 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
                (when (room-block-p name) (incf placed-rooms))
                (let ((run (if (room-block-p name) 0 (1+ run)))
                      (connectors (place-block name container :at at :turns turns :spawns spawns)))
-                 ;; A network's block joins the network it was reached by, or starts one.
-                 (let ((family (some (lambda (c) (kind-network (connector-kind c))) connectors)))
-                   (when family
-                     (unless (and network (eq family (network-family network)))
-                       (destructuring-bind (low high) (symbol-value (fifth (assoc family *networks*)))
-                         (setf network (make-instance 'network :family family
-                                                               :target (+ low (generator-roll (1+ (- high low))))))
-                         (push network networks)))
-                     (incf (network-pieces network))
-                     (when (network-end-p name family) (push :end (network-ends network)))))
+                 ;; A network's block joins the network it was reached by, or starts one, for
+                 ;; each family its doorways belong to.
+                 (let ((here ()))
+                   (dolist (family (remove-duplicates (remove NIL (mapcar (lambda (c) (kind-network (connector-kind c)))
+                                                                          connectors))
+                                                      :from-end T))
+                     (let ((net (if (and network (eq family (network-family network)))
+                                    network
+                                    (destructuring-bind (low high) (symbol-value (fifth (assoc family *networks*)))
+                                      (let ((new (make-instance 'network :family family
+                                                                         :target (+ low (generator-roll (1+ (- high low)))))))
+                                        (push new networks)
+                                        new)))))
+                       (incf (network-pieces net))
+                       (when (network-end-p name family) (push :end (network-ends net)))
+                       (push (cons family net) here)))
+                   (setf network here))
                  (dolist (c connectors)
                    (push c doors)
                    (let ((other (find-if (lambda (d) (let ((o (door-connector d)))
                                                        (and (facing-p c o)
                                                             (gate-allowed-p name (connector-block o) (connector-kind c)))))
                                          frontier))
-                         (network (and (kind-network (connector-kind c)) network)))
+                         (network (cdr (assoc (kind-network (connector-kind c)) network))))
                      ;; A doorway that meets another shares its portal.
                      (cond ((and joined (facing-p c joined)) (drop-portal c))
                            (other (drop-portal c) (setf frontier (remove other frontier))
@@ -269,11 +300,17 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
                          (place name at turns (door-run door) :joined c :network (door-network door)
                                                               :depth (door-depth door))
                          (return-from attach T)))))))
+             (fitting (door)
+               ;; The blocks with DOOR's kind of doorway, but not one that would start another
+               ;; network of a family already full.
+               (let ((family (network-family (door-network door))))
+                 (remove-if (lambda (n) (some (lambda (f) (and (not (eq f family)) (full-p f))) (block-families n)))
+                            (with-doorway (connector-kind (door-connector door))))))
              (ends (door)
                ;; The blocks that may end DOOR's arm: its end blocks, heavier first, then any
                ;; other room with its doorway, for when no end block fits.
-               (let ((family (network-family (door-network door)))
-                     (fitting (with-doorway (connector-kind (door-connector door)))))
+               (let* ((family (network-family (door-network door)))
+                      (fitting (fitting door)))
                  (append (weighted-order (remove-if-not (lambda (n) (network-end-p n family)) fitting))
                          (weighted-order (remove-if-not (lambda (n) (and (member :room (block-tags n))
                                                                          (not (network-end-p n family))))
@@ -283,7 +320,7 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
                ;; end is still tried when no piece fits, ahead of a plug.
                (let* ((network (door-network door))
                       (pieces (weighted-order (remove-if (lambda (n) (network-end-p n (network-family network)))
-                                                         (with-doorway (connector-kind (door-connector door)))))))
+                                                         (fitting door)))))
                  (if (< (network-pieces network) (network-target network))
                      (append pieces (ends door))
                      (ends door))))
@@ -397,9 +434,8 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
 
 (defun level-map (&optional (stream *standard-output*))
   "Print the generated level's cells, a storey at a time, north up: each cell is the first
-letter of its block's name, upper case for rooms, @ for the settlement's town, and a
-network's blocks by its family's character in *NETWORKS*: ~ for a river's, ^ for a high
-quarter's, = for a flooded run's, - for a canal's and * for a frozen river's."
+letter of its block's name, upper case for rooms, @ for the settlement's town, ~ for a river's blocks, ^ for a high
+quarter's, = for a flooded run's, - for a canal's, % for a creek's and * for a frozen river's."
   (let ((keys (loop for k being the hash-keys of *level-cells* collect k)))
     (when keys
       (loop for k from (reduce #'min keys :key #'third) to (reduce #'max keys :key #'third)
@@ -409,7 +445,12 @@ quarter's, = for a flooded run's, - for a canal's and * for a frozen river's."
                               for name = (gethash (list i j k) *level-cells*)
                               do (write-char (cond ((null name) #\.)
                                                    ((member :town (block-tags name)) #\@)
-                                                   ((block-network name) (network-char (block-network name)))
+                                                   ((eq (block-network name) :river) #\~)
+                                                   ((eq (block-network name) :high) #\^)
+                                                   ((eq (block-network name) :flooded) #\=)
+                                                   ((eq (block-network name) :canal) #\-)
+                                                   ((eq (block-network name) :creek) #\%)
+                                                   ((eq (block-network name) :frozen) #\*)
                                                    ((member :room (block-tags name)) (char-upcase (char name 0)))
                                                    (T (char-downcase (char name 0))))
                                              stream))

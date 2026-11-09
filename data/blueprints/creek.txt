@@ -1,0 +1,46 @@
+; A creek, a cave river of water, north to south: deep water 3 m wide in a channel a storey
+; deep, between banks 2 m wide, 0.3 m over the water, and a doorway onto the west bank. Under
+; that bank the water reaches back into the rock, a hollow with a reward on its floor.
+; Its plans are drawn by tools/cave_plans.py.
+cells 2 2
+storeys 2
+tags corridor creek cave
+weight 1.5
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  B door creek                       ; a creek's doorway: bank
+  C door creek, open                 ; and its open middle, over the water
+  & water, pickup reward
+  $ pickup floor
+
+plan 0
+#####~~~~~~#####
+#####~~~~~~#####
+###<<~~~~~~#####
+###&&~~~~~~#####
+###>>~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+#####~~~~~~#####
+
+plan 1
+#BBBBCCCCCCBBBB#
+#....      ....#
+T.$$.      ....#
+#....      ..//#
+#....      ..###
+w....      ..\\#
+w....      ....T
+w....      ....#
+#BBBBCCCCCCBBBB#

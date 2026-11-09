@@ -1,5 +1,5 @@
-; A rill turning from the south to the west, ice wall to wall: what slides round it meets
-; the rock on the outside of the bend.
+; A slide, a narrow frozen river, turning from the south to the west, ice wall to wall:
+; what slides round it meets the rock on the outside of the bend.
 ; Its plan is drawn by tools/cave_plans.py.
 cells 2 2
 tags corridor frozen-river
@@ -17,7 +17,7 @@ legend
   ] diagonal \ floor -0.4 0, pit 0.4, floor ice
   < diagonal /, pit 0.4, floor ice                  ; 45-degree ice-rock standing on the ice
   > diagonal \, pit 0.4, floor ice
-  | door rill, pit 0.4, floor ice                   ; a rill's doorway: ice wall to wall
+  | door slide, pit 0.4, floor ice                   ; a slide's doorway: ice wall to wall
 
 plan 0
 ########T#######

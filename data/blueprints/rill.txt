@@ -1,27 +1,42 @@
-; A rill, north to south: ice sunk a step wall to wall, no bank to stop on. A doorway on the
-; west opens onto it.
-; Its plan is drawn by tools/cave_plans.py.
+; A rill, a narrow creek, north to south, water wall to wall: no bank, so it is swum.
+; A doorway on the west opens onto it.
+; Its plans are drawn by tools/cave_plans.py.
 cells 1 2
-tags corridor frozen-river
-weight 2
+storeys 2
+tags corridor creek cave
+weight 1
 mirror yes
-remap wall ice-rock
-remap ceiling ice-rock
-remap floor snow
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
 legend
-  + door ice                                        ; ice caves join only ice caves and gates
-  F door frozen                                     ; a frozen river's doorway: bank
-  f door frozen, pit 0.4, floor ice                 ; and its sunken ice
-  _ pit 0.4, floor ice                              ; the river's ice, sunk a step
-  | door rill, pit 0.4, floor ice                   ; a rill's doorway: ice wall to wall
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  - door rill, open                  ; a rill's doorway: all open, over the water
 
 plan 0
-#||||||#
-#______#
-#______T
-#______#
-#______#
-+______#
-+______#
-+______#
-#||||||#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+
+plan 1
+#------#
+#      #
+#      T
+#      #
+#      #
+w      #
+w      #
+w      #
+#------#
