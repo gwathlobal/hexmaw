@@ -550,7 +550,9 @@ real time instead.
   `slot-1.sav` .. `slot-3.sav`, `quick.sav`). A save doesn't store the level: it keeps the
   seed and the generator's settings (`*saved-generator-settings*`), and the level's cells
   (`level-layout`) to check that the rebuild is the same level; one built from changed blocks
-  isn't, and its save then starts fresh, with a warning. What it stores is everything that
+  isn't, and its save then starts fresh, with a warning. So does one whose pickups were scattered
+  another way (`:pickup-kinds`, `built-pickup-kinds`: the taken ones are named by index), and one
+  older than that key. What it stores is everything that
   changes in play, so a load is the moment of the save, nothing in flight lost: the player,
   every creature by its index in `*creatures*` (raised skeletons recreated), every effect in
   the scene (projectiles, circles, impacts, with their glows), the blood pool's arrays,
@@ -1047,19 +1049,24 @@ real time instead.
   `*pickups*` (`:pickups`; none in an older save). It flashes the view (`restore-flash`, hud.lisp,
   a `pain-flash` with its own `flash-color`). The blocks say where one may go (`pickup` in a
   blueprint, `*pickup-spots*`), and `place-pickups`, last in `build-level`, fills a generated level
-  (`scatter-pickups`) until they restore `*health-per-monster*` (10) and `*mana-per-monster*` (15)
-  per monster, every `*pickup-potion-every*`th (2nd) of a resource a potion, on a reward spot if one
+  (`scatter-pickups`) until they restore `*health-per-monster-health*` (0.09) and
+  `*mana-per-monster-health*` (0.18) of the level's monsters' health (`monster-health`, their
+  `max-health` as built, elites' and the boss's raised: by health, not number, so an imp pack is
+  paid for as imps), every `*pickup-potion-every*`th (3rd) of a resource a potion, on a reward spot if one
   is free in a block with no pickup yet and otherwise anywhere. It skips
   the start block and spots the player can't reach (`spot-reached-p`: a floor spot's own cell, or
   for a reward spot a floor up to `*jump-reach*` under it within 2 m), keeps to one a block until
   blocks run out, and likes rooms `*pickup-room-weight*` times as much as corridors. It draws from
   a random state of its own seeded with the level's, so a seed always places the same ones. A save
-  names the taken ones by place, so changing how they're scattered makes an older save mark the wrong
-  ones taken. Over seeds 1 to 30, on a run's first level: 42 monsters (27 to 63), about half of them imps
-  (imp packs, imp.lisp), and 32 pickups; since then 45 monsters (29 to 65), measured once its pool kept
-  out the high quarter's ogres. Before packs it was 33 monsters and 26 pickups (half of each
-  resource potions, 5 to 8 of each, restoring 343 health and 509 mana), on its second 40 and 32, on its
-  third 48 and 38. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
+  names the taken ones by place, so changing how they're scattered would make an older save mark the
+  wrong ones taken; it starts its level fresh instead (`save-matches-level-p`). Over run seeds 1 to 30
+  (`tools/levelcheck --runs 1-30`), 45 monsters on a run's first level (34 to 60), about half of them
+  imps (imp packs, imp.lisp), 54 on the second and third and 64 on the last, and 17 in the settlement:
+  15 health and mana pickups on the first (4.6 potions, 152 health, 296 mana), 22 on the second and
+  third (7 potions, 225 health, 440 mana), 36 on the last (11 potions, 354 health, 710 mana) and 8 in
+  the settlement; a run 25 potions, 810 health and 1,590 mana. At 10 health and 15 mana a monster and
+  a potion every 2nd it was 66 potions, 1,780 health and 2,670 mana a run, and the bag came to the
+  boss full of potions. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
   **Glyphs** are pickup kinds with `:teaches` (`:glyph-frost` .. `:glyph-area`): touched, they teach
@@ -1068,14 +1075,17 @@ real time instead.
   the run seed alone (`run-glyphs`), so the first three levels teach them all and the last has none,
   placed after the other pickups (`place-glyphs`, from a random state of their own) on free spots, a
   reward spot first, so the other pickups keep their places. `scatter-pickups` leaves them their spots
-  (`:reserve`, the level's glyphs and loot, `src/loot.lisp`, and the settlement's relic): the settlement's small wing ran out and
-  lost a glyph for the run. The town's shopkeeper sells the ones the player doesn't know (see "The
+  (`:reserve`, the level's glyphs and loot, `src/loot.lisp`, the settlement's relic, a sacked town's
+  `*sacked-town-loot*`, and `*pile-spots*` (3) for gold and dust): the settlement's small wing ran out and
+  lost a glyph for the run, and before the gold and dust had spots kept, half of a run's first levels
+  had neither (run seed 5's first among them). The town's shopkeeper sells the ones the player doesn't know (see "The
   settlement"). The test level has one of each along the hall's south wall, west of the pickups. **Arcane dust**
   (`:dust`, an `:item` with `:count`: the pile's `pickup-count`) is placed last (`place-dust`, from a
   random state of its own, on spots `free-pickup-spots` leaves) until a generated level holds
   `*dust-per-monster*` (2) for each monster (`monster-p`: not the townsfolk), in piles of `*dust-pile*`
   (8 to 20; bigger where few spots are left, so a level gets its whole budget while it has a spot:
-  about 60 to 120, three to six spells). Sprites:
+  about 60 to 120, three to six spells). Over run seeds 1 to 30 every level got its whole gold and
+  dust; one that can't logs "No spot for ...". Sprites:
   `tools/draw_glyphs.py data/sprites/pickups` (a rune tablet per glyph, and `altar-sigil`).
   **Altars**: `add-altar` notes a point in `*level-altars*` (blocks.lisp; a blueprint's `altar`) and
   hangs an `altar-sigil` over it with a lamp; `reset-run` keeps it. The test level has one on a dais
@@ -3116,7 +3126,7 @@ at the highest). Monsters: 15.9 (11 to 21), 19.2 (13 to 27) and 22.7 (16 to 29),
 (an older count: over run seeds 1 to 20, `*creatures*` held 33.0, 42.3 and 54.3 after the depth
 scaling, against 31.9, 40.3 and 48.9 before it, with 10% elites on level 2 and 19% on level 3;
 all before imp packs, which add a quarter or so);
-pickups 13.2, 15.7, 18.3. A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
+pickups 13.2, 15.7, 18.3 (before imp packs and the pickups' rebalance: see `src/pickups.lisp`). A level takes 0.4 to 0.5 s to build, 0.8 s at most. Over seeds 1 to 100 on
 levels 1 and 2 the walk to the exit is 136 m on average against 143 m for the level's longest walk,
 with a median at 99.6% of it and the lowest tenth under 81%: blocks from the start are a good stand-in.
 It can be close in a straight line (20 m away, but a 91 m walk). 6 of those 200 exits lie behind a

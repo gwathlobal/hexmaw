@@ -65,9 +65,19 @@ step's height, so one on a 0.8 m sarcophagus takes a jump.")
 (defparameter *pickup-above* 0.8
   "How far over that floor the player's feet may be: the top of the pickup, about.")
 
-(defparameter *health-per-monster* 10 "Health a generated level's pickups restore, per monster in it.")
-(defparameter *mana-per-monster* 15 "Mana a generated level's pickups restore, per monster in it.")
-(defparameter *pickup-potion-every* 2 "Every so many pickups of a resource, one is a potion, on a reward spot if one is free.")
+(defparameter *health-per-monster-health* 0.09
+  "Health a generated level's pickups restore, per point of its monsters' health (MONSTER-HEALTH):
+by their health, not their number, so an imp pack is paid for as imps, not ogres.")
+(defparameter *mana-per-monster-health* 0.18
+  "Mana a generated level's pickups restore, per point of its monsters' health. More than health:
+it is all the spells have.")
+(defparameter *pickup-potion-every* 3 "Every so many pickups of a resource, one is a potion, on a reward spot if one is free.")
+(defparameter *pile-spots* 3
+  "Spots the health and mana pickups leave free for gold and arcane dust, which come after them:
+one pile of gold and two of dust, each growing to hold its whole budget. Without them half of a
+run's first levels had neither.")
+(defparameter *sacked-town-loot* '(:health-potion :gold :mana-potion :gold)
+  "What a sacked town leaves on its own spots (PLACE-SETTLEMENT-PICKUPS), in turn while they last.")
 (defparameter *pickup-room-weight* 2 "How much likelier a spot in a room is than one in a corridor.")
 (defparameter *gold-per-monster* 6
   "Gold a generated level's gold pickups hold, per monster in it, at the first depth (GOLD-SCALE).
@@ -90,6 +100,12 @@ of), at the first depth (GOLD-SCALE). One that is no class here drops 5.")
   "True if CREATURE counts as one of the level's monsters: built with it, not raised in play,
 and not one of the settlement's townsfolk."
   (and (not (summoned creature)) (not (townsfolk-p creature))))
+
+(defun monster-health ()
+  "The health of the level's monsters (MONSTER-P) as built, all together: elites' and the boss's
+as raised. What its health and mana pickups answer."
+  (loop for creature across *creatures*
+        when (monster-p creature) sum (max-health creature)))
 
 (defparameter *jump-reach* 1.0 "Metres above a floor the player can jump to get onto: a reward spot's limit.")
 
@@ -379,8 +395,9 @@ from a random state of their own, so the level and its monsters don't change."
                         when (and (not (eq start (getf spot :block))) (spot-reached-p spot seen))
                           collect spot)))
          (monsters (count-if #'monster-p *creatures*))
-         (health-owed (* monsters *health-per-monster*))
-         (mana-owed (* monsters *mana-per-monster*))
+         (strength (monster-health))
+         (health-owed (* strength *health-per-monster-health*))
+         (mana-owed (* strength *mana-per-monster-health*))
          (health-count 0) (mana-count 0)
          (used ()))
     (flet ((place (health-p)
@@ -405,11 +422,12 @@ from a random state of their own, so the level and its monsters don't change."
                  T))))
       ;; Whichever resource still owes the larger part of its budget goes next.
       (loop while (or (< 0 health-owed) (< 0 mana-owed))
-            while (place (< (/ mana-owed (max 1 *mana-per-monster*)) (/ health-owed (max 1 *health-per-monster*))))))
-    (v:info :hexmaw "~d pickups for ~d monsters: ~d health, ~d mana~@[, ~d health and ~d mana short~]."
-            (length *pickups*) monsters health-count mana-count
-            (when (or (< 0 health-owed) (< 0 mana-owed)) (max 0 health-owed))
-            (max 0 mana-owed))))
+            while (place (< (/ mana-owed (max 1e-6 *mana-per-monster-health*))
+                            (/ health-owed (max 1e-6 *health-per-monster-health*))))))
+    (v:info :hexmaw "~d pickups for ~d monsters of ~d health: ~d health, ~d mana~@[, ~d health and ~d mana short~]."
+            (length *pickups*) monsters strength health-count mana-count
+            (when (or (< 0 health-owed) (< 0 mana-owed)) (max 0 (round health-owed)))
+            (max 0 (round mana-owed)))))
 
 (defun fill-pickup-spots (container)
   "A pickup on every spot, alternating health and mana, to look them over in the gallery."
@@ -491,7 +509,9 @@ before it moves."
                    (decf left count)
                    (decf room)
                    (setf spots (remove spot spots))
-                   (push (getf spot :block) used)))))))
+                   (push (getf spot :block) used))))
+      (when (< 0 left)
+        (v:warn :hexmaw "No spot for ~d of the level's gold." left)))))
 
 (defun place-glyphs (container)
   "Put the level's glyphs on spots no pickup took, a reward spot first, in blocks with no
@@ -530,17 +550,24 @@ placed before it moves: a save's taken pickups name their places."
                      (add-pickup container :dust (vx p) (vy p) (vz p) :phase (random 10.0 random) :count count)
                      (decf left count)
                      (setf spots (remove spot spots))
-                     (push (getf spot :block) used))))))))
+                     (push (getf spot :block) used)))))
+      (when (< 0 left)
+        (v:warn :hexmaw "No spot for ~d of the level's arcane dust." left)))))
 
 (defun place-pickups (container &key guards)
   "Put the level's pickups in. Last in BUILD-LEVEL: it asks the nav grid who can reach what.
 GUARDS are the stranded ogres, each of which gets a hoard (PLACE-HOARDS, loot.lisp)."
   (case *level*
     ;; The settlement's relic before the glyphs, which would take its wing's last spots.
-    ;; Leaving spots for the glyphs, which no other level has, and the settlement's relic: the
-    ;; settlement's small wing ran out of spots and lost a glyph for the run.
+    ;; Leaving spots for the glyphs, which no other level has, the loot, the settlement's relic
+    ;; and a sacked town's loot (the settlement's small wing ran out of spots and lost a glyph
+    ;; for the run), and for gold and dust.
     (:generated (scatter-pickups container :reserve (+ (length (run-glyphs *run-depth*)) (loot-count)
-                                                       (if *settlement* 1 0)))
+                                                       (if *settlement* 1 0)
+                                                       (if (and *settlement* (eq (built-condition *settlement*) :sacked))
+                                                           (length *sacked-town-loot*)
+                                                           0)
+                                                       *pile-spots*))
      (when *settlement* (place-settlement-pickups container))
      (place-glyphs container)
      ;; Weapons and runes (loot.lisp) on the reward spots the glyphs left.
@@ -623,7 +650,7 @@ SCATTER-PICKUPS, so its pickups keep their places in *PICKUPS*."
           (vector-push-extend relic *pickups*)
           (enter relic container))))
     (when (eq (built-condition *settlement*) :sacked)
-      (let ((loot '(:health-potion :gold :mana-potion :gold)))
+      (let ((loot (copy-list *sacked-town-loot*)))
         (loop for spot across *pickup-spots*
               when (and (in-settlement-p (getf spot :position)) (spot-free-p spot))
                 do (let ((p (getf spot :position)))
