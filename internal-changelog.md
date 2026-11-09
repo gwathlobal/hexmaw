@@ -7,6 +7,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Climbing out onto a ledge just under the water.** A swimmer climbed out only onto a ledge
+  standing over the surface, so a creek ford's sill (0.15 m under it) and a waterfall's lip
+  stopped them dead, and only the banks could be climbed. `ledge-ahead-p` now also takes a ledge
+  up to `*climb-out-depth*` (0.3 m) under the surface.
 - **No gap at the top of a waterfall.** The sheet hung in the middle of the metre-wide opening it
   pours through, so from above the dark drop showed either side of it and the lip was bare rock.
   `add-waterfall` now finds the pool it pours from (within `*spill-reach*`), stands the sheet at

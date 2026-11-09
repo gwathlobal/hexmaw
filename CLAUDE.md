@@ -1443,7 +1443,8 @@ real time instead.
   level, Space up and C or Ctrl down, at `*swim-speed*` (`*swim-run-speed*` with Shift)
   against `*water-drag*`, sinking at `*swim-sink*` when swimming nowhere below the surface and
   floating with the eye `*float-eye*` over it. Pushing forward into a ledge at the surface no
-  more than `*climb-out-height*` over the water climbs out (`climb-out`). `breath`
+  more than `*climb-out-height*` over the water, or no more than `*climb-out-depth*` (0.3 m) under it
+  (a ford's sill, a waterfall's lip), climbs out (`climb-out`, `ledge-ahead-p`). `breath`
   (`*breath-time*`, 20 s) runs down while the eye is under water and comes back at
   `*breath-refill*`; with none left the player drowns, `*drown-damage*` a second
   (`update-breath`, through `burn-due`).
