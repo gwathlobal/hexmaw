@@ -18,7 +18,42 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   front of the landing (`tools/town_plan.py`). The automap's "Stairs down" was drawn at its
   block's middle, which in the town is the plaza where the player arrives; it now stands over the
   exit itself (`label-point`).
-
+- **A frozen river in the ice caves.** A sixth network, `:frozen`: the lava river made of ice, a
+  3 m channel of slick ice sunk 0.4 m between 2 m snow banks under icicles, and the slide, ice wall
+  to wall. Its doorway kinds are `frozen` (7 × 3.5 m) and `slide` (3 × 3.5 m), and its banks open
+  onto the ice caves through `ice` doorways, so it lives wholly in the ice wing and never meets
+  lava. It burns nothing; its risk is control. The channel is the fastest road in the game, but
+  it stops only on snow: bends carry a sliding player into the outer rock, and a monster struck
+  on it skates into the walls. Ten blocks drawn by `tools/cave_plans.py`, nine with mirrors:
+  `frozen-river`, `frozen-ford`, `frozen-bend`, `frozen-cavern`, `frozen-narrows`, `frozen-slide`,
+  `frozen-slide-bend`, and the ends `frozen-spring`, `frozen-sink`, `frozen-slide-spring`
+  (`frozen-slide*` rather than `rill`, which the creek took first). `*frozen-length*`
+  (4 to 7) and `*max-frozen-rivers*` (1). `check-kit` is clean on all of them, with ogres too.
+  Over run seeds 1 to 150, every level (601), 132 levels had an ice wing and 35 of them a frozen
+  river, 4.5 blocks on average (1 to 9), with no unreachable doorway, bad ice join, stranded
+  creature but ogres, or doorway opening onto nothing.
+  Merged with the creek: over run seeds 1 to 60 (240 levels), 15 frozen rivers (4.1 blocks), no
+  warnings.
+- **Ice is a doorway's third liquid.** `kind-liquid` (the 5th element of `*connector-kinds*`) may
+  be `:ice` beside `:lava` and `:water`: a pit floored with ice, which `middle-cell-p` checks in a
+  doorway's middle and whose depth its plug reaches down to. `(level-map)` draws a frozen river's
+  blocks as `*`.
+- **Walkers keep off ice when they can.** `nav-flood` charges a step onto a slippery footing
+  `*nav-ice-cost*` (1.5) times its length for walkers (`*nav-hazards*` `:avoid` and `:wade`), so
+  paths keep to a frozen river's banks and cross it the short way. Straight walks and flyers are
+  unchanged.
+- New kit blocks change what each seed grows, so an older save on a generated level starts fresh
+  with the usual warning.
+- **Gold is an item in the bag.** The spellforge branch added a `:gold` item kind and the
+  settlement, built beside it, a purse slot on the player; their merge kept the purse, so the item
+  was never given. Gold is now the bag's `:gold`, in stacks of 999: pickups and kill gold go in
+  with `give-item`, prices take it with `take-item`, and the purse label in the HUD's lower-right
+  corner is gone (the talk panel still says how much). A pile the bag can't hold all of leaves a
+  pile of the rest (dust's too, which lost it), kill gold that doesn't fit falls where the monster
+  died, and a sale or quest reward with no room for its coins is refused. Piles are scaled to
+  their depth as they're placed (`gold-coins`), not on taking, so a dropped pile holds what it
+  says, and a save's `:drops` keep their counts. An older save's purse comes into the bag through
+  `(setf gold)`, so `*save-version*` stays 4.
 - **A waterfall made of the water's own texture.** Its white streaks were hashed lanes of solid
   white an eighth of a metre wide, crude beside the textured water around them, and the texture
   stretched eight times was still blocky. The sheet is now two layers of the water texture,

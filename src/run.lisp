@@ -55,6 +55,7 @@ attack and :COOLDOWN its abilities' cooldowns. A key left out keeps the variable
                                       "corridor-long" "corner" "tee" "cross" "arch" "narrow" "narrowing"
                                       "stair" "tower" "tower-mirror"))
                (*max-rivers* . 0) (*max-high-networks* . 0) (*max-flooded-networks* . 0) (*max-canals* . 0)
+               (*max-frozen-rivers* . 0)
                (*start-clearance* . 6.0)))
   "The settlement's level, which RUN-LEVELS puts into the run once (settlement.lisp): grown
 from the town block (:CORE) instead of a start block, with a small wing of crypts and cells
@@ -85,7 +86,7 @@ from there on is one deeper.")
 
 (defparameter *carried-slots*
   '(health mana inventory quickslot stamina winded run-time damage-taken level-records
-    gold reputation max-health max-mana max-stamina blessed
+    reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells wanted-slot enchantments)
   "The player's slots that go on to the next level; the rest start fresh (RESET-PLAYER).
 SETUP-SCENE takes what the hotbar slot asked for in hand (SETTLE-HELD).")

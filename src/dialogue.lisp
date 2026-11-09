@@ -41,9 +41,8 @@
         *menu-refresh* T))
 
 (defun spend (amount)
-  "Take AMOUNT gold from the player, or say they can't afford it. True if it was paid."
-  (cond ((<= amount (gold *player*))
-         (decf (gold *player*) amount)
+  "Take AMOUNT gold from the player's bag, or say they can't afford it. True if it was paid."
+  (cond ((take-item *player* :gold amount)
          (setf *menu-refresh* T)
          T)
         (T (talk-note "You can't afford that: ~d gold." amount)
@@ -64,11 +63,15 @@
              (talk-note "Bought a ~(~a~)." (item-property kind :name))))))
 
 (defun sell-item (kind)
+  ;; Taken first, since its cell may be the room the coins need.
   (when (take-item *player* kind 1)
     (let ((paid (max 1 (round (* *sell-share* (price kind))))))
-      (incf (gold *player*) paid)
-      (incf (getf (settlement-stock *settlement*) kind 0))
-      (talk-note "Sold a ~(~a~) for ~d gold." (item-property kind :name) paid))))
+      (cond ((< (item-room *player* :gold) paid)
+             (give-item *player* kind)
+             (talk-note "You've no room for the coins."))
+            (T (give-item *player* :gold paid)
+               (incf (getf (settlement-stock *settlement*) kind 0))
+               (talk-note "Sold a ~(~a~) for ~d gold." (item-property kind :name) paid))))))
 
 (defun shop-glyphs (player)
   "The glyphs the shop has for PLAYER: every one teaching an effect they don't know yet."
@@ -378,14 +381,20 @@
     (talk-note "Good. Come back when it's done.")))
 
 (defun claim-quest ()
-  (let ((quest (settlement-quest *settlement*)))
-    (when (eq :relic (getf quest :kind))
+  (let* ((quest (settlement-quest *settlement*))
+         (relic (eq :relic (getf quest :kind)))
+         (reward (getf quest :reward)))
+    ;; The relic first, since its cell may be the room the reward needs.
+    (when relic
       (take-item *player* :relic 1))
-    (setf (getf quest :state) :claimed
-          (settlement-quest *settlement*) quest)
-    (incf (gold *player*) (getf quest :reward))
-    (adjust-reputation *player* (settlement-faction *settlement*) *quest-reputation*)
-    (talk-note "As promised: ~d gold." (getf quest :reward))))
+    (cond ((< (item-room *player* :gold) reward)
+           (when relic (give-item *player* :relic))
+           (talk-note "Make room in your bag for ~d gold first." reward))
+          (T (setf (getf quest :state) :claimed
+                   (settlement-quest *settlement*) quest)
+             (give-item *player* :gold reward)
+             (adjust-reputation *player* (settlement-faction *settlement*) *quest-reputation*)
+             (talk-note "As promised: ~d gold." reward)))))
 
 (defun quest-buttons (settlement)
   (let ((quest (ensure-quest settlement)))

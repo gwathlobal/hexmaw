@@ -665,7 +665,10 @@ real time instead.
   stays under a quarter of its walk speed. A melee creature slides on through its wind-up, so
   its blow can miss. Stepping onto ice mid-walk carries the walk's speed over
   (`update-footing`); hovering flyers have no footing. `tools/hd status` shows the player's
-  footing and speed and each creature's footing. Nothing in pathing knows about ice yet.
+  footing and speed and each creature's footing. Pathing knows ice only as a cost: a walker's
+  path search (`nav-flood`, under `*nav-hazards*` `:avoid` or `:wade`) charges a step onto a
+  slippery cell `*nav-ice-cost*` (1.5) times its length, so routes keep to the snow beside a
+  frozen river and cross it the short way; a straight walk still goes straight over it, skidding.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites.
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
@@ -1104,7 +1107,7 @@ real time instead.
 - `src/inventory.lisp`: the inventory, the hotbar, the quickslot and the panel. `*item-kinds*` says
   what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
   stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
-  5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, nothing uses it yet) 999.
+  5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, the settlement's coin) 999.
   Weapons and spells are items too: `:sword` and `:spear` (`:weapon`, what they put in hand), a stack
   `(:sword 1 enchantment)` (`stack-enchantment`, each weapon its own; `(:sword 1)` is plain), and
   `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
@@ -1174,13 +1177,13 @@ real time instead.
   frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
   on every screen, counting frames in its render and updating every `*fps-interval*`.
   Right of the quickslot: the spell in hand (`spell-label`, inventory.lisp). The hands, like the
-  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). The purse
-  (`gold-text`) is in the lower-right corner.
-  `show-message` puts a line across the view for `*message-time*` (a glyph's, a gold find, the
-  watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
+  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). Gold has
+  no label of its own: it is stacks in the bag.
+  `show-message` puts a line across the view for `*message-time*` (a glyph's, kill gold the bag
+  had no room for, the watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
   what the player looks at or stands at (`prompt-line`; a new string only when it changes, so the
   tick tells by EQ). A pickup of a
-  counted item (dust's pile) puts "+25 arcane dust" just above
+  counted item (dust's pile, gold's, a kill's gold) puts "+25 arcane dust" just above
   the crosshair for `*pickup-note-time*` (`note-pickup`, the `pickup-banner`; the item's `:note`,
   else its name), pickups of one kind in quick succession adding up.
 - `src/menu.lisp`: the main menu and the Esc pause menu, built with Alloy (Trial's UI
@@ -2567,14 +2570,17 @@ Blender export that keeps the conventions works the same. Conventions:
   `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated levels"),
   anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
   fourth value is its middle's width, a stream's its whole width: `flooded-kind-p`, and its
-  fifth what fills the middle, `:lava` or `:water`: `kind-liquid`),
+  fifth what fills the middle, `:lava`, `:water` or `:ice`: `kind-liquid`, `middle-cell-p`),
   `connector_underwater_north` an `underwater` (3 × 3 m, full of water: a flooded passage's
   and a cistern's), `connector_canal_north` a `canal` (a river's with deep water: 7 × 3.5 m,
   its middle 3 m open down to the water filling the storey below, which runs on through the
   wall under it, so its plug reaches down there too; any `:water` kind is so, `under-channel-p`),
-  `connector_creek_north` a `creek` (the canal's doorway in the caves, a network of its own) and
+  `connector_creek_north` a `creek` (the canal's doorway in the caves, a network of its own),
   `connector_rill_north` a `rill` (3 × 3.5 m, open wall to wall over the water, no banks: the
-  creek's narrow kind, swum), and each kind joins only itself. A doorway two cells
+  creek's narrow kind, swum), `connector_frozen_north` a `frozen` (a river's with a channel of
+  ice sunk 0.4 m, `pit 0.4, floor ice`, in place of its lava: the ice caves' river) and
+  `connector_slide_north` a `slide` (3 × 3.5 m, that ice wall to wall: the frozen river's narrow
+  kind), and each kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
@@ -2771,6 +2777,11 @@ you can walk across, into a plunge pool, a rock stair down the west bank, a ford
 narrow `rill` and `rill-sump` (dives 3 m under the rock), and the ends `creek-spring`,
 `rill-spring`, `creek-sink` (the river runs on under the walk joining its banks to a dead end
 with a reward) and `creek-sink-sump` (the same to an underwater doorway: a flooded run goes on);
+the frozen river (below), the ice caves' own: `frozen-river`, `frozen-ford` (a causeway of snow
+across, doorways onto both banks), `frozen-bend`, `frozen-cavern` (a room it runs through, a
+snow bridge), `frozen-narrows` (wide to a slide), `frozen-slide` and `frozen-slide-bend` (ice wall
+to wall, no bank), and the ends `frozen-spring` (out from under a frozen fall of icicles),
+`frozen-sink` (a frozen pool) and `frozen-slide-spring`, all but the sink with a mirror;
 and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 m vault, a
 2.5 m terrace and a 5 m walkway with a doorway out at the top), `high-hall` (six pillars the
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
@@ -2796,7 +2807,15 @@ or column reads as a slab laid across a cave. Nothing in a cave is a rectangle: 
 winds, the niche and the shrine are chamfered, hanging ice is octagonal or a diamond
 (`hang_diamond`, in the 3 m corridors), and ponds and shelves have 45° edges.
 `tools/cave_plans.py` draws every ice block (`POND`, `pond_rock`, `hang_over`,
-`hang_diamond`, `frost_line`). `ice-hall` is an ordinary dungeon room with an ice
+`hang_diamond`, `frost_line`). The frozen river is the lava river made of ice: a channel of slick
+ice sunk 0.4 m (a step, twice a pond's) between 2 m banks of snow, under icicles, with ice-rock
+walls and 45° shores (`[ ]`, `diagonal / floor -0.4 0, pit 0.4, floor ice`); its doorways are
+`FFFFffffffFFFF` and `FFfffFF` (`F door frozen`, `f door frozen, pit 0.4, floor ice`) and a slide's
+`||||||` and `|||`, and its banks open onto the ice caves through `+` ice doorways, so it never
+meets lava. It burns nothing: its risk is control. A run along the channel reaches about 12 m/s
+and stops only on snow, a bend carries a sliding player into the outer bank's rock (a player on
+ice isn't hurt by a wall, but it stops them), and a monster struck on it skates into the rock
+and is hurt (see "Impacts"). `ice-hall` is an ordinary dungeon room with an ice
 floor, outside all this. Ice never meets lava: `ice-bridge` (the forge frozen, ice up to its
 lava channel) has no tags, so the generator leaves it out, until water can fill its channel.
 Every piece must let the player walk between all its doorways (drops don't
@@ -2892,13 +2911,15 @@ the shader takes only 32.
 
 Networks: a network is the blocks joined through doorways ordinary blocks don't have; each
 family is an entry in `*networks*` (its doorway kinds, piece and end tags, and the variables
-for its length and how many a level may have). There are five: rivers and creeks, below; high
+for its length and how many a level may have). There are six: rivers and creeks, below; high
 quarters, galleries and high rooms joined through `high` doorways (`high`, ends `high-end`:
 the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level; flooded
 runs, passages joined through `underwater` doorways (`flooded`, ends `cistern`), a cistern at
 each end, `*flooded-length*` (2 to 4 blocks, the first cistern included: short, swum on one
 breath), `*max-flooded-networks*` (1); and canals (`canal`, ends `canal-end`),
-`*canal-length*` (3 to 6), `*max-canals*` (1). All grow the same way, with `network` in place
+`*canal-length*` (3 to 6), `*max-canals*` (1); and frozen rivers, the ice caves' river,
+through `frozen` and `slide` doorways (`frozen-river`, ends `frozen-end`), `*frozen-length*`
+(4 to 7: the ice wing is small), `*max-frozen-rivers*` (1). All grow the same way, with `network` in place
 of `river` throughout. A cistern has one underwater doorway, so a run ends at it; one reached
 through its ledge starts a run. A block may have doorways of two families (`block-families`:
 `creek-sink-sump`'s creek doorway and its underwater one): placed, it is in a network of each,
@@ -2907,7 +2928,7 @@ block that would start another of it is offered, from an ordinary doorway (`tagg
 network's (`fitting`).
 `*level-networks*` holds the last level's (`network-family`, `-pieces`, `-target`, `-ends`),
 the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`, a
-flooded run's as `=` and a canal's as `-`. Over 200 seeds, 60% of levels had a canal (4 blocks on
+flooded run's as `=`, a canal's as `-` and a frozen river's as `*`. Over 200 seeds, 60% of levels had a canal (4 blocks on
 average), 11% a flooded run (3) and 24% a high quarter (4), and a level had 0.8 network arms
 end in a plug. The vault, 4 × 4 cells and two storeys, is the high quarter's only end and often
 doesn't fit.
@@ -2952,7 +2973,13 @@ so the way into the ice is always a rock cave, a gate, then ice. An ice doorway 
 (few blocks have one), the first piece through a gate isn't another gate, and a gate doorway
 still open at the room quota gets a room, ice or cave. `check-ice-joins` warns about any join
 against the rule after every generated level. Over seeds 1 to 100, 20 levels had an ice gate,
-and 29 of their 30 gates led into the ice. The generator asks every block's tags and weight
+and 29 of their 30 gates led into the ice. The frozen river grows inside the ice wing: its first
+piece comes in through an ice doorway like any ice corridor or room, and its banks' doorways lead
+on into the ice. Over run seeds 1 to 150, every level of each run (601), 132 levels had an ice
+wing and 35 a frozen river, of 4.5 blocks on average (1 to 9), two thirds of its arms (47 of
+70) ending in an end block, the rest in a plug. With the creek in the kit too, over run seeds 1
+to 60 (240 levels), 46 had an ice wing and 15 a frozen river (4.1 blocks), and none warned. On seed 5's third level a frame at a spot on the river costs what one elsewhere does
+(32 to 82 fps there, 32 to 127 at the level's other doorways, vsync off, world frozen). The generator asks every block's tags and weight
 thousands of times a level, so `build-level` binds `*block-memo*`, which keeps each
 definition `find-block` gives (half a millisecond each, since it checks the files): a level
 generated in 5 to 10 s before it, under one after.
@@ -3174,13 +3201,18 @@ player has sacked the town (`refusing-p`):
   `*quest-reputation*`.
 
 `price` is `*base-prices*`, `*price-depth-step*` dearer per depth, by the faction's multiplier and
-`(1 - standing / 400)`. **Gold** (`gold`, a player slot) comes from `:gold` pickups, which
+`(1 - standing / 400)`. **Gold** is the bag's `:gold` item, in stacks of 999 (`gold` is its total,
+`kind-total`; `spend` takes it with `take-item`, and a sale or a quest's reward needs `item-room`
+for its coins, or is refused). It comes from `:gold` pickups, which
 `place-gold` scatters on the spots health, mana, the relic and the glyphs left (`*gold-per-monster*`,
 on at most `*gold-spot-share*` of them but one at least, since arcane dust comes after and its piles
 grow to fill fewer spots), in piles of `*gold-pile*` coins (`pickup-count`, as dust's; bigger where its
-share of spots is too few, so a level gets its whole budget: 200 to 370), and from
-kills (`*kill-gold*` by class, straight into the purse through `creature-died`), both
-`*gold-depth-step*` more per depth (`gold-scale`). **Reputation** (`reputation`, a plist by faction,
+share of spots is too few, so a level gets its whole budget: 200 to 370; `gold-coins` scales a
+pile as it is placed), and from kills (`*kill-gold*` by class, straight into the bag through
+`creature-died`), both `*gold-depth-step*` more per depth (`gold-scale`). A pile (gold's or dust's)
+the bag can't hold all of leaves a pile of the rest, and kill gold that doesn't fit falls where the
+monster died (`drop-loot`, kept in a save's `:drops` with its count). An older save's purse, a
+player slot of its own, comes back through `(setf gold)` into the bag. **Reputation** (`reputation`, a plist by faction,
 -100 to 100) moves prices, greetings and the watch's patience (`*patient-reputation*`).
 
 **The watch** (`report-crime`): `hurt` and `burn` take `:by` (who struck, through `harmed` and

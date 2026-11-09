@@ -334,8 +334,8 @@ void main(){
 
 (define-shader-entity level-banner (hud-text) ())
 
-;;; A message across the middle of the view for a few seconds of play: what a glyph taught, a
-;;; gold find, what the watch warns of (SHOW-MESSAGE, or HUD-SAY to format it).
+;;; A message across the middle of the view for a few seconds of play: what a glyph taught, kill
+;;; gold the bag had no room for, what the watch warns of (SHOW-MESSAGE, or HUD-SAY to format it).
 
 (defparameter *message-time* 3.0 "Seconds of play a message stays up.")
 (defvar *message-left* 0.0 "Seconds of play left of the message.")
@@ -448,8 +448,6 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
    (shown-pickup-note :initform NIL :accessor shown-pickup-note)
    (shown-message :initform NIL :accessor shown-message)
    (prompt-line :initform (make-hud-text "" 'interact-prompt) :reader prompt-line)
-   (gold-text :initform (make-hud-text) :reader gold-text)
-   (shown-gold :initform NIL :accessor shown-gold)
    (health-label :initform (make-hud-text "HP") :reader health-label)
    (health-bar :initform (make-instance 'hud-bar :fill-color *health-bar-color*) :reader health-bar)
    (health-text :initform (make-hud-text) :reader health-text)
@@ -483,7 +481,7 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
-        (level-banner hud) (message-banner hud) (pickup-banner hud) (prompt-line hud) (gold-text hud)
+        (level-banner hud) (message-banner hud) (pickup-banner hud) (prompt-line hud)
         (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
         (fps-display hud)))
 
@@ -532,8 +530,6 @@ numbers; breath has none."
   (place (prompt-line hud)
          (round (- (/ (width *context*) 2) (* 4.5 (length (text (prompt-line hud))))))
          (round (* 0.4 (height *context*))))
-  ;; The purse, against the bottom-right corner.
-  (place (gold-text hud) (- (width *context*) *hud-margin* (* 9 (length (text (gold-text hud))))) (hud-row-y 0))
   ;; The boss bar, centred across the top: the title, the bar, the powers under it.
   (let* ((w (width *context*))
          (title-y (- (height *context*) *boss-bar-top* +glyph-height+))
@@ -601,8 +597,5 @@ numbers; breath has none."
                 (text (mana-text hud)) (format NIL "~d/~d" mp max-mp)))
         (unless (eql (+ sp (* 100000 max-sp)) (shown-stamina hud))
           (setf (shown-stamina hud) (+ sp (* 100000 max-sp))
-                (text (stamina-text hud)) (format NIL "~d/~d" sp max-sp))))
-      (unless (eql (gold *player*) (shown-gold hud))
-        (setf (shown-gold hud) (gold *player*)
-              (text (gold-text hud)) (format NIL "~d gold" (gold *player*))))))
+                (text (stamina-text hud)) (format NIL "~d/~d" sp max-sp))))))
   (layout-hud hud))

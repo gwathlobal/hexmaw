@@ -1,0 +1,31 @@
+; A frozen river, west to east, a causeway of snow across it to stop on, doorways onto
+; both banks.
+; Its plan is drawn by tools/cave_plans.py.
+cells 2 3
+tags corridor frozen-river
+weight 2
+mirror yes
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice                                        ; ice caves join only ice caves and gates
+  F door frozen                                     ; a frozen river's doorway: bank
+  f door frozen, pit 0.4, floor ice                 ; and its sunken ice
+  _ pit 0.4, floor ice                              ; the river's ice, sunk a step
+  $ pickup floor
+
+plan 0
+#++++++#########
+#......\\#######
+#.$$.....\\#####
+T..........\\###
+#............\\#
+F..............F
+F..............F
+f_____...._____f
+f_____...._____f
+f_____...._____f
+F..............F
+F..............F
+####T####++++++#

@@ -34,18 +34,21 @@
 (defparameter *connector-kinds* '(("door" 3.0 3.0) ("narrow" 2.0 2.5) ("river" 7.0 3.5 3.0 :lava)
                                    ("stream" 3.0 3.5 3.0 :lava) ("high" 7.0 9.0) ("ice" 3.0 3.0)
                                    ("underwater" 3.0 3.0) ("canal" 7.0 3.5 3.0 :water)
-                                   ("creek" 7.0 3.5 3.0 :water) ("rill" 3.0 3.5 3.0 :water))
+                                   ("creek" 7.0 3.5 3.0 :water) ("rill" 3.0 3.5 3.0 :water)
+                                   ("frozen" 7.0 3.5 3.0 :ice) ("slide" 3.0 3.5 3.0 :ice))
   "Each kind of doorway: its name, width and height in metres, and for a river the width of
-its middle, between two banks, and the liquid there: :LAVA, in a pit in the floor, or :WATER,
-the middle open down to deep water filling the storey below, which runs on through the wall
-under it. A stream's lava fills it wall to wall, no banks, and so does a rill's water.
+its middle, between two banks, and what fills it: :LAVA, in a pit in the floor; :WATER, the
+middle open down to deep water filling the storey below, which runs on through the wall under
+it; or :ICE, a pit floored with ice. A stream's lava fills it wall to wall, no banks, and so
+does a rill's water and a slide's ice.
 Each kind joins only itself. One wider than a cell spans two and is centred on the boundary
 between them. A high doorway joins the high blocks, two storeys tall: at 9 m it is as tall
 as they are inside, so it runs on up through the storey above (^ in that plan). An ice
 cave's ice doorways join only ice caves and the ice gates that lead into them. An underwater doorway, full of water, joins a flooded passage
 to the cisterns at either end of it. A canal's doorway is a river's with deep water in
 place of lava. A creek's is the same doorway in the caves, a network of its own, and a rill is
-its narrow kind.")
+its narrow kind. A frozen river's is a river's with a channel of ice sunk in place of the lava,
+and a slide is its narrow kind: the ice caves' river.")
 (defparameter *default-ceiling* 4.0)
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3
@@ -407,8 +410,17 @@ pool stands this far out of the water, within a step.")
 (defun storey-base (k) (* k *storey-height*))
 
 (defun kind-liquid (name)
-  "What fills the middle of a doorway of kind NAME: :LAVA, :WATER, or NIL for none."
+  "What fills the middle of a doorway of kind NAME: :LAVA, :WATER, :ICE, or NIL for none."
   (fifth (connector-kind name)))
+
+(defun middle-cell-p (liquid actions)
+  "True if a cell of ACTIONS is what fills a banked doorway's middle, LIQUID as KIND-LIQUID
+gives it: lava, open down to the water in the storey below, or a pit floored with ice."
+  (ecase liquid
+    (:lava (action :lava actions))
+    (:water (action :open actions))
+    (:ice (and (action :pit actions)
+               (equalp "ice" (second (action :floor actions)))))))
 
 (defun under-channel-p (blueprint k r c)
   "True if cell R C of storey K lies under the open channel of a water doorway (a canal's,
@@ -885,7 +897,8 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                           (< *cell-size* (second spec)) kind))
                   ;; A river's lava runs down its middle, LAVA wide, the rest is bank (none
                   ;; when it is the doorway's width), so every doorway of a kind meets every other.
-                  ;; A water doorway's middle is open, down to its water in the storey below.
+                  ;; A water doorway's middle is open, down to its water in the storey below;
+                  ;; a frozen river's is a pit floored with ice.
                   (when (fourth spec)
                     (loop for i from (if ns (second start) (first start)) to (if ns (second end) (first end))
                           for rc = (if ns (list (first start) i) (list i (second start)))
@@ -893,8 +906,8 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                           (nth-value 1 (if ns (col-span blueprint i) (row-span blueprint i))))
                                        2)
                           for actions = (char-actions blueprint (char (aref rows (first rc)) (second rc)))
-                          for lava = (or (action :lava actions) (action :open actions))
-                          for what = (if (eq :water (fifth spec)) "open channel" "lava")
+                          for lava = (middle-cell-p (fifth spec) actions)
+                          for what = (ecase (fifth spec) (:lava "lava") (:water "open channel") (:ice "sunken ice"))
                           do (unless (eq (not lava) (not (< (abs (- mid centre)) (/ (fourth spec) 2))))
                                (fail (+ (line plan) (first rc)) (1+ (second rc))
                                      "~:[A ~a doorway has ~a m of ~a down its middle and bank on each side~;A ~a doorway is all ~*~a~]; this cell should be ~:[bank~;~a~]."
@@ -912,16 +925,17 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                         (:south (list (- centre half) base (- (/ d 2) *border*) (+ centre half) y1 (/ d 2)))
                                         (:west (list (/ w -2) base (- centre half) (+ (/ w -2) *border*) y1 (+ centre half)))
                                         (:east (list (- (/ w 2) *border*) base (- centre half) (/ w 2) y1 (+ centre half)))))
-                              ;; Under a river's lava the floor is sunk, so its plug goes down
-                              ;; to the pit's floor there, or the lava shows beneath it. Under a
-                              ;; water doorway's open channel, down a storey to the water's bottom.
+                              ;; Under a river's lava (a frozen river's ice) the floor is sunk, so
+                              ;; its plug goes down to the pit's floor there, or the pit shows beneath
+                              ;; it. Under a water doorway's open channel, down a storey to the water's bottom.
                               :lava-plug (when (fourth spec)
                                            (let* ((depth (if (eq :water (fifth spec))
                                                              *storey-height*
                                                              (or (loop for i from (if ns (second start) (first start))
                                                                          to (if ns (second end) (first end))
                                                                        for ch = (if ns (char (aref rows (first start)) i) (char (aref rows i) (second start)))
-                                                                       thereis (second (action :lava (char-actions blueprint ch))))
+                                                                       for actions = (char-actions blueprint ch)
+                                                                       thereis (second (or (action :lava actions) (action :pit actions))))
                                                                  *lava-depth*)))
                                                   (y0 (- base depth)) (lh (/ (fourth spec) 2)))
                                              (ecase side

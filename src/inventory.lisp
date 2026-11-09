@@ -65,6 +65,26 @@ budget, so keep the two the same. A weapon's :WEAPON is what it puts in the play
   (loop for stack in (inventory player)
         when (and stack (eq kind (first stack))) sum (second stack)))
 
+(defun item-room (player kind)
+  "How many more of KIND PLAYER's bag takes: what its stacks still hold and its empty cells."
+  (loop for stack in (inventory player)
+        sum (cond ((null stack) (item-property kind :stack))
+                  ((eq kind (first stack)) (stack-room stack))
+                  (T 0))))
+
+(defun gold (player)
+  "The coin PLAYER carries: the bag's :GOLD, in stacks of 999 like any item."
+  (kind-total player :gold))
+
+(defun (setf gold) (amount player)
+  "Make the bag hold AMOUNT gold, giving or taking the difference. An older save's purse, a slot
+of its own, comes back through this, after the bag (RESTORE-STATE): what won't fit is lost."
+  (let ((have (gold player)))
+    (if (< have amount)
+        (give-item player :gold (- amount have))
+        (take-item player :gold (- have amount))))
+  amount)
+
 (defun slot-stack (player slot)
   "What SLOT shows: a bag cell's stack, the bag stack a hotbar slot points at, or for :QUICK
 its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound."

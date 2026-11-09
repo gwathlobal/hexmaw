@@ -16,7 +16,9 @@
 ;;; (two storeys of room, for the ogre's leaps), and flooded runs, through underwater
 ;;; doorways (passages full of water, swum on one breath, a cistern at each end, whose
 ;;; ledges go on into the dungeon), and canals, through canal doorways (a river's, deep
-;;; water in place of lava). The first block of one comes in like any
+;;; water in place of lava), and frozen rivers, the ice caves' own, through frozen doorways
+;;; (a river's with a sunken channel of ice in place of lava) and slide doorways (ice wall to
+;;; wall), whose banks open onto the ice caves by ice doorways. The first block of one comes in like any
 ;;; corridor or room, through an ordinary doorway, and starts a network with a target length
 ;;; in blocks. Its open network doorways are tried before any other, with pieces until the
 ;;; network has its length and ends from then on, so each arm ends in an end block (whose
@@ -49,12 +51,16 @@ short, so it is swum on one breath.")
 (defparameter *creek-chance* 0.6
   "The chance a level may have a creek at all: from any of a level's many doorways some creek
 block nearly always fits, so its weights alone would put one on nearly every level.")
+(defparameter *frozen-length* '(4 7)
+  "The fewest and most blocks a frozen river runs to before it ends: the ice wing is small.")
+(defparameter *max-frozen-rivers* 1 "How many frozen rivers a level may start.")
 (defparameter *networks*
   '((:river ("river" "stream") :river :river-end *river-length* *max-rivers*)
     (:high ("high") :high :high-end *high-length* *max-high-networks*)
     (:flooded ("underwater") :flooded :cistern *flooded-length* *max-flooded-networks*)
     (:canal ("canal") :canal :canal-end *canal-length* *max-canals*)
-    (:creek ("creek" "rill") :creek :creek-end *creek-length* *max-creeks* *creek-chance*))
+    (:creek ("creek" "rill") :creek :creek-end *creek-length* *max-creeks* *creek-chance*)
+    (:frozen ("frozen" "slide") :frozen-river :frozen-end *frozen-length* *max-frozen-rivers*))
   "The networks the generator grows: each family, the doorway kinds that join its blocks,
 the tags of its pieces and of its ends, and the variables that hold its length in blocks and
 how many a level may start, and optionally the one that holds the chance a level may have one
@@ -137,7 +143,7 @@ seed, so the generator's own draws are those it would make without it."
   (member (fourth (assoc family *networks*)) (block-tags name)))
 
 (defclass network ()
-  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER, :HIGH, :FLOODED, :CANAL or :CREEK.")
+  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER, :HIGH, :FLOODED, :CANAL, :CREEK or :FROZEN.")
    (target :initarg :target :reader network-target :documentation "How many blocks it runs to.")
    (pieces :initform 0 :accessor network-pieces :documentation "How many blocks it has.")
    (ends :initform () :accessor network-ends :documentation "How each arm ended: :END, :JOIN or :PLUG."))
@@ -429,7 +435,7 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
 (defun level-map (&optional (stream *standard-output*))
   "Print the generated level's cells, a storey at a time, north up: each cell is the first
 letter of its block's name, upper case for rooms, @ for the settlement's town, ~ for a river's blocks, ^ for a high
-quarter's, = for a flooded run's and - for a canal's."
+quarter's, = for a flooded run's, - for a canal's, % for a creek's and * for a frozen river's."
   (let ((keys (loop for k being the hash-keys of *level-cells* collect k)))
     (when keys
       (loop for k from (reduce #'min keys :key #'third) to (reduce #'max keys :key #'third)
@@ -444,6 +450,7 @@ quarter's, = for a flooded run's and - for a canal's."
                                                    ((eq (block-network name) :flooded) #\=)
                                                    ((eq (block-network name) :canal) #\-)
                                                    ((eq (block-network name) :creek) #\%)
+                                                   ((eq (block-network name) :frozen) #\*)
                                                    ((member :room (block-tags name)) (char-upcase (char name 0)))
                                                    (T (char-downcase (char name 0))))
                                              stream))

@@ -594,7 +594,6 @@ victory screens share."
         (level-records player) ()
         (killed-by player) NIL
         (death-time player) 0.0
-        (gold player) 0
         (reputation player) ()
         (max-health player) *player-max-health*
         (max-mana player) *max-mana*
