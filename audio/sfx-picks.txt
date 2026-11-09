@@ -12,6 +12,8 @@ shield-guard-break 3
 shield-bash 3
 bash-hit 2
 bash-glance 3
+spear-impale 3
+haft-sweep 7
 cast-fizzle 3
 tornado 4 gain=8 even
 imp-pain 3

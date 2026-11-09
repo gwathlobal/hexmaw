@@ -1,0 +1,21 @@
+{
+  "prompt": "A charging beast running onto a set iron spearhead: a heavy wet punch of the blade going in and a hard wooden jolt through the shaft. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-spear-impale.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 0.7,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794261541,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.68,
+    0.68,
+    0.68
+  ]
+}

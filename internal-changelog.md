@@ -7,6 +7,19 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The spear counters and sweeps.** A thrust that lands on a creature charging through the air
+  (`charging-p`: an imp's pounce or ogre's leap in flight, a harpy's dive) is a counter
+  (`swing-strike`'s spear method, `spear-counter`): 18 to 26, a sure flinch (a boss only a bonus),
+  the jolt frame, the spear's enchantment, and a leaper dropping out of the air with no quake. The
+  right button with the spear sweeps the haft through every creature in a 1.4 rad arc (the bash's
+  rules, no enchantment, 15 stamina) to clear space. A first try held the right button to set the
+  spear and skewered whatever came onto it every tick, walkers too: in play it stunlocked imps
+  (the reset and the stamina came back faster than they did) and read as a bug against casters,
+  which never walked onto it; it is gone, with its set frames and the `spear-set` sound. The
+  shield's guard and bash became generics on the weapon (`guard-raise-time`, `bash-frame-times`,
+  `bash-strike`), `looked-at-creature`'s test `blow-reaches-p`, and the sprite's frame
+  `weapon-frame`. Four new poses (the jolt, the sweep's three, the wind-up and follow-through drawn again at the spear's full length, both their hafts lengthened by `tools/extend_shaft.py`, and the follow-through moved right, its spearhead off the screen's edge: `make_shield.py --side-margin` and the index's `:overhang`) and two sounds (`spear-impale`,
+  `haft-sweep`). The `:block` action reads "Raise shield, sweep with spear".
 - **Level sweeps without a window.** `tools/levelcheck` builds generated levels and kit blocks in
   plain SBCL processes, with no window, GL, music or sound, several at once: `build-level` already
   needed no context, so `build-level-alone` (new `src/levelcheck.lisp`) builds into a bare scene,

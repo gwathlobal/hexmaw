@@ -558,10 +558,11 @@ coin (pickups.lisp), the watch notes a murder (townsfolk.lisp).")
 rest (the riftwalker blinks away, riftwalker.lisp).")
   (:method ((creature creature)) NIL))
 
-(defun hurt (creature amount &key from (pain-bonus 0) by)
+(defun hurt (creature amount &key from (pain-bonus 0) by force-pain)
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
 the blood sprays away from, by BY (as for HARMED). It flinches and breaks off what it's
-doing on a pain roll, its PAIN-CHANCE plus PAIN-BONUS percent."
+doing on a pain roll, its PAIN-CHANCE plus PAIN-BONUS percent, or whatever it says with
+FORCE-PAIN (a charge countered by the spear)."
   (when (and (dormant-p creature) (not (dead creature)))
     (setf (flash creature) *flash-time*)
     (return-from hurt))
@@ -574,6 +575,7 @@ doing on a pain roll, its PAIN-CHANCE plus PAIN-BONUS percent."
     (setf (flash creature) *flash-time*
           (alert creature) (alert-time))
     (when (or (<= (health creature) 0)
+              force-pain
               (always-pained-p creature)
               (pain-roll-p creature pain-bonus))
       ;; Stop (a hit breaks off an attack too), and plan afresh once the flinch is over:
@@ -1335,6 +1337,17 @@ with both taken it doesn't. True if it set off."
   (loop for time in (attack-frame-times creature)
         repeat (attack-hit-frame creature)
         sum time))
+
+(defgeneric charging-p (creature)
+  (:documentation "True while CREATURE, hunting the player, charges at them through the air: a
+leap or pounce (ogre.lisp) or a harpy's dive (flyer.lisp). A thrust of the spear that lands then is
+a counter (spear.lisp). A melee blow's lunge doesn't count: it stops a moment into the wind-up.")
+  (:method ((creature creature)) NIL))
+
+(defgeneric impale (creature)
+  (:documentation "CREATURE's charge was countered by the spear: what that does to it besides the
+blow (a leaper drops out of its leap, ogre.lisp).")
+  (:method ((creature creature)) NIL))
 
 (defun winding-up-p (creature)
   "True while CREATURE's attack has yet to land: the moment a shield bash interrupts it."
