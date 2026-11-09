@@ -630,9 +630,10 @@ real time instead.
   waterfalls' feet (`*falls-points*`, which `clear-level` empties).
 - `src/waterfall.lisp`: waterfalls, where a creek drops a storey (a blueprint's `falls Y0 Y1`,
   empties `falls_<n>_lo` and `_hi`, `add-waterfall` from `place-block`). The sheet is a
-  `waterfall`, a `liquid-sheet` standing across the drop's longer side: the water texture in
-  lanes an eighth of a metre across, each pouring down at its own speed (`*falls-speed*`), long
-  streaks of white and white water near its foot, lit on the side it is seen from, see-through
+  `waterfall`, a `liquid-sheet` standing across the drop's longer side: two layers of the water
+  texture stretched eight times down its length, pouring down at `*falls-speed*` and 1.37 times
+  it, their brightest texels whitened (more toward its foot) so the white water keeps the water's
+  own pixel shapes (hashed lanes of solid white, the first try, looked crude beside it), lit on the side it is seen from, see-through
   (`*falls-alpha*`), `late-rank` 0.2. `add-waterfall` looks within `*spill-reach*` either side
   of the drop for the pool it pours from, stands the sheet at the drop's far edge from it, and
   lays a spill (a `water-surface` at the pool's height) from the pool's edge over the lip to the

@@ -45,28 +45,31 @@ uniform vec2 falls_axis;
 uniform float falls_bottom;
 out vec4 color;
 
-float falls_hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec3 falls_layer(float u, float v, float speed, float shift){
+  // The water's own texture stretched eight times down its length, pouring down at SPEED.
+  vec2 st = vec2(u + shift, (v + time * speed) * 0.125);
+  return texture(surface_texture, st * texels_per_metre / vec2(textureSize(surface_texture, 0))).rgb;
+}
 
 void main(){
   float u = dot(v_world_position.xz, falls_axis);
   float v = v_world_position.y;
-  // The water's texture stretched into streaks and pouring down; columns of it at their own speeds.
-  // Lanes an eighth of a metre across, two texels, each pouring at its own speed.
-  float lane = floor(u * 8.0);
-  float speed = falls_speed * (0.75 + 0.5 * falls_hash(vec2(lane, 1.0)));
-  float fall = v + time * speed;
-  vec2 st = vec2(u + 0.04 * sin(v * 2.0 + time * 3.0), fall * 0.25);
-  vec3 c = texture(surface_texture, st * texels_per_metre / vec2(textureSize(surface_texture, 0))).rgb;
-  // White water: long streaks of foam down it, and churning near its foot.
-  float streak = step(0.72, falls_hash(vec2(lane, floor(fall * 0.6 + falls_hash(vec2(lane, 2.0)) * 7.0))));
-  float foot = smoothstep(falls_bottom + 1.2, falls_bottom, v);
-  c = mix(c * 1.3, vec3(0.85, 0.9, 0.92), clamp(0.45 * streak + 0.7 * foot, 0.0, 1.0));
+  // Two layers falling at different speeds, so the pattern never repeats as one sheet.
+  vec3 a = falls_layer(u, v, falls_speed, 0.0);
+  vec3 b = falls_layer(u, v, falls_speed * 1.37, 1.7);
+  vec3 c = max(a, b) * 1.15;
+  // White water: the texture's own brightest texels whitened, more of them toward the foot,
+  // so the foam keeps the pixel shapes of the water around it.
+  float foot = smoothstep(falls_bottom + 1.5, falls_bottom, v);
+  float bright = max(dot(a, vec3(0.3333)), dot(b, vec3(0.3333)));
+  float foam = step(0.29 - 0.1 * foot, bright);
+  c = mix(c, vec3(0.74, 0.8, 0.83), (0.4 + 0.3 * foot) * foam);
   // Lit on the side it is seen from.
   vec3 n = vec3(-falls_axis.y, 0.0, falls_axis.x);
   if(dot(n, camera_position - v_world_position) < 0.0) n = -n;
   vec3 light = band_light(light_at(snap_position(v_world_position), n, 1.0, v_world_position + n * 0.05));
   vec3 lamp = lamp_part(light);
-  color = vec4(fog_lit(c * (light - lamp), c * lamp, length(v_view_position)), min(1.0, falls_alpha + 0.2 * streak));
+  color = vec4(fog_lit(c * (light - lamp), c * lamp, length(v_view_position)), falls_alpha);
 }")
 
 (define-shader-entity falls-foam (liquid-sheet)
