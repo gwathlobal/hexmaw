@@ -3166,7 +3166,8 @@ player has sacked the town (`refusing-p`):
   can't take the wing's last ones, hidden until the quest is taken; touched, it goes into the bag
   as the `:relic` item, the reliquary, and the claim takes it back out),
   a bounty on the wing's commonest monster (`bounty-target`, progress counted from the dead), or,
-  besieged, hold the gates through `*gate-raids*` raids. Claimed back in town for gold and
+  besieged, hold the gates through `*gate-raids*` raids, or until the siege is broken (below),
+  which counts as held. Claimed back in town for gold and
   `*quest-reputation*`.
 
 `price` is `*base-prices*`, `*price-depth-step*` dearer per depth, by the faction's multiplier and
@@ -3197,7 +3198,11 @@ one of the townsfolk takes it as its foe, and a townsperson who can fight takes 
 struck it. The `settlement-director` (on every level, for the prompt; the rest only in the
 settlement, at `*director-step*`) has free guards take on monsters up to something in town
 (`guards-watch`), and while besieged sends 2 or 3 of the wing's nearest `*raid-classes*` at the
-guards every `*raid-interval*` (`start-raid`, `run-siege`; `raids-held` counts the ones beaten off).
+guards every `*raid-interval*` (`start-raid`, `run-siege`; `raids-held` counts the ones beaten off,
+whoever killed the raiders). Once the wing has no raiders left (`raid-pool` empty with no raid on:
+the player cleared it, or the raids used it up) the siege is broken for good (`siege-broken-p`,
+"The undercroft falls quiet"): no more raids, a hold-the-gates quest is done, and one not yet drawn
+isn't offered. Before, an empty pool stopped the raid timer and the quest could never finish.
 Only plain fighters raid: a flyer's, caster-boss's or leaper's attack assumes the player.
 
 A save keeps the settlement's build (faction and condition, `:settlement :built`), its state

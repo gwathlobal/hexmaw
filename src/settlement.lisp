@@ -78,6 +78,8 @@ shopkeeper teaches (dialogue.lisp).")
    (raid-timer :initform 0.0 :accessor raid-timer :documentation "Seconds of play until the next raid, while besieged.")
    (raids-held :initform 0 :accessor raids-held :documentation "Raids beaten off: every raider dead.")
    (raid-on :initform NIL :accessor raid-on-p :documentation "True while a raid's monsters are coming.")
+   (siege-broken :initform NIL :accessor siege-broken-p
+                 :documentation "True once the wing has no raiders left: no more raids, and holding the gate is done.")
    (rule-grace :initform NIL :accessor rule-grace
                :documentation "Seconds left before a rule the player has been warned of counts as broken, or NIL."))
   (:documentation "The settlement of the level in play: what it is, drawn when the level is built,

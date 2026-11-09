@@ -7,6 +7,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Holding the gates can always be finished.** A besieged town raids only with the wing's
+  monsters, and once none were left `start-raid` set the raid timer to 0, which stopped the raids
+  for good: a player who cleared the wing before two raids had come could never finish the
+  quest. Now a wing with no raiders left breaks the siege (`siege-broken-p`, saved): no more
+  raids, "The undercroft falls quiet", and the quest counts as held. A town whose siege is
+  already broken doesn't offer the quest.
 - **A waterfall made of the water's own texture.** Its white streaks were hashed lanes of solid
   white an eighth of a metre wide, crude beside the textured water around them, and the texture
   stretched eight times was still blocky. The sheet is now two layers of the water texture,

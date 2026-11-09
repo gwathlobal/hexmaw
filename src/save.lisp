@@ -119,7 +119,7 @@ their values."
   '(caster centre))
 
 (defmethod saved-slots append ((settlement settlement))
-  '(condition strikes fine fine-left hostile sacked-by stock trained quest raid-timer raids-held raid-on rule-grace))
+  '(condition strikes fine fine-left hostile sacked-by stock trained quest raid-timer raids-held raid-on siege-broken rule-grace))
 
 (defmethod saved-slots append ((townsfolk townsfolk))
   '(provoked last-assault))

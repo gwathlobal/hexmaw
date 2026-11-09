@@ -293,7 +293,8 @@
 ;;; level as built, and kept on the settlement as a plist: :KIND, :STATE (:OFFERED, :ACTIVE,
 ;;; :CLAIMED), :REWARD and what its kind needs. A relic waits, hidden, on a spot deep in the wing
 ;;; (QUEST-PICKUP, pickups.lisp) until the quest is taken; a bounty counts the dead of one kind; holding
-;;; the gate counts raids beaten off (townsfolk.lisp).
+;;; the gate counts raids beaten off (townsfolk.lisp), and is done once the siege is broken: the wing
+;;; has no raiders left, however they died.
 
 (defparameter *quest-rewards* '(:relic 110 :bounty 30 :hold-gate 140)
   "Gold a quest pays at the first depth: the relic and holding the gate all told, a bounty per head.")
@@ -327,7 +328,9 @@
                    (scale (gold-scale (settlement-depth-of settlement)))
                    (kinds (append (when (quest-relic) '(:relic))
                                   (when (bounty-target) '(:bounty))
-                                  (when (eq (built-condition settlement) :besieged) '(:hold-gate)))))
+                                  (when (and (eq (built-condition settlement) :besieged)
+                                             (not (siege-broken-p settlement)))
+                                    '(:hold-gate)))))
               (when kinds
                 (let ((kind (nth (random (length kinds) random) kinds)))
                   (ecase kind
@@ -345,7 +348,9 @@
     (:relic (values (min 1 (kind-total *player* :relic)) 1))
     (:bounty (values (min (getf quest :count) (- (dead-count (getf quest :target)) (getf quest :baseline 0)))
                      (getf quest :count)))
-    (:hold-gate (values (min (getf quest :count) (- (raids-held *settlement*) (getf quest :baseline 0)))
+    (:hold-gate (values (if (siege-broken-p *settlement*)
+                            (getf quest :count)
+                            (min (getf quest :count) (- (raids-held *settlement*) (getf quest :baseline 0))))
                         (getf quest :count)))))
 
 (defun quest-done-p (quest)

@@ -416,37 +416,42 @@ or a burn's every tick (magic.lisp), are the same assault.")
 (defun raiders ()
   (loop for c across *creatures* when (and (monster-p c) (not (dead c)) (foe c) (townsfolk-p (foe c))) collect c))
 
+(defun raid-pool ()
+  "The wing's monsters that may yet raid: plain fighters outside the town and not raiding now."
+  (loop for c across *creatures*
+        when (and (monster-p c) (not (dead c)) (not (foe c))
+                  (some (lambda (class) (typep c class)) *raid-classes*)
+                  (not (in-settlement-p (location c))))
+          collect c))
+
 (defun start-raid ()
   "Send the wing's nearest raiders at the guards."
   (let* ((s *settlement*)
          (centre (let ((b (settlement-block s))) (v* (v+ (map-block-low b) (map-block-high b)) 0.5)))
-         (pool (sort (loop for c across *creatures*
-                           when (and (monster-p c) (not (dead c)) (not (foe c))
-                                     (some (lambda (class) (typep c class)) *raid-classes*)
-                                     (not (in-settlement-p (location c))))
-                             collect c)
-                     #'< :key (lambda (c) (vdistance (location c) centre))))
+         (pool (sort (raid-pool) #'< :key (lambda (c) (vdistance (location c) centre))))
          (size (+ (first *raid-size*) (random (1+ (- (second *raid-size*) (first *raid-size*)))))))
-    (cond ((null pool) (setf (raid-timer s) 0.0))
-          (T (loop for c in pool repeat size
-                   do (let ((guard (nearest-guard (location c))))
-                        (when guard (setf (foe c) guard (replan-timer c) 0.0))))
-             (hud-say "The watch: To the gates! The undercroft is coming!")))))
+    (loop for c in pool repeat size
+          do (let ((guard (nearest-guard (location c))))
+               (when guard (setf (foe c) guard (replan-timer c) 0.0))))
+    (hud-say "The watch: To the gates! The undercroft is coming!")))
 
 (defun run-siege (dt)
+  "Raid the town every *RAID-INTERVAL* while the wing has raiders. Once it has none (the player
+cleared it, or the raids used them up) the siege is broken for good, which holds the gate."
   (let ((s *settlement*))
-    (when (and (eq (settlement-condition s) :besieged) (settlement-guards))
+    (when (and (eq (settlement-condition s) :besieged) (settlement-guards) (not (siege-broken-p s)))
       (cond ((raid-on-p s)
              (unless (raiders)
                (setf (raid-on-p s) NIL)
                (incf (raids-held s))
                (hud-say "The watch: They're beaten back!")))
-            ((< 0 (raid-timer s))
-             (when (<= (decf (raid-timer s) dt) 0)
-               (start-raid)
-               (when (raiders)
-                 (setf (raid-on-p s) T
-                       (raid-timer s) *raid-interval*))))))))
+            ((null (raid-pool))
+             (setf (siege-broken-p s) T)
+             (hud-say "The undercroft falls quiet. The siege is broken!"))
+            ((<= (decf (raid-timer s) dt) 0)
+             (start-raid)
+             (setf (raid-on-p s) T
+                   (raid-timer s) *raid-interval*))))))
 
 (defun guards-watch ()
   "Each free guard takes on the nearest monster in town it can see that is up to something."
