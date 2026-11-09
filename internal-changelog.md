@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Level sweeps without a window.** `tools/levelcheck` builds generated levels and kit blocks in
+  plain SBCL processes, with no window, GL, music or sound, several at once: `build-level` already
+  needed no context, so `build-level-alone` (new `src/levelcheck.lisp`) builds into a bare scene,
+  and the levels are a live game's (run seeds 1 to 10, 40 levels: layout, counts, creatures,
+  pickups and warnings all matched). It prints a line per level and each depth's averages, or JSON
+  records (`--json`), checks the kit (`--kit`, `check-kit` headless: 143 blocks in 5 s), and with
+  `--strict` fails on the findings that are bugs. Runs 1 to 10 take 24 s with 4 workers against
+  80 s through `reload-scene`. `build-level` keeps what its checks found in
+  `*last-level-checks*`; `tools/blueprint --stale` builds only blueprints newer than their block.
+  CI sweeps runs 1 to 3 and the kit on every push.
 - **Holding the gates can always be finished.** A besieged town raids only with the wing's
   monsters, and once none were left `start-raid` set the raid timer to 0, which stopped the raids
   for good: a player who cleared the wing before two raids had come could never finish the

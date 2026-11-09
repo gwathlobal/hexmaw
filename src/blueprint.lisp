@@ -1173,9 +1173,18 @@ blocks built, and has no blueprints to build them from.")
           T)))))
 
 (defun main (args)
-  "tools/blueprint: build the named blueprints, or all; --check only checks. Returns the exit code."
+  "tools/blueprint: build the named blueprints, or all; --check only checks, --stale builds only
+those newer than their block (ENSURE-BLOCK). Returns the exit code."
   (let* ((check (member "--check" args :test #'string=))
-         (names (or (remove "--check" args :test #'string=) (blueprint-names))))
+         (stale (member "--stale" args :test #'string=))
+         (names (or (remove-if (lambda (a) (member a '("--check" "--stale") :test #'string=)) args)
+                    (blueprint-names))))
+    (when stale
+      (return-from main
+        (let ((failed NIL))
+          (dolist (name names (if failed 1 0))
+            (handler-case (when (ensure-block name) (format T "Built ~a.~%" name))
+              (error (e) (setf failed T) (format *error-output* "~a~%" e)))))))
     (multiple-value-bind (summaries errors) (build-blueprints :names names :write (not check))
       (dolist (s summaries) (format T "~a~%" s))
       (dolist (e errors) (format *error-output* "~a~%" e))

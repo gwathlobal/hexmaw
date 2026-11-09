@@ -124,8 +124,14 @@ must have an altar (:ALTAR-CHANCE 1) and has none the player can get to."
             ((and altar (<= 1 altar) (not (altar-reached-p)))
              "has no altar the player can reach")))))
 
+(defvar *last-level-checks* ()
+  "What BUILD-LEVEL found about the level it built last, as a plist: :ATTEMPTS (seeds tried),
+:PROBLEM (why the last of them wouldn't do, or NIL), :UNREACHABLE doorways and :STRANDED
+creatures (CHECK-REACHABLE), :ICE-JOINS (CHECK-ICE-JOINS). Level sweeps read it (levelcheck.lisp).")
+
 (defun build-level (container)
-  (let ((*block-memo* (make-hash-table :test 'equal)))
+  (let ((*block-memo* (make-hash-table :test 'equal))
+        (attempts 0) (last-problem NIL))
     (loop for attempt from 0
           for problem = (progn
                           (clear-level)
@@ -140,6 +146,7 @@ must have an altar (:ALTAR-CHANCE 1) and has none the player can get to."
                           (link-rooms)
                           (build-nav-grid)
                           (level-needs-rebuilding-p))
+          do (setf attempts (1+ attempt) last-problem problem)
           while problem
           do (cond ((< (1+ attempt) *max-level-attempts*)
                     (v:warn :hexmaw "Level ~d ~a; trying another seed." *last-level-seed* problem)
@@ -151,9 +158,10 @@ must have an altar (:ALTAR-CHANCE 1) and has none the player can get to."
                     (return))))
     ;; Before the checks, which count the packs too.
     (spread-packs container *last-level-seed*)
-    (let ((stranded (nth-value 1 (check-reachable))))
-      (when (eq *level* :generated)
-        (check-ice-joins))
+    (multiple-value-bind (lost stranded) (check-reachable)
+      (setf *last-level-checks* (list :attempts attempts :problem last-problem
+                                      :unreachable lost :stranded stranded
+                                      :ice-joins (when (eq *level* :generated) (check-ice-joins))))
       (place-pickups container :guards (remove-if-not #'hoard-guard-p stranded)))
     (setf *built-pickups* (length *pickups*))))
 
