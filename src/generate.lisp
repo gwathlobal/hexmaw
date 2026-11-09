@@ -16,7 +16,9 @@
 ;;; (two storeys of room, for the ogre's leaps), and flooded runs, through underwater
 ;;; doorways (passages full of water, swum on one breath, a cistern at each end, whose
 ;;; ledges go on into the dungeon), and canals, through canal doorways (a river's, deep
-;;; water in place of lava). The first block of one comes in like any
+;;; water in place of lava), and frozen rivers, the ice caves' own, through frozen doorways
+;;; (a river's with a sunken channel of ice in place of lava) and rill doorways (ice wall to
+;;; wall), whose banks open onto the ice caves by ice doorways. The first block of one comes in like any
 ;;; corridor or room, through an ordinary doorway, and starts a network with a target length
 ;;; in blocks. Its open network doorways are tried before any other, with pieces until the
 ;;; network has its length and ends from then on, so each arm ends in an end block (whose
@@ -44,14 +46,18 @@ short, so it is swum on one breath.")
 (defparameter *max-flooded-networks* 1 "How many flooded runs a level may start.")
 (defparameter *canal-length* '(3 6) "The fewest and most blocks a canal runs to before it ends.")
 (defparameter *max-canals* 1 "How many canals a level may start.")
+(defparameter *frozen-length* '(4 7)
+  "The fewest and most blocks a frozen river runs to before it ends: the ice wing is small.")
+(defparameter *max-frozen-rivers* 1 "How many frozen rivers a level may start.")
 (defparameter *networks*
-  '((:river ("river" "stream") :river :river-end *river-length* *max-rivers*)
-    (:high ("high") :high :high-end *high-length* *max-high-networks*)
-    (:flooded ("underwater") :flooded :cistern *flooded-length* *max-flooded-networks*)
-    (:canal ("canal") :canal :canal-end *canal-length* *max-canals*))
+  '((:river ("river" "stream") :river :river-end *river-length* *max-rivers* #\~)
+    (:high ("high") :high :high-end *high-length* *max-high-networks* #\^)
+    (:flooded ("underwater") :flooded :cistern *flooded-length* *max-flooded-networks* #\=)
+    (:canal ("canal") :canal :canal-end *canal-length* *max-canals* #\-)
+    (:frozen ("frozen" "rill") :frozen-river :frozen-end *frozen-length* *max-frozen-rivers* #\*))
   "The networks the generator grows: each family, the doorway kinds that join its blocks,
-the tags of its pieces and of its ends, and the variables that hold its length in blocks and
-how many a level may start.")
+the tags of its pieces and of its ends, the variables that hold its length in blocks and
+how many a level may start, and the character LEVEL-MAP draws its blocks with.")
 (defparameter *start-clearance* 16.0
   "Metres round the player's start where no monster spawns: the start block's neighbours
 would see the player the moment the level begins.")
@@ -109,11 +115,13 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
   "The family of network block NAME is a piece or an end of, by its tags, or NIL."
   (first (find-if (lambda (spec) (intersection (list (third spec) (fourth spec)) (block-tags name))) *networks*)))
 
+(defun network-char (family) (seventh (assoc family *networks*)))
+
 (defun network-end-p (name family)
   (member (fourth (assoc family *networks*)) (block-tags name)))
 
 (defclass network ()
-  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER, :HIGH, :FLOODED or :CANAL.")
+  ((family :initarg :family :reader network-family :documentation "Its entry in *NETWORKS*: :RIVER, :HIGH, :FLOODED, :CANAL or :FROZEN.")
    (target :initarg :target :reader network-target :documentation "How many blocks it runs to.")
    (pieces :initform 0 :accessor network-pieces :documentation "How many blocks it has.")
    (ends :initform () :accessor network-ends :documentation "How each arm ended: :END, :JOIN or :PLUG."))
@@ -389,8 +397,9 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
 
 (defun level-map (&optional (stream *standard-output*))
   "Print the generated level's cells, a storey at a time, north up: each cell is the first
-letter of its block's name, upper case for rooms, @ for the settlement's town, ~ for a river's blocks, ^ for a high
-quarter's, = for a flooded run's and - for a canal's."
+letter of its block's name, upper case for rooms, @ for the settlement's town, and a
+network's blocks by its family's character in *NETWORKS*: ~ for a river's, ^ for a high
+quarter's, = for a flooded run's, - for a canal's and * for a frozen river's."
   (let ((keys (loop for k being the hash-keys of *level-cells* collect k)))
     (when keys
       (loop for k from (reduce #'min keys :key #'third) to (reduce #'max keys :key #'third)
@@ -400,10 +409,7 @@ quarter's, = for a flooded run's and - for a canal's."
                               for name = (gethash (list i j k) *level-cells*)
                               do (write-char (cond ((null name) #\.)
                                                    ((member :town (block-tags name)) #\@)
-                                                   ((eq (block-network name) :river) #\~)
-                                                   ((eq (block-network name) :high) #\^)
-                                                   ((eq (block-network name) :flooded) #\=)
-                                                   ((eq (block-network name) :canal) #\-)
+                                                   ((block-network name) (network-char (block-network name)))
                                                    ((member :room (block-tags name)) (char-upcase (char name 0)))
                                                    (T (char-downcase (char name 0))))
                                              stream))

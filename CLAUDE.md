@@ -639,7 +639,10 @@ real time instead.
   stays under a quarter of its walk speed. A melee creature slides on through its wind-up, so
   its blow can miss. Stepping onto ice mid-walk carries the walk's speed over
   (`update-footing`); hovering flyers have no footing. `tools/hd status` shows the player's
-  footing and speed and each creature's footing. Nothing in pathing knows about ice yet.
+  footing and speed and each creature's footing. Pathing knows ice only as a cost: a walker's
+  path search (`nav-flood`, under `*nav-hazards*` `:avoid` or `:wade`) charges a step onto a
+  slippery cell `*nav-ice-cost*` (1.5) times its length, so routes keep to the snow beside a
+  frozen river and cross it the short way; a straight walk still goes straight over it, skidding.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites.
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
@@ -2539,11 +2542,15 @@ Blender export that keeps the conventions works the same. Conventions:
   banks), `connector_high_north` a `high` (7 × 9 m, two cells: the high blocks', floor to ceiling),
   `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated levels"),
   anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
-  fourth value is its lava width, a stream's its whole width: `flooded-kind-p`),
+  fourth value is its middle's width, a stream's its whole width, `flooded-kind-p`, and its fifth
+  what fills the middle: `:lava`, `:open` or `:ice`, `middle-cell-p`),
   `connector_underwater_north` an `underwater` (3 × 3 m, full of water: a flooded passage's
   and a cistern's), `connector_canal_north` a `canal` (a river's with deep water: 7 × 3.5 m,
   its middle 3 m open down to the water filling the storey below, which runs on through the
-  wall under it, so its plug reaches down there too), and each kind joins only itself. A doorway two cells
+  wall under it, so its plug reaches down there too), `connector_frozen_north` a `frozen` (a
+  river's with a channel of ice sunk 0.4 m, `pit 0.4, floor ice`, in place of its lava: the ice
+  caves' river), `connector_rill_north` a `rill` (a stream's, that ice wall to wall), and each
+  kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
@@ -2727,6 +2734,11 @@ west wall: the end of a flooded run), the flooded passages `flooded-passage`, `f
 and `flooded-tee` (full of water to the roof, swum on one breath, no torches), and the canal:
 `canal`, `canal-bend` (mirrored), `canal-ford` (a bridge, doorways onto both banks) and the
 end `canal-end` (the banks joined round the channel's head);
+the frozen river (below), the ice caves' own: `frozen-river`, `frozen-ford` (a causeway of snow
+across, doorways onto both banks), `frozen-bend`, `frozen-cavern` (a room it runs through, a
+snow bridge), `frozen-narrows` (wide to a rill), `rill` and `rill-bend` (ice wall to wall, no
+bank), and the ends `frozen-spring` (out from under a frozen fall of icicles), `frozen-sink` (a
+frozen pool) and `rill-spring`, all but the sink with a mirror;
 and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 m vault, a
 2.5 m terrace and a 5 m walkway with a doorway out at the top), `high-hall` (six pillars the
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
@@ -2752,7 +2764,15 @@ or column reads as a slab laid across a cave. Nothing in a cave is a rectangle: 
 winds, the niche and the shrine are chamfered, hanging ice is octagonal or a diamond
 (`hang_diamond`, in the 3 m corridors), and ponds and shelves have 45° edges.
 `tools/cave_plans.py` draws every ice block (`POND`, `pond_rock`, `hang_over`,
-`hang_diamond`, `frost_line`). `ice-hall` is an ordinary dungeon room with an ice
+`hang_diamond`, `frost_line`). The frozen river is the lava river made of ice: a channel of slick
+ice sunk 0.4 m (a step, twice a pond's) between 2 m banks of snow, under icicles, with ice-rock
+walls and 45° shores (`[ ]`, `diagonal / floor -0.4 0, pit 0.4, floor ice`); its doorways are
+`FFFFffffffFFFF` and `FFfffFF` (`F door frozen`, `f door frozen, pit 0.4, floor ice`) and a rill's
+`||||||` and `|||`, and its banks open onto the ice caves through `+` ice doorways, so it never
+meets lava. It burns nothing: its risk is control. A run along the channel reaches about 12 m/s
+and stops only on snow, a bend carries a sliding player into the outer bank's rock (a player on
+ice isn't hurt by a wall, but it stops them), and a monster struck on it skates into the rock
+and is hurt (see "Impacts"). `ice-hall` is an ordinary dungeon room with an ice
 floor, outside all this. Ice never meets lava: `ice-bridge` (the forge frozen, ice up to its
 lava channel) has no tags, so the generator leaves it out, until water can fill its channel.
 Every piece must let the player walk between all its doorways (drops don't
@@ -2840,18 +2860,21 @@ the shader takes only 32.
 
 Networks: a network is the blocks joined through doorways ordinary blocks don't have; each
 family is an entry in `*networks*` (its doorway kinds, piece and end tags, and the variables
-for its length and how many a level may have). There are four: rivers, below; high
+for its length and how many a level may have, and the character `(level-map)` draws its
+blocks with, `network-char`). There are five: rivers, below; high
 quarters, galleries and high rooms joined through `high` doorways (`high`, ends `high-end`:
 the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level; flooded
 runs, passages joined through `underwater` doorways (`flooded`, ends `cistern`), a cistern at
 each end, `*flooded-length*` (2 to 4 blocks, the first cistern included: short, swum on one
 breath), `*max-flooded-networks*` (1); and canals (`canal`, ends `canal-end`),
-`*canal-length*` (3 to 6), `*max-canals*` (1). All grow the same way, with `network` in place
+`*canal-length*` (3 to 6), `*max-canals*` (1); and frozen rivers, the ice caves' river,
+through `frozen` and `rill` doorways (`frozen-river`, ends `frozen-end`), `*frozen-length*`
+(4 to 7: the ice wing is small), `*max-frozen-rivers*` (1). All grow the same way, with `network` in place
 of `river` throughout. A cistern has one underwater doorway, so a run ends at it; one reached
 through its ledge starts a run.
 `*level-networks*` holds the last level's (`network-family`, `-pieces`, `-target`, `-ends`),
 the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`, a
-flooded run's as `=` and a canal's as `-`. Over 200 seeds, 60% of levels had a canal (4 blocks on
+flooded run's as `=`, a canal's as `-` and a frozen river's as `*`. Over 200 seeds, 60% of levels had a canal (4 blocks on
 average), 11% a flooded run (3) and 24% a high quarter (4), and a level had 0.8 network arms
 end in a plug. The vault, 4 × 4 cells and two storeys, is the high quarter's only end and often
 doesn't fit.
@@ -2879,7 +2902,12 @@ so the way into the ice is always a rock cave, a gate, then ice. An ice doorway 
 (few blocks have one), the first piece through a gate isn't another gate, and a gate doorway
 still open at the room quota gets a room, ice or cave. `check-ice-joins` warns about any join
 against the rule after every generated level. Over seeds 1 to 100, 20 levels had an ice gate,
-and 29 of their 30 gates led into the ice. The generator asks every block's tags and weight
+and 29 of their 30 gates led into the ice. The frozen river grows inside the ice wing: its first
+piece comes in through an ice doorway like any ice corridor or room, and its banks' doorways lead
+on into the ice. Over run seeds 1 to 150, every level of each run (601), 132 levels had an ice
+wing and 35 a frozen river, of 4.5 blocks on average (1 to 9), two thirds of its arms (47 of
+70) ending in an end block, the rest in a plug. On seed 5's third level a frame at a spot on the river costs what one elsewhere does
+(32 to 82 fps there, 32 to 127 at the level's other doorways, vsync off, world frozen). The generator asks every block's tags and weight
 thousands of times a level, so `build-level` binds `*block-memo*`, which keeps each
 definition `find-block` gives (half a millisecond each, since it checks the files): a level
 generated in 5 to 10 s before it, under one after.

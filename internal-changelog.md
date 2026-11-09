@@ -7,6 +7,30 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A frozen river in the ice caves.** A fifth network, `:frozen`: the lava river made of ice, a
+  3 m channel of slick ice sunk 0.4 m between 2 m snow banks under icicles, and the rill, ice wall
+  to wall. Its doorway kinds are `frozen` (7 × 3.5 m) and `rill` (3 × 3.5 m), and its banks open
+  onto the ice caves through `ice` doorways, so it lives wholly in the ice wing and never meets
+  lava. It burns nothing; its risk is control. The channel is the fastest road in the game, but
+  it stops only on snow: bends carry a sliding player into the outer rock, and a monster struck
+  on it skates into the walls. Ten blocks drawn by `tools/cave_plans.py`, nine with mirrors:
+  `frozen-river`, `frozen-ford`, `frozen-bend`, `frozen-cavern`, `frozen-narrows`, `rill`,
+  `rill-bend`, and the ends `frozen-spring`, `frozen-sink`, `rill-spring`. `*frozen-length*`
+  (4 to 7) and `*max-frozen-rivers*` (1). `check-kit` is clean on all of them, with ogres too.
+  Over run seeds 1 to 150, every level (601), 132 levels had an ice wing and 35 of them a frozen
+  river, 4.5 blocks on average (1 to 9), with no unreachable doorway, bad ice join, stranded
+  creature but ogres, or doorway opening onto nothing.
+- **The network code is more general.** A banked doorway kind names what fills its middle (a
+  5th element in `*connector-kinds*`: `:lava`, `:open`, `:ice`; `middle-cell-p`), and each
+  `*networks*` entry names its `(level-map)` character (`network-char`), so a new family needs
+  no new branches.
+- **Walkers keep off ice when they can.** `nav-flood` charges a step onto a slippery footing
+  `*nav-ice-cost*` (1.5) times its length for walkers (`*nav-hazards*` `:avoid` and `:wade`), so
+  paths keep to a frozen river's banks and cross it the short way. Straight walks and flyers are
+  unchanged.
+- New kit blocks change what each seed grows, so an older save on a generated level starts fresh
+  with the usual warning.
+
 - **Music from a composition plan.** `tools/gen_music.py --plan FILE` sends ElevenLabs a plan of
   timed sections (`music_v2_5`'s chunks, each its text, styles and length) in place of a prompt,
   so a track can be written to a cut: `audio/prompts/music-trailer-plan.json` is the trailer's,

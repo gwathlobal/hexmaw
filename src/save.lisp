@@ -19,7 +19,7 @@
 (defparameter *saved-generator-settings*
   '(*generator-rooms* *generator-attempts* *corridor-run* *generator-storeys* *generator-blocks* *spawn-pool*
     *river-length* *max-rivers* *high-length* *max-high-networks* *flooded-length* *max-flooded-networks*
-    *canal-length* *max-canals* *start-clearance* *spawn-skip-scale* *elite-chance*)
+    *canal-length* *max-canals* *frozen-length* *max-frozen-rivers* *start-clearance* *spawn-skip-scale* *elite-chance*)
   "The variables besides the seed that decide a generated level.")
 
 (defparameter *level-setting-keys*

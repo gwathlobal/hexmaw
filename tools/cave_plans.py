@@ -17,7 +17,8 @@ A blueprint's header and legend are written by hand; this replaces the rows afte
   in the lava.
 - doorways: put strings on the border. A wide river doorway is `RRRR======RRRR` on a north or
   south face and `RR===RR` on an east or west one; a stream's, all lava, `------` and `---`;
-  an ice cave's `++++++` and `+++`.
+  an ice cave's `++++++` and `+++`; a frozen river's `FFFFffffffFFFF` and `FFfffFF` (bank, then
+  its sunken ice), a rill's `||||||` and `|||`.
 - pickup spots: put `$$` (floor) or `&&` (reward) where the blueprint's legend says what they are.
 
 Ice caves: their floor is snow, and a frozen pond (`_`) is sunk 0.2 m into it, a REGION with
@@ -42,6 +43,8 @@ HANG = {'/': 'A', '\\': 'B'}
 POND = {'/': '[', '\\': ']'}
 WIDE_NS, WIDE_EW = 'RRRR======RRRR', 'RR===RR'
 NARROW_NS, NARROW_EW = '------', '---'
+FROZEN_NS, FROZEN_EW = 'FFFFffffffFFFF', 'FFfffFF'
+RILL_NS, RILL_EW = '||||||', '|||'
 
 
 def blank(wide, deep):
@@ -538,6 +541,132 @@ def frost_shrine():
     return g
 
 
+# The frozen river, the ice caves' own: a river's channel of ice sunk 0.4 m between banks of
+# snow, and the rill, ice wall to wall. Its doorways are `FFFFffffffFFFF` and `FFfffFF` (bank,
+# then sunken ice) and `||||||` and `|||`; the banks open onto the ice caves by ice doorways.
+
+def frozen_river():
+    g = blank(2, 2)
+    put(g, 0, 1, FROZEN_NS); put(g, 8, 1, FROZEN_NS); down(g, 0, 5, '+++')
+    outline(g, L=[1] * 8, R=[15, 15, 15, 13, 13, 15, 15, 15])
+    fill(g, range(1, 8), range(5, 11), '_')
+    hang_over(g, 4, L=[7, 5, 5, 7], R=[9, 11, 11, 9])
+    put(g, 2, 2, '$$'); g[2][0] = 'T'; g[7][15] = 'T'
+    return g
+
+
+def frozen_ford():
+    g = blank(2, 3)
+    down(g, 0, 5, FROZEN_EW); down(g, 15, 5, FROZEN_EW); put(g, 0, 1, '++++++'); put(g, 12, 9, '++++++')
+    outline(g, L=[1] * 12, R=[7, 9, 11, 13, 15, 15, 15, 15, 15, 15, 15, 15])
+    fill(g, (7, 8, 9), range(1, 15), '_')
+    fill(g, (7, 8, 9), range(6, 10), '.')  # a causeway of snow across
+    put(g, 2, 2, '$$'); g[3][0] = 'T'; g[12][4] = 'T'
+    return g
+
+
+def frozen_bend():
+    g = blank(3, 3)
+    put(g, 12, 9, FROZEN_NS); down(g, 23, 1, FROZEN_EW); down(g, 0, 5, '+++')
+    outline(g, L=[9] * 12, R=[23] * 12)
+    fill(g, (5, 6, 7), range(1, 9), '.')
+    region(g, 3, L=[17, 15, 13, 13, 13, 13, 13, 13, 13, 13], R=[23, 23, 23, 23, 21, 19, 19, 19, 19, 19],
+           fill='_', pairs=POND)
+    hang_over(g, 8, L=[15, 13, 13, 15], R=[17, 19, 19, 17])
+    g[0][14] = 'T'; g[10][23] = 'T'
+    return g
+
+
+def frozen_cavern():
+    g = blank(3, 4)
+    put(g, 0, 9, FROZEN_NS); put(g, 16, 9, FROZEN_NS); down(g, 0, 5, '+++'); down(g, 23, 9, '+++')
+    outline(g, L=[9, 7, 5, 3, 1, 1, 1, 1, 1, 3, 5, 7, 9, 9, 9, 9], R=[23] * 16)
+    region(g, 1, L=[13, 13, 13, 13, 11, 11, 11, 11, 13, 13, 13, 13, 13, 13, 13, 13],
+           R=[19, 19, 19, 19, 17, 17, 17, 17, 19, 19, 19, 19, 19, 19, 19, 19], fill='_', pairs=POND)
+    fill(g, (11, 12), range(13, 19), '.')  # a bridge of snow
+    hang_over(g, 2, L=[15, 13, 13, 15], R=[17, 19, 19, 17])
+    put(g, 4, 5, 'ii'); put(g, 13, 20, 'jj'); put(g, 9, 7, 'mm'); put(g, 4, 20, 'MM')
+    put(g, 6, 14, '&&'); put(g, 7, 3, '$$')
+    g[2][23] = 'T'; g[14][23] = 'T'
+    pond_rock(g)
+    return g
+
+
+def frozen_narrows():
+    g = blank(2, 3)
+    # A one-cell doorway sits in one cell, so the river narrows toward the east one: the
+    # banks run out and its last cell is ice wall to wall.
+    put(g, 12, 1, FROZEN_NS); put(g, 0, 9, RILL_NS)
+    outline(g, L=[9, 9, 9, 9, 9, 7, 5, 3, 1, 1, 1, 1], R=[15] * 12)
+    region(g, 1, L=[9, 9, 9, 9, 9, 7, 5, 5, 5, 5, 5, 5], R=[15, 15, 15, 15, 15, 13, 11, 11, 11, 11, 11, 11],
+           fill='_', pairs=POND)
+    pond_rock(g)
+    put(g, 7, 3, '//')  # the west bank's tip, snow
+    g[10][0] = 'T'; g[10][15] = 'T'
+    return g
+
+
+def rill():
+    # Ice wall to wall, sunk: no bank to stop on, so it is taken at a slide.
+    g = blank(1, 2)
+    put(g, 0, 1, RILL_NS); put(g, 8, 1, RILL_NS); down(g, 0, 5, '+++')
+    outline(g, L=[1] * 8, R=[7] * 8, fill='_')
+    g[2][7] = 'T'
+    return g
+
+
+def rill_bend():
+    g = blank(2, 2)
+    put(g, 8, 9, RILL_NS); down(g, 0, 1, RILL_EW)
+    outline(g, L=[1] * 8, R=[15] * 8, fill='_')
+    fill(g, range(4, 8), range(1, 9), '#')
+    # 45-degree rock on the bend's outer and inner corners: what slides round it meets them.
+    put(g, 1, 13, '\\\\'); put(g, 4, 7, '\\\\')
+    pond_rock(g)
+    g[0][8] = 'T'
+    return g
+
+
+def frozen_spring():
+    g = blank(3, 3)
+    put(g, 12, 9, FROZEN_NS); put(g, 0, 9, '++++++'); down(g, 0, 5, '+++')
+    # The east bank runs straight up into the room, 2 m wide, so both banks join here.
+    outline(g, L=[7, 5, 3, 1, 1, 1, 1, 1, 3, 5, 7, 9], R=[19, 21, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23])
+    region(g, 3, L=[13, 11, 11, 11, 11, 13, 13, 13, 13, 13], R=[17, 19, 19, 19, 19, 19, 19, 19, 19, 19],
+           fill='_', pairs=POND)
+    # The frozen fall it comes out from under: icicles hanging low over the pool's head.
+    hang_over(g, 3, L=[15, 13, 13, 15], R=[17, 19, 19, 17])
+    put(g, 6, 5, 'ii'); put(g, 2, 12, 'mm'); put(g, 9, 20, 'mm')
+    put(g, 8, 5, '$$')
+    g[4][0] = 'T'; g[8][23] = 'T'
+    pond_rock(g)
+    return g
+
+
+def frozen_sink():
+    g = blank(3, 3)
+    put(g, 0, 9, FROZEN_NS); down(g, 0, 5, '+++'); down(g, 23, 5, '+++')
+    outline(g, L=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 5], R=[23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 21, 19])
+    region(g, 1, L=[13, 13, 13, 11, 9, 7, 7, 9, 11], R=[19, 19, 19, 21, 21, 21, 21, 21, 19], fill='_', pairs=POND)
+    hang_over(g, 5, L=[11, 9, 9, 11], R=[13, 15, 15, 13])
+    put(g, 7, 17, '&&'); put(g, 10, 11, '$$')
+    g[2][0] = 'T'; g[2][23] = 'T'; g[12][11] = 'T'
+    pond_rock(g)
+    return g
+
+
+def rill_spring():
+    g = blank(2, 2)
+    put(g, 8, 9, RILL_NS); put(g, 0, 1, '++++++'); down(g, 0, 5, '+++')
+    outline(g, L=[1] * 8, R=[11, 13, 15, 15, 15, 15, 15, 15])
+    # The rill comes in wall to wall for 3 m before the pool opens out.
+    region(g, 2, L=[9, 7, 7, 9, 9, 9, 9], R=[13, 15, 15, 15, 15, 15, 15], fill='_', pairs=POND)
+    fill(g, (5, 6, 7), [8], '#')
+    pond_rock(g)
+    put(g, 3, 2, '$$'); g[3][0] = 'T'
+    return g
+
+
 PLANS = {
     'cave': cave, 'lava-lake': lava_lake, 'cave-passage': cave_passage,
     'grotto': grotto, 'cavern': cavern, 'cave-bend': cave_bend, 'cave-fork': cave_fork,
@@ -548,6 +677,9 @@ PLANS = {
     'ice-grotto': ice_grotto, 'ice-lake': ice_lake, 'ice-sheet': ice_sheet, 'ice-cavern': ice_cavern,
     'ice-passage': ice_passage, 'ice-bend': ice_bend, 'ice-gate': ice_gate, 'ice-gate-bend': ice_gate_bend,
     'ice-chute': ice_chute, 'ice-niche': ice_niche, 'frost-shrine': frost_shrine,
+    'frozen-river': frozen_river, 'frozen-ford': frozen_ford, 'frozen-bend': frozen_bend,
+    'frozen-cavern': frozen_cavern, 'frozen-narrows': frozen_narrows, 'rill': rill, 'rill-bend': rill_bend,
+    'frozen-spring': frozen_spring, 'frozen-sink': frozen_sink, 'rill-spring': rill_spring,
 }
 
 

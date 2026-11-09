@@ -1,0 +1,40 @@
+; Where a frozen river spreads into a frozen pool; doorways onward west and east.
+; Its plan is drawn by tools/cave_plans.py.
+cells 3 3
+tags room frozen-end
+weight 1
+remap wall ice-rock
+remap ceiling ice-rock
+remap floor snow
+legend
+  + door ice                                        ; ice caves join only ice caves and gates
+  F door frozen                                     ; a frozen river's doorway: bank
+  f door frozen, pit 0.4, floor ice                 ; and its sunken ice
+  _ pit 0.4, floor ice                              ; the river's ice, sunk a step
+  [ diagonal / floor -0.4 0, pit 0.4, floor ice     ; a shore: snow on one half, ice on the other
+  ] diagonal \ floor -0.4 0, pit 0.4, floor ice
+  < diagonal /, pit 0.4, floor ice                  ; 45-degree ice-rock standing on the ice
+  > diagonal \, pit 0.4, floor ice
+  v box 3 top ice-rock                              ; icicles, hanging from 4 m to 3 m
+  A diagonal / ice-rock 3 top
+  B diagonal \ ice-rock 3 top
+  x box 3 top ice-rock, pit 0.4, floor ice          ; the same over the ice
+  P diagonal / ice-rock 3 top, pit 0.4, floor ice
+  Q diagonal \ ice-rock 3 top, pit 0.4, floor ice
+  $ pickup floor
+  & pit 0.4, floor ice, pickup reward
+
+plan 0
+#########FFFFffffffFFFF#
+#............______....#
+T............______....T
+#..........[[______]]..#
+#........[[__________..#
++......[[PPxxQQ______..+
++......__xxxxxx______..+
++......]]QQxxPP__&&__..+
+#........]]________[[..#
+#......................#
+#\\........$$........//#
+###\\..............//###
+###########T############

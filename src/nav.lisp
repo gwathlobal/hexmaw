@@ -88,6 +88,10 @@ for flyers. :SWIM wades lava and swims, over deep water and under it, for the pl
 Creatures bind it while they think.")
 (defparameter *nav-wade-cost* 3.0
   "How many times as costly a step through lava is to a path that may wade.")
+(defparameter *nav-ice-cost* 1.5
+  "How many times as costly a step onto a slippery footing (ice) is to a walker's path, so
+routes keep to the snow beside a frozen river and cross it the short way. Not to a flyer's
+(*NAV-HAZARDS* :IGNORE) or the player's (:SWIM).")
 
 (defvar *nav-bodies* NIL
   "Bodies the nav questions keep a body's paths clear of, though the grid ignores bodies:
@@ -457,7 +461,8 @@ Only floors within REACH metres of POINT's height count, the nearest in each col
   "Shortest path lengths from cell SI SJ SK to every cell within MAX-DISTANCE metres of
 walking. Returns two arrays indexed by NAV-INDEX: distances (infinity where not
 reached) and each cell's previous cell on its path (-1 for none). While *NAV-HAZARDS* is
-:WADE, a step into lava counts *NAV-WADE-COST* times its length."
+:WADE, a step into lava counts *NAV-WADE-COST* times its length; while it is :AVOID or :WADE,
+a step onto ice *NAV-ICE-COST* times."
   (let* ((n (* (nav-width grid) (nav-depth grid) (nav-layers grid)))
          (cell (nav-cell-size grid))
          (dist (make-array n :element-type 'single-float :initial-element most-positive-single-float))
@@ -466,7 +471,9 @@ reached) and each cell's previous cell on its path (-1 for none). While *NAV-HAZ
          (open (make-array 64 :adjustable T :fill-pointer 0))
          (start (nav-index si sj sk grid))
          (hazard (nav-hazard grid))
-         (wade-cost (if (member *nav-hazards* '(:wade :swim)) (float *nav-wade-cost* 0f0) 1f0)))
+         (footing (nav-footing grid))
+         (wade-cost (if (member *nav-hazards* '(:wade :swim)) (float *nav-wade-cost* 0f0) 1f0))
+         (ice-cost (if (member *nav-hazards* '(:avoid :wade)) (float *nav-ice-cost* 0f0) 1f0)))
     (setf (aref dist start) 0.0)
     (vector-push-extend start open)
     ;; Dijkstra with a plain list of open cells: a wander radius reaches a few hundred.
@@ -490,7 +497,8 @@ reached) and each cell's previous cell on its path (-1 for none). While *NAV-HAZ
                                              (nav-step i j k ni nj radius height step grid))
                                   when nk
                                     do (let* ((nc (nav-index ni nj nk grid))
-                                              (d (+ (aref dist c) (if (= 1 (aref hazard ni nj nk)) (* d0 wade-cost) d0))))
+                                              (d (+ (aref dist c) (* d0 (if (= 1 (aref hazard ni nj nk)) wade-cost 1f0)
+                                                                     (if (< 0 (aref footing ni nj nk)) ice-cost 1f0)))))
                                          (when (and (<= d max-distance) (< d (aref dist nc)))
                                            (setf (aref dist nc) d
                                                  (aref parent nc) c)
