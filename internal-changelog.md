@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **No gap at the top of a waterfall.** The sheet hung in the middle of the metre-wide opening it
+  pours through, so from above the dark drop showed either side of it and the lip was bare rock.
+  `add-waterfall` now finds the pool it pours from (within `*spill-reach*`), stands the sheet at
+  the opening's far edge, and lays a spill of water at the pool's height from the pool over the
+  lip to the sheet's top.
 - **The creek, a cave river of water.** A fifth network (`:creek`, doorways `creek` and `rill`,
   `*creek-length*` 4 to 8, `*max-creeks*` 1, `%` in `(level-map)`): rock caves with deep water a
   storey down between 45° banks, built like the lava river but two storeys (three for the falls).

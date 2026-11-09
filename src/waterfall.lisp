@@ -9,6 +9,7 @@
 (defparameter *falls-speed* 3.0 "Metres a second the sheet's streaks pour down.")
 (defparameter *falls-alpha* 0.8 "How much of what lies behind the sheet it hides.")
 (defparameter *foam-reach* 1.6 "Metres out from the sheet's foot that its foam spreads.")
+(defparameter *spill-reach* 2.5 "How far beside a waterfall ADD-WATERFALL looks for the pool it pours from.")
 
 (define-shader-entity waterfall (liquid-sheet)
   ((axis :initarg :axis :initform (vec2 1 0) :reader falls-axis
@@ -123,13 +124,36 @@ void main(){
 
 (defun add-waterfall (container low high)
   "Add a waterfall pouring through the box from LOW to HIGH: its sheet across the box's longer
-side, from HIGH's height down to LOW's (the pool's surface), and foam where it lands."
+side, from HIGH's height down to LOW's (the pool's surface), and foam where it lands. With the
+upper pool found on one side (within *SPILL-REACH* of the box), the sheet stands at the box's far
+edge from it, and a SPILL of water at the pool's height runs from the pool over the lip to the
+sheet's top, so nothing open shows between them."
   (let* ((w (- (vx high) (vx low))) (d (- (vz high) (vz low)))
          (along-x (<= d w))
-         (width (max w d))
+         (width (max w d)) (depth (min w d))
          (cx (/ (+ (vx low) (vx high)) 2)) (cz (/ (+ (vz low) (vz high)) 2))
          (y0 (vy low)) (y1 (vy high))
-         (axis (if along-x (vec2 1 0) (vec2 0 1))))
+         (axis (if along-x (vec2 1 0) (vec2 0 1)))
+         ;; Across the drop, the unit step; and how far out from the box the upper pool starts
+         ;; on each side, if it does.
+         (nx (if along-x 0.0 1.0)) (nz (if along-x 1.0 0.0)))
+    (flet ((pool-gap (side)
+             (loop for out from 0.05 to *spill-reach* by 0.05
+                   for reach = (+ (/ depth 2) out)
+                   when (swim-liquid-at (+ cx (* side nx reach)) (- y1 0.05) (+ cz (* side nz reach)))
+                     return out)))
+      (let* ((up (cond ((pool-gap 1) 1) ((pool-gap -1) -1)))
+             (gap (and up (pool-gap up))))
+        (when up
+          ;; The sheet at the downstream edge, the spill from it to the pool's edge.
+          (let ((length (+ depth gap)))
+            (enter (make-instance 'water-surface :surface-texture (// 'hexmaw 'water-ripple)
+                                                 :location (vec (+ cx (* up nx (/ gap 2))) y1 (+ cz (* up nz (/ gap 2))))
+                                                 :scaling (if along-x (vec width length 1) (vec length width 1))
+                                                 :orientation (qfrom-angle +vx+ (float (- (/ pi 2)) 0f0)))
+                   container))
+          (setf cx (- cx (* up nx (- (/ depth 2) 0.02)))
+                cz (- cz (* up nz (- (/ depth 2) 0.02)))))))
     (enter (make-instance 'waterfall :surface-texture (// 'hexmaw 'water-ripple)
                                      :axis axis :bottom y0
                                      :location (vec cx (/ (+ y0 y1) 2) cz)

@@ -633,7 +633,11 @@ real time instead.
   `waterfall`, a `liquid-sheet` standing across the drop's longer side: the water texture in
   lanes an eighth of a metre across, each pouring down at its own speed (`*falls-speed*`), long
   streaks of white and white water near its foot, lit on the side it is seen from, see-through
-  (`*falls-alpha*`), `late-rank` 0.2. At its foot a `falls-foam` lies on the pool, churning
+  (`*falls-alpha*`), `late-rank` 0.2. `add-waterfall` looks within `*spill-reach*` either side
+  of the drop for the pool it pours from, stands the sheet at the drop's far edge from it, and
+  lays a spill (a `water-surface` at the pool's height) from the pool's edge over the lip to the
+  sheet's top: without it the sheet hung mid-opening, rock showing on the lip and the dark drop
+  either side of it. At its foot a `falls-foam` lies on the pool, churning
   blobs out to `*foam-reach*`, rank 0.1. It is a picture: the water is the two pools' liquids,
   and swimming over the lip drops into the pool below. Its roar is the `waterfall` loop at the
   foot (`*falls-points*`, full volume to 8 m). A `render :before` on a `liquid-sheet` subclass
