@@ -549,7 +549,7 @@ monster struck by one of them fights back (FIGHT-FOE).")
       (setf (foe creature) by))))
 
 (defgeneric creature-died (creature by)
-  (:documentation "CREATURE has just died, killed by BY, as for HARMED: the purse takes its
+  (:documentation "CREATURE has just died, killed by BY, as for HARMED: the bag takes its
 coin (pickups.lisp), the watch notes a murder (townsfolk.lisp).")
   (:method ((creature creature) by) (declare (ignore by))))
 

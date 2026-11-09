@@ -85,7 +85,7 @@ from there on is one deeper.")
 
 (defparameter *carried-slots*
   '(health mana inventory quickslot stamina winded run-time damage-taken level-records
-    gold reputation max-health max-mana max-stamina blessed
+    reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells wanted-slot enchantments)
   "The player's slots that go on to the next level; the rest start fresh (RESET-PLAYER).
 SETUP-SCENE takes what the hotbar slot asked for in hand (SETTLE-HELD).")

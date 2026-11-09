@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Gold is an item in the bag.** The spellforge branch added a `:gold` item kind and the
+  settlement, built beside it, a purse slot on the player; their merge kept the purse, so the item
+  was never given. Gold is now the bag's `:gold`, in stacks of 999: pickups and kill gold go in
+  with `give-item`, prices take it with `take-item`, and the purse label in the HUD's lower-right
+  corner is gone (the talk panel still says how much). A pile the bag can't hold all of leaves a
+  pile of the rest (dust's too, which lost it), kill gold that doesn't fit falls where the monster
+  died, and a sale or quest reward with no room for its coins is refused. Piles are scaled to
+  their depth as they're placed (`gold-coins`), not on taking, so a dropped pile holds what it
+  says, and a save's `:drops` keep their counts. An older save's purse comes into the bag through
+  `(setf gold)`, so `*save-version*` stays 4.
 - **A waterfall made of the water's own texture.** Its white streaks were hashed lanes of solid
   white an eighth of a metre wide, crude beside the textured water around them, and the texture
   stretched eight times was still blocky. The sheet is now two layers of the water texture,

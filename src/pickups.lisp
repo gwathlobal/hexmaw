@@ -30,7 +30,7 @@
     (:shard :animation pickup-shard :resource :mana :amount 28 :sound :pickup-shard)
     (:mana-potion :animation pickup-mana-potion :item :mana-potion :resource :mana :amount 50
      :sound :pickup-potion)
-    (:gold :animation pickup-gold :resource :gold :amount 12 :count T :sound :pickup-shard)
+    (:gold :animation pickup-gold :item :gold :count T :resource :gold :amount 12 :sound :pickup-shard)
     (:glyph-frost :animation glyph-frost :teaches :frost :name "Frost" :about "frost damage, which chills"
      :sound :pickup-shard)
     (:glyph-shock :animation glyph-shock :teaches :shock :name "Shock" :about "shock damage, which staggers"
@@ -74,13 +74,17 @@ step's height, so one on a 0.8 m sarcophagus takes a jump.")
 Placed after the health and mana, on the spots they leave.")
 (defparameter *kill-gold* '((imp 4) (skeleton-warrior 3) (acolyte 7) (harpy 7) (knight 10) (necromancer 14)
                             (gale-wraith 12) (ogre 16) (boss 120))
-  "Coin a monster the player kills drops straight into the purse, by class (the first that it is
+  "Coin a monster the player kills drops straight into the bag, by class (the first that it is
 of), at the first depth (GOLD-SCALE). One that is no class here drops 5.")
 (defparameter *gold-depth-step* 0.3 "How much more gold each depth past the first is worth.")
 
 (defun gold-scale (&optional (depth *run-depth*))
   "How much a coin count at the first depth is worth at DEPTH."
   (+ 1.0 (* *gold-depth-step* (1- depth))))
+
+(defun gold-coins (count &optional (depth *run-depth*))
+  "COUNT coins at the first depth, as many as they are worth at DEPTH."
+  (max 1 (round (* count (gold-scale depth)))))
 
 (defun monster-p (creature)
   "True if CREATURE counts as one of the level's monsters: built with it, not raised in play,
@@ -128,17 +132,15 @@ COUNT how many of its item (or, gold, coins) it gives."
         (restored player) resource))
 
 (defun give-gold (player amount)
-  "Put AMOUNT coin in PLAYER's purse, flash the view and say so."
-  (incf (gold player) amount)
-  (flash-resource player :gold)
-  (hud-say "+~d gold" amount))
+  "Put AMOUNT coin in PLAYER's bag, flash the view and say so. How many went in (GIVE-ITEM)."
+  (let ((given (give-item player :gold amount)))
+    (when (< 0 given)
+      (flash-resource player :gold)
+      (note-pickup :gold given))
+    given))
 
 (defun restore-resource (player resource amount)
-  "Give PLAYER AMOUNT of RESOURCE, :HEALTH or :MANA (or :GOLD, never full), and flash the view.
-NIL if it was full."
-  (when (eq resource :gold)
-    (give-gold player (round (* amount (gold-scale))))
-    (return-from restore-resource T))
+  "Give PLAYER AMOUNT of RESOURCE, :HEALTH or :MANA, and flash the view. NIL if it was full."
   (when (ecase resource
           (:health (when (< (health player) (max-health player))
                      (setf (health player) (min (max-health player) (+ (health player) amount)))))
@@ -154,10 +156,15 @@ NIL if it was full."
          (teaches (pickup-property kind :teaches)))
     (cond (teaches (learn-glyph player kind))
           (item
-           (let ((given (give-item player item (if (pickup-property kind :count) (pickup-count pickup) 1))))
+           (let* ((count (if (pickup-property kind :count) (pickup-count pickup) 1))
+                  (given (give-item player item count)))
              (when (< 0 given)
                (when (pickup-property kind :count)
-                 (note-pickup item given))
+                 (note-pickup item given)
+                 ;; What the bag had no room for stays: a new pile of the rest, where this one lay.
+                 (when (< given count)
+                   (let ((at (location pickup)))
+                     (drop-loot (container pickup) kind (vx at) (pickup-ground pickup) (vz at) (- count given)))))
                (flash-resource player resource)
                T)))
           (T (restore-resource player resource (if (pickup-property kind :count)
@@ -215,11 +222,12 @@ NIL if it was full."
         for pickup = (aref *pickups* i)
         unless (taken pickup)
           collect (let ((at (location pickup)))
-                    (list (pickup-kind pickup) (vx at) (pickup-ground pickup) (vz at)))))
+                    (list (pickup-kind pickup) (vx at) (pickup-ground pickup) (vz at) (pickup-count pickup)))))
 
 (defun restore-dropped-pickups (container drops)
-  (loop for (kind x y z) in drops
-        do (add-pickup container kind x y z)))
+  ;; An older save's drops have no count.
+  (loop for (kind x y z count) in drops
+        do (drop-loot container kind x y z count)))
 
 ;;; Loot: what a thieving imp (imp.lisp) carries off, held over its head, and drops where it
 ;;; dies. The pickup it took stays taken; what it drops is a new one.
@@ -245,9 +253,12 @@ mana, one at a time. Gold and dust come in piles, weapons and runes with what th
             do (setf best pickup best-d d))
     best))
 
-(defun drop-loot (container kind x y z)
-  "Drop a pickup of KIND on the floor at X Y Z, past those the level was built with."
-  (add-pickup container kind x y z))
+(defun drop-loot (container kind x y z &optional count)
+  "Drop a pickup of KIND on the floor at X Y Z, past those the level was built with: COUNT of
+its item for a pile (gold, dust), else as many as it gives."
+  (if count
+      (add-pickup container kind x y z :count count)
+      (add-pickup container kind x y z)))
 
 (defparameter *loot-lift* 0.05 "Metres over its carrier's head that loot is held.")
 (defparameter *loot-scale* 0.6 "Size loot is drawn at, against the pickup's: held up, it looks nearer.")
@@ -470,12 +481,13 @@ before it moves."
       (loop while (and (< 0 left) (< 0 room))
             do (let ((spot (pick-spot spots '(:floor :reward) used random)))
                  (unless spot (return))
-                 ;; A pile's coins are at the first depth: taking it scales them (RESTORE-RESOURCE).
+                 ;; The budget is coins at the first depth; the pile holds them at this one.
                  (let ((p (getf spot :position))
                        (count (destructuring-bind (low high) *gold-pile*
                                 (min left (max (+ low (random (1+ (- high low)) random))
                                                (ceiling left room))))))
-                   (add-pickup container :gold (vx p) (vy p) (vz p) :phase (random 10.0 random) :count count)
+                   (add-pickup container :gold (vx p) (vy p) (vz p) :phase (random 10.0 random)
+                                                         :count (gold-coins count))
                    (decf left count)
                    (decf room)
                    (setf spots (remove spot spots))
@@ -540,7 +552,7 @@ GUARDS are the stranded ogres, each of which gets a hoard (PLACE-HOARDS, loot.li
      (place-hoards container guards))
     (:gallery (fill-pickup-spots container))))
 
-;;; Coin from kills: straight into the purse, nothing to pick up.
+;;; Coin from kills: straight into the bag, nothing to pick up, unless the bag is full.
 
 (defun kill-gold (creature)
   "Coin CREATURE drops, killed by the player, at this depth."
@@ -549,7 +561,14 @@ GUARDS are the stranded ogres, each of which gets a hoard (PLACE-HOARDS, loot.li
 
 (defmethod creature-died :after ((creature creature) by)
   (when (and (eq by *player*) (monster-p creature) (eq *level* :generated))
-    (give-gold *player* (kill-gold creature))))
+    (let* ((coins (kill-gold creature))
+           (rest (- coins (give-gold *player* coins))))
+      ;; What the bag has no room for falls where it died, to come back for.
+      (when (< 0 rest)
+        (let* ((loc (location creature))
+               (floor (or (and *nav-grid* (nav-floor-at (vx loc) (+ (vy loc) 0.1) (vz loc))) (vy loc))))
+          (drop-loot (container creature) :gold (vx loc) floor (vz loc) rest))
+        (hud-say "No room in the bag: ~d gold left on the floor." rest)))))
 
 ;;; The quest-giver's relic (dialogue.lisp): a pickup in the settlement's wing, hidden and out of
 ;;; reach until the quest for it is taken. Taken, it goes into the bag as an item, :RELIC, which
@@ -608,5 +627,9 @@ SCATTER-PICKUPS, so its pickups keep their places in *PICKUPS*."
         (loop for spot across *pickup-spots*
               when (and (in-settlement-p (getf spot :position)) (spot-free-p spot))
                 do (let ((p (getf spot :position)))
-                     (add-pickup container (pop loot) (vx p) (vy p) (vz p))
+                     (let ((kind (pop loot)))
+                       (if (eq kind :gold)
+                           (add-pickup container kind (vx p) (vy p) (vz p)
+                                       :count (gold-coins (pickup-property :gold :amount)))
+                           (add-pickup container kind (vx p) (vy p) (vz p))))
                      (unless loot (return))))))))
