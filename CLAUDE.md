@@ -2926,11 +2926,17 @@ and `rill` doorways (pieces tagged `creek`, ends `creek-end`, all tagged `cave` 
 `*creek-length*` (4 to 8), `*max-creeks*` (1), drawn `%` by `(level-map)`. Every block is two
 storeys, the water filling the lower to 0.3 m under the banks (three for `creek-falls`). No
 creature swims, so a walker crosses only at a ford's shallows, an arch or round by the dungeon,
-while the player swims or jumps the 3 m channel; a rill is swum. Over run seeds 1 to 100 (300
-levels) at the first weights, every doorway could be reached, no ice join was wrong, and the only
-stranded creatures were ogres, about one a level as before; but 114% of levels had a creek, a
-flooded run having started a second through `creek-sink-sump` (since barred, `fitting`). With
-the weights halved, 95% of the first 20 levels have one (6 blocks on average) and none two.
+while the player swims or jumps the 3 m channel; a rill is swum. From a level's many doorways
+some creek block nearly always fits, so weights decide little: at full weight a creek was on
+every level, at half on 94%. So a level may have one at all only with `*creek-chance*` (0.6), the
+seventh of its `*networks*` entry, rolled from the level's seed on a random state of its own
+(`network-barred`); a barred family counts as full. Over run seeds 1 to 100 (300 levels), 56% of
+levels have a creek, 6.4 blocks on average (243 arms ending in an end, 93 in a plug), none two;
+every doorway could be reached, no ice join was wrong, and the only stranded creatures were
+ogres (328, about one a level as before). Flooded runs rose from 11% of levels to 27%, started by
+`creek-sink-sump` (seed 16, level 1: sink, `flooded-bend`, `flooded-passage`, `cistern`). On run
+seed 17's level 4, two views from the middle of every block, vsync off: creek blocks 6.1 ms of
+GPU a frame, the canal's 6.5, the level's 5.9.
 
 Ice: the ice caves are a frozen wing of the caves. Their doorways are all of kind `ice`, so
 they join only each other and the ice gates, and a gate's rock side joins only a block tagged

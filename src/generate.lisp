@@ -46,15 +46,19 @@ short, so it is swum on one breath.")
 (defparameter *max-canals* 1 "How many canals a level may start.")
 (defparameter *creek-length* '(4 8) "The fewest and most blocks a creek, a cave river of water, runs to before it ends.")
 (defparameter *max-creeks* 1 "How many creeks a level may start.")
+(defparameter *creek-chance* 0.6
+  "The chance a level may have a creek at all: from any of a level's many doorways some creek
+block nearly always fits, so its weights alone would put one on nearly every level.")
 (defparameter *networks*
   '((:river ("river" "stream") :river :river-end *river-length* *max-rivers*)
     (:high ("high") :high :high-end *high-length* *max-high-networks*)
     (:flooded ("underwater") :flooded :cistern *flooded-length* *max-flooded-networks*)
     (:canal ("canal") :canal :canal-end *canal-length* *max-canals*)
-    (:creek ("creek" "rill") :creek :creek-end *creek-length* *max-creeks*))
+    (:creek ("creek" "rill") :creek :creek-end *creek-length* *max-creeks* *creek-chance*))
   "The networks the generator grows: each family, the doorway kinds that join its blocks,
 the tags of its pieces and of its ends, and the variables that hold its length in blocks and
-how many a level may start. A block may have doorways of two families (a creek's sink with an
+how many a level may start, and optionally the one that holds the chance a level may have one
+at all (rolled from the level's seed, NETWORK-BARRED). A block may have doorways of two families (a creek's sink with an
 underwater way on): it is then in a network of each.")
 (defparameter *start-clearance* 16.0
   "Metres round the player's start where no monster spawns: the start block's neighbours
@@ -118,6 +122,16 @@ RANDOM depends on the old level, so the seed alone would not decide the level.")
   (remove-duplicates
    (remove NIL (list* (block-network name)
                       (mapcar (lambda (c) (kind-network (getf c :kind))) (getf (find-block name) :connectors))))))
+
+(defun network-barred (seed)
+  "The families of network level SEED may not have: each with a chance (the seventh of its
+entry in *NETWORKS*) that the level's roll missed. Rolled on a random state of its own from the
+seed, so the generator's own draws are those it would make without it."
+  (let ((random (sb-ext:seed-random-state (logxor seed #xC4EE7))))
+    (loop for spec in *networks*
+          for chance = (and (seventh spec) (symbol-value (seventh spec)))
+          when (and chance (<= chance (random 1.0 random)))
+            collect (first spec))))
 
 (defun network-end-p (name family)
   (member (fourth (assoc family *networks*)) (block-tags name)))
@@ -202,13 +216,15 @@ part way in (*ALTAR-BLOCK*). Returns the seed and whether EXIT went in."
          ;; Only blocks whose named monsters the level's pool has.
          (kit (remove-if-not #'block-fits-pool-p all))
          (cells (setf *level-cells* (make-hash-table :test 'equal)))
-         (frontier ()) (shut ()) (doors ()) (placed-rooms 0) (networks ()) (exit-placed NIL))
+         (frontier ()) (shut ()) (doors ()) (placed-rooms 0) (networks ()) (exit-placed NIL)
+         (barred (network-barred seed)))
     (when (< (length kit) (length all))
       (v:info :hexmaw "Generated level ~d: the pool leaves out ~{~a~^, ~}."
               seed (remove-if (lambda (n) (member n kit :test #'string=)) all)))
     (labels ((full-p (family)
-               ;; True once the level has as many networks of FAMILY as it may.
-               (<= (symbol-value (sixth (assoc family *networks*))) (count family networks :key #'network-family)))
+               ;; True once the level has as many networks of FAMILY as it may, or may have none.
+               (or (member family barred)
+                   (<= (symbol-value (sixth (assoc family *networks*))) (count family networks :key #'network-family))))
              (tagged (&rest tags)
                ;; Once the level has a family's networks, no ordinary doorway starts another.
                (remove-if (lambda (n) (some #'full-p (block-families n)))

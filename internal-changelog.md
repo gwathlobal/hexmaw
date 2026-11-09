@@ -21,8 +21,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   with a middle its liquid (`kind-liquid`), which replaces the canal's special cases
   (`under-channel-p`), and `check-kit` swims a block with a rill's doorway. A block may now have
   doorways of two networks' kinds: the generator keeps a network per family, and leaves out a
-  block that would start another of a family already full. `check-kit` is clean. Over run seeds 1 to 100 every doorway could be reached;
-  creeks are still on nearly every level (95% of the first 20 at halved weights), to be tuned.
+  block that would start another of a family already full. `check-kit` is clean.
+- **A level has a creek 56% of the time.** Its weights decided little (every level at full weight,
+  94% at half), so a network may carry a chance a level has one at all, rolled from the level's
+  seed on a random state of its own (`network-barred`): `*creek-chance*` 0.6, the creek's weights
+  halved. Over run seeds 1 to 100 (300 levels): 6.4 creek blocks on average, never two, every
+  doorway reachable, only ogres stranded; flooded runs on 27% of levels (11% before), the sink
+  starting them. Creek blocks cost 6.1 ms of GPU a frame against the canal's 6.5 (seed 17, level 4).
 - **Music from a composition plan.** `tools/gen_music.py --plan FILE` sends ElevenLabs a plan of
   timed sections (`music_v2_5`'s chunks, each its text, styles and length) in place of a prompt,
   so a track can be written to a cut: `audio/prompts/music-trailer-plan.json` is the trailer's,
