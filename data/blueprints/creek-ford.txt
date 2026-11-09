@@ -1,0 +1,53 @@
+; A creek, west to east, with a ford: shallows a hand deep over a sill of rock, where walkers
+; cross; doorways onto both banks.
+; Its plans are drawn by tools/cave_plans.py.
+cells 2 3
+storeys 2
+tags corridor creek cave
+weight 1
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  B door creek                       ; a creek's doorway: bank
+  C door creek, open                 ; and its open middle, over the water
+  , shallow                          ; the ford
+  $ pickup floor
+
+plan 0
+################
+################
+################
+################
+################
+################
+################
+~~~~~~####~~~~~~
+~~~~~~####~~~~~~
+~~~~~~####~~~~~~
+################
+################
+################
+
+plan 1
+#nnnnnn#########
+#......\\#######
+#.$$.....\\#####
+T..........\\###
+#............\\#
+B..............B
+B..............B
+C     ,,,,     C
+C     ,,,,     C
+C     ,,,,     C
+B..............B
+B..............B
+####T####ssssss#

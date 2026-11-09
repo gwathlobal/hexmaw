@@ -7,6 +7,22 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The creek, a cave river of water.** A fifth network (`:creek`, doorways `creek` and `rill`,
+  `*creek-length*` 4 to 8, `*max-creeks*` 1, `%` in `(level-map)`): rock caves with deep water a
+  storey down between 45° banks, built like the lava river but two storeys (three for the falls).
+  Twelve blocks, all drawn by `tools/cave_plans.py`, which now writes a plan per storey: `creek`,
+  `creek-bend`, `creek-ford`, `creek-cavern`, `creek-narrows`, `creek-falls`, `rill`,
+  `rill-sump`, and the ends `creek-spring`, `rill-spring`, `creek-sink` and `creek-sink-sump`,
+  whose underwater doorway starts a flooded run. No creature swims, so walkers cross only at the
+  fords' **shallows**, a new liquid kind (`:shallows`, a blueprint's `shallow`): a hand of water
+  level with the deep water beside it, waded by everything. **Waterfalls**
+  (`src/waterfall.lisp`, a blueprint's `falls`): a sheet of water pouring in lanes, foam churning
+  at its foot and a looping roar (`waterfall`, a new clip). `*connector-kinds*` gives each kind
+  with a middle its liquid (`kind-liquid`), which replaces the canal's special cases
+  (`under-channel-p`), and `check-kit` swims a block with a rill's doorway. A block may now have
+  doorways of two networks' kinds: the generator keeps a network per family, and leaves out a
+  block that would start another of a family already full. `check-kit` is clean. Over run seeds 1 to 100 every doorway could be reached;
+  creeks are still on nearly every level (95% of the first 20 at halved weights), to be tuned.
 - **Music from a composition plan.** `tools/gen_music.py --plan FILE` sends ElevenLabs a plan of
   timed sections (`music_v2_5`'s chunks, each its text, styles and length) in place of a prompt,
   so a track can be written to a cut: `audio/prompts/music-trailer-plan.json` is the trailer's,

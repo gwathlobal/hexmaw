@@ -185,6 +185,7 @@ Loops on many sources: play only the nearest few of each kind.
 | torch-crackle | 2 | P L | 4 | 2 | `add-torch` lights.lisp:102 |
 | lava-bubble | 2 | P L | 4 | 2 | lava glow lamps, `add-liquid` liquids.lisp:199-222 |
 | water-lap | 3 | P L | 4 | 2 | water surfaces, liquids.lisp |
+| waterfall | 2 | P L | 6 | 2 | a waterfall's foot, `add-waterfall` waterfall.lisp (`*falls-points*`) |
 | dungeon-drips | 3 | 1P L | 8 | 2 | room tone under everything |
 
 ## Pickups and inventory

@@ -17,14 +17,17 @@
 
 (defparameter *liquid-kinds*
   '((:lava :damage 12.0 :speed 0.8 :jump 0.7 :texture lava-flow :surface liquid-surface
-     :glow (2.4 1.0 0.3) :glow-radius 7.0 :glow-spacing 4.0 :glow-flicker 0.08)
-    (:water :damage 0.0 :speed 1.0 :jump 1.0 :texture water-ripple :surface water-surface :swim T))
+     :glow (2.4 1.0 0.3) :glow-radius 7.0 :glow-spacing 4.0 :glow-flicker 0.08 :step-sound :lava-step)
+    (:water :damage 0.0 :speed 1.0 :jump 1.0 :texture water-ripple :surface water-surface :swim T)
+    (:shallows :damage 0.0 :speed 0.75 :jump 0.9 :texture water-ripple :surface water-surface
+     :step-sound :splash-out))
   "Per kind: :DAMAGE health per second to what stands in it, :SPEED the factor on walking
 speed (kept through a jump from it until landing outside), :JUMP the factor on a jump's
 speed from it (height goes with its square), :TEXTURE its surface and :SURFACE the class
-that draws it, :SWIM true for a liquid deep enough to swim in, and :GLOW the colour of the
-lamps over it (NIL for none), :GLOW-RADIUS their reach, one per :GLOW-SPACING metres of the
-pool's length.")
+that draws it, :SWIM true for a liquid deep enough to swim in, :STEP-SOUND the clip the
+player's step into it plays, and :GLOW the colour of the lamps over it (NIL for none),
+:GLOW-RADIUS their reach, one per :GLOW-SPACING metres of the pool's length. Shallows are a
+ford's: a hand deep, waded by everything, level with deep water beside them.")
 (defparameter *water-alpha* 0.6 "How much of what lies beyond water's surface it hides.")
 (defparameter *lava-tick* 0.4 "Seconds between the burns of something standing in lava.")
 (defparameter *glow-height* 0.8 "Metres above a liquid's surface that its lamps hang.")
@@ -38,6 +41,8 @@ pool's length.")
            :documentation "#(min-x min-y min-z max-x max-y max-z) as a solid's; max-y is the surface.")
    (glows :initform () :accessor liquid-glows :documentation "The lamps it hung over itself.")))
 
+(defvar *falls-points* (make-array 0 :adjustable T :fill-pointer T)
+  "Where each waterfall lands, the source of its roar (waterfall.lisp). BUILD-LEVEL empties it.")
 (defvar *liquids* (make-array 0 :adjustable T :fill-pointer T)
   "Every liquid in the level. BUILD-LEVEL empties it.")
 
@@ -236,9 +241,11 @@ lava. Leave the hole in the floor around it."
 (defparameter *ambient-sources*
   '((:torch-crackle :source :torches :voices 3 :reach 12.0 :volume 0.6)
     (:lava-bubble :source :lava :voices 3 :reach 18.0 :volume 0.8)
-    (:water-lap :source :water :voices 2 :reach 14.0 :volume 0.6))
-  "Per ambient loop: what sounds it (:TORCHES, or a liquid's kind, heard from the nearest point
-of its surface), how many of the nearest sources at most (8), from how far, how loud.")
+    (:water-lap :source (:water :shallows) :voices 2 :reach 14.0 :volume 0.6)
+    (:waterfall :source :falls :voices 2 :reach 24.0 :volume 1.0))
+  "Per ambient loop: what sounds it (:TORCHES; :FALLS, the waterfalls' feet, waterfall.lisp;
+or a liquid's kind or kinds, heard from the nearest point of its surface), how many of the
+nearest sources at most (8), from how far, how loud.")
 (defparameter *room-tone* :dungeon-drips "The loop under everything in play, or NIL.")
 (defparameter *room-tone-volume* 0.3)
 (defparameter *ambience-interval* 0.25 "Seconds between choosing the nearest sources again.")
@@ -282,15 +289,18 @@ in reach of the player's ear, and keep the room tone going (quiet under water)."
                               (when (< d2 r2)
                                 (setf count (note-ambient-source n count x y z d2))))))
                      (declare (dynamic-extent #'consider))
-                     (if (eq source :torches)
-                         (loop for p across *torch-points*
-                               do (consider (vx p) (vy p) (vz p)))
+                     (case source
+                       (:torches (loop for p across *torch-points*
+                                       do (consider (vx p) (vy p) (vz p))))
+                       (:falls (loop for p across *falls-points*
+                                     do (consider (vx p) (vy p) (vz p))))
+                       (T
                          (loop for liquid across *liquids*
                                for b = (liquid-bounds liquid)
-                               do (when (eq (liquid-kind liquid) source)
+                               do (when (if (listp source) (member (liquid-kind liquid) source) (eq (liquid-kind liquid) source))
                                     (consider (max (aref b 0) (min ex (aref b 3)))
                                               (aref b 4)
-                                              (max (aref b 2) (min ez (aref b 5))))))))
+                                              (max (aref b 2) (min ez (aref b 5)))))))))
                    (dotimes (i count)
                      (ambient-voice name i (aref *ambient-near* i) volume))
                    (drop-ambient-voices name count)))))))

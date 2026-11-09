@@ -619,6 +619,26 @@ real time instead.
   out up the step onto the ledge. A projectile bursts on entering a liquid from outside: one
   cast under water (`submerged`) flies on. The necromancer draws no grave circle under a
   swimmer. On the test level the `pool` hangs off the shrine's west doorway.
+
+  Shallows (`:shallows`, a blueprint's `shallow`, mesh prefix `shallows_`) are a ford's water: a
+  pit 0.45 m into the slab holding 0.15 m, its surface level with deep water's beside it, so the
+  two meet without a seam. Water's look (a `water-surface`), no `:swim`, no damage: the nav grid
+  takes it for floor, so walkers cross a creek there and nowhere else, and the player wades at
+  its `:speed`. A kind's `:step-sound` is what the player's step into it plays (lava's
+  `:lava-step`, the shallows' `:splash-out`). The ambient loops (`*ambient-sources*`) take a
+  liquid kind or a list of them (`water-lap` sounds over water and shallows), and `:falls`, the
+  waterfalls' feet (`*falls-points*`, which `clear-level` empties).
+- `src/waterfall.lisp`: waterfalls, where a creek drops a storey (a blueprint's `falls Y0 Y1`,
+  empties `falls_<n>_lo` and `_hi`, `add-waterfall` from `place-block`). The sheet is a
+  `waterfall`, a `liquid-sheet` standing across the drop's longer side: the water texture in
+  lanes an eighth of a metre across, each pouring down at its own speed (`*falls-speed*`), long
+  streaks of white and white water near its foot, lit on the side it is seen from, see-through
+  (`*falls-alpha*`), `late-rank` 0.2. At its foot a `falls-foam` lies on the pool, churning
+  blobs out to `*foam-reach*`, rank 0.1. It is a picture: the water is the two pools' liquids,
+  and swimming over the lip drops into the pool below. Its roar is the `waterfall` loop at the
+  foot (`*falls-points*`, full volume to 8 m). A `render :before` on a `liquid-sheet` subclass
+  mustn't ask `first-this-frame-p`: the shared method after it asks too, and the texture and fog
+  uniforms go unset (it drew black).
 - `src/footing.lisp`: moving on a slippery footing, Hexen's ice. A footing (`*footings*`,
   greybox.lisp, beside `*surfaces*`) belongs to a surface: whatever is drawn with surface
   `:ice` (a blueprint's `ice` material, `add-box :surface :ice`) is slippery, a box, floor slab
@@ -2539,11 +2559,15 @@ Blender export that keeps the conventions works the same. Conventions:
   banks), `connector_high_north` a `high` (7 × 9 m, two cells: the high blocks', floor to ceiling),
   `connector_ice_north` an `ice` (3 × 3 m, the ice caves': see "Generated levels"),
   anything else a `door` (3 × 3 m); `*connector-kinds*` lists them (a river's
-  fourth value is its lava width, a stream's its whole width: `flooded-kind-p`),
+  fourth value is its middle's width, a stream's its whole width: `flooded-kind-p`, and its
+  fifth what fills the middle, `:lava` or `:water`: `kind-liquid`),
   `connector_underwater_north` an `underwater` (3 × 3 m, full of water: a flooded passage's
   and a cistern's), `connector_canal_north` a `canal` (a river's with deep water: 7 × 3.5 m,
   its middle 3 m open down to the water filling the storey below, which runs on through the
-  wall under it, so its plug reaches down there too), and each kind joins only itself. A doorway two cells
+  wall under it, so its plug reaches down there too; any `:water` kind is so, `under-channel-p`),
+  `connector_creek_north` a `creek` (the canal's doorway in the caves, a network of its own) and
+  `connector_rill_north` a `rill` (3 × 3.5 m, open wall to wall over the water, no banks: the
+  creek's narrow kind, swum), and each kind joins only itself. A doorway two cells
   wide is centred on the boundary between them. Light
   passes between blocks only through connectors: a block is one room for lighting, so its
   walls stop light from a block stacked above, below or beside it.
@@ -2661,7 +2685,12 @@ default, and lava fills it to SURFACE below, 0.1; it can't touch the border), `p
 lava: a dry dip, under a step so it is walked through), `water [Y]` (deep water from the
 cell's floor up to Y, `top` for the storey's top, by default `*water-surface*` (0.3 m) under
 the next storey's floor; never above the slab over the cell or a doorway's lintel; on the
-border only under a canal doorway's open channel), `torch Y`
+border only under a water doorway's open channel), `shallow [DEPTH]` (a ford: a pit DEPTH
+deep, 0.45 by default, `*shallow-depth*`, holding shallows to `*water-surface*` under the floor,
+so 0.15 m of water level with deep water's in the storey below; a liquid of kind `:shallows`,
+waded by everything, the player at `:speed` 0.75, and no nav hazard or water cell, so walkers
+cross there), `falls Y0 Y1` (a waterfall pouring through these cells from Y1 down to Y0 above
+the storey's floor: the sheet hangs across the region's longer side, src/waterfall.lisp), `torch Y`
 and `spawn MONSTER FACING [SKIP] [when:COND|COND]`, where `when:` limits it to those settlement
 conditions (see "The settlement") and SKIP is a percent chance of no monster (every room
 has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has two kinds of
@@ -2726,7 +2755,15 @@ doorways on the ledge), `cistern` (a pool with an underwater doorway at the bott
 west wall: the end of a flooded run), the flooded passages `flooded-passage`, `flooded-bend`
 and `flooded-tee` (full of water to the roof, swum on one breath, no torches), and the canal:
 `canal`, `canal-bend` (mirrored), `canal-ford` (a bridge, doorways onto both banks) and the
-end `canal-end` (the banks joined round the channel's head);
+end `canal-end` (the banks joined round the channel's head); the creek, a cave river of water
+(below), all mirrored but the sump: `creek` (undercut under its west bank, a reward in the
+hollow), `creek-bend`, `creek-ford` (shallows over a rock sill, where walkers cross),
+`creek-cavern` (a room, a rock arch 0.6 m over the banks that a swimmer passes under),
+`creek-narrows` (to a rill), `creek-falls` (three storeys: the river falls a storey over a lip
+you can walk across, into a plunge pool, a rock stair down the west bank, a ford below), the
+narrow `rill` and `rill-sump` (dives 3 m under the rock), and the ends `creek-spring`,
+`rill-spring`, `creek-sink` (the river runs on under the walk joining its banks to a dead end
+with a reward) and `creek-sink-sump` (the same to an underwater doorway: a flooded run goes on);
 and the high quarter (below), for the ogre's leaps: rooms `vault` (the end: a 9 m vault, a
 2.5 m terrace and a 5 m walkway with a doorway out at the top), `high-hall` (six pillars the
 full 9 m, a 2.5 m dais with no steps, a perch) and `terrace` (climbs a storey, 14 m tall),
@@ -2790,7 +2827,15 @@ NAME` redraws one, `--check` says which differ), one spec per block: the room's 
 the first open and first rock column at each row boundary (a line moving 2 columns makes a
 diagonal pair), then regions inside it (pools, pits, shelves, hanging rock, causeways),
 each with its own pair characters, rock in lava, and doorway strings; the header and legend
-stay hand-written in the blueprint, and the tool rewrites the rows after `plan 0`. A pair
+stay hand-written in the blueprint, and the tool rewrites the rows after `plan 0`. A spec may
+return a plan per storey (`{0: g0, 1: g1}`), and the tool writes each `plan K` in turn: the
+creek's do, the water in the lower storey and the banks above. `channel` draws a channel's
+outline in both, open above and water below, each 45° pair below rock standing in the water
+(`<`, `>`, `diagonal / cave-floor, water`) up to the bank's floor, so the plan-1 cell over it is
+plain open and no two faces share a plane; `carve` cuts water into the lower storey alone
+(undercuts under a bank, where it reaches the slab and shows no surface); `water_rock` turns a
+plan-1 rock pair beside the channel into rock over the water (`(`, `)`: `diagonal / rock 0 top,
+open`), with `<` or `>` under it; `creek_door` draws a creek's or rill's doorway in both. A pair
 can't tell its side when both outer sides are other diagonals: move it, or give it a SIDE.
 So walls and pools are octagonal, not round, floors and ceilings stay flat and terraced,
 dips go no deeper than the slab (deeper hollows need the floor
@@ -2840,7 +2885,7 @@ the shader takes only 32.
 
 Networks: a network is the blocks joined through doorways ordinary blocks don't have; each
 family is an entry in `*networks*` (its doorway kinds, piece and end tags, and the variables
-for its length and how many a level may have). There are four: rivers, below; high
+for its length and how many a level may have). There are five: rivers and creeks, below; high
 quarters, galleries and high rooms joined through `high` doorways (`high`, ends `high-end`:
 the vault), `*high-length*` (3 to 6) blocks long, `*max-high-networks*` (1) a level; flooded
 runs, passages joined through `underwater` doorways (`flooded`, ends `cistern`), a cistern at
@@ -2848,7 +2893,11 @@ each end, `*flooded-length*` (2 to 4 blocks, the first cistern included: short, 
 breath), `*max-flooded-networks*` (1); and canals (`canal`, ends `canal-end`),
 `*canal-length*` (3 to 6), `*max-canals*` (1). All grow the same way, with `network` in place
 of `river` throughout. A cistern has one underwater doorway, so a run ends at it; one reached
-through its ledge starts a run.
+through its ledge starts a run. A block may have doorways of two families (`block-families`:
+`creek-sink-sump`'s creek doorway and its underwater one): placed, it is in a network of each,
+the one it was reached by or a new one (`place`), and while a family is full (`full-p`) no
+block that would start another of it is offered, from an ordinary doorway (`tagged`) or a
+network's (`fitting`).
 `*level-networks*` holds the last level's (`network-family`, `-pieces`, `-target`, `-ends`),
 the log line says how each ended, and `(level-map)` draws a high quarter's blocks as `^`, a
 flooded run's as `=` and a canal's as `-`. Over 200 seeds, 60% of levels had a canal (4 blocks on
@@ -2871,6 +2920,17 @@ ends and crossings (fords, the cavern's bridge), so ends join both banks; a stre
 no banks, so a river that narrows is waded from there on, and the dungeon past it is
 reached through lava. Over 200 seeds, 99% of levels had a river,
 of 9 blocks on average.
+
+Creeks: a creek is the lava river's counterpart in water, grown the same way through `creek`
+and `rill` doorways (pieces tagged `creek`, ends `creek-end`, all tagged `cave` too),
+`*creek-length*` (4 to 8), `*max-creeks*` (1), drawn `%` by `(level-map)`. Every block is two
+storeys, the water filling the lower to 0.3 m under the banks (three for `creek-falls`). No
+creature swims, so a walker crosses only at a ford's shallows, an arch or round by the dungeon,
+while the player swims or jumps the 3 m channel; a rill is swum. Over run seeds 1 to 100 (300
+levels) at the first weights, every doorway could be reached, no ice join was wrong, and the only
+stranded creatures were ogres, about one a level as before; but 114% of levels had a creek, a
+flooded run having started a second through `creek-sink-sump` (since barred, `fitting`). With
+the weights halved, 95% of the first 20 levels have one (6 blocks on average) and none two.
 
 Ice: the ice caves are a frozen wing of the caves. Their doorways are all of kind `ice`, so
 they join only each other and the ice gates, and a gate's rock side joins only a block tagged

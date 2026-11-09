@@ -1,0 +1,56 @@
+; Where a creek spreads into a pool and runs on under the rock, under a walk that joins the
+; banks, to an underwater doorway: a flooded run goes on from it to a cistern. Doorways onward
+; west and east.
+; Its plans are drawn by tools/cave_plans.py.
+cells 3 3
+storeys 2
+tags room creek-end cave
+weight 0.5
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  B door creek                       ; a creek's doorway: bank
+  C door creek, open                 ; and its open middle, over the water
+  u door underwater, water
+  $ pickup floor
+  i spawn any south
+  m spawn any south 30
+
+plan 0
+#############~~~~~~#####
+#############~~~~~~#####
+#############~~~~~~#####
+###########<<~~~~~~#####
+#########<<~~~~~~~~#####
+#########~~~~~~~~~~#####
+#########>>~~~~~~~~#####
+#########<<~~~~~~<<#####
+#########~~~~~~<<#######
+#########~~~~~~#########
+#########~~~~~~#########
+#########~~~~~~#########
+#########uuuuuu#########
+
+plan 1
+#####T###BBBBCCCCCCBBBB#
+#............      ....#
+#............      ....#
+#..........        .mm.#
+#........          ....#
+w........          ....e
+w........          ....e
+w......................e
+T......................#
+#...ii.................T
+#\\...............$$.//#
+###\\..............//###
+########################

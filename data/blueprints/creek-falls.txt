@@ -1,0 +1,72 @@
+; A creek falling a storey: the upper river comes in from the north over a lip a metre wide,
+; which is a walk across the top of the falls, into a pool below; the lower river goes on south
+; past a ford. A rock stair takes the west bank down. Three storeys.
+; Its plans are drawn by tools/cave_plans.py.
+cells 3 3
+storeys 3
+tags corridor creek cave
+weight 1
+mirror yes
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  B door creek                       ; a creek's doorway: bank
+  C door creek, open                 ; and its open middle, over the water
+  L box 0 4.6 rock                   ; the lip, just under the upper water's surface
+  F open, falls -0.3 4.7             ; the falls, from the upper surface to the lower
+  S stairs north 0 5 rock
+  , shallow                          ; the ford
+  & water, pickup reward
+
+plan 0
+########################
+########################
+########################
+########################
+########################
+########################
+########################
+#########<<~~~~~~~~~~>>#
+#########>>&&~~~~~~~~<<#
+########################
+########################
+#############~~~~~~#####
+#############~~~~~~#####
+
+plan 1
+#############~~~~~~#####
+#############~~~~~~#####
+###SSSS######~~~~~~#####
+###SSSS######~~~~~~#####
+###SSSS######~~~~~~#####
+###SSSS######~~~~~~#####
+###SSSS######LLLLLL#####
+###SSSS##....FFFFFF..\\#
+###SSSS##....      ....#
+###SSSS##....,,,,,,....T
+###..........,,,,,,....#
+###\\........      ....#
+######T##BBBBCCCCCCBBBB#
+
+plan 2
+#########BBBBCCCCCCBBBB#
+###..........      ..\\#
+###    ......      ....#
+###    ......      ....T
+###    ......      ....#
+###    ......      ....#
+###    \\....      ..//#
+###    ######      #####
+###    #################
+###    #################
+########################
+########################
+########################

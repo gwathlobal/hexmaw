@@ -33,6 +33,7 @@
                (:file "fx")
                (:file "lights")
                (:file "liquids")
+               (:file "waterfall")
                (:file "gore")
                (:file "spells")
                (:file "player")

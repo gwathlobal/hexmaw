@@ -1,0 +1,50 @@
+; A rill that dives under the rock for 3 m, its water up to the rock, and comes up again:
+; swum under on a breath.
+; Its plans are drawn by tools/cave_plans.py.
+cells 1 3
+storeys 2
+tags corridor creek cave
+weight 0.5
+material rock 0.36 0.32 0.3
+material cave-floor 0.4 0.35 0.3
+remap wall rock
+remap ceiling rock
+remap floor cave-floor
+legend
+  ~ water
+  < diagonal / cave-floor, water     ; rock standing in the water, its top the bank's floor
+  > diagonal \ cave-floor, water
+  ( diagonal / rock 0 top, open      ; rock over the water
+  ) diagonal \ rock 0 top, open
+  - door rill, open                  ; a rill's doorway: all open, over the water
+  X box 4.5 top rock, water 4.5      ; the rock the sump runs under
+
+plan 0
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#>>~~~~#
+#XXXXXX#
+#XXXXXX#
+#XXXXXX#
+#~~~~>>#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+#~~~~~~#
+
+plan 1
+#------#
+#      #
+T      #
+#      #
+#))    #
+########
+########
+########
+#    ))#
+#      #
+#      T
+#      #
+#------#
