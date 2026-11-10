@@ -63,7 +63,7 @@ gate-rise 2
 footstep-stone 2
 gust-hit 2
 step-armour 3
-step-bone 3
+step-bone 18
 creature-sizzle 2
 summon-burst 2
 pickup-herbs 1

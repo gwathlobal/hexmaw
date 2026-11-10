@@ -1,0 +1,21 @@
+{
+  "prompt": "A single footstep of a skeleton on stone: a quick dry clack-clack-clack, three small sharp bone clicks in fast succession, like knucklebones tapped on a flagstone, bright, hollow and brittle, then silence. No thud, no low end, no flesh, no boots, no armour. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-step-bone.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.6,
+  "loop": false,
+  "duration_seconds": 0.5,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794279248,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.48,
+    0.48,
+    0.48
+  ]
+}
