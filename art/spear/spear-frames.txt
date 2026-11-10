@@ -23,3 +23,18 @@ extend-1.png    0.254 1536 1024 -8 -32
 thrust-1.png    0.254 1536 1024 -8 -32
 recover-1.png   0.254 1536 1024 -8 -32
 idle-2.png      0.254 1536 1024 -8 -32
+
+; The jolt of a counter (a thrust that met a charge): the spear driven back toward the viewer.
+jolt-2.png      0.254 1536 1024 -8 -32
+
+; The haft sweep (the right button): wound up to the right, the sweep, the follow-through
+; to the left, and the recovery on its way back to rest. The spear is as long in each: the
+; wind-up's and the follow-through's hafts are lengthened by 200 source pixels
+; (tools/extend_shaft.py; the follow-through's canvas 200 wider on the left, so its corner is
+; SX 1736). The follow-through is moved 167 art pixels right and 16 up, so its butt end stays
+; near the middle of the view (its forearms still run 16 below the bottom); its spearhead runs
+; past the corner, and the strip's --side-margin 80 keeps all of it, so the screen's edge cuts it.
+sweep-windup-long-2-haft.png  0.254 1536 1024 -8 -32
+sweep-2.png                   0.254 1536 1024 -8 -32
+sweep-follow-long-2-haft.png  0.254 1736 1024 -175 -16
+recover-1.png                 0.254 1536 1024 -8 -40

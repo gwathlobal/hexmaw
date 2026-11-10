@@ -120,6 +120,9 @@ as it lands, then sprawled, its head down, for the corpse."
 
 (defmethod ranged-p ((flyer flyer)) T)
 
+(defmethod charging-p ((flyer flyer))
+  (and (dive-left flyer) (not (dead flyer)) (hunting-p flyer)))
+
 (defmethod move-lift ((flyer flyer)) 0.05)
 ;; It hovers over lava and water: its paths treat lava as any floor, and pass over water.
 (defmethod nav-hazards ((flyer flyer)) :ignore)

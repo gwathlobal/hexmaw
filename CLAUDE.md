@@ -1438,8 +1438,14 @@ real time instead.
   another bash can't stagger it and shoves it only `*poised-bash-knockback*` as far
   (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
   frame: idle, `*shield-raise-frames*` rising, the block held, then the bash's.
-- `src/spear.lisp`: the spear, held in both hands, so no shield (the right button does
-  nothing with it; block and bash ask for `:sword`). Against the sword it reaches further
+  `block-raise` is the shield's guard (`guard-raise-time`, by keyword: NIL for a weapon with
+  none), and the guard's blow runs on `bash-time` through generics on the weapon's keyword
+  (`bash-frame-times`, `bash-hit-frame`, `bash-strike`: the bash, or the spear's sweep). A swing
+  that lands goes through `swing-strike` (player, weapon, target), whose spear method makes a
+  counter. `blow-reaches-p` is the test every melee blow makes of one creature (reach, arc,
+  height, a clear line), `looked-at-creature` the nearest that passes it. The sprite's tick asks
+  `weapon-frame` for its strip frame.
+- `src/spear.lisp`: the spear, held in both hands, so no shield. Against the sword it reaches further
   (`*spear-reach*` 3.5 m against 2) in a narrower arc (`*spear-arc*` 0.3 rad), staggers more
   (`*spear-pain-bonus*` 35) and is slower: the thrust plays `*thrust-frame-times*` (0.68 s
   against 0.53) and lands at full extension, `*thrust-hit-frame*` (0.24 s in, against 0.23).
@@ -1449,6 +1455,25 @@ real time instead.
   middle rather than against the right edge, so the thrust goes where the player looks on any
   screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
   (`art/spear/spear-frames.txt` says how).
+  **The counter**: a thrust whose blow lands on a creature `charging-p` (creature.lisp: hunting the
+  player and coming at them through the air, a leaper `airborne`, the imp's pounce or the ogre's
+  leap, or a flyer with `dive-left`, the harpy; not a crouch, nor a melee blow's lunge, which stops
+  a moment into its wind-up) skewers it (`spear-counter`): `*counter-damage*` (18 to 26),
+  `*counter-knockback*`, a flinch whatever the roll (`hurt`'s `:force-pain`; a boss rolls with
+  `*counter-pain-bonus*`), the jolt frame for `*spear-jolt-time*` (`spear-jolt`), the enchantment,
+  and `impale`: a leaper drops out of the air where it is (`falling`, `impaled`) and lands with no
+  quake (an imp's own `react-to-hit` throws it down; a diving harpy is downed as by any hit). A
+  knight from a view its shield covers takes it as a plain thrust. The thrust lands 0.24 s after
+  the click, so a click late in the crouch or early in the flight meets a pounce or leap, and one
+  a little into a dive meets the harpy as it comes down within the player's height.
+  **The sweep**: a press of the right button (`:block`, `player-press`, player.lisp; it holds
+  nothing up, so the player isn't slowed) swings the haft across (`player-sweep`, `*sweep-stamina*`,
+  none without it, nor during a thrust) on `*sweep-frame-times*`, landing on `*sweep-hit-frame*`
+  (`sweep-hit`) on every creature within `*sweep-reach*` (1.8 m) and `*sweep-arc*` (1.4 rad):
+  `*sweep-damage*`, `*sweep-knockback*`, and the bash's rules for the rest (a stagger only in a
+  wind-up and not poised, `bash-poise`; a covered knight glances and the player reels back once).
+  No enchantment goes with it. The strip: 4 idle frames, the 8 of the thrust, the jolt
+  (`*spear-jolt-frame*`), then the sweep's 4 (`*spear-sweep-first*`).
 - `src/player.lisp`: first-person controller and box collision. Walking backward keeps
   `*backpedal-scale*` (0.75) of the speed. Mana doesn't regenerate:
   only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
@@ -1608,9 +1633,9 @@ until within `*lunge-stop*` of its reach, so backing off at a walk doesn't escap
 back does, and so does a sidestep from a slow turner once its facing is set (the imp turns at
 once, so it follows a sidestep through its wind-up). A hit breaks the attack off. Then it stands `attack-pause` and hunts on.
 
-A creature that `flanks` (the imp, the skeleton) doesn't attack into a raised shield: within
-`*flank-range*` and in front of it (`shield-facing-p`, the shield's arc plus `*flank-margin*`)
-it walks an arc round the player (`flank`, `*flank-steps*` points) to just past the arc, on
+A creature that `flanks` (the imp, the skeleton, the riftwalker) doesn't attack into a raised
+shield: within `*flank-range*` and in front of it (`shield-facing-p`, the shield's arc plus
+`*flank-margin*`) it walks an arc round the player (`flank`, `*flank-steps*` points) to just past the arc, on
 the side it is on, or the other if another creature already makes for that spot (with both
 taken it doesn't flank), and attacks from there. While `flanking` it neither attacks nor
 replans; the flank ends as soon as the shield no longer faces it (lowered, or got past). After one flank it waits
@@ -2239,16 +2264,29 @@ says how far is safe), and the shield can't turn: the bash is a push straight ou
 The spear (`art/spear/`) is one generated picture per pose, the whole 1536 × 1024 canvas
 being the screen, both gauntlets on the shaft, their forearms running off the bottom edge so
 the one sprite can stand against the bottom-right corner: `art/prompts/spear-common.txt` plus
-`spear-<pose>.txt` (idle, drawback, thrust, extend, recover), with the sword's idle frame
+`spear-<pose>.txt` (idle, drawback, thrust, extend, recover; jolt, sweep, sweep-windup-long,
+sweep-follow-long for the counter and the sweep; the jolt, the set pose driven back, adds
+`art/spear/set-2.png`, from `spear-set.txt`, as a third reference, and the sweep's wind-up and
+follow-through add `spear-sweep-length.txt` and `art/spear/sweep-2.png`, so the spear stays its
+length: asked without it, they drew it half as long), with the sword's idle frame
 (`art/sword-shield/ref-sword-idle.png`) as the reference, the other poses adding
 `spear-follow.txt` and the chosen idle picture as the second. `tools/make_shield.py
 --corner right` places them against the bottom-right corner, as the sword sits, from
-`art/spear/spear-frames.txt` (4 idle entries, then the 8 of the thrust):
+`art/spear/spear-frames.txt` (4 idle entries, the 8 of the thrust, the jolt and the sweep's 4). The strip is placed by its aim, so its side edges show on screen: nothing may reach a
+picture's left or right edge (the sweep's wind-up, whose spearhead did, is moved left):
 
 ```bash
 tools/gen_image.py art/spear/extend.png --prompt "$(cat art/prompts/spear-{common,extend,follow}.txt)" --ref art/sword-shield/ref-sword-idle.png --ref art/spear/idle-2.png --size 1536x1024 -n 2
-tools/make_shield.py --corner right art/spear/spear-frames.txt data/sprites/spear/spear
+tools/make_shield.py --corner right --side-margin 80 art/spear/spear-frames.txt data/sprites/spear/spear
 ```
+
+A pose whose shaft came out short is lengthened by `tools/extend_shaft.py`, which lays a plain
+stretch of the shaft again along its line past the end and puts the end's cap back on: the sweep's
+wind-up and follow-through (its docstring has the command; the frames file says how far each went).
+The follow-through is moved right so its butt end stays near the view's middle, which puts its
+spearhead past the strip's corner: `--side-margin 80` keeps 80 art pixels past the corner
+instead of the bottom's 6, the index says so (`:overhang`), and `layout-sword` sits the strip that
+far past, so the screen's edge cuts the spearhead, never the strip's.
 
 Generators can't keep a motion sequence across a grid of first-person poses, and they draw
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
@@ -3145,7 +3183,8 @@ Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, 
 down; swim into a ledge at the surface to climb out), 1 to 9 for what the hotbar holds (at the
 start 1 the sword, 2 the fire bolt, 3 heal; whatever is found goes on the next free key), the mouse wheel to change the
 quickslot's potion, left click to attack (swing, thrust, or cast the spell in hand), right button
-held to raise the shield (sword only; a left click while it's up bashes), Q to drink from the
+held to raise the shield (a left click while it's up bashes) or, with the spear, pressed to sweep
+with the haft (the spear's thrust counters a leap or dive it meets), Q to drink from the
 quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, or a
 potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
 quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E to talk to the
@@ -3158,7 +3197,10 @@ starts a cast, and the bolt leaves from the player's view `*cast-release*` (0.2 
 on the hands' release frame; `(select-weapon *player* :1)` then `(player-attack *player*)` swings the sword (the blow lands
 0.23 s in; stand within 2 m of the imp, facing it), and with `:3` thrusts the spear (0.24 s in, within 3.5 m); `(setf (block-raise *player*) 1.0)` under hit-stop
 shows the raised shield, and with it raised `(player-attack *player*)` bashes (`block-held`
-is what the right button sets; without it the shield comes down again once the world runs); `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
+is what the right button sets; without it the shield comes down again once the world runs); with
+the spear (`:3`), the imp 5 m in front with `(setf (alert imp) 10.0 (idle-timer imp) 0.0
+(leap-cooldown imp) 0.0)` crouches and pounces, and `(player-attack *player*)` 0.4 s later meets it
+in the air (`charging-p` is true while it flies), and `(player-press *player* :mouse-right)` sweeps; `(hurt (aref *creatures* 0) 0)` triggers a hit reaction and a spray of blood (100 kills, and tears an imp apart; `:from point` aims the spray); to look at one death
 frame, `(setf *hit-stop* 1000.0)` freezes the world and `(setf (dead imp) 0.35)` shows the
 frame at that time; likewise `(setf (brain imp) :attacking (attack-time imp) 0.6)` shows an
 attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp hunting (the acolyte on the platform the same way);

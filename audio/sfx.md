@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-139 clips; tier 1: 83 clips, 256 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 404 s, about 4,043 credits for everything.
+141 clips; tier 1: 85 clips, 260 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 408 s, about 4,082 credits for everything.
 
 ## Player: weapons and shield
 
@@ -35,6 +35,8 @@ First-person, so stereo is fine (`:speech`).
 | shield-bash | 1 | 1P | 0.5 | 3 | `player-bash` sword.lisp:147 |
 | bash-hit | 1 | P | 0.5 | 3 | `bash-hit` sword.lisp:217, a target |
 | bash-glance | 1 | P | 0.6 | 3 | `bash-hit` sword.lisp:223-226, a covered view (knight, warded boss) |
+| spear-impale | 1 | P | 0.7 | 3 | `spear-counter` spear.lisp, a thrust that met a charge |
+| haft-sweep | 1 | 1P | 0.6 | 3 | `player-sweep` spear.lisp, the right button with the spear |
 | draw-sword | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:sword` |
 | draw-spear | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:spear` |
 | draw-magic | 1 | 1P | 0.7 | 3 | `(setf (weapon player))` sword.lisp:270, `:hands` and `:tempest` |

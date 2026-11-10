@@ -162,6 +162,8 @@ differs from WEAPON while switching.")
               :documentation "Seconds since the shield bash began, or NIL when not bashing.")
    (bash-pending :initform NIL :accessor bash-pending
                  :documentation "True until the bash's blow has landed.")
+   (spear-jolt :initform 0.0 :accessor spear-jolt
+               :documentation "Seconds the spear still shows the jolt of a counter (spear.lisp).")
    (guard-broken :initform 0.0 :accessor guard-broken
                  :documentation "Seconds left before the shield can be raised again, after a
 blow knocked it aside (BREAK-GUARD).")
@@ -274,7 +276,10 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
         (when (eq *game-state* :playing)
           (case action
             (:attack (player-attack player))
-            (:block (setf (block-held player) T))
+            ;; Held, the shield rises; with the spear, a press sweeps with the haft.
+            (:block (setf (block-held player) T)
+             (when (eq (weapon player) :spear)
+               (player-sweep player)))
             ;; Talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
             (:interact (player-interact player))
             (T (let ((slot (position action *hotbar-slots*)))

@@ -21,7 +21,7 @@
     (:jump "Jump, swim up" (:play) (:space))
     (:crouch "Crouch, dive" (:play) (:c :left-control))
     (:attack "Attack" (:play) (:mouse-left))
-    (:block "Raise shield" (:play) (:mouse-right))
+    (:block "Raise shield, sweep with spear" (:play) (:mouse-right))
     (:interact "Talk, use" (:play) (:e))
     (:drink "Drink potion" (:play) (:q))
     (:inventory "Inventory" (:play) (:i))

@@ -101,6 +101,8 @@ for the first three frames of the attack animation.")
    (falling :initform NIL :accessor falling
             :documentation "True while it drops, a leap cut short by a wall or a body.")
    (fall-speed :initform 0.0 :accessor fall-speed)
+   (impaled :initform NIL :accessor impaled
+            :documentation "True while it drops out of a leap the spear's counter broke: it lands with no quake.")
    (recover :initform 0.0 :accessor recover
             :documentation "Seconds it still stands after landing.")
    (leap-cooldown :initform 0.0 :accessor leap-cooldown))
@@ -387,10 +389,22 @@ short: the ogre's quake, by default.")
       (setf (recover ogre) (leap-recover-time ogre))
       (stop-walking ogre (leap-recover-time ogre))
       (play-sound :ogre-land at)
-      (quake ogre at *quake-radius* *quake-damage* *quake-shove* *quake-player-shove* *quake-player-lift*
-             :inner (body-radius ogre))
-      (kick-dust at (* 0.6 *quake-radius*) *ogre-dust-puffs* (container ogre))
-      (hit-stop *leap-hit-stop*))))
+      ;; Brought down by the spear's counter, it lands in a heap: no quake.
+      (unless (impaled ogre)
+        (quake ogre at *quake-radius* *quake-damage* *quake-shove* *quake-player-shove* *quake-player-lift*
+               :inner (body-radius ogre))
+        (hit-stop *leap-hit-stop*))
+      (kick-dust at (* 0.6 *quake-radius*) *ogre-dust-puffs* (container ogre)))))
+
+(defmethod charging-p ((leaper leaper))
+  (and (airborne leaper) (not (dead leaper)) (hunting-p leaper)))
+
+(defmethod impale ((leaper leaper))
+  (when (airborne leaper)
+    (setf (airborne leaper) NIL
+          (falling leaper) T
+          (fall-speed leaper) 0.0
+          (impaled leaper) T)))
 
 (defun land-leap (ogre)
   (setf (airborne ogre) NIL
@@ -402,7 +416,8 @@ short: the ogre's quake, by default.")
           (*leaper* ogre))
       (leap-log "lands at ~,2f ~,2f ~,2f, its feet at most ~,2f up"
                 (vx at) (vy at) (vz at) (- *leap-peak* (vy at))))
-    (leap-landed ogre)))
+    (leap-landed ogre))
+  (setf (impaled ogre) NIL))
 
 (defvar *arc-point* (vec 0 0 0) "Where FLY-LEAP is on the arc this tick, reused.")
 

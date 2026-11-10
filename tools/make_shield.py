@@ -27,7 +27,9 @@ by --saturation, and mapped onto one --colors palette, so the frames match.
 weapon held on the right (the spear, data/sprites/spear): X counts leftward from the right edge,
 the margin is kept past the right edge and the bottom, and SX is still counted from the
 picture's left. Such a strip sits as the sword's does, *SWORD-OVERHANG* and *SWORD-DROP*
-art pixels past the corner, so give --margin the same.
+art pixels past the corner, so give --margin the same. --side-margin keeps more past the side
+edge than the bottom, for a weapon placed by its aim whose pictures reach past the corner (the
+spear's sweep); the index then says so (:overhang), and the game sits that strip so far past.
 
 Writes <out>.png, the frames in a row with 2 px gaps, and <out>.lisp, the index
 define-fx-animation reads.
@@ -87,6 +89,8 @@ def main():
     ap.add_argument("frames", help="frames file")
     ap.add_argument("out", help="output strip, without extension")
     ap.add_argument("--margin", type=int, default=6, help="art pixels kept past the screen's left and bottom edges")
+    ap.add_argument("--side-margin", type=int, default=None,
+                    help="art pixels kept past the side edge instead (default --margin); written into the index as :overhang")
     ap.add_argument("--brightness", type=float, default=0.8)
     ap.add_argument("--saturation", type=float, default=0.8)
     ap.add_argument("--colors", type=int, default=48)
@@ -96,6 +100,7 @@ def main():
     # A right-corner strip is built as a left-corner one from mirrored pictures, then
     # mirrored back.
     mirror = args.corner == "right"
+    side = args.margin if args.side_margin is None else args.side_margin
 
     placed = []   # (image, left, top) in screen art pixels, Y down from the screen's bottom
     for source, scale, sx, sy, x, y in read_frames(args.frames):
@@ -107,21 +112,19 @@ def main():
         small = grade(box_downscale(img, (w, h)), args.brightness, args.saturation)
         left, top = round(x - sx * scale), round(-y - sy * scale)
         # Keep only what shows: past the margins nothing is drawn.
-        m = args.margin
-        small = small.crop((max(0, -m - left), 0, small.width, min(small.height, m - top)))
-        left = max(left, -m)
+        small = small.crop((max(0, -side - left), 0, small.width, min(small.height, args.margin - top)))
+        left = max(left, -side)
         bbox = small.getbbox()
         placed.append((small.crop(bbox), left + bbox[0], top + bbox[1]))
 
-    m = args.margin
     right = max(left + img.width for img, left, _ in placed)
     top = min(top for _, _, top in placed)
-    cell_w, cell_h = right + m, m - top
+    cell_w, cell_h = right + side, args.margin - top
     cells = []
     for img, left, top_y in placed:
-        # The cell's top-left corner is at screen (-m, top); anything past it is cut.
+        # The cell's top-left corner is at screen (-side, top); anything past it is cut.
         cell = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
-        cell.paste(img, (left + m, top_y - top), img)
+        cell.paste(img, (left + side, top_y - top), img)
         cells.append(cell.transpose(Image.Transpose.FLIP_LEFT_RIGHT) if mirror else cell)
 
     strip = Image.new("RGBA", (len(cells) * (cell_w + GAP) - GAP, cell_h), (0, 0, 0, 0))
@@ -135,7 +138,9 @@ def main():
         f";;; Written by tools/make_shield.py from {Path(args.frames).name}; do not edit.\n"
         f'(:image "{out.name}.png"\n'
         f" :cell-width {cell_w} :cell-height {cell_h} :gap {GAP}\n"
-        f" :frames {len(cells)})\n")
+        f" :frames {len(cells)}"
+        + (f" :overhang {side}" if args.side_margin is not None else "")
+        + ")\n")
     print(f"{len(cells)} frames, {cell_w} x {cell_h} cells, {out.with_suffix('.png')}")
 
 

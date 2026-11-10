@@ -58,7 +58,7 @@ their values."
   '(feet rotation velocity grounded eye health pain restore-flash restored burn-timer wading swimming climbing breath drown-timer
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
-    block-raise bash-time bash-pending guard-broken run-time damage-taken level-records
+    block-raise bash-time bash-pending spear-jolt guard-broken run-time damage-taken level-records
     reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells wanted-slot enchantments))
 
@@ -100,7 +100,7 @@ their values."
 
 (defmethod saved-slots append ((leaper leaper))
   '(attack-kind leap-from leap-to leap-apex leap-duration leap-time airborne falling fall-speed
-    recover leap-cooldown))
+    impaled recover leap-cooldown))
 
 (defmethod saved-slots append ((sprite fx-sprite))
   '(animation location age))
