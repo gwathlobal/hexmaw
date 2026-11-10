@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A new footstep for the skeleton.** `step-bone` was take 3, a thin hiss of a click ringing
+  0.29 s (a chasing skeleton steps every 0.23 s). It is now take 18: take 2, a quick dry
+  clack-clack-clack of three bone clicks, pitched 1.5 semitones down (`step-bone-18.prompt.json`
+  says how), picked by ear over fifteen takes from two newer prompts, kept in
+  `step-bone-4`, `-8`, `-11` and `-14.prompt.json`.
 - **Gold and dust on every level, and far fewer potions.** Gold and arcane dust are placed after the
   health and mana pickups, on the spots they leave, and over run seeds 1 to 30 half of a run's first
   levels had neither (run seed 5's first among them), the settlement's two thirds. `scatter-pickups`
