@@ -101,7 +101,7 @@ cut, so this must be more than the sway, or the cut-off end shows.")
 ;;; WANTED-SLOT, WEAPON-LOWER how far it is lowered (0 up, 1 off screen).
 
 (defun attacking-p (player)
-  (or (swing-time player) (pending-spell player) (cast-position)
+  (or (swing-time player) (charge-time player) (pending-spell player) (cast-position)
       (bash-time player) (< 0.0 (block-raise player))))
 
 (defun weapon-in-hand-p (player)
@@ -151,19 +151,21 @@ it holds something."
 
 (defun player-attack (player)
   "Attack with the weapon in hand: cast the spell in the hands, swing the sword, thrust the
-spear, or, with the shield raised, bash with it. Nothing while the shield is on its way up
-or down, or with nothing in hand."
+spear, raise the maul to charge it (maul.lisp), or, with the shield raised, bash with it.
+Nothing while the shield is on its way up or down, or with nothing in hand."
   (when (weapon-ready-p player)
     (case (weapon player)
       (:hands (when (held-spell player)
                 (player-cast player (held-spell player))))
       (:sword (cond ((<= 1.0 (block-raise player)) (player-bash player))
                     ((= 0.0 (block-raise player)) (player-swing player))))
-      (:spear (player-swing player)))))
+      (:spear (player-swing player))
+      (:maul (player-maul player)))))
 
 (defparameter *weapon-sounds*
   '(:sword (:swing :sword-swing :draw :draw-sword :guard :shield-raise)
     :spear (:swing :spear-thrust :draw :draw-spear)
+    :maul (:swing :maul-swing :draw :draw-maul)
     :hands (:draw :draw-magic))
   "Each weapon's clips (sound.lisp): :SWING as a swing starts, :DRAW as it comes up, :GUARD as
 its guard rises (the shield).")
@@ -271,8 +273,13 @@ be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
 (defun swing-hit (player)
   (let* ((weapon (weapon player))
          (target (swing-target player (swing-reach weapon) (swing-arc weapon))))
-    (when target
-      (swing-strike player weapon target))))
+    (if target
+        (swing-strike player weapon target)
+        (swing-miss player weapon))))
+
+(defgeneric swing-miss (player weapon)
+  (:documentation "WEAPON's swing found no one living to land on: the maul pulps a corpse (maul.lisp).")
+  (:method (player weapon) (declare (ignore player weapon)) NIL))
 
 (defgeneric swing-strike (player weapon target)
   (:documentation "WEAPON's swing lands on TARGET: hurt, shoved, and the weapon's enchantment.
@@ -362,6 +369,7 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
     (unless (and (bash-time player) (frame-at (bash-time player) (bash-frame-times (weapon player))))
       (setf (bash-time player) NIL)))
   (setf (spear-jolt player) (max 0.0 (- (spear-jolt player) dt)))
+  (update-maul-charge player dt)
   ;; The guard (the shield) rises while the block is held with its weapon in hand and staying
   ;; there, once any swing is over; it stays up through a bash.
   (let* ((weapon (weapon player))
@@ -408,7 +416,7 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
    (bob-amount :initform 0.0 :accessor bob-amount)))
 
 (defgeneric held-weapon (sprite)
-  (:documentation "The weapon (:SWORD or :SPEAR, as a weapon item's :WEAPON) SPRITE is drawn for."))
+  (:documentation "The weapon (:SWORD, :SPEAR or :MAUL, as a weapon item's :WEAPON) SPRITE is drawn for."))
 (defgeneric idle-frames (sprite)
   (:documentation "Strip frames SPRITE's idle loop steps through, from the first."))
 (defgeneric swing-first (sprite)
@@ -572,7 +580,7 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (define-fx-animation weapon-icons "sprites/icons/weapons")
 
-(defparameter *weapon-icons* '(:sword 0 :spear 2) "Frame of each weapon's icon in the strip.")
+(defparameter *weapon-icons* '(:sword 0 :spear 2 :maul 11) "Frame of each weapon's icon in the strip.")
 (defparameter *spell-icons*
   '(:fire 1 :storm 3 :frost 4 :shock 5 :drain 6 :heal 7 :ward 8 :slow 9 :knockback 10)
   "Frame in the strip of the icon of a rune by its first effect (SPELL-ICON-KEY): damage by its

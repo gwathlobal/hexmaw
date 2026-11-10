@@ -396,10 +396,10 @@ or a burn's every tick (magic.lisp), are the same assault.")
                           (setf (path guard) path (brain guard) :walking)))))))))))
 
 (defun check-drawn-blade (dt)
-  "The Deepwardens' rule: no sword or spear in hand in the market or the temple."
+  "The Deepwardens' rule: no sword, spear or maul in hand in the market or the temple."
   (let* ((s *settlement*)
          (feet (feet *player*))
-         (drawn (member (weapon *player*) '(:sword :spear)))
+         (drawn (member (weapon *player*) '(:sword :spear :maul)))
          (in-zone (and drawn
                        (loop for (name low high) across *level-zones*
                              thereis (and (member name (faction-property :zones s))

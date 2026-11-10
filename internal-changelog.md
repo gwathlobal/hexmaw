@@ -7,6 +7,38 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The maul, a third weapon.** Two-handed, no shield (src/maul.lisp). The left button held charges
+  the blow (15 stamina a blow, paid as it rises, and none without it; 0.4 s up, full at 1.35 s, 30
+  stamina a second past the least, landing 0.19 s after the release and done 0.4 s later, the player slowed to 0.6
+  of a walk with no run, jump or stamina coming back), and letting go strikes one creature: 18-24
+  to 34-44, knockback 8 to 15 m/s with heft (the square root of `knockback-scale`, so knights and
+  ogres move too, and what it throws into walls, bodies, lava, water or across ice pays there). A
+  full blow always flinches (a boss rolls), knocks a shield or ward aside for 1.2 s (`reel` on
+  creatures: the stagger frame held, no thinking, `shielded-p` false, so spells reach the front),
+  and its kills gib from 0.1 overkill, the undead's always, so its skeletons can't be raised. A
+  blow on no one living pulps a raisable corpse. The right button is the earthshake: 30 stamina,
+  3-6 and a sure flinch (unless poised; bosses roll) to everything standing within 3 m all round,
+  a 5 m/s shove out with heft, unblockable, nothing off the floor feels it, and it shares the
+  bash's poise. Regular loot from level 2 on (`*loot-weapons*`, a third as likely as each other
+  kind; level 1's first weapon stays the spear; ogre hoards too), so a seed's found weapon may be
+  another kind than before. New: `attack-held` (the left button, set and cleared by
+  `player-press`/`player-release`), `charge-time` and `blow-charge` on the player (saved, not
+  `attack-held`, so a loaded charge comes down on resume), `push-creature :heft`, `hurt
+  :gib-overkill`, the `swing-miss` generic, and the tooltip's `weapon-lines` generic in place of
+  `(eq weapon :spear)` branches. Its strip is the renders of a 3D model built by script
+  (`tools/render_maul.py`, `tools/blender_maul.py`, `art/maul/maul.blend`), each redrawn as pixel art
+  by the image generator with the render as its first reference (`art/maul/restyle/`), since image generators
+  couldn't keep its head upright in the plane of the blow (broadside, end-on and mace-like tries are
+  in the art attic); `blender_sword.py` runs its `main` only when called, for its helpers. Also a hotbar icon and a loot sprite drawn, eight clips in
+  `audio/sfx.md`, picked by ear (draw-maul 6, earthshake 6 at +10 dB, maul-crush 6, maul-hit 6,
+  maul-swing 5, maul-charge 17, maul-full 6, maul-guard-break 6; draw-maul 5 is the spear's draw).
+  The charge's cry is a one-shot, not a loop (a loop held while the charge grew sounded for good
+  once stamina stopped it short of full), started once the button has been held `*maul-cry-delay*`
+  (0.2 s, so a click has none) and cut off as the blow comes down: `cut-sound` (sound.lisp) pauses a
+  one-shot `play-sound` returned until it is next played. Setting its volume to 0 instead left the
+  voice silent at full volume after. `make_sfx.py` given clip names checks only their picks, since a worktree has only its own
+  takes. The debug level's hotbar has it on key 6. The `:block`
+  action reads "Block, alt attack" (the longer label ran into its key on Controls), and the Deepwardens' rule "No weapon is drawn".
 - **The spear counters and sweeps.** A thrust that lands on a creature charging through the air
   (`charging-p`: an imp's pounce or ogre's leap in flight, a harpy's dive) is a counter
   (`swing-strike`'s spear method, `spear-counter`): 18 to 26, a sure flinch (a boss only a bonus),

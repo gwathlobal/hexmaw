@@ -226,6 +226,9 @@ for no shield.")
                     :documentation "Frame animation of the block pose, one sequence per view like
 WALK-ANIMATION, spread over *BLOCK-TIME*; NIL to show nothing.")
    (brace :initform 0.0 :accessor brace :documentation "Seconds left of the block pose.")
+   (reel :initform 0.0 :accessor reel
+         :documentation "Seconds left of a reel: a full blow of the maul knocked its guard aside
+(maul.lisp). It holds its flinch's stagger frame, does nothing, and its shield covers nothing.")
    (bash-poise :initform 0.0 :accessor bash-poise
                :documentation "Seconds left in which a shield bash can't stagger it and barely
 moves it (sword.lisp): set by every bash that lands.")
@@ -558,11 +561,12 @@ coin (pickups.lisp), the watch notes a murder (townsfolk.lisp).")
 rest (the riftwalker blinks away, riftwalker.lisp).")
   (:method ((creature creature)) NIL))
 
-(defun hurt (creature amount &key from (pain-bonus 0) by force-pain)
+(defun hurt (creature amount &key from (pain-bonus 0) by force-pain gib-overkill)
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
 the blood sprays away from, by BY (as for HARMED). It flinches and breaks off what it's
 doing on a pain roll, its PAIN-CHANCE plus PAIN-BONUS percent, or whatever it says with
-FORCE-PAIN (a charge countered by the spear)."
+FORCE-PAIN (a charge countered by the spear). GIB-OVERKILL, if given, tears it apart on a
+killing blow that overkills by that fraction of its most, if its own needs more (the maul's)."
   (when (and (dormant-p creature) (not (dead creature)))
     (setf (flash creature) *flash-time*)
     (return-from hurt))
@@ -587,7 +591,7 @@ FORCE-PAIN (a charge countered by the spear)."
     (hit-stop)
     (when (<= (health creature) 0)
       (creature-noise creature :death)
-      (cond ((gib-p creature amount)
+      (cond ((gib-p creature amount gib-overkill)
              (tear-apart creature :from from))
             ((bleeds creature)
              (bleed-out creature)))
@@ -637,9 +641,10 @@ look further if need be."
 
 (defun shielded-p (creature from)
   "True if CREATURE's shield covers it against a blow from point FROM: the view of it
-seen from FROM is one its shield covers."
+seen from FROM is one its shield covers, and the maul hasn't knocked it aside (REEL)."
   (and (shield-views creature)
        (not (dead creature))
+       (<= (reel creature) 0.0)
        (<= (billboard-view creature from) (shield-views creature))))
 
 (defun block-hit (creature)
@@ -652,11 +657,12 @@ and a moment's brace, unless it's in the middle of an attack."
     (stop-walking creature *block-time*))
   (hit-stop *block-hit-stop*))
 
-(defun push-creature (creature direction speed)
+(defun push-creature (creature direction speed &key heft)
   "Knock CREATURE along DIRECTION (only its horizontal part counts) at SPEED m/s, scaled
-by its KNOCKBACK-SCALE."
+by its KNOCKBACK-SCALE, or with HEFT (the maul's) by its square root, so the heavy move too."
   (let ((len (/ (sqrt (+ (expt (vx direction) 2) (expt (vz direction) 2)))
-                (float (knockback-scale creature) 0f0)))
+                (let ((scale (float (knockback-scale creature) 0f0)))
+                  (if heft (sqrt scale) scale))))
         (kb (momentum creature)))
     (when (< 1f-4 len)
       (setf (vx kb) (* speed (/ (vx direction) len))
@@ -1572,6 +1578,7 @@ It only sinks while its body has room below, so it never sinks into a ledge it o
   (setf (dead creature) NIL
         (health creature) (max-health creature)
         (stagger creature) 0.0
+        (reel creature) 0.0
         (brace creature) 0.0
         (flash creature) 0.0
         (texture creature) (body-texture creature))
@@ -1589,7 +1596,9 @@ lying knocked down, which squashes its own pose instead.")
   (:method ((creature creature)) T))
 
 (defun creature-hurting-p (creature)
-  (and (< 0 (stagger creature)) (not (dead creature)) (hurt-animation creature) (flinch-p creature)))
+  "True while CREATURE shows its flinch: staggering, or reeling (REEL), which holds the stagger frame."
+  (and (or (< 0 (stagger creature)) (< 0 (reel creature)))
+       (not (dead creature)) (hurt-animation creature) (flinch-p creature)))
 
 ;; The block strip only has the views the shield covers: a deflected spell comes from
 ;; one of them. Seen from elsewhere, it braces in the standing pose.
@@ -1760,6 +1769,7 @@ after the flinch, block and attack.")
       (setf (flash creature) (max 0.0 (- (flash creature) dt))
             (stagger creature) (max 0.0 (- (stagger creature) dt))
             (brace creature) (max 0.0 (- (brace creature) dt))
+            (reel creature) (max 0.0 (- (reel creature) dt))
             (bash-poise creature) (max 0.0 (- (bash-poise creature) dt))
             (flank-timer creature) (max 0.0 (- (flank-timer creature) dt))
             (slot-ban-timer creature) (max 0.0 (- (slot-ban-timer creature) dt))
@@ -1795,6 +1805,7 @@ after the flinch, block and attack.")
               (cond ((< 0 (rising creature))
                      (decf (rising creature) dt))
                     ((< 0 (stagger creature)))
+                    ((< 0 (reel creature)))
                     ((dormant-p creature))
                     (afloat
                      (flounder creature dt))

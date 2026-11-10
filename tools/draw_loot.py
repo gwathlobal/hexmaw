@@ -4,9 +4,9 @@ the format tools/slice_frames.py writes:
 
   tools/draw_loot.py data/sprites/pickups
 
-writes loot-sword, loot-spear and loot-rune-<look> (.png and .lisp) for each look a spell can have
+writes loot-sword, loot-spear, loot-maul and loot-rune-<look> (.png and .lisp) for each look a spell can have
 (*SPELL-LOOKS*, spells.lisp, and the tornado's storm), at the monsters' 64 px per metre. The sword
-stands planted point down, 0.75 m; the spear upright, 1.25 m; a rune is a round stone the size of
+stands planted point down, 0.75 m; the spear upright, 1.25 m; the maul upright on its head, 0.9 m; a rune is a round stone the size of
 a palm, a sign cut into it glowing in its look's colours, apart from the glyphs' upright tablets.
 4 frames each: a glint runs down the weapons' steel, and a rune's sign and halo pulse.
 """
@@ -31,6 +31,10 @@ GRIP = (122, 66, 34, 255)
 GRIP_DARK = (84, 42, 22, 255)
 WOOD = (140, 96, 56, 255)
 WOOD_DARK = (96, 62, 34, 255)
+
+IRON_LIGHT = (128, 124, 122, 255)
+IRON_MID = (88, 85, 86, 255)
+IRON_DARK = (54, 51, 54, 255)
 
 STONE = (74, 68, 72, 255)
 STONE_LIGHT = (104, 97, 100, 255)
@@ -112,6 +116,38 @@ def spear(step):
     return outlined(px, w, h), w, h
 
 
+def maul(step):
+    """Upright on its head: a block of blackened iron on the floor, iron bands up the haft, a
+leather grip at the top."""
+    w, h = 24, 58
+    px = {}
+    cx = 11
+    head_top, head_end = h - 11, h - 2
+    for y in range(head_top, head_end + 1):
+        for x in range(1, w - 2):
+            edge = y in (head_top, head_end) or x in (1, w - 3)
+            px[(x, y)] = IRON_DARK if edge or y > head_end - 2 else (IRON_LIGHT if y == head_top + 1 else IRON_MID)
+    # The straps where the haft goes in, riveted.
+    for y in range(head_top, head_end + 1):
+        for x in (cx - 3, cx + 4):
+            px[(x, y)] = STEEL_DARK if y % 3 else GOLD_DARK
+    for y in range(3, head_top):
+        px[(cx, y)] = WOOD
+        px[(cx + 1, y)] = WOOD_DARK
+    for y in range(1, 12):
+        px[(cx, y)] = GRIP if y % 2 else GRIP_DARK
+        px[(cx + 1, y)] = GRIP_DARK
+    for y in (16, 26, 36):
+        for x in range(cx - 1, cx + 3):
+            px[(x, y)] = STEEL_DARK
+            px[(x, y + 1)] = IRON_DARK
+    # The glint: a short bright run along the head's top edge, frame by frame.
+    g = 3 + step * 5
+    for x in range(g, min(g + 3, w - 3)):
+        px[(x, head_top + 1)] = GLINT
+    return outlined(px, w, h), w, h
+
+
 SIGN = [
     "...#...",
     "..#.#..",
@@ -185,6 +221,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     write(out, "loot-sword", [from_pixels(*sword(s)) for s in range(FRAMES)])
     write(out, "loot-spear", [from_pixels(*spear(s)) for s in range(FRAMES)])
+    write(out, "loot-maul", [from_pixels(*maul(s)) for s in range(FRAMES)])
     for look in LOOKS:
         write(out, f"loot-rune-{look}", [rune(look, s) for s in range(FRAMES)])
 

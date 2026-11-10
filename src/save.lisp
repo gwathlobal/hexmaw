@@ -58,6 +58,7 @@ their values."
   '(feet rotation velocity grounded eye health pain restore-flash restored burn-timer wading swimming climbing breath drown-timer
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
+    charge-time blow-charge
     block-raise bash-time bash-pending spear-jolt guard-broken run-time damage-taken level-records
     reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells wanted-slot enchantments))
@@ -68,7 +69,7 @@ their values."
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
     idle-timer path stuck walk-distance momentum flight stagger flash brace burn-timer dead bleeding
-    drip-timer gibbed rising stirring bash-poise flanking flank-timer
+    drip-timer gibbed rising stirring reel bash-poise flanking flank-timer
     sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer foe foe-attack))
 
 (defmethod saved-slots append ((flyer flyer))

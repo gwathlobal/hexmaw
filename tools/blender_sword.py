@@ -376,4 +376,5 @@ def main():
         sys.exit(__doc__)
 
 
-main()
+if __name__ == "__main__":   # tools/blender_maul.py imports its helpers
+    main()

@@ -5,7 +5,7 @@
 ;;; out of the effects they know (glyphs teach them, pickups.lisp) and to enchant weapons, whose
 ;;; blows then carry a spell (ENCHANT-STRIKE, sword.lisp). Two tabs (*FORGE-TAB*): Spells, where
 ;;; a new spell is made into a rune in the bag (GIVE-RUNE), bound to the first free key, and an
-;;; old one unweaved for half its dust; and Enchanting, where a plain weapon (a sword or spear in
+;;; old one unweaved for half its dust; and Enchanting, where a plain weapon (a sword, spear or maul in
 ;;; the bag, each its own, or the shield) is enchanted and an enchanted one disenchanted,
 ;;; likewise. A rune or an enchantment is never changed in place: make another, or destroy it. What is being made is a draft: a delivery and
 ;;; up to *MAX-SPELL-EFFECTS* effects, each a kind, an element for damage, and the dials the kind
@@ -74,7 +74,7 @@ hover gives it), or that was last added or changed.")
   (or (eq sink :shield) (weapon-stack-p sink)))
 
 (defun sink-weapon (sink)
-  "The weapon SINK is, :SWORD, :SPEAR or :SHIELD, or NIL."
+  "The weapon SINK is, :SWORD, :SPEAR, :MAUL or :SHIELD, or NIL."
   (if (eq sink :shield) :shield (and (weapon-stack-p sink) (item-property (first sink) :weapon))))
 
 (defun player-runes (player)
@@ -221,6 +221,7 @@ never offers damage cast on yourself or a heal thrown at a monster."
          (weapon (sink-weapon (draft-sink draft)))
          (noun (cond ((eq weapon :sword) "Edge")
                      ((eq weapon :spear) "Point")
+                     ((eq weapon :maul) "Maul")
                      ((eq weapon :shield) "Bulwark")
                      ((eq (draft-delivery draft) :touch) "Touch")
                      ((eq (draft-delivery draft) :self) (if (eq :ward (and first (draft-kind first))) "Aegis" "Blessing"))
@@ -350,9 +351,9 @@ what it holds, not what making it takes (DRAFT-PROBLEM). Generated loot asks it 
 
 (defun forge-select (sink &optional (player *player*))
   "Put SINK on the forge: a new spell or a plain weapon to make, or a rune or an enchanted weapon
-to look at. One the player no longer carries falls back to the tab's first. :SWORD or :SPEAR, as
-from the REPL, is the first one carried."
-  (let* ((sink (if (member sink '(:sword :spear))
+to look at. One the player no longer carries falls back to the tab's first. :SWORD, :SPEAR or
+:MAUL, as from the REPL, is the first one carried."
+  (let* ((sink (if (member sink '(:sword :spear :maul))
                    (or (find sink (carried-weapons player) :key #'sink-weapon) sink)
                    sink))
          (sink (if (valid-sink-p player sink *forge-tab*) sink (default-sink player *forge-tab*))))

@@ -113,6 +113,7 @@ RGBA-ICON would put them. An icon that won't load only logs."
   (add-hands scene)
   (add-sword scene)
   (add-spear scene)
+  (add-maul scene)
   (add-shield scene)
   ;; Projectiles and impacts are spawned mid-game; load their shaders and sprites up front.
   (preload-spells scene)

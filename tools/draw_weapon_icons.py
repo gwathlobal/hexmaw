@@ -8,7 +8,7 @@ writes weapons.png (frames left to right, 2 px transparent gaps) and weapons.lis
 Frames, in order: the sword, a flame (a rune whose first effect is fire damage), the spear, the
 tornado (the tornado's rune), then a rune's icon for each other first effect (*SPELL-ICONS*,
 sword.lisp): frost damage a snowflake, shock a lightning bolt, drain a drop of blood, heal a cross,
-ward a shield, slow an hourglass, knockback a shockwave pushing right. Each is SIZE art pixels
+ward a shield, slow an hourglass, knockback a shockwave pushing right; then the maul. Each is SIZE art pixels
 square, drawn in the palettes of the sword and bolt sprites, then outlined in near-black so it
 reads on any background. The top-left corner of each icon is left empty: the game draws the slot's key
 number there.
@@ -130,6 +130,36 @@ def spear():
         if i in (1, 2):
             px[(x - 1, y - 1)] = steel_mid
             px[(x + 1, y + 1)] = steel_dark
+    return px
+
+
+def maul():
+    px = {}
+    steel_light = (196, 200, 204, 255)
+    steel_mid = (138, 142, 148, 255)
+    steel_dark = (82, 84, 92, 255)
+    iron = (58, 55, 58, 255)
+    wood = (122, 66, 34, 255)
+    wood_dark = (84, 42, 22, 255)
+    # Haft: a diagonal from the end (bottom left) up into the head.
+    for i in range(10):
+        x, y = 2 + i, 18 - i
+        px[(x, y)] = wood
+        px[(x + 1, y)] = wood_dark
+    for x, y in ((4, 16), (6, 14)):
+        px[(x, y)] = wood_dark
+    # The head: a long block of steel square to the haft across its end (a sledge's, not a club's),
+    # lit on the face away from the hand, an iron band either side of the haft.
+    cx, cy = 13, 7
+    for s in range(-4, 5):
+        for d in range(-1, 3):
+            shade = steel_light if d == 2 else steel_dark if d == -1 else steel_mid
+            if s in (-2, 2):
+                shade = iron
+            elif abs(s) == 4:
+                shade = steel_dark if d < 2 else steel_mid
+            for dx in (0, 1):
+                px[(cx + s + d + dx, cy + s - d)] = shade
     return px
 
 
@@ -293,7 +323,7 @@ def main():
     out = Path(sys.argv[1])
     out.parent.mkdir(parents=True, exist_ok=True)
     icons = [sword(), flame(), spear(), tornado(), snowflake(), lightning(), blood_drop(), cross(),
-             shield(), hourglass(), shockwave()]
+             shield(), hourglass(), shockwave(), maul()]
     strip = Image.new("RGBA", (len(icons) * SIZE + (len(icons) - 1) * GAP, SIZE), (0, 0, 0, 0))
     for i, icon in enumerate(icons):
         for (x, y), c in outlined(icon).items():

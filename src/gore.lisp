@@ -516,11 +516,13 @@ SCALE; a DRY one leaves no blood."
               (aref p (* 3 i)) (float x 0f0) (aref p (+ 1 (* 3 i))) (float y 0f0) (aref p (+ 2 (* 3 i))) (float z 0f0)
               (aref v (* 3 i)) (float vx 0f0) (aref v (+ 1 (* 3 i))) (float vy 0f0) (aref v (+ 2 (* 3 i))) (float vz 0f0))))))
 
-(defun gib-p (creature amount)
-  "True if CREATURE, killed by a blow of AMOUNT, should be torn apart."
+(defun gib-p (creature amount &optional overkill)
+  "True if CREATURE, killed by a blow of AMOUNT, should be torn apart: its own GIB-OVERKILL, or
+OVERKILL if the blow's needs less (the maul's)."
   (declare (ignore amount))
   (and (gibs creature)
-       (<= (health creature) (- (* (or (gib-overkill creature) *gib-overkill*) (max-health creature))))))
+       (<= (health creature) (- (* (min (or (gib-overkill creature) *gib-overkill*) (or overkill 1.0))
+                                   (max-health creature))))))
 
 (defun burst-gibs (creature from)
   "Tear CREATURE apart: throw its gibs out every way and along the blow from point FROM

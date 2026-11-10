@@ -1,0 +1,2 @@
+
+REFERENCE IMAGE 4 is the rest pose of this maul already redrawn in this style: draw the gauntlets, vambraces, haft, bands, grip and steel head with exactly its pixel size, colours, materials and detail. The pose and composition still come only from REFERENCE IMAGE 1.

@@ -69,6 +69,8 @@ rebuilds, so voices are made once; RELOAD-SOUNDS makes them afresh.")
 (defvar *sound-requests* ()
   "SFX-VOICEs of one-shots asked for and not started yet. The game thread pushes and the
 mixing thread pops, both atomically.")
+(defvar *sound-cuts* ()
+  "SFX-VOICEs of one-shots to silence (CUT-SOUND), pushed and popped as *SOUND-REQUESTS* are.")
 (defvar *sound-error* NIL "The last error in SOUND-FRAME, with its clip if it had one.")
 (defvar *sound-clock* 0.0 "Seconds of real time the sound director has ticked.")
 (macrolet ((def (name doc)
@@ -202,7 +204,7 @@ for SECONDS, even while the game is paused. Run it in the game thread."
   (let ((voices (loop for sfx being the hash-values of *sounds*
                       when (typep sfx 'sfx) append (coerce (sfx-voices sfx) 'list))))
     (clrhash *sounds*)
-    (setf *loop-voice-list* () *sound-requests* ())
+    (setf *loop-voice-list* () *sound-requests* () *sound-cuts* ())
     (free-voices voices)
     (length voices)))
 
@@ -243,6 +245,14 @@ is the one to go. A first-person clip's soonest done."
     (cond (free)
           ((not (sfx-space-p sfx)) best)
           ((< d2 best-d2) best))))
+
+(defun cut-sound (voice)
+  "Silence VOICE, a one-shot PLAY-SOUND returned, if it still plays. Returns NIL, for the
+holder's slot."
+  (when voice
+    (setf (busy-until voice) *sound-clock*)
+    (sb-ext:atomic-push voice (symbol-value '*sound-cuts*)))
+  NIL)
 
 (defun listener-or (at)
   (or at (and *player* (location *player*)) (vec 0 0 0)))
@@ -403,12 +413,21 @@ asked for, and every loop's state."
               while voice
               unless (sfx-freed (voice-sfx voice))
               do (let ((hvoice (sfx-voice-voice voice)))
-                   ;; Still playing (all its voices were busy): from the top.
+                   ;; Still playing (all its voices were busy), or cut and paused there
+                   ;; (CUT-SOUND): from the top.
                    (when (harmony:chain hvoice)
                      (mixed:seek hvoice 0))
+                   (when (harmony:paused-p hvoice)
+                     (setf (harmony:paused-p hvoice) NIL))
                    (connect-voice voice)
                    (setf (mixed:volume hvoice) (voice-volume voice))
                    (place-voice voice)))
+        ;; A cut one stays connected, paused, until it is next played. Not its volume to 0:
+        ;; a voice so silenced stayed silent at full volume after.
+        (loop for voice = (sb-ext:atomic-pop (symbol-value '*sound-cuts*))
+              while voice
+              unless (or (sfx-freed (voice-sfx voice)) (null (harmony:chain (sfx-voice-voice voice))))
+                do (setf (harmony:paused-p (sfx-voice-voice voice)) T))
         (dolist (voice *loop-voice-list*)
           (let ((hvoice (sfx-voice-voice voice))
                 (on (and (voice-held voice)

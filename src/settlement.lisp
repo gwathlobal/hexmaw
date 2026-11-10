@@ -18,7 +18,7 @@
      :crimes (:rule :assault :murder)
      :prices (:heal 0.6 :mana 0.6 :bless 0.8 :goods 1.1 :training 1.2) :bribable NIL)
     (:deepwardens :name "the Deepwardens" :rule :no-drawn-weapon :zones (:market :temple)
-     :rule-text "No blade is drawn in the market or the temple."
+     :rule-text "No weapon is drawn in the market or the temple."
      :crimes (:rule :assault :murder)
      :prices (:heal 1.0 :mana 1.0 :bless 1.0 :goods 1.0 :training 0.7) :bribable NIL)
     (:free-company :name "the Free Company" :rule NIL
