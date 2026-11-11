@@ -50,6 +50,7 @@
                (:file "hands")
                (:file "sword")
                (:file "spear")
+               (:file "maul")
                (:file "inventory")
                (:file "status-icons")
                (:file "menu")

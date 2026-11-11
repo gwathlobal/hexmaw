@@ -1,0 +1,16 @@
+Pixel-art first-person weapon view for a Doom/Hexen-style dungeon game: the player's own two armoured hands holding a two-handed WAR MAUL, seen from the player's eyes. One single frame, not a sprite sheet.
+
+REFERENCE IMAGE 1 is a 3D render of this exact frame. REDRAW IT AS PIXEL ART, KEEPING ITS COMPOSITION EXACTLY: every part stays where it is in the render, at the same size and the same angle, with the same outline. Trace over it. Do not move, turn, resize, re-pose or re-frame anything, do not add or remove anything, and do not change where anything leaves the edge of the canvas. Only the rendering changes: the flat cel shading becomes detailed hand-drawn pixel art.
+
+REFERENCE IMAGES 2 and 3 are the game's other first-person weapons, a spear and a sword. They set the style to match: the pixel size, the dark outline weight, the shading, the colours, polished steel with highlights, brass rivets, leather-and-brass cuffs.
+
+WHAT IS IN THE RENDER
+- The maul's head: a long rectangular block of dark forged steel, its long sides flat and straight, its corners slightly bevelled, bound by two iron straps either side of the haft, on an iron socket. Keep it a straight-edged block, exactly the shape and angle the render shows: never round it, taper it, or add spikes, flanges or a second face.
+- The haft: straight ash wood, dark brown with a faint grain, an iron cap at its butt end, three iron bands under the head, and a wrapped leather grip where the hands hold it. It is rigid and perfectly straight.
+- Two steel gauntlets (articulated finger plates, brass rivets, a leather-and-brass cuff) and steel vambraces, exactly where and how the render has them, each finger where the render puts it. Where the render shows the haft resting on an open palm, keep it so.
+
+STRICT RULES
+- The whole 1536 x 1024 canvas is the player's screen, exactly as in the render.
+- Background: flat pure magenta (#FF00FF) everywhere the render has magenta: no floor, no walls, no gradient, no vignette, no glow, no shadow.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels and no pink or purple glow bleeding into the background.
+- No text, labels, frame borders, grid lines, motion blur or effects.

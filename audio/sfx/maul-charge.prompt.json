@@ -1,0 +1,21 @@
+{
+  "prompt": "Steady straining tension, looping: leather grip and a thick wooden haft creaking under a heavy iron weight held high, a low slow groan of the wood, no breathing, no voice. Retro 1990s first-person fantasy game sound effect, dry, no music.",
+  "prompt_file": "audio/prompts/sfx-maul-charge.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": true,
+  "duration_seconds": 2.0,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794312542,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    2.25,
+    2.25,
+    2.25
+  ]
+}

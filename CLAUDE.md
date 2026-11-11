@@ -985,7 +985,7 @@ real time instead.
   (`enchant-dust`); destroying one gives back `*dust-refund*` (0.5) of that (`refund-dust`). Two tabs
   (`*forge-tab*`, `forge-tab`): **Spells** lists "New spell" and every rune in the bag (`player-runes`,
   `*forge-list-rows*` a page, `forge-page`), **Enchant** the weapons carried (`carried-weapons`: every
-  sword and spear in the bag, each a stack, its sink, and the shield, `:shield`, with a sword;
+  sword, spear and maul in the bag, each a stack, its sink, and the shield, `:shield`, with a sword;
   `weapon-sink-p`, `sink-weapon`, `(setf sink-spell)`; `(forge-select :sword)` from the REPL takes the
   first sword). The forge is on one of them (`*forge-sink*`,
   `forge-select`): a new spell or a plain weapon has a draft to make (`*forge-draft*`, kept per sink in
@@ -1093,7 +1093,8 @@ real time instead.
 - `src/loot.lisp`: found weapons and runes. A run starts with the sword, the fire bolt and heal; the
   rest is loot. Each level's `:loot` (`*run-levels*`, run.lisp; `loot-property`, which takes the
   settlement's own `(:weapons 0 :runes 1)` before the level it borrows the rest from) gives its
-  `:weapons` (level 1 a plain spear, `:first-weapon`) and `:runes`. A weapon is a sword or spear with
+  `:weapons` (level 1 a plain spear, `:first-weapon`) and `:runes`. A weapon is a sword, spear or maul
+  (`*loot-weapons*`, each as likely) with
   the usual stats; only its enchantment varies: `:enchant-chance` (0, 0.5, 0.8) of one costing
   `:enchant-cost` a blow (2-3 on level 2, 3-6 on level 3) with up to `:enchant-effects`
   (`loot-enchantment`). A rune (`make-loot-rune`) is a generated spell made as the forge makes one,
@@ -1109,7 +1110,7 @@ real time instead.
   `loot-pickup` (its `loot-stack`, given as a copy so a reset hands out the same) on a reward spot
   first, from a random state of the level's seed, so a load builds the same items; taken, it goes
   into the bag on the next free key with "Found a sword: Frost Edge, on key 4." Its sprite is
-  `loot-sword`, `loot-spear` or `loot-rune-<look>` by its spell's look (`tools/draw_loot.py
+  `loot-sword`, `loot-spear`, `loot-maul` or `loot-rune-<look>` by its spell's look (`tools/draw_loot.py
   data/sprites/pickups`). An enchanted weapon's pickup has the outline it has in hand: `loot-pickup` is a `rim-glow`
   (boss.lisp), its rim in the enchantment's colour, pulsing as the weapon's in hand (never dimmed). A
   rune's stone shows its look, not its first effect as its icon does. The debug level has
@@ -1120,7 +1121,7 @@ real time instead.
   what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
   stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
   5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, the settlement's coin) 999.
-  Weapons and spells are items too: `:sword` and `:spear` (`:weapon`, what they put in hand), a stack
+  Weapons and spells are items too: `:sword`, `:spear` and `:maul` (`:weapon`, what they put in hand), a stack
   `(:sword 1 enchantment)` (`stack-enchantment`, each weapon its own; `(:sword 1)` is plain), and
   `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
   tag for a spell reference); none of them stack. `give-stack` puts one in the first free cell, bound
@@ -1137,8 +1138,8 @@ real time instead.
   Bag cells mark the key bound to their stack. A run starts with `give-starting-kit` (player.lisp's
   `initialize-instance`, `reset-player`): `*starting-hotbar*`'s items in the first cells, bound to
   keys 1 to 3 (sword, fire bolt, heal), slot `*starting-slot*` (the sword) in hand; the rest is found
-  (`src/loot.lisp`). The debug level starts with `*debug-starting-hotbar*` instead, keys 1 to 5
-  (sword, bolt, spear, tempest, heal), so the recipes below that use keys 3 and 4 work there. The hotbar draws in
+  (`src/loot.lisp`). The debug level starts with `*debug-starting-hotbar*` instead, keys 1 to 6
+  (sword, bolt, spear, tempest, heal, maul), so the recipes below that use keys 3, 4 and 6 work there. The hotbar draws in
   rows of `*hotbar-columns*` (5) over the bars (`hot-position`; in one row of nine the hands covered the
   last), each slot with its key, the one asked for framed in gold, the others' icons dimmed in play, an
   enchanted weapon's border in its spell's colour. A rune's icon is its spell's look's (`stack-icon`:
@@ -1338,12 +1339,16 @@ real time instead.
   vec (positional clips; without AT, at the listener) or unplaced (first-person clips);
   `start-loop` holds a loop's voice, `move-loop` moves it each tick (allocating nothing) and
   `stop-loop` gives it back, returning NIL for the holder's slot: a projectile, circle, vortex,
-  sign or channel keeps its loop in a slot and stops it in its `leave :after`. Clips are
+  sign or channel keeps its loop in a slot and stops it in its `leave :after`. `cut-sound` silences a one-shot
+  `play-sound` returned (the maul's cry, `charge-voice`, cut as its blow comes down). Clips are
   keywords from `data/sfx/index.lisp`; a clip not made yet plays nothing. Each clip keeps
   voices of its own (Trial's sound assets play one copy at a time): `*sfx-voices*` per file,
   taken in turn, the oldest cut short when all are busy, and `*loop-voices*` per loop, made
   once by `add-sounds` (from `setup-scene`) and kept in `*sounds*` across rebuilds;
-  `(reload-sounds)` then a reset picks up re-made files. **The game thread never touches a
+  `(reload-sounds)` then a reset picks up re-made files. Freeing voices (`free-voices`) frees
+  their unpackers too: Harmony keeps a freed voice's for the next voice made, ended and still
+  paused if it was, and a clip swapped in on those (after its paused loop or a cut cry was freed)
+  played nothing until it was swapped in again. **The game thread never touches a
   voice's connection**: `play-sound` pushes a request, and the `sound-director`'s tick hands
   Harmony's mixing thread one function, `sound-frame`, that starts them, moves the listener
   (`*listener-location*`, the player's eye) and the loops, and pauses the loops whenever
@@ -1474,6 +1479,51 @@ real time instead.
   wind-up and not poised, `bash-poise`; a covered knight glances and the player reels back once).
   No enchantment goes with it. The strip: 4 idle frames, the 8 of the thrust, the jolt
   (`*spear-jolt-frame*`), then the sweep's 4 (`*spear-sweep-first*`).
+- `src/maul.lisp`: the maul, two-handed, no shield: the slowest weapon, its blow charged. **The
+  charge**: a press of the left button (`player-maul`, from `player-attack`) pays `*maul-blow-stamina*`
+  (15; with less, nothing happens) and starts `charge-time`;
+  the maul rises for `*maul-min-charge*` (0.4 s, the least charge, whatever the button does), and
+  while `attack-held` (a player slot `player-press` sets and `player-release` clears, so a quick
+  click is a least-charge blow) it winds on to `*maul-full-charge*` (1.35 s from the press) for
+  `*maul-charge-stamina*` (30) a second past the least, about 29 for a full one; with no stamina it
+  stops growing. Full, it trembles between two strip frames (`*maul-tremble-rate*`). While it charges
+  and through the earthshake (`maul-heaving-p`) the player walks at `maul-speed-scale`
+  (`*maul-charge-speed*` 0.6, `*shake-speed*` 0.3), with no run, no jump and no stamina coming back
+  (`update-stamina`). Let go once it is up, `update-maul-charge` (from `update-weapons`) puts the
+  charge, 0 to 1 (`maul-charge`), in `blow-charge` and starts the swing (`player-swing`, so
+  `swing-time` and the swing generics, `*maul-frame-times*`, landing 0.19 s after the release and done 0.4 s later: a quick click
+  takes 1 s in all, a full blow 1.95).
+  **The blow** (`swing-strike` on `:maul`): one creature within `*maul-reach*` (2.2 m) and
+  `*maul-arc*` (0.6 rad); damage, knockback, pain bonus and hit-stop run from the least charge's to
+  the full one's by the charge (`maul-lerp`: 18-24 to 34-44, 8 to 15 m/s, 10 to 60, 0.06 to 0.12 s).
+  Its knockback has **heft** (`push-creature`'s `:heft`, the square root of `knockback-scale`: the
+  knight 0.59, the ogre 0.39; not a boss's, whose cap stands), so it throws things into walls, other
+  bodies, lava, deep water and across ice ("Impacts", `src/creature.lisp`): an imp hit full a metre
+  from a wall takes about 16 more from it. A full blow always flinches (`:force-pain`; a boss only
+  rolls), and on a shield or ward that covers it (`shielded-p`) knocks the guard aside
+  (`knock-guard-aside`): the creature's `reel` (creature.lisp, `*maul-reel-time*` 1.2 s, a boss's
+  `*maul-boss-reel-time*` 0.5) holds its flinch's stagger frame (`creature-hurting-p`), stops it
+  thinking, and makes `shielded-p` false, so a spell reaches its front. Its kills gib from
+  `*maul-gib-overkill*` (0.1; `hurt`'s `:gib-overkill`, `gib-p`), the undead's from any overkill, so a
+  skeleton it kills always shatters and can't be raised. A blow that finds no one living
+  (`swing-miss`, sword.lisp, a generic) pulps a corpse in its reach that `raisable-p` says could be
+  raised (`tear-apart`). The enchantment goes with every blow that lands. **The earthshake**: the right
+  button (`:block`, `player-earthshake`, `*shake-stamina*` 30, none without it, nor while charging or
+  swinging) runs on `bash-time` (`*shake-frame-times*`, landing 0.3 s in, 0.8 s in all):
+  `earthshake-hit` puffs `ogre-dust` round the player (`kick-dust`, ogre.lisp) and reaches every live
+  creature whose feet are within `*shake-reach-height*` (0.4 m) of the player's and its body within
+  `*shake-radius*` (3 m) all round, with no wall between (`shaken-p`): `*shake-damage*` (3-6), a flinch
+  whatever the roll unless poised (a boss rolls with `*shake-boss-pain-bonus*`), and a shove out at
+  `*shake-knockback*` (5 m/s, with heft). No shield stops it, and nothing off the floor feels it (a
+  hovering flyer, a leap or pounce in the air). It shares the bash's poise (`bash-poise`, set to
+  `*shake-poise-time*`, 2 s), so the shake, a bash and a sweep never flinch one creature twice running.
+  The strip (`data/sprites/maul/maul`): 4 idle frames, the charge's 3 (`*maul-charge-first*`: raised,
+  wound up, wound up a pixel aside), the blow's 4 (`*maul-swing-first*`) and the earthshake's 5
+  (`*maul-shake-first*`: lifted, coming over, the slam, held, recovery), placed by its aim, `*maul-aim*` (the impact's head on the view's middle).
+  The tooltip's weapon lines are `weapon-lines` (inventory.lisp), a generic on the weapon's keyword.
+  To try it on the debug level: `(select-weapon *player* :6)`, then `(setf (attack-held *player*) t)
+  (player-attack *player*)`, and `(setf (attack-held *player*) NIL)` 1.35 s later for a full blow;
+  `(player-press *player* :mouse-right)` shakes the floor.
 - `src/player.lisp`: first-person controller and box collision. Walking backward keeps
   `*backpedal-scale*` (0.75) of the speed. Mana doesn't regenerate:
   only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
@@ -1818,7 +1868,7 @@ doorway, the far bank of a river): one stranded there guards its part of the lev
 `check-reachable` warns. It guards a hoard too (`place-hoards`, loot.lisp): `build-level` passes
 `check-reachable`'s stranded ogres (`hoard-guard-p`: elites too, not bosses or the summoned) to
 `place-pickups`, which, last of all the pickups so the others keep their places in `*pickups*`, lays
-a found item that is never plain (an enchanted sword or spear, or a generated rune;
+a found item that is never plain (an enchanted sword, spear or maul, or a generated rune;
 `make-hoard-loot`) and a pile of `*hoard-gold*` coins on the floor `*hoard-behind*` (1.5 m) behind
 its spawn point, by its facing then, `*hoard-spread*` apart (`hoard-points`: nearer or turned toward
 its side where a wall is in the way, never in front, on the spawn point at last; floor the player
@@ -2287,6 +2337,53 @@ The follow-through is moved right so its butt end stays near the view's middle, 
 spearhead past the strip's corner: `--side-margin 80` keeps 80 art pixels past the corner
 instead of the bottom's 6, the index says so (`:overhang`), and `layout-sword` sits the strip that
 far past, so the screen's edge cuts the spearhead, never the strip's.
+
+The maul (`art/maul/`) is a 3D model built by script, its renders redrawn as pixel art: image
+generators couldn't draw its head the right way round (it lies in the plane of the blow, so on
+screen it stands up and down, broad side to the player, and strikes end first; asked for that,
+they drew it broadside, end-on, or carried on along the haft like a mace; the tries are in the art
+attic). `tools/render_maul.py` is the model (an ash haft, grip and bands, a 38 cm forged-steel
+head, the sword's gauntlet in both hands, the left mirrored) and its eight poses in camera space
+(`POSES`: idle, raise, charged, strike, impact, recover, shake-lift, shake-swing, shake-slam), each the head's
+place and the haft's way, the head's axis `cross(+X, haft)`, and each hand's grip and elbow, the
+way the back of the hand faces (`right_back`, `left_back`: outward, the right hand's to the right
+and the left's to the left, the fingers round the inside of the haft and under it), a roll of hand
+and forearm together about the haft (`right_roll`), and `right_open` for an open hand, the haft
+resting on the palm and the fingers closed only to `OPEN_CURL`, about its middle as the player sees
+it (the rest pose's far hand: a fist there wrapped the whole haft, and turning only the hand bent
+the wrist into a hook). The wrist never bends: hand and forearm are one line. A forearm running back
+toward its elbow turns its hand however that runs, and where the haft points away from low hands
+that put the hand under the haft, palm up; a hand whose back then faces more than 60° from its
+BACK (`BACK_TURN`) is turned to it, its forearm running back nearly along the haft instead. The
+left hand grips higher there (`CLOSE_GRIP`), or only its cuff showed at the screen's edge. The
+gauntlets are render_sword's with a thumb of their own (`thumb_parts`) hugging the thicker grip, as far
+as `THUMB_REACH` round it, about the haft's middle as the player sees it (further, it crossed it).
+It previews them in seconds with render_sword's rasterizer. A head stands upright only with the haft
+running nearly level, forward from low hands (perspective makes it rise on screen); tipped up, the
+head tips back with it. A head driven into the floor at the player's feet is below the screen, so
+the slam shows the hands and haft only, and the dust shows the impact. Coming down in front, the
+haft points at the camera and shows only its end cap, so the frame between the lift and the slam
+(shake-swing) swings the head down and out to the right, the haft's length showing. `tools/blender_maul.py`
+builds `art/maul/maul.blend` from it (a `Maul` empty and a grip per hand, keyed per pose and constant
+between, each hand with both fists and which shows keyed too: pose them by hand there) and renders it toon-shaded with blender_sword's materials into
+`art/maul/renders/frame_01.png` .. `09`, the whole 1536 × 1024 screen each. The image generator
+then redraws each in the spear's and sword's style (`art/prompts/maul-restyle.txt`, the render as
+the first reference, the spear's idle and the sword's as the style), into `art/maul/restyle/<pose>-N.png`:
+traced over a render, it keeps the composition to a pixel or two. Handed a whole restyled frame as a
+fourth reference it copied that frame's pose instead, so the gauntlets' look comes from a close-up cut
+from the recover frame (`restyle/recover-detail.png`, with `maul-restyle-detail.txt`), which it can't
+copy as a pose, and on the slam it drew the butt end's cap as a
+second head until told the head is out of sight (`maul-restyle-butt.txt`). `art/maul/maul-frames.txt`
+places the chosen takes as the spear's pictures are, at its scale, 14 art pixels low so what runs off a
+picture's top is cut above the screen's (the idle 50, so at rest the hands and head hide less of the view); `*maul-aim*` is measured from the impact frame's head.
+
+```bash
+tools/render_maul.py /tmp/maul-preview --pixel 4
+tools/blender -b --python tools/blender_maul.py -- build art/maul/maul.blend --force
+tools/blender -b --python tools/blender_maul.py -- render art/maul/maul.blend art/maul/renders
+tools/gen_image.py art/maul/restyle/strike.png --prompt-file art/prompts/maul-restyle.txt --ref art/maul/renders/frame_04.png --ref art/spear/idle-2.png --ref art/sword-shield/ref-sword-idle.png --size 1536x1024 -n 2
+tools/make_shield.py --corner right art/maul/maul-frames.txt data/sprites/maul/maul
+```
 
 Generators can't keep a motion sequence across a grid of first-person poses, and they draw
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
@@ -3184,7 +3281,8 @@ down; swim into a ledge at the surface to climb out), 1 to 9 for what the hotbar
 start 1 the sword, 2 the fire bolt, 3 heal; whatever is found goes on the next free key), the mouse wheel to change the
 quickslot's potion, left click to attack (swing, thrust, or cast the spell in hand), right button
 held to raise the shield (a left click while it's up bashes) or, with the spear, pressed to sweep
-with the haft (the spear's thrust counters a leap or dive it meets), Q to drink from the
+with the haft (the spear's thrust counters a leap or dive it meets) or, with the maul, pressed to
+shake the floor (its left button held charges the blow, let go strikes), Q to drink from the
 quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, or a
 potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
 quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E to talk to the
@@ -3245,7 +3343,7 @@ crimes count, prices and whether its guards take bribes:
 | Faction | Rule | Crimes | Cheap | Bribable |
 | --- | --- | --- | --- | --- |
 | `:ashen-temple` | no spell cast in town (`player-cast`) | rule, assault, murder | healing, mana | no |
-| `:deepwardens` | no sword or spear drawn in the `market` and `temple` zones (`check-drawn-blade`) | rule, assault, murder | training | no |
+| `:deepwardens` | no sword, spear or maul drawn in the `market` and `temple` zones (`check-drawn-blade`) | rule, assault, murder | training | no |
 | `:free-company` | none | murder | goods (and a random extra in stock) | yes |
 
 The player learns it on arriving: the level banner names the town and who holds it ("Level 2 of 4:

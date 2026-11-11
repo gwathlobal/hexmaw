@@ -22,6 +22,7 @@
     (:relic :name "Reliquary" :icon 4 :stack 1 :about "Lost in the undercroft: the quest-giver wants it back")
     (:sword :name "Sword" :weapon :sword :stack 1)
     (:spear :name "Spear" :weapon :spear :stack 1)
+    (:maul :name "Maul" :weapon :maul :stack 1)
     (:rune :name "Rune" :stack 1))
   "What each kind of item is: its name, its frame in the icon strip, what it restores, and how
 many fit in one stack. A pickup that gives one (*PICKUP-KINDS*) counts its :AMOUNT in a level's
@@ -468,6 +469,25 @@ slot's key."))
                     (mapcan #'effect-lines (spell-effects spell))))
       (list (format NIL "~a: plain (enchant it at an altar)" label))))
 
+(defgeneric weapon-lines (weapon)
+  (:documentation "What WEAPON's tooltip says it does, as lines: its blow, then its other actions.")
+  (:method (weapon)
+    (list (format NIL "Damage ~a, reach ~,1f m" (range-text (swing-damage weapon)) (swing-reach weapon))
+          (format NIL "~,2f s a swing" (reduce #'+ (swing-frame-times weapon)))
+          "Right button: shield up, click to bash"))
+  (:method ((weapon (eql :spear)))
+    (list (format NIL "Damage ~a, reach ~,1f m" (range-text (swing-damage weapon)) (swing-reach weapon))
+          (format NIL "~,2f s a thrust" (reduce #'+ (swing-frame-times weapon)))
+          "A thrust counters a leap or dive"
+          "Right button: sweep, shove all near"))
+  (:method ((weapon (eql :maul)))
+    (list (format NIL "Damage ~a to ~a, reach ~,1f m" (range-text *maul-damage*) (range-text *maul-full-damage*)
+                  *maul-reach*)
+          (format NIL "A blow ~d SP; hold to charge it" (round *maul-blow-stamina*))
+          "A full charge breaks a shield's guard"
+          (format NIL "Right button: earthshake, ~d SP" (round *shake-stamina*))
+          "  staggers all standing round you")))
+
 (defun stack-details (player stack)
   "STACK in detail, as lines for its tooltip: its name, then what it does."
   (let ((kind (first stack)))
@@ -477,14 +497,8 @@ slot's key."))
           ((item-property kind :weapon)
            (let ((weapon (item-property kind :weapon)))
              (append
-              (list (item-property kind :name)
-                    (format NIL "Damage ~a, reach ~,1f m" (range-text (swing-damage weapon)) (swing-reach weapon))
-                    (format NIL "~,2f s a ~a" (reduce #'+ (swing-frame-times weapon))
-                            (if (eq weapon :spear) "thrust" "swing")))
-              (if (eq weapon :spear)
-                  (list "A thrust counters a leap or dive"
-                        "Right button: sweep, shove all near")
-                  (list "Right button: shield up, click to bash"))
+              (list (item-property kind :name))
+              (weapon-lines weapon)
               (enchantment-lines "Enchanted" (stack-enchantment stack))
               (when (eq weapon :sword)
                 (enchantment-lines "Shield" (getf (enchantments player) :shield))))))

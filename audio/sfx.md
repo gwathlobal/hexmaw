@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-141 clips; tier 1: 85 clips, 260 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 408 s, about 4,082 credits for everything.
+149 clips; tier 1: 93 clips, 281 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 429 s, about 4,290 credits for everything.
 
 ## Player: weapons and shield
 
@@ -40,6 +40,14 @@ First-person, so stereo is fine (`:speech`).
 | draw-sword | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:sword` |
 | draw-spear | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:spear` |
 | draw-magic | 1 | 1P | 0.7 | 3 | `(setf (weapon player))` sword.lisp:270, `:hands` and `:tempest` |
+| draw-maul | 1 | 1P | 0.7 | 2 | `(setf (weapon player))` sword.lisp, `:maul` |
+| maul-charge | 1 | 1P | 1.5 | 3 | `update-maul-charge` maul.lisp, once the button has been held `*maul-cry-delay*` (0.2 s); cut off (`cut-sound`) when the blow comes down |
+| maul-full | 1 | 1P | 1.0 | 3 | `update-maul-charge` maul.lisp, the charge reaching full |
+| maul-swing | 1 | 1P | 0.6 | 3 | `player-swing` sword.lisp, `:maul` (the release), and `player-earthshake` maul.lisp |
+| maul-hit | 1 | P | 0.6 | 3 | `swing-strike :maul` maul.lisp, a target |
+| maul-crush | 1 | P | 0.8 | 3 | `swing-strike :maul` and `swing-miss :maul` maul.lisp, a kill torn apart or a corpse pulped |
+| maul-guard-break | 1 | P | 0.8 | 3 | `knock-guard-aside` maul.lisp, a full blow on a shield or ward |
+| earthshake | 1 | P | 1.2 | 3 | `earthshake-hit` maul.lisp |
 
 ## Player: spells
 

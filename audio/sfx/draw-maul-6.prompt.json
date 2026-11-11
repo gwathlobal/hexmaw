@@ -1,0 +1,21 @@
+{
+  "prompt": "A heavy two-handed war maul brought up into both hands: a hollow knock of a thick wooden haft caught in gauntlets and a short, heavier iron rattle of its head. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-draw-maul.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 0.7,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794340614,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.68,
+    0.68,
+    0.68
+  ]
+}

@@ -9,7 +9,8 @@ Here is what was made how.
   The scripts in `tools/` then cut, scale and palette them into the strips in `data/sprites/` and
   `data/textures/`. Some sprites are drawn by code instead: the blood, the glyph tablets, the item,
   weapon and status icons, the gold, and the spell signs and sigils. The sword's poses were
-  rendered from a Blender model built by script.
+  rendered from a Blender model built by script, and the maul in hand is such a model's renders,
+  each redrawn as pixel art by the image generator.
 - **Sound effects.** Generated with ElevenLabs on a paid plan (`tools/gen_sfx.py`), then trimmed
   and levelled by `tools/make_sfx.py`.
 - **Music.** Seven tracks were generated with ElevenLabs on a paid plan (`tools/gen_music.py`)

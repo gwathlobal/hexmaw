@@ -287,6 +287,9 @@ def main():
         if clip not in table:
             sys.exit(f"{clip}: not in {TABLE}")
     for clip, (takes, *_) in picks.items():
+        # Clips named: only theirs, since a worktree has only the takes it made.
+        if args.clips and clip not in args.clips:
+            continue
         for n in takes:
             if not take_path(clip, n):
                 sys.exit(f"{clip}: no take {n} in {TAKES}")

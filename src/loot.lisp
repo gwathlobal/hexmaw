@@ -2,7 +2,7 @@
 
 ;;; Loot: the weapons and runes a generated level hands out, for the player to find. A run starts
 ;;; with only the sword and shield, the fire bolt and heal (*STARTING-HOTBAR*, player.lisp); the
-;;; rest is found. A found weapon is a sword or a spear with the stats every sword or spear has:
+;;; rest is found. A found weapon is a sword, spear or maul with the stats every one of its kind has:
 ;;; it differs only in its enchantment (its stack's, STACK-ENCHANTMENT), plain on the first level,
 ;;; more often enchanted and more strongly the deeper it lies. A found rune is a ready spell: a
 ;;; generated one, made as the spellforge would make it (a FORGE-DRAFT, forge.lisp), so it costs
@@ -18,7 +18,7 @@
   "Spells the forge can't make that a level may hand out as a rune instead of a generated one,
 each once a run at most (AUTHORED-LOOT).")
 
-(defparameter *loot-weapons* '(:sword :spear) "The weapons a level may hand out, as items.")
+(defparameter *loot-weapons* '(:sword :spear :maul) "The weapons a level may hand out, as items.")
 
 (defvar *loot-override* NIL "A :LOOT that LOOT-PROPERTY answers from instead, for the debug level's.")
 
@@ -127,7 +127,7 @@ cost in its :RUNE-MANA."
 ;;; Items.
 
 (defun make-loot-weapon (random &optional kind)
-  "A weapon of this level, a stack (KIND 1 ENCHANTMENT): KIND, or a sword or spear at random,
+  "A weapon of this level, a stack (KIND 1 ENCHANTMENT): KIND, or one of *LOOT-WEAPONS* at random,
 enchanted with the level's :ENCHANT-CHANCE."
   (let* ((kind (or kind (nth (random (length *loot-weapons*) random) *loot-weapons*)))
          (stack (list kind 1 NIL))
@@ -179,6 +179,7 @@ one, first) and :RUNES, the authored spells it has taking runes' places."
 
 (define-fx-animation loot-sword "sprites/pickups/loot-sword" :fps 4 :loop T :size (/ 48 64.0))
 (define-fx-animation loot-spear "sprites/pickups/loot-spear" :fps 4 :loop T :size (/ 80 64.0))
+(define-fx-animation loot-maul "sprites/pickups/loot-maul" :fps 4 :loop T :size (/ 58 64.0))
 (define-fx-animation loot-rune-fire "sprites/pickups/loot-rune-fire" :fps 5 :loop T :size (/ 22 64.0))
 (define-fx-animation loot-rune-frost "sprites/pickups/loot-rune-frost" :fps 5 :loop T :size (/ 22 64.0))
 (define-fx-animation loot-rune-shock "sprites/pickups/loot-rune-shock" :fps 5 :loop T :size (/ 22 64.0))
@@ -214,7 +215,8 @@ outline glows in its enchantment's colour, pulsing, as it does in hand and in th
       (getf *loot-rune-animations* (spell-look (stack-spell stack)) 'loot-rune-fire)
       (ecase (item-property (first stack) :weapon)
         (:sword 'loot-sword)
-        (:spear 'loot-spear))))
+        (:spear 'loot-spear)
+        (:maul 'loot-maul))))
 
 (defun add-loot (container stack x y z &key (phase 0.0))
   "A pickup of STACK standing on the floor at X Y Z."

@@ -77,8 +77,8 @@ sill, 0.15 m under, or a waterfall's lip. Deeper, the player swims over it.")
 place, from 1: a weapon's item kind, or a spell's name, which the player carries as a rune. The
 rest is found in the dungeon (loot.lisp). Every spell here must be one the spellforge makes
 (CHECK-STARTING-SPELLS, forge.lisp).")
-(defparameter *debug-starting-hotbar* '(:sword bolt :spear tempest heal)
-  "What the debug level starts with instead: the spear and the tornado too, to try them.")
+(defparameter *debug-starting-hotbar* '(:sword bolt :spear tempest heal :maul)
+  "What the debug level starts with instead: the spear, the tornado and the maul too, to try them.")
 (defparameter *starting-slot* 0 "The hotbar slot, from 0, a run starts with in hand: the sword.")
 (defparameter *footstep-stride* 2.0 "Metres walked on foot from one footstep to the next.")
 (defparameter *footstep-volume* 0.5)
@@ -144,7 +144,7 @@ INVENTORY (EQ), or NIL (inventory.lisp): what keys 1 to 9 take in hand. Saved as
                  :documentation "A plist from :SHIELD to the spell the shield's bash carries
 (ENCHANT-STRIKE, sword.lisp). A sword's or spear's is its own stack's (STACK-ENCHANTMENT).")
    (weapon :initform NIL :accessor weapon
-           :documentation "Weapon on screen (sword.lisp): :SWORD, :SPEAR, :HANDS or NIL.")
+           :documentation "Weapon on screen (sword.lisp): :SWORD, :SPEAR, :MAUL, :HANDS or NIL.")
    (wanted-weapon :initform NIL :accessor wanted-weapon
                   :documentation "Weapon asked for, from the wanted hotbar slot (SYNC-WANTED);
 differs from WEAPON while switching.")
@@ -154,6 +154,13 @@ differs from WEAPON while switching.")
                :documentation "Seconds since the sword swing began, or NIL when not swinging.")
    (swing-pending :initform NIL :accessor swing-pending
                   :documentation "True until the swing's blow has landed.")
+   (attack-held :initform NIL :accessor attack-held
+                :documentation "True while the attack button (the left one) is down: the maul charges.")
+   (charge-time :initform NIL :accessor charge-time
+                :documentation "Seconds the maul's blow has been charging (maul.lisp), or NIL.")
+   (charge-voice :initform NIL :accessor charge-voice :documentation "The maul's cry while it charges, or NIL (maul.lisp).")
+   (blow-charge :initform 0.0 :accessor blow-charge
+                :documentation "The maul's charge, 0 to 1, as its blow was released.")
    (block-held :initform NIL :accessor block-held
                :documentation "True while the block button (the right one) is down.")
    (block-raise :initform 0.0 :accessor block-raise
@@ -275,17 +282,22 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
         (screenshot)
         (when (eq *game-state* :playing)
           (case action
-            (:attack (player-attack player))
-            ;; Held, the shield rises; with the spear, a press sweeps with the haft.
+            (:attack (setf (attack-held player) T)
+             (player-attack player))
+            ;; Held, the shield rises; with the spear, a press sweeps with the haft, and with the
+            ;; maul it shakes the floor.
             (:block (setf (block-held player) T)
-             (when (eq (weapon player) :spear)
-               (player-sweep player)))
+             (case (weapon player)
+               (:spear (player-sweep player))
+               (:maul (player-earthshake player))))
             ;; Talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
             (:interact (player-interact player))
             (T (let ((slot (position action *hotbar-slots*)))
                  (when slot (select-slot player slot)))))))))
 
 (defun player-release (player input)
+  (when (member input (action-inputs :attack))
+    (setf (attack-held player) NIL))
   (when (member input (action-inputs :block))
     (setf (block-held player) NIL)))
 
@@ -554,7 +566,9 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
           (play-sound :winded))
         (setf (stamina player) 0.0
               (winded player) T))
-      (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt)))))
+      ;; Nor does it come back while the maul is charged or shakes the floor (maul.lisp).
+      (unless (maul-heaving-p player)
+        (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt))))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
     (setf (winded player) NIL)))
 
@@ -615,13 +629,16 @@ and not the last step of the stair.")
                      (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
-         (running (and (held-p :run) (< 0.0 wlen) (not crouching) (= 0.0 raise)
+         (heaving (maul-heaving-p player))
+         (running (and (held-p :run) (< 0.0 wlen) (not crouching) (= 0.0 raise) (not heaving)
                        (not (winded player)) (not (whirl player))))
-         ;; The raised shield slows the player to a walk and below.
+         ;; The raised shield slows the player to a walk and below, and so does the maul's charge
+         ;; and its earthshake (maul.lisp).
          (speed (* (cond (crouching *crouch-speed*)
                          (running *run-speed*)
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
+                   (maul-speed-scale player)
                    (if (< iz 0.0) *backpedal-scale* 1.0)
                    (if kind (liquid-property kind :speed) 1.0)
                    (slow-factor player))))
@@ -750,7 +767,7 @@ at SPEED, out of liquid KIND if any."
                (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
              (incf (vx vel) dvx)
              (incf (vz vel) dvz))))
-    (when (and (grounded player) (held-p :jump) (not crouching)
+    (when (and (grounded player) (held-p :jump) (not crouching) (not (maul-heaving-p player))
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
       (play-sound :jump)

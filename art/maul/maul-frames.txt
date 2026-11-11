@@ -1,0 +1,40 @@
+; The maul's strip, for tools/make_shield.py --corner right:
+;   SOURCE SCALE SX SY X Y
+; Every picture is a render of the Blender model (art/maul/maul.blend, built by
+; tools/blender_maul.py from tools/render_maul.py; renders/frame_NN.png) redrawn as pixel art by
+; the image generator, which keeps its composition (restyle/<pose>-N.png, from
+; art/prompts/maul-restyle.txt with the render as the first reference, and but for recover,
+; shake-swing and shake-slam a close-up of recover's gauntlets, restyle/recover-detail.png,
+; with maul-restyle-detail.txt), the whole screen,
+; placed as the spear's are (art/spear/spear-frames.txt), at its scale: by its bottom-right
+; corner (1536, 1024), 8 art pixels right of the strip's screen corner and 14 below it, so the
+; haft and head that run off the top of the charged and lifted pictures are cut above the
+; screen's top. Nothing reaches a picture's left or right edge (both forearms leave through the
+; bottom), so the game places the strip by its aim (*MAUL-AIM*, the impact's head on the view's
+; middle) and the blow comes down where the player looks.
+
+; Idle: the rest pose, breathing a pixel up and down, sunk 36 art pixels lower than the other
+; frames so the hands and head hide less of the view.
+restyle/idle-1.png 0.254 1536 1024 -8 -50
+restyle/idle-1.png 0.254 1536 1024 -8 -49
+restyle/idle-1.png 0.254 1536 1024 -8 -48
+restyle/idle-1.png 0.254 1536 1024 -8 -49
+
+; The charge: raised, wound up, and wound up a pixel aside (the full charge trembles between them).
+restyle/raise-2.png 0.254 1536 1024 -8 -14
+restyle/charged-1.png 0.254 1536 1024 -8 -14
+restyle/charged-1.png 0.254 1536 1024 -7 -15
+
+; The blow, once released: falling, the impact, the impact a little lower, recovery.
+restyle/strike-1.png 0.254 1536 1024 -8 -14
+restyle/impact-2.png 0.254 1536 1024 -8 -14
+restyle/impact-2.png 0.254 1536 1024 -8 -17
+restyle/recover-1.png 0.254 1536 1024 -8 -14
+
+; The earthshake: lifted, coming over (the head swinging down at the right), the slam (the
+; head at the player's feet, below the screen), held lower, recovery.
+restyle/shake-lift-1.png 0.254 1536 1024 -8 -14
+restyle/shake-swing-1.png 0.254 1536 1024 -8 -14
+restyle/shake-slam-3.png 0.254 1536 1024 -8 -14
+restyle/shake-slam-3.png 0.254 1536 1024 -8 -17
+restyle/recover-1.png 0.254 1536 1024 -8 -18

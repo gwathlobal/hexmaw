@@ -583,6 +583,9 @@ victory screens share."
         ;; No cast in progress, or its bolt would leave at the start of the next game.
         (cast-time player) NIL
         (pending-spell player) NIL
+        ;; Nor a maul's charge (maul.lisp).
+        (charge-time player) NIL
+        (attack-held player) NIL
         (statuses player) ()
         (known-effects player) (copy-list *starting-effects*)
         (wanted-slot player) *starting-slot*

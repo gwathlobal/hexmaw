@@ -94,3 +94,11 @@ rift-cast 4
 rift-flight 3
 rift-impact 6
 rift-blink 14 start=0.42
+draw-maul 6
+earthshake 6 gain=10
+maul-crush 6
+maul-hit 6
+maul-swing 5
+maul-charge 17
+maul-full 6
+maul-guard-break 6
