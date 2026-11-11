@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The harpy dives at creatures too.** Its dive aims at its target's head (`strike-height`, or a
+  shorter target's chest, `aim-height`) and its talons strike through `strike-target`.
 - **The imp and the ogre fight creatures as they fight the player.** The leap (`plan-leap`,
   `try-leap`) aims at the leaper's target, so an imp pounces and an ogre leaps at a guard, and an
   ogre's quake shakes it as it does anyone; the claw, the pounce's claw and the slam go through
