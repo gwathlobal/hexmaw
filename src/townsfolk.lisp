@@ -150,6 +150,12 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
 
 (defun place-npc (role at yaw container)
   "A townsperson of ROLE standing at AT facing YAW, from a blueprint's npc action (PLACE-BLOCK)."
+  (let ((npc (make-npc role at yaw)))
+    (when npc
+      (spawn-creature npc container))))
+
+(defun make-npc (role at yaw)
+  "A townsperson of ROLE standing at AT facing YAW, or NIL for a role there is none of."
   (let ((entry (assoc role *roles* :test #'string-equal)))
     (if (null entry)
         (v:warn :hexmaw "No townsfolk role ~s; npc ignored." role)
@@ -159,7 +165,7 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
                  (atlas (if set (read-atlas (getf set :atlas)) (townsfolk-atlas sprite)))
                  (names (rest (or (assoc sprite *townsfolk-names* :test #'equal) (assoc class *townsfolk-names*))))
                  (greetings (rest (assoc class *townsfolk-greetings*))))
-            (spawn-creature (apply #'make-instance class
+            (apply #'make-instance class
                                    :role (string-downcase role)
                                    :location at :facing yaw
                                    :texture (// 'hexmaw (if set
@@ -172,8 +178,7 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
                                    :greeting (nth (random (length greetings) *block-random*) greetings)
                                    (when set
                                      (list :walk-animation (getf set :walk) :hurt-animation (getf set :hurt)
-                                           :death-animation (getf set :death) :attack-animation (getf set :attack))))
-                            container))))))
+                                           :death-animation (getf set :death) :attack-animation (getf set :attack)))))))))
 
 (defun townsfolk-title (townsfolk)
   "What the HUD and the dialogue call TOWNSFOLK: its name and, for one with a name, its role."

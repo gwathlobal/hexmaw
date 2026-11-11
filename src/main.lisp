@@ -122,6 +122,9 @@ RGBA-ICON would put them. An icon that won't load only logs."
   (preload-riftwalker scene)
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
+  ;; And on the test level the guards STAGE-FIGHT (level.lisp) sets against monsters.
+  (when (eq *level* :test)
+    (preload (make-npc "guard" (vec 0 0 0) 0.0) scene))
   ;; And the dust an ogre kicks up.
   (preload (make-instance 'upright-fx :animation (find-fx-animation 'ogre-dust)) scene)
   ;; And the loot imps carry off and drop.

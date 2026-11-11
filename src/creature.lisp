@@ -1073,9 +1073,13 @@ watch (which goes by PROVOKED), fight them.")
         (:player NIL)
         (T (and *player* (<= (faction-reputation *player* side) *hostile-reputation*)))))))
 
+(defvar *spectating* NIL
+  "Debug: true while nothing is hostile to the player, to watch fights (STAGE-FIGHT, level.lisp).")
+
 (defun hostile-p (a b)
   "True if A and B, actors both alive, fight each other."
   (and a b (not (eq a b)) (target-live-p a) (target-live-p b)
+       (not (and *spectating* (or (typep a 'player) (typep b 'player))))
        (cond ((typep b 'creature)
               (if (typep a 'creature)
                   (or (eq (grudge a) b) (eq (grudge b) a)
