@@ -433,8 +433,6 @@ shield; or throw a pull or a swap at one in range. True if it started one."
                                             (T :swap)))
             T)))))
 
-(defmethod targets-creatures-p ((riftwalker riftwalker)) T)
-
 (defmethod release-attack ((riftwalker riftwalker))
   (let ((ability (current-ability riftwalker)))
     (case (ability-name ability)

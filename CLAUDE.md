@@ -1653,6 +1653,46 @@ level's 3 m corridor, two attack side by side and three stand 2 to 3.5 m back. O
 runs of five imps hunting a strafing player, contacts between imps fell from about 45 to
 11.
 
+### Targets and sides
+
+A creature hunts a **target**, the player or any other actor, and everything below that says "the
+player" means its target: attack slots, flanks, lunges, retreats and every monster's specials (the
+imp's pounce, the ogre's leap, the harpy's dive, the necromancer's circle and skulls, the wraith's
+sign and tornado, the riftwalker's rifts, a boss's powers) aim at it, so an ogre leaps at a guard as
+at the player. `hunt-target` is the creature's `quarry`, else the player when it is hostile to them,
+so off the settlement it is always the player. What a hunt asks of a target is a small protocol
+with a method for the player (player.lisp) and one for a creature (creature.lisp): the body's
+`body-feet`, `body-radius` and `body-height`, and `aim-height` (the chest), `target-facing`,
+`target-live-p`, `target-guarding-p` (a raised shield: only the player's, so flanking is theirs),
+`target-swimming-p`, `strike-target` (the player's `hurt-player`, with the shield, block, guard
+break, shove and lift; a creature's `hurt` and a shove, `*creature-blow-shove*`) and `shove-target`.
+The helpers read `hunt-target`: `target-within-p`, `target-angle`, `target-distance`, `face-target`,
+`target-bearing`, `sees-target-p`. Spells, circles, quakes and rifts strike any actor already; a
+homing projectile follows its `homing-target`, what its caster hunted as it cast. What stays the
+player's: the shield, block, bash and guard break, theft from the bag (an imp steals only from the
+player), the HUD, the spear's counter, the arena's trigger and the watch's crimes.
+
+**Sides.** `hostile-p a b` says who fights whom, from each actor's `allegiance`: `:player`,
+`:monsters`, or a faction (the settlement's townsfolk); a summoned creature (a raised skeleton, a
+boss's summons) is on its `summoner`'s side. Monsters are hostile to every other side, townsfolk to
+the player only while `provoked`, any other faction's people to the player at standing
+`*hostile-reputation*` (-50) or under, and none of a side to another of it, unless one bears the
+other a **grudge**: three blows (`*grudge-strikes*`, `hurt` only, not burn ticks) within
+`*grudge-window*` (12 s) from a creature of another kind (`same-kind-p`: an elite or boss is of its
+kind) turn it on that one (`note-grudge`), so a stray ogre landing doesn't set the level fighting.
+`*spectating*` (debug) makes nothing hostile to the player, to watch a fight. `notice-targets` every
+`*look-interval*` keeps what it hunts while it still sees it, else takes the nearest hostile actor it
+sees (`look-for-target`; off the settlement only the player is ever a candidate), and gives up one
+dead, at peace with it or out of its reach (`keeps-target-p`: a townsperson goes no further than
+`*town-leash*`, 20 m, from its post). Struck by a hostile actor, a creature turns on it unless
+what it hunts is in its reach (`harmed`). Attack spots are claimed round each hunter's own target,
+among the hunters of that target; a new target starts its spots afresh (`set-target`). A creature
+`sent` at its quarry (a raid) keeps after it unseen and walks up to `*sent-max-walk*` (60 m). A blow
+between two creatures hit-stops only within `*hit-stop-reach*` (10 m) of the player (`felt-hit-p`).
+`(stage-fight a b)` (level.lisp) sets two fighting on the test level, a class, a townsfolk role
+(`"guard"`, preloaded there) or a creature each; a class takes a creature of it the level has, so
+set `*debug-level-monsters*` to the kinds wanted first.
+
 A creature with `attack-damage` also hunts (`think`). It notices the player in front of it
 within `*sight-range*` with nothing solid between them, or anywhere within `*hearing-range*`,
 and whenever it's hit; it stays alert for `*alert-time*` after the last time. While alert it
@@ -3213,7 +3253,7 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
   0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
 - asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
-  `*sight-range*` and `*hearing-range*` in `sees-player-p`, `:alert` the hunt's `alert-time`,
+  `*sight-range*` and `*hearing-range*` in `sees-target-p`, `:alert` the hunt's `alert-time`,
   `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
   abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
 
@@ -3428,23 +3468,20 @@ from 3, a murder, a refusal or `*fine-time*` unpaid, every guard turns on the pl
 The last guard dying sacks the town (`sack-town`): by the player, `*sack-reputation*` off and the
 trainer fights; by monsters, nothing worse.
 
-**Fighting a foe** (creature.lisp): a creature with a `foe` (a creature) and not hunting the player
-walks to it and attacks it with its own blow or spell (`fight-foe`; `release-attack` and
-`face-attack-target` have `:around` methods, and a foe attack never lunges). A monster struck by
-one of the townsfolk takes it as its foe, and a townsperson who can fight takes the monster that
-struck it. The `settlement-director` (on every level, for the prompt; the rest only in the
-settlement, at `*director-step*`) has free guards take on monsters up to something in town
-(`guards-watch`), and while besieged sends 2 or 3 of the wing's nearest `*raid-classes*` at the
-guards every `*raid-interval*` (`start-raid`, `run-siege`; `raids-held` counts the ones beaten off,
+**Fighting in town**: monsters and townsfolk fight each other with the whole hunt ("Targets and
+sides" under "Creature movement"): a monster notices any townsperson on sight, armed or not, and a
+guard or the trainer any monster within `*town-leash*` of its post. The `settlement-director` (on
+every level, for the prompt; the rest only in the settlement, at `*director-step*`) while besieged
+sends 2 or 3 of the wing's nearest `*raid-classes*` at the guards every `*raid-interval*`
+(`start-raid`, `sent` at the nearest guard; `run-siege`; `raids-held` counts the ones beaten off,
 whoever killed the raiders). Once the wing has no raiders left (`raid-pool` empty with no raid on:
 the player cleared it, or the raids used it up) the siege is broken for good (`siege-broken-p`,
 "The undercroft falls quiet"): no more raids, a hold-the-gates quest is done, and one not yet drawn
 isn't offered. Before, an empty pool stopped the raid timer and the quest could never finish.
-Only plain fighters raid: a flyer's, caster-boss's or leaper's attack assumes the player.
 
 A save keeps the settlement's build (faction and condition, `:settlement :built`), its state
 (`saved-slots`: strikes, fine, stock, training, quest, raids, ...), the townsfolk's `provoked`,
-every creature's `foe`, and the level's entry in the run (`:level`), so a load builds the same town.
+every creature's `quarry` (and `sent`, `summoner` and grudge), and the level's entry in the run (`:level`), so a load builds the same town.
 To try it: `(progn (setf *settlement-override* (list :depth 1)) (game (start-game)))`, then
 `(game (start-talk (find-if (lambda (c) (typep c 'priest)) *creatures*)))`, `(game (setf (raid-timer
 *settlement*) 0.05))` for a raid, `(game (hurt <commoner> 3 :by *player*))` for the watch.

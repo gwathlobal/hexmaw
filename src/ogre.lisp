@@ -284,8 +284,6 @@ true if there is a landing cell and an arc OGRE's body fits."
     (creature-noise leaper :leap)
     T))
 
-(defmethod targets-creatures-p ((ogre ogre)) T)
-
 (defmethod special-attack ((ogre ogre))
   (try-leap ogre))
 

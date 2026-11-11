@@ -128,8 +128,6 @@ asset), :ATLAS (its index) and the animations, :WALK, :HURT, :DEATH and :ATTACK.
 (defmethod allegiance ((townsfolk townsfolk))
   (if *settlement* (settlement-faction *settlement*) :free-company))
 (defmethod hostile-to-player-p ((townsfolk townsfolk)) (provoked townsfolk))
-(defmethod targets-creatures-p ((townsfolk townsfolk)) T)
-
 (defparameter *town-leash* 20.0 "Metres from its post a townsperson goes after what it fights.")
 
 (defmethod keeps-target-p ((townsfolk townsfolk) target)

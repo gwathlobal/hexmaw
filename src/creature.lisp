@@ -49,6 +49,7 @@ the weapon's bonus: some hits always pass it by, so it can't be held in its flin
 (defparameter *chase-max-walk* 25.0
   "Longest path, in metres, a creature takes to reach the player. A room above or below
 is a long walk round by the stairs.")
+(defparameter *sent-max-walk* 60.0 "Metres the walk may be for a creature SENT at its quarry, or to the player for a fine.")
 (defparameter *retreat-step* 3.0 "Metres a ranged creature backs off at a time when the player is too close.")
 (defparameter *cast-aim-height* 1.1 "Height above the player's feet a creature's spell is aimed at.")
 (defparameter *block-time* 0.3 "Seconds a shielded creature shows its block pose after a spell hits the shield.")
@@ -376,7 +377,7 @@ times (NOTE-GRUDGE): the two are hostile until one dies or it gives up the hunt.
    (grudge-count :initform 0 :accessor grudge-count :documentation "How many times GRUDGE-FROM has struck it.")
    (grudge-time :initform 0.0 :accessor grudge-time
                 :documentation "Seconds left before it forgets GRUDGE-FROM's strikes: *GRUDGE-WINDOW* from the last.")
-   (foe-attack :initform NIL :accessor foe-attack :documentation "True while its attack is at its FOE.")))
+))
 
 (defmethod initialize-instance :after ((creature creature) &key)
   (setf (health creature) (max-health creature))
@@ -1092,11 +1093,6 @@ watch (which goes by PROVOKED), fight them.")
   (:documentation "True if CREATURE goes after TARGET at all: a townsperson only near its post.")
   (:method ((creature creature) target) (declare (ignore target)) T))
 
-(defgeneric targets-creatures-p (creature)
-  (:documentation "True once CREATURE's hunt works against a creature as against the player.
-Until then a creature it hunts is fought the old way (FIGHT-FOE).")
-  (:method ((creature creature)) NIL))
-
 (defun set-target (creature target)
   "Make TARGET what CREATURE hunts. A new one starts its attack spots and flanks afresh."
   (unless (eq target (hunt-target creature))
@@ -1409,8 +1405,7 @@ another; with none, it waits off."
   (setf (brain creature) :attacking
         (path creature) ()
         (attack-time creature) 0.0
-        (attack-pending creature) T
-        (foe-attack creature) NIL)
+        (attack-pending creature) T)
   (creature-noise creature :windup))
 
 (defun chase (creature)
@@ -1656,91 +1651,11 @@ flyer's dive.")
 (defgeneric wander (creature)
   (:documentation "CREATURE, not hunting, has stood long enough: set off somewhere (PLAN-WANDER).")
   (:method ((creature creature)) (plan-wander creature)))
-;;; Fighting a foe: a creature set against another creature (the settlement's raids and its
-;;; watch, townsfolk.lisp) walks to it and attacks it with its own blow or spell, the
-;;; minimum the rest of the hunt's machinery, which is all about the player, needs: no attack
-;;; spots, flanks or lunges. Only plain fighters take a foe (*FOE-CLASSES*' kinds).
-
-(defparameter *sent-max-walk* 60.0 "Metres the walk may be for a creature SENT at its quarry, or to the player for a fine.")
-
-(defun foe-within-p (creature foe reach)
-  "True if FOE's body is within REACH metres of CREATURE's, and level with it."
-  (let* ((a (location creature)) (b (location foe))
-         (dx (- (vx b) (vx a))) (dz (- (vz b) (vz a)))
-         (r (+ (body-radius creature) (body-radius foe) reach)))
-    (and (< (+ (* dx dx) (* dz dz)) (* r r))
-         (< (abs (- (vy a) (vy b))) (max (sprite-height creature) (sprite-height foe))))))
-
-(defun face-foe (creature)
-  (let ((loc (location creature)) (at (location (quarry creature))))
-    (turn-to creature (atan (- (vx at) (vx loc)) (- (vz loc) (vz at))) 1.0)))
-
-(defun foe-in-range-p (creature foe)
-  (if (attack-spell creature)
-      (and (foe-within-p creature foe (attack-range creature))
-           (clear-path-p (location creature) (location foe) 1.0))
-      (foe-within-p creature foe (* *attack-start-reach* (attack-reach creature)))))
-
-(defun fight-foe (creature dt)
-  "Walk to CREATURE's foe and attack it; forget it once it is dead."
-  (let ((foe (quarry creature)))
-    (when (or (dead foe) (dead creature))
-      (setf (quarry creature) NIL
-            (foe-attack creature) NIL)
-      (when (eq (brain creature) :walking)
-        (stop-walking creature 0.5))
-      (return-from fight-foe))
-    (case (brain creature)
-      (:attacking (attack-step creature dt))
-      (T
-       (cond ((foe-in-range-p creature foe)
-              (face-foe creature)
-              (setf (brain creature) :attacking
-                    (path creature) ()
-                    (attack-time creature) 0.0
-                    (attack-pending creature) T
-                    (foe-attack creature) T))
-             (T
-              (when (<= (decf (replan-timer creature) dt) 0)
-                (setf (replan-timer creature) *chase-replan*)
-                (let ((path (nav-path-to (ground-point creature) (location foe) (body-radius creature)
-                                         (sprite-height creature) (step-height creature) :max-walk *sent-max-walk*)))
-                  (if path
-                      (setf (path creature) path (brain creature) :walking)
-                      (setf (brain creature) :idle))))
-              (when (eq (brain creature) :walking)
-                (walk-path creature dt))))))))
-
-(defmethod lunge-speed :around ((creature creature))
-  (unless (foe-attack creature) (call-next-method)))
-
-(defmethod face-attack-target :around ((creature creature) dt)
-  (if (and (foe-attack creature) (quarry creature))
-      (face-foe creature)
-      (call-next-method)))
-
-(defmethod release-attack :around ((creature creature))
-  (let ((foe (quarry creature)))
-    (cond ((not (foe-attack creature)) (call-next-method))
-          ((or (null foe) (dead foe)))
-          ((attack-spell creature)
-           (let* ((loc (location creature))
-                  (origin (vec (vx loc) (+ (vy loc) (cast-height creature)) (vz loc)))
-                  (at (location foe))
-                  (aim (v- (vec (vx at) (+ (vy at) (* 0.6 (sprite-height foe))) (vz at)) origin)))
-             (when (< 1f-4 (vlength aim))
-               (cast-spell (find-spell (attack-spell creature)) origin (nvunit aim) (container creature)
-                           :caster creature))))
-          ((foe-within-p creature foe (+ 0.3 (attack-reach creature)))
-           (hurt foe (roll (attack-damage creature)) :from (location creature) :by creature)
-           (push-creature foe (v- (location foe) (location creature)) 3.0)))))
 
 (defun think (creature dt)
   "Hunt what it hunts while alert (HUNT-TARGET), wander otherwise."
   (when (attacker-p creature)
     (notice-targets creature dt))
-  (when (and (typep (quarry creature) 'creature) (hunting-p creature) (not (targets-creatures-p creature)))
-    (return-from think (fight-foe creature dt)))
   (let ((hunting (hunting-p creature)))
     (ecase (brain creature)
       (:attacking
@@ -2169,6 +2084,3 @@ after the flinch, block and attack.")
 (define-creature-sounds knight
   :alert :knight-alert :pain :knight-pain :death :knight-death :windup :knight-mace :step :step-armour)
 
-;; Their hunts work against any target (TARGETS-CREATURES-P): the plain blow and spell.
-(defmethod targets-creatures-p ((acolyte acolyte)) T)
-(defmethod targets-creatures-p ((knight knight)) T)

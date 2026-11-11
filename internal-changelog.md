@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **One combat for every actor: `fight-foe` is gone.** Every monster, boss power and townsperson
+  fights a creature with the same hunt it uses on the player ("Targets and sides" in CLAUDE.md), so
+  `fight-foe`, its `:around` methods, `foe-attack` and the conversion gate are removed. Fights against
+  the player are unchanged: scripted fights of every kind against a standing player matched a
+  baseline recorded before the work, and run seeds 1 to 10 build the same levels, creatures and
+  pickups. For the player changelog at release: "Monsters fight the town's guards and townsfolk with
+  everything they have (an ogre leaps at a guard, a harpy dives at one, a necromancer draws its
+  circle under one), and a monster struck again and again by another kind turns on it."
 - **A boss's powers aim at its target.** Fire volleys, skull barrages, the grave circle, the
   shockwave's reach, the tornado's sign and the blink read `hunt-target` (`boss-sees-target-p`), and
   its summons are on its side and hunt its target. Waking it and sealing the arena stay the

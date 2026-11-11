@@ -116,8 +116,6 @@ the superclasses, so that its methods here come before the slot readers there.")
    (pain-chance :initform 20)
    (max-health :initform 20)))
 
-(defmethod targets-creatures-p ((skeleton skeleton-warrior)) T)
-
 (define-creature-sounds skeleton-warrior
   :alert :skeleton-alert :pain :skeleton-pain :death :skeleton-collapse :windup :skeleton-chop :step :step-bone)
 
@@ -208,8 +206,6 @@ SUMMONER hunts (or the player). Returns it."
   :alert :necro-alert :pain :necro-pain :death :necro-death :step :step-light)
 
 (defmethod spares-p ((n necromancer) target) (undead target))
-
-(defmethod targets-creatures-p ((necromancer necromancer)) T)
 
 (defun raisable-p (corpse)
   "True if CORPSE can be raised: dead and done falling, whole, and of flesh or bone."

@@ -114,8 +114,6 @@ none is up and it is on a floor to lay the sign on, else throw a gust; or close 
           (seen (start-ability wraith :gust))
           (T (chase wraith)))))
 
-(defmethod targets-creatures-p ((wraith gale-wraith)) T)
-
 (defmethod release-attack ((wraith gale-wraith))
   (let ((ability (current-ability wraith)))
     (ecase (ability-name ability)

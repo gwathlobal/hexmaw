@@ -260,8 +260,6 @@ length, against a wall or a body, or on the strike."
             ((or x-blocked z-blocked (<= (dive-left flyer) 0))
              (end-dive flyer))))))
 
-(defmethod targets-creatures-p ((flyer flyer)) T)
-
 (defmethod attack-step ((flyer flyer) dt)
   (cond ((< (incf (attack-time flyer) dt) (dive-windup flyer))
          ;; The warning: it hangs, rising, turned to follow the player.

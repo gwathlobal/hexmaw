@@ -71,7 +71,7 @@ their values."
     idle-timer path stuck walk-distance momentum flight stagger flash brace burn-timer dead bleeding
     drip-timer gibbed rising stirring reel bash-poise flanking flank-timer
     sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer quarry sent summoner
-    grudge grudge-from grudge-count grudge-time foe-attack))
+    grudge grudge-from grudge-count grudge-time))
 
 (defmethod saved-slots append ((flyer flyer))
   '(dive-direction dive-left downed landed launching landed-dead fall-speed bob-phase))

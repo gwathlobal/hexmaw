@@ -407,8 +407,6 @@ walk that comes no nearer it than it is now. NIL if there is none."
 
 ;;; How it hunts.
 
-(defmethod targets-creatures-p ((imp imp)) T)
-
 (defmethod holds-back-p ((imp imp))
   (and (skittish-p imp)
        (or (< 0 (downed imp))
