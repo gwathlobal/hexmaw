@@ -15,6 +15,10 @@ legend
   : box 0 0.4 ice                                   ; the step round it
   [ diagonal / ice 0 0.4
   ] diagonal \ ice 0 0.4
+  a box 0 0.8 ice, diagonal / ice-rock 0.8 top nw    ; the rock's 45-degree wall over the dais
+  b box 0 0.8 ice, diagonal \ ice-rock 0.8 top ne
+  c box 0 0.4 ice, diagonal / ice-rock 0.4 top nw    ; and over the step
+  d box 0 0.4 ice, diagonal \ ice-rock 0.4 top ne
   I box 0 0.8 ice, spawn acolyte south
   m spawn acolyte south 30
   _ pit 0.2, floor ice                              ; the frozen pond
@@ -29,8 +33,8 @@ legend
 
 plan 0
 ########################
-#####//((%%%%%%))\\#####
-###//::%&&%II%&&%::\\###
+#####aa%%%%%%%%%%bb#####
+###cc::%&&%II%&&%::dd###
 #//..]]))%%%%%%(([[..\\#
 T...1122........1122...T
 +...3344.{{__}}.3344...+

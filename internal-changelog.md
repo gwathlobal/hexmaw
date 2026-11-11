@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **No slot to fall into beside the frost shrine's dais.** Where the rock's 45° wall met the dais's
+  45° edge they ran parallel 1 m apart, leaving a slot of floor 0.8 m down between them (and a
+  triangle 0.4 m down beside the step); the player fell in. The rock pairs there now stand on ice
+  filled up to the dais's or step's height, and the dais runs square up to them (`tools/cave_plans.py`,
+  new legend characters `a` to `d`). `tools/levelcheck --kit --strict` is clean.
 - **A creature's standing picture is always loaded with its scene.** A creature was staged with
   only the picture it showed at that moment plus its strips, so one restored from a save mid-walk
   left its turnaround out of the scene's staging area, and Trial unloaded it if the scene before
