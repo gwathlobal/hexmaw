@@ -1525,7 +1525,11 @@ real time instead.
   (player-attack *player*)`, and `(setf (attack-held *player*) NIL)` 1.35 s later for a full blow;
   `(player-press *player* :mouse-right)` shakes the floor.
 - `src/player.lisp`: first-person controller and box collision. Walking backward keeps
-  `*backpedal-scale*` (0.75) of the speed. Mana doesn't regenerate:
+  `*backpedal-scale*` (0.75) of the speed. A vertical move (`move-axis`) stops short of a solid
+  and never passes where it started, so a solid the body is already inside can't drop it through
+  the floor. Below `*kill-height*` the player goes back to the start (`respawn`), and the log gets
+  the last 2 s of movement, each tick that jumped or ended inside a solid (`report-fall`,
+  `*fall-trace*`): send it with a fall. Mana doesn't regenerate:
   only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
   `*stamina-regen*` except while running, which costs `*run-stamina*` a second, on foot or
   swimming with Shift (`update-stamina`); running it empty leaves the player `winded`, walking,

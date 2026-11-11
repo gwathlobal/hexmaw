@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A vertical move can't push the player through a solid, and a fall out of the world is
+  logged.** `move-axis` put the feet under the bottom of whatever a rise overlapped, and on top of
+  whatever a fall overlapped, even a solid the body was already inside: a jump from inside a
+  ledge put them under the floor (the slab under it next, then the void), and a fall beside a tall
+  45° wall could put them on top of it. Now the feet never pass where the move started. The player
+  fell out of the world after jumping on ice by the frost shrine, but its cause wasn't found:
+  600,000 random moves through that level's geometry around the shrine left no one inside a solid
+  or moved them more than 0.6 m. So `report-fall` logs the last 2 s of movement
+  (`*fall-trace*`, kept by `note-fall-trace` every tick, no allocation) when the player drops
+  below `*kill-height*` and goes back to the start.
 - **No slot to fall into beside the frost shrine's dais.** Where the rock's 45° wall met the dais's
   45° edge they ran parallel 1 m apart, leaving a slot of floor 0.8 m down between them (and a
   triangle 0.4 m down beside the step); the player fell in. The rock pairs there now stand on ice
