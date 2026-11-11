@@ -7,6 +7,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The imp and the ogre fight creatures as they fight the player.** The leap (`plan-leap`,
+  `try-leap`) aims at the leaper's target, so an imp pounces and an ogre leaps at a guard, and an
+  ogre's quake shakes it as it does anyone; the claw, the pounce's claw and the slam go through
+  `strike-target`, the imp springs back from its target (`spring-from-target`) and flees from it,
+  and its shriek sets its allies on its target. A slam's victim isn't shoved again by the slam's
+  own shake (`quake`'s `:spare`). Theft stays the player's: an imp steals only from them.
 - **Creatures hunt a target, and `hostile-p` says who fights whom.** A creature's `quarry` (the
   player or a creature) replaces `foe`; `hunt-target` falls back to the player when it is hostile
   to them, so off the settlement nothing changes. Sides (`allegiance`): the player, the monsters,
