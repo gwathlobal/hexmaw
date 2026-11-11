@@ -260,7 +260,7 @@ is a creature that nothing moves (a sleeping boss)."
           ;; The target keeps its facing, so the caster ends up behind it.
           (rift-move target to-there)
           (rift-move caster to-here :yaw (bearing to-here to-there))
-          (when (and (typep caster 'riftwalker) (typep target 'player))
+          (when (and (typep caster 'riftwalker) (eq target (hunt-target caster)))
             (setf (pounce caster) *pounce-delay*)))))))
 
 ;;; The blink.
@@ -273,13 +273,15 @@ is a creature that nothing moves (a sleeping boss)."
        (not (flung riftwalker))
        (not (afloat-p riftwalker))
        (<= (rising riftwalker) 0)
-       *player* (< 0 (health *player*))))
+       (let ((target (hunt-target riftwalker)))
+         (and target (target-live-p target)))))
 
 (defun blink-spot (riftwalker)
   "A random free spot *BLINK-RANGE* metres from RIFTWALKER, with a clear line from it and to
-the player, and not on top of them. Or NIL."
+what it hunts, and not on top of that. Or NIL."
   (let* ((loc (location riftwalker))
-         (feet (feet *player*))
+         (target (hunt-target riftwalker))
+         (feet (body-feet target))
          (start (* 2 pi (/ (random 360 *roll-random*) 360.0)))
          (d (random-between *blink-range*)))
     (loop for i below 8
@@ -289,15 +291,17 @@ the player, and not on top of them. Or NIL."
                               :search 1 :ignore riftwalker :sight-of feet :from loc)
           when (and to
                     (clear-path-p loc to 1.0)
-                    (< (+ (body-radius riftwalker) *player-radius* 1.0)
+                    (< (+ (body-radius riftwalker) (body-radius target) 1.0)
                        (sqrt (+ (expt (- (vx to) (vx feet)) 2) (expt (- (vz to) (vz feet)) 2)))))
             return to)))
 
 (defun pounce-spot (riftwalker)
-  "A free spot right behind the player, in RIFTWALKER's stab's reach; or NIL."
-  (let ((feet (feet *player*)))
-    (spot-around feet (+ (vy (rotation *player*)) pi) (+ (body-radius riftwalker) *player-radius* 0.3) riftwalker
-                 :sight-of feet :from feet)))
+  "A free spot right behind what RIFTWALKER hunts, in its stab's reach; or NIL."
+  (let* ((target (hunt-target riftwalker))
+         (feet (and target (body-feet target))))
+    (when feet
+      (spot-around feet (+ (target-facing target) pi) (+ (body-radius riftwalker) (body-radius target) 0.3) riftwalker
+                   :sight-of feet :from feet))))
 
 (defun blink (riftwalker &optional (to (blink-spot riftwalker)))
   "Step RIFTWALKER through a rift to TO, by default a random spot near it, breaking off
@@ -328,6 +332,8 @@ whatever it was doing. True if it went."
        (not (dormant-p c))
        (not (typep c 'boss))
        (attacker-p c)
+       (eq (allegiance c) (allegiance riftwalker))
+       (not (hostile-p riftwalker c))
        (<= (rising c) 0)
        (not (whirl c))
        (not (flung c))
@@ -338,20 +344,21 @@ whatever it was doing. True if it went."
              never (and (typep other 'riftwalker) (not (eq other riftwalker)) (eq c (call-target other))))))
 
 (defun call-spot (riftwalker c)
-  "Where an ally C called to the player steps out: in front of them, in their sight, but to
-the side of the way from RIFTWALKER to them, so it doesn't stand in the riftwalker's line."
-  (let* ((feet (feet *player*))
-         (facing (vy (rotation *player*)))
+  "Where an ally C called to what RIFTWALKER hunts steps out: in front of it, in its sight, but
+to the side of the way from RIFTWALKER to it, so it doesn't stand in the riftwalker's line."
+  (let* ((target (hunt-target riftwalker))
+         (feet (body-feet target))
+         (facing (target-facing target))
          (toward (bearing feet (location riftwalker)))
          ;; Of the player's front quarters, the one further from the riftwalker.
          (yaw (if (< (angle-between (+ facing 0.8) toward) (angle-between (- facing 0.8) toward))
                   (- facing 0.8)
                   (+ facing 0.8))))
-    (spot-around feet yaw (+ *player-radius* (body-radius c) *call-distance*) c
+    (spot-around feet yaw (+ (body-radius target) (body-radius c) *call-distance*) c
                  :sight-of feet :from feet)))
 
 (defun ally-to-call (riftwalker)
-  "The ally nearest RIFTWALKER worth calling to the player, within *CALL-REACH*, and the spot
+  "The ally nearest RIFTWALKER worth calling to what it hunts, within *CALL-REACH*, and the spot
 it would step out on; or NIL."
   (let ((loc (location riftwalker))
         (best NIL) (spot NIL) (best-d *call-reach*))
@@ -380,7 +387,10 @@ it would step out on; or NIL."
       ;; Something may have stepped onto the spot since.
       (let ((to (free-spot spot (body-radius ally) (sprite-height ally) :search 1 :ignore ally)))
         (when to
-          (rift-move ally to :yaw (bearing to (feet *player*)) :container (container riftwalker))
+          (let ((target (hunt-target riftwalker)))
+            (rift-move ally to :yaw (and target (bearing to (body-feet target))) :container (container riftwalker))
+            (when (and target (hostile-p ally target))
+              (set-target ally target)))
           (setf (alert ally) (max (alert ally) (alert-time))))))))
 
 (defun calling-p (riftwalker)
@@ -398,10 +408,11 @@ it would step out on; or NIL."
 
 
 (defmethod special-attack ((riftwalker riftwalker))
-  "Call an ally; push away a player on top of it while it is hurt or they hide behind their
+  "Call an ally; push away a target on top of it while it is hurt or the target hides behind a
 shield; or throw a pull or a swap at one in range. True if it started one."
-  (let* ((distance (target-distance riftwalker))
-         (seen (clear-path-p (location riftwalker) (feet *player*) (cast-height riftwalker))))
+  (let* ((target (hunt-target riftwalker))
+         (distance (target-distance riftwalker target))
+         (seen (clear-path-p (location riftwalker) (body-feet target) (cast-height riftwalker))))
     (or (and (ready-p riftwalker :call)
              (multiple-value-bind (ally spot) (ally-to-call riftwalker)
                (when ally
@@ -409,9 +420,10 @@ shield; or throw a pull or a swap at one in range. True if it started one."
                  T)))
         (and seen
              (ready-p riftwalker :push)
-             (< distance (+ (body-radius riftwalker) *player-radius* *rift-push-reach*))
+             (< distance (+ (body-radius riftwalker) (body-radius target) *rift-push-reach*))
              (or (< (health riftwalker) (* 0.5 (max-health riftwalker)))
-                 (< 0 (block-raise *player*)))
+                 ;; Raised at all, whichever way it faces.
+                 (target-guarding-p target (location riftwalker) pi))
              (progn (start-ability riftwalker :push) T))
         (let ((pull (and (ready-p riftwalker :pull) (in-range-p distance *rift-pull-range*)))
               (swap (and (ready-p riftwalker :swap) (in-range-p distance *rift-swap-range*))))
@@ -420,6 +432,8 @@ shield; or throw a pull or a swap at one in range. True if it started one."
                                             (pull :pull)
                                             (T :swap)))
             T)))))
+
+(defmethod targets-creatures-p ((riftwalker riftwalker)) T)
 
 (defmethod release-attack ((riftwalker riftwalker))
   (let ((ability (current-ability riftwalker)))
