@@ -116,6 +116,8 @@ the superclasses, so that its methods here come before the slot readers there.")
    (pain-chance :initform 20)
    (max-health :initform 20)))
 
+(defmethod targets-creatures-p ((skeleton skeleton-warrior)) T)
+
 (define-creature-sounds skeleton-warrior
   :alert :skeleton-alert :pain :skeleton-pain :death :skeleton-collapse :windup :skeleton-chop :step :step-bone)
 

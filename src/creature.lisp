@@ -361,9 +361,21 @@ empowered form (boss.lisp). Its SPRITE-HEIGHT is already scaled.")
    (body-texture :reader body-texture :documentation "The standing atlas texture, for when it isn't walking or dying.")
    (home :reader home)
    (base-scaling :reader base-scaling)
-   (foe :initform NIL :accessor foe
-        :documentation "A creature it fights rather than the player (FIGHT-FOE): a raider's guard, a
-guard's raider. Hunting the player comes first.")
+   (quarry :initform NIL :accessor quarry
+           :documentation "The actor it hunts, the player or a creature (HUNT-TARGET), or NIL: then
+the player, if it is hostile to them (HOSTILE-P).")
+   (sent :initform NIL :accessor sent
+         :documentation "True while something sent it at its QUARRY (a raid, townsfolk.lisp): it keeps
+after it unseen, and walks up to *SENT-MAX-WALK* to get there.")
+   (summoner :initarg :summoner :initform NIL :accessor summoner
+             :documentation "The creature that raised or summoned it, whose side it is on (ALLEGIANCE), or NIL.")
+   (grudge :initform NIL :accessor grudge
+           :documentation "A creature it would not fight but has turned on, struck by it *GRUDGE-STRIKES*
+times (NOTE-GRUDGE): the two are hostile until one dies or it gives up the hunt.")
+   (grudge-from :initform NIL :accessor grudge-from :documentation "The creature whose strikes it is counting, or NIL.")
+   (grudge-count :initform 0 :accessor grudge-count :documentation "How many times GRUDGE-FROM has struck it.")
+   (grudge-time :initform 0.0 :accessor grudge-time
+                :documentation "Seconds left before it forgets GRUDGE-FROM's strikes: *GRUDGE-WINDOW* from the last.")
    (foe-attack :initform NIL :accessor foe-attack :documentation "True while its attack is at its FOE.")))
 
 (defmethod initialize-instance :after ((creature creature) &key)
@@ -544,12 +556,15 @@ before its arena is sealed, boss.lisp). A hit only flashes it.")
 
 (defgeneric harmed (creature amount by)
   (:documentation "CREATURE has just lost AMOUNT health to BY: the player, a creature, or NIL
-for nothing in particular (lava, water). Townsfolk report it to the watch (townsfolk.lisp); a
-monster struck by one of them fights back (FIGHT-FOE).")
+for nothing in particular (lava, water). One that can fight turns on a hostile BY, unless what
+it hunts already is in its reach; townsfolk also report the player to the watch (townsfolk.lisp).")
   (:method ((creature creature) amount by)
     (declare (ignore amount))
-    (when (and (typep by 'creature) (townsfolk-p by) (not (townsfolk-p creature)) (not (foe creature)))
-      (setf (foe creature) by))))
+    (when (and by (not (keywordp by)) (attacker-p creature) (hostile-p creature by))
+      (let ((now (hunt-target creature)))
+        (unless (and now (not (eq now by)) (target-live-p now)
+                     (target-within-p creature (* *attack-start-reach* (attack-reach creature)) now))
+          (set-target creature by))))))
 
 (defgeneric creature-died (creature by)
   (:documentation "CREATURE has just died, killed by BY, as for HARMED: the bag takes its
@@ -588,7 +603,8 @@ killing blow that overkills by that fraction of its most, if its own needs more 
       (stop-walking creature *hurt-pause*)
       (when (< 0 (health creature))
         (creature-noise creature :pain)))
-    (hit-stop)
+    (when (felt-hit-p creature by)
+      (hit-stop))
     (when (<= (health creature) 0)
       (creature-noise creature :death)
       (cond ((gib-p creature amount gib-overkill)
@@ -597,9 +613,42 @@ killing blow that overkills by that fraction of its most, if its own needs more 
              (bleed-out creature)))
       (setf (dead creature) 0.0)
       (creature-died creature by))
+    (note-grudge creature by)
     (harmed creature amount by)
     (unless (dead creature)
       (react-to-hit creature))))
+
+(defparameter *hit-stop-reach* 10.0
+  "Metres from the player within which a blow between two creatures hit-stops the world: one
+across the town shouldn't freeze it.")
+
+(defun felt-hit-p (creature by)
+  "True if a blow at CREATURE by BY hit-stops: the player's or nothing's, or near the player."
+  (or (not (typep by 'creature))
+      (null *player*)
+      (< (vdistance (location creature) (feet *player*)) *hit-stop-reach*)))
+
+(defparameter *grudge-strikes* 3
+  "Strikes by one creature of another kind that turn a creature on it (NOTE-GRUDGE), so one stray
+blow, an ogre's landing or a grave circle, doesn't set the level fighting.")
+(defparameter *grudge-window* 12.0 "Seconds within which a striker's strikes count toward a grudge.")
+
+(defun same-kind-p (a b)
+  "True if A and B are of a kind: an elite or a boss is of its own kind."
+  (or (typep a (type-of b)) (typep b (type-of a))))
+
+(defun note-grudge (creature by)
+  "Count a blow at CREATURE by BY, a creature it isn't hostile to; at *GRUDGE-STRIKES* it bears BY a grudge."
+  (when (and (typep by 'creature) (not (eq by creature)) (not (dead creature)) (not (dead by))
+             (not (same-kind-p creature by)) (not (hostile-p creature by)))
+    (unless (eq by (grudge-from creature))
+      (setf (grudge-from creature) by
+            (grudge-count creature) 0))
+    (setf (grudge-time creature) *grudge-window*)
+    (when (<= *grudge-strikes* (incf (grudge-count creature)))
+      (setf (grudge creature) by
+            (grudge-from creature) NIL
+            (grudge-count creature) 0))))
 
 (defmethod hit-surface ((creature creature) speed x y z &key (threshold *impact-speed*) by)
   (when (< threshold speed)
@@ -766,16 +815,16 @@ speed onto it as momentum, so it doesn't stall at the edge."
     (setf (footing creature) footing)))
 
 (defgeneric calm-p (creature)
-  (:documentation "True while CREATURE, though it could fight, doesn't: a townsperson nobody
-has provoked (townsfolk.lisp). It wanders and never notices the player.")
+  (:documentation "True while CREATURE, a townsperson nobody has provoked (townsfolk.lisp), is at
+peace with the player: it talks, and isn't hostile to them (HOSTILE-P).")
   (:method ((creature creature)) NIL))
 
 (defun attacker-p (creature)
-  (and (or (attack-damage creature) (attack-spell creature))
-       (not (calm-p creature))))
+  "True if CREATURE has an attack at all; HOSTILE-P says at whom."
+  (or (attack-damage creature) (attack-spell creature)))
 
 (defun hunting-p (creature)
-  (and (attacker-p creature) (< 0 (alert creature))))
+  (and (attacker-p creature) (< 0 (alert creature)) (hunt-target creature)))
 
 (defun stop-walking (creature &optional (pause (if (hunting-p creature) *chase-pause* (wander-pause))))
   "Stand still, walking or attacking, for PAUSE seconds."
@@ -995,9 +1044,75 @@ knockback, a speed in m/s, or NIL; LIFT throws the player up too. The player's s
     (push-creature creature (v- (location creature) from) speed)))
 
 (defun hunt-target (creature)
-  "What CREATURE hunts."
-  (declare (ignore creature))
-  *player*)
+  "What CREATURE hunts: its QUARRY, else the player if it is hostile to them."
+  (or (quarry creature)
+      (and *player* (hostile-p creature *player*) *player*)))
+
+;;; Who fights whom. Every actor is on a side (ALLEGIANCE): the player's, the monsters', or a
+;;; faction's (the settlement's townsfolk). Monsters are hostile to every other side; the
+;;; townsfolk to the player only while provoked; any other faction's to the player by their
+;;; standing with it; a summoned creature is on its summoner's side. A grudge (NOTE-GRUDGE)
+;;; makes two of a side hostile.
+
+(defgeneric allegiance (actor)
+  (:documentation "The side ACTOR is on: :PLAYER, :MONSTERS, or a faction (*FACTIONS*).")
+  (:method ((creature creature))
+    (let ((summoner (summoner creature)))
+      (if summoner (allegiance summoner) :monsters))))
+
+(defparameter *hostile-reputation* -50
+  "The player's standing with a faction at or under which its people, other than a town's
+watch (which goes by PROVOKED), fight them.")
+
+(defgeneric hostile-to-player-p (creature)
+  (:documentation "True if CREATURE's side fights the player.")
+  (:method ((creature creature))
+    (let ((side (allegiance creature)))
+      (case side
+        (:monsters T)
+        (:player NIL)
+        (T (and *player* (<= (faction-reputation *player* side) *hostile-reputation*)))))))
+
+(defun hostile-p (a b)
+  "True if A and B, actors both alive, fight each other."
+  (and a b (not (eq a b)) (target-live-p a) (target-live-p b)
+       (cond ((typep b 'creature)
+              (if (typep a 'creature)
+                  (or (eq (grudge a) b) (eq (grudge b) a)
+                      (let ((x (allegiance a)) (y (allegiance b)))
+                        (and (not (eq x y)) (or (eq x :monsters) (eq y :monsters)))))
+                  (hostile-to-player-p b)))
+             ((typep a 'creature) (hostile-to-player-p a)))))
+
+(defgeneric keeps-target-p (creature target)
+  (:documentation "True if CREATURE goes after TARGET at all: a townsperson only near its post.")
+  (:method ((creature creature) target) (declare (ignore target)) T))
+
+(defgeneric targets-creatures-p (creature)
+  (:documentation "True once CREATURE's hunt works against a creature as against the player.
+Until then a creature it hunts is fought the old way (FIGHT-FOE).")
+  (:method ((creature creature)) NIL))
+
+(defun set-target (creature target)
+  "Make TARGET what CREATURE hunts. A new one starts its attack spots and flanks afresh."
+  (unless (eq target (hunt-target creature))
+    (setf (slot-yaw creature) NIL
+          (slot-bans creature) ()
+          (flanking creature) NIL
+          (sent creature) NIL
+          (replan-timer creature) 0.0))
+  (setf (quarry creature) target))
+
+(defun drop-target (creature)
+  "CREATURE gives up what it hunted, and looks about at once."
+  (setf (quarry creature) NIL
+        (sent creature) NIL
+        (slot-yaw creature) NIL
+        (slot-bans creature) ()
+        (alert creature) 0.0
+        (look-timer creature) 0.0)
+  (when (eq (brain creature) :walking)
+    (stop-walking creature *chase-pause*)))
 
 (defun target-within-p (creature reach &optional (target (hunt-target creature)))
   "True if TARGET's body is within REACH metres of CREATURE's, and level with it."
@@ -1056,17 +1171,54 @@ it can do something about. The ogre, which leaps down, looks further.")
                   (< (target-angle creature target) #.(float (/ pi 2) 0f0))))
          (clear-path-p loc feet (* 0.8 (sprite-height creature))))))
 
-(defun notice-player (creature dt)
+(defun look-for-target (creature)
+  "What CREATURE sees to hunt: what it hunts now, if it still sees it, else the nearest hostile
+actor it sees, or NIL. Off the settlement that is only ever the player."
+  (let ((now (hunt-target creature)))
+    (if (and now (hostile-p creature now) (sees-target-p creature now))
+        now
+        (let ((best NIL) (best-d 0.0))
+          (flet ((consider (actor)
+                   (when (and (hostile-p creature actor) (keeps-target-p creature actor)
+                              (sees-target-p creature actor))
+                     (let ((d (target-distance creature actor)))
+                       (when (or (null best) (< d best-d))
+                         (setf best actor best-d d))))))
+            (when *player*
+              (consider *player*))
+            (loop for c across *creatures*
+                  unless (or (eq c creature) (dead c))
+                    do (consider c)))
+          best))))
+
+(defun notice-targets (creature dt)
+  "Keep track of what CREATURE hunts: give up one gone, at peace with it or out of its reach (KEEPS-TARGET-P),
+and look every *LOOK-INTERVAL* for what it sees (LOOK-FOR-TARGET), which keeps it alert."
   (setf (alert creature) (max 0.0 (- (alert creature) dt)))
+  (when (and (< 0 (grudge-time creature)) (<= (decf (grudge-time creature) dt) 0))
+    (setf (grudge-from creature) NIL
+          (grudge-count creature) 0))
+  (let ((grudge (grudge creature)))
+    (when (and grudge (or (not (target-live-p grudge)) (<= (alert creature) 0)))
+      (setf (grudge creature) NIL)))
+  (let ((quarry (quarry creature)))
+    (when (and quarry (not (eq (brain creature) :attacking))
+               (not (and (hostile-p creature quarry) (keeps-target-p creature quarry))))
+      (drop-target creature)))
+  (when (and (sent creature) (quarry creature))
+    (setf (alert creature) (max (alert creature) *look-interval*)))
   (when (<= (decf (look-timer creature) dt) 0)
     (setf (look-timer creature) *look-interval*)
-    (when (and *player* (sees-target-p creature))
-      (when (<= (alert creature) 0)
-        ;; Just noticed: cut a wander's pause short, and turn a wander's walk into a chase.
-        (setf (idle-timer creature) (min (idle-timer creature) *chase-pause*)
-              (replan-timer creature) 0.0)
-        (creature-noise creature :alert))
-      (setf (alert creature) (alert-time)))))
+    (let ((seen (look-for-target creature)))
+      (when seen
+        (when (<= (alert creature) 0)
+          ;; Just noticed: cut a wander's pause short, and turn a wander's walk into a chase.
+          (setf (idle-timer creature) (min (idle-timer creature) *chase-pause*)
+                (replan-timer creature) 0.0)
+          (creature-noise creature :alert))
+        (unless (and (sent creature) (not (eq seen (quarry creature))) (typep seen 'creature))
+          (set-target creature seen))
+        (setf (alert creature) (alert-time))))))
 
 (defun target-bearing (target point)
   "Direction from TARGET to POINT, as a yaw."
@@ -1160,12 +1312,15 @@ waits its turn); NIL further off, or for anything else."
   (let ((distance (target-distance creature)))
     (if (not (and *nav-grid* (melee-hunter-p creature) (< distance *slot-range*)))
         (setf (slot-yaw creature) NIL)
-        (let ((claims (loop for c across *creatures*
+        (let* ((target (hunt-target creature))
+               (claims (loop for c across *creatures*
                             when (and (not (eq c creature)) (slot-yaw c) (melee-hunter-p c)
+                                      (eq (hunt-target c) target)
                                       (< (target-distance c) (+ *slot-range* 1.0)))
                               collect (cons (slot-yaw c) (target-distance c))))
               (standing (loop for c across *creatures*
-                              when (and (not (eq c creature)) (not (dead c))
+                              when (and (not (eq c creature)) (not (dead c)) (attacker-p c)
+                                        (eq (hunt-target c) target)
                                         (target-within-p c (attack-reach c)))
                                 collect (target-bearing (hunt-target c) (location c))))
               (own (slot-yaw creature)))
@@ -1195,15 +1350,16 @@ another; with none, it waits off."
          (loc (ground-point creature))
          (r (body-radius creature))
          (h (sprite-height creature))
-         (step (step-height creature)))
+         (step (step-height creature))
+         (walk (if (sent creature) *sent-max-walk* *chase-max-walk*)))
     (labels ((path-to (goal)
                (cond ((nav-line-clear-p loc goal r h step)
                       (list (vcopy goal)))
-                     ((nav-path-to loc goal r h step :max-walk *chase-max-walk*))
+                     ((nav-path-to loc goal r h step :max-walk walk))
                      ;; No dry way: through lava, then, the short way across.
                      ((eq *nav-hazards* :avoid)
                       (let ((*nav-hazards* :wade))
-                        (nav-path-to loc goal r h step :max-walk *chase-max-walk*)))))
+                        (nav-path-to loc goal r h step :max-walk walk)))))
              (wait-path ()
                ;; No spot free: stand (NIL) until one is, or come in to *SLOT-WAIT-RADIUS*
                ;; from further off, or back out to it from close in, clear of the others
@@ -1212,6 +1368,7 @@ another; with none, it waits off."
                       (near (+ *slot-wait-radius* 1.5))
                       (waiting (loop for c across *creatures*
                                      when (and (not (eq c creature)) (melee-hunter-p c)
+                                               (eq (hunt-target c) (hunt-target creature))
                                                (< (target-distance c) near))
                                        collect (target-bearing (hunt-target c) (location c))))
                       (spot (and (or (< near distance) (< distance (- *slot-wait-radius* 1.0)))
@@ -1241,6 +1398,7 @@ another; with none, it waits off."
     (let ((bearing (float (target-bearing (hunt-target creature) (location creature)) 0f0)))
       (when (loop for c across *creatures*
                   never (and (not (eq c creature)) (slot-yaw c) (melee-hunter-p c)
+                             (eq (hunt-target c) (hunt-target creature))
                              (< (angle-between bearing (slot-yaw c)) *slot-spacing*)))
         (setf (slot-yaw creature) bearing))))
   (face-target creature)
@@ -1499,11 +1657,7 @@ flyer's dive.")
 ;;; minimum the rest of the hunt's machinery, which is all about the player, needs: no attack
 ;;; spots, flanks or lunges. Only plain fighters take a foe (*FOE-CLASSES*' kinds).
 
-(defparameter *foe-max-walk* 60.0 "Metres the walk to a foe may be.")
-
-(defun fighter-p (creature)
-  "True if CREATURE has an attack at all, calm or not."
-  (or (attack-damage creature) (attack-spell creature)))
+(defparameter *sent-max-walk* 60.0 "Metres the walk may be for a creature SENT at its quarry, or to the player for a fine.")
 
 (defun foe-within-p (creature foe reach)
   "True if FOE's body is within REACH metres of CREATURE's, and level with it."
@@ -1514,7 +1668,7 @@ flyer's dive.")
          (< (abs (- (vy a) (vy b))) (max (sprite-height creature) (sprite-height foe))))))
 
 (defun face-foe (creature)
-  (let ((loc (location creature)) (at (location (foe creature))))
+  (let ((loc (location creature)) (at (location (quarry creature))))
     (turn-to creature (atan (- (vx at) (vx loc)) (- (vz loc) (vz at))) 1.0)))
 
 (defun foe-in-range-p (creature foe)
@@ -1525,9 +1679,9 @@ flyer's dive.")
 
 (defun fight-foe (creature dt)
   "Walk to CREATURE's foe and attack it; forget it once it is dead."
-  (let ((foe (foe creature)))
-    (when (or (dead foe) (not (fighter-p creature)) (dead creature))
-      (setf (foe creature) NIL
+  (let ((foe (quarry creature)))
+    (when (or (dead foe) (dead creature))
+      (setf (quarry creature) NIL
             (foe-attack creature) NIL)
       (when (eq (brain creature) :walking)
         (stop-walking creature 0.5))
@@ -1546,7 +1700,7 @@ flyer's dive.")
               (when (<= (decf (replan-timer creature) dt) 0)
                 (setf (replan-timer creature) *chase-replan*)
                 (let ((path (nav-path-to (ground-point creature) (location foe) (body-radius creature)
-                                         (sprite-height creature) (step-height creature) :max-walk *foe-max-walk*)))
+                                         (sprite-height creature) (step-height creature) :max-walk *sent-max-walk*)))
                   (if path
                       (setf (path creature) path (brain creature) :walking)
                       (setf (brain creature) :idle))))
@@ -1557,12 +1711,12 @@ flyer's dive.")
   (unless (foe-attack creature) (call-next-method)))
 
 (defmethod face-attack-target :around ((creature creature) dt)
-  (if (and (foe-attack creature) (foe creature))
+  (if (and (foe-attack creature) (quarry creature))
       (face-foe creature)
       (call-next-method)))
 
 (defmethod release-attack :around ((creature creature))
-  (let ((foe (foe creature)))
+  (let ((foe (quarry creature)))
     (cond ((not (foe-attack creature)) (call-next-method))
           ((or (null foe) (dead foe)))
           ((attack-spell creature)
@@ -1578,10 +1732,10 @@ flyer's dive.")
            (push-creature foe (v- (location foe) (location creature)) 3.0)))))
 
 (defun think (creature dt)
-  "Hunt the player while alert, fight a foe (FIGHT-FOE) if it has one, wander otherwise."
+  "Hunt what it hunts while alert (HUNT-TARGET), wander otherwise."
   (when (attacker-p creature)
-    (notice-player creature dt))
-  (when (and (foe creature) (not (hunting-p creature)))
+    (notice-targets creature dt))
+  (when (and (typep (quarry creature) 'creature) (hunting-p creature) (not (targets-creatures-p creature)))
     (return-from think (fight-foe creature dt)))
   (let ((hunting (hunting-p creature)))
     (ecase (brain creature)
@@ -2010,3 +2164,7 @@ after the flinch, block and attack.")
 
 (define-creature-sounds knight
   :alert :knight-alert :pain :knight-pain :death :knight-death :windup :knight-mace :step :step-armour)
+
+;; Their hunts work against any target (TARGETS-CREATURES-P): the plain blow and spell.
+(defmethod targets-creatures-p ((acolyte acolyte)) T)
+(defmethod targets-creatures-p ((knight knight)) T)

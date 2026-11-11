@@ -7,6 +7,20 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Creatures hunt a target, and `hostile-p` says who fights whom.** A creature's `quarry` (the
+  player or a creature) replaces `foe`; `hunt-target` falls back to the player when it is hostile
+  to them, so off the settlement nothing changes. Sides (`allegiance`): the player, the monsters,
+  the settlement's faction, a summoned creature its `summoner`'s. Monsters are hostile to every
+  other side, townsfolk to the player while provoked, any other faction's people to the player at
+  standing -50 or under (`*hostile-reputation*`). `notice-targets` (was `notice-player`) looks for
+  the nearest hostile actor it sees, so monsters notice townsfolk on sight and guards notice
+  monsters (`guards-watch` is gone), within 20 m of their post (`*town-leash*`). Struck by a hostile
+  actor, a creature turns on it unless its target is in reach. **Grudges**: three blows within 12 s
+  from a creature of another kind it isn't hostile to turn it on that one (`note-grudge`), so a
+  stray ogre landing doesn't set the level fighting. Attack spots are claimed round each hunter's
+  own target. A raid sends its monsters (`sent`: kept after their guard unseen, a 60 m walk). A blow
+  between creatures hit-stops only within 10 m of the player. The acolyte, knight, skeleton and the
+  townsfolk hunt creatures with the full hunt; the rest still use `fight-foe` until converted.
 - **A creature's hunt asks about its target, not the player.** The first step toward one combat
   for every actor: the hunt's helpers (`target-within-p`, `target-angle`, `target-distance`,
   `face-target`, `target-bearing`, `sees-target-p`, attack slots, flanks, retreats, the plain

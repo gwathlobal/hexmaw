@@ -70,7 +70,8 @@ their values."
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
     idle-timer path stuck walk-distance momentum flight stagger flash brace burn-timer dead bleeding
     drip-timer gibbed rising stirring reel bash-poise flanking flank-timer
-    sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer foe foe-attack))
+    sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer quarry sent summoner
+    grudge grudge-from grudge-count grudge-time foe-attack))
 
 (defmethod saved-slots append ((flyer flyer))
   '(dive-direction dive-left downed landed launching landed-dead fall-speed bob-phase))

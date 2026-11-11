@@ -330,6 +330,7 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
 (defmethod body-solid-p ((player player)) (not (whirl player)))
 
 ;; The player as a creature's target (creature.lisp).
+(defmethod allegiance ((player player)) :player)
 (defmethod aim-height ((player player)) *cast-aim-height*)
 (defmethod target-facing ((player player)) (vy (rotation player)))
 (defmethod target-live-p ((player player)) (< 0 (health player)))
