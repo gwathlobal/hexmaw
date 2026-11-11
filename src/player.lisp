@@ -329,6 +329,18 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
 (defmethod body-height ((player player)) *player-height*)
 (defmethod body-solid-p ((player player)) (not (whirl player)))
 
+;; The player as a creature's target (creature.lisp).
+(defmethod aim-height ((player player)) *cast-aim-height*)
+(defmethod target-facing ((player player)) (vy (rotation player)))
+(defmethod target-live-p ((player player)) (< 0 (health player)))
+(defmethod target-guarding-p ((player player) from &optional (margin 0.0)) (shield-facing-p player from margin))
+(defmethod target-swimming-p ((player player)) (swimming player))
+(defmethod strike-target ((player player) amount from &rest args &key by shove lift guard-break unblockable)
+  (declare (ignore by shove lift guard-break unblockable))
+  (apply #'hurt-player player amount from args))
+(defmethod shove-target ((player player) from speed &optional lift)
+  (shove-player player from speed lift))
+
 (defvar *walk-through-bodies* NIL
   "True while the player already overlaps a body (something revived on it), so it can walk out.")
 

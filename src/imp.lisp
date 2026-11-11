@@ -274,7 +274,7 @@ that comes no nearer them than it is now. NIL if there is none."
              (h (sprite-height imp))
              (step (step-height imp))
              (feet (feet *player*))
-             (now (player-distance imp))
+             (now (target-distance imp))
              (closest (* 0.8 (min now 2.5))))
         (multiple-value-bind (si sj sk) (nav-nearest-fitting loc r h)
           (when si
@@ -312,7 +312,7 @@ that comes no nearer them than it is now. NIL if there is none."
 (defun keep-fleeing (imp)
   "Go on running while IMP flees: true; NIL if it has nowhere to go, when it turns and fights."
   (cond ((and (eq (brain imp) :walking) (path imp)) T)
-        ((< *flee-safe-distance* (player-distance imp))
+        ((< *flee-safe-distance* (target-distance imp))
          ;; Far enough: watch from here.
          (stop-walking imp 0.3)
          T)
@@ -345,7 +345,7 @@ that comes no nearer them than it is now. NIL if there is none."
 
 (defun seek-loot (imp)
   "Set IMP walking to the nearest pickup within *THIEF-SNIFF-RANGE* it can reach: true if it did."
-  (let ((pickup (and *player* (< (player-distance imp) *thief-witness-range*)
+  (let ((pickup (and *player* (< (target-distance imp *player*) *thief-witness-range*)
                      (< (abs (- (vy (feet *player*)) (vy (location imp)))) *shriek-rise*)
                      (loose-pickup-near (location imp) *thief-sniff-range*))))
     (when (and pickup *nav-grid*)
@@ -415,7 +415,7 @@ that comes no nearer them than it is now. NIL if there is none."
         ((< 0 (shriek imp)) (stop-walking imp (shriek imp)) T)
         ((< 0 (fleeing imp)) (keep-fleeing imp))
         ((and (stolen imp) (<= (cornered imp) 0))
-         (cond ((< (player-distance imp) *thief-keep-away*)
+         (cond ((< (target-distance imp) *thief-keep-away*)
                 (setf (fleeing imp) *thief-flee-time*
                       (slot-yaw imp) NIL)
                 (keep-fleeing imp))
@@ -429,8 +429,8 @@ that comes no nearer them than it is now. NIL if there is none."
   (if (not (skittish-p imp))
       (call-next-method)
       (progn
-        (when (and (player-within-p imp (attack-reach imp))
-                   (< (player-angle imp) (attack-arc imp))
+        (when (and (target-within-p imp (attack-reach imp))
+                   (< (target-angle imp) (attack-arc imp))
                    (clear-path-p (location imp) (feet *player*) 1.0))
           (unless (hurt-player *player* (roll (attack-damage imp)) (location imp) :by imp)
             (try-steal imp)))
@@ -460,7 +460,7 @@ that comes no nearer them than it is now. NIL if there is none."
   (declare (ignore dt))
   (when (and (eq (attack-kind imp) :leap) (or (airborne imp) (falling imp))
              (not (pounce-struck imp)) (not (dead imp)) *player* (< 0 (health *player*))
-             (player-within-p imp *pounce-reach*))
+             (target-within-p imp *pounce-reach*))
     (pounce-strike imp)))
 
 (defmethod show-own-pose ((imp imp) squash)

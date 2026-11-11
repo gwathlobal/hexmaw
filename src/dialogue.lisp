@@ -20,7 +20,7 @@
   "Open the talk with TOWNSFOLK, who turns to the player."
   (when (and (eq *game-state* :playing) *player*)
     (unless (dead townsfolk)
-      (face-player townsfolk))
+      (face-target townsfolk 0.0 *player*))
     (setf *talk-target* townsfolk
           *talk-page* page
           *talk-note* NIL

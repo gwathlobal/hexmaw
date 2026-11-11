@@ -230,7 +230,7 @@ the superclasses, so that its methods here come before the slot readers there.")
   "Back off from a player too close; raise a corpse if one is in reach; draw the grave
 circle under a player in range and sight, standing (not swimming: it is drawn on a floor);
 else throw skulls, or close in."
-  (let ((distance (player-distance necromancer))
+  (let ((distance (target-distance necromancer))
         (corpse NIL))
     (cond ((and (< distance (keep-away necromancer)) (retreat necromancer)))
           ((and (ready-p necromancer :raise) (setf corpse (corpse-to-raise necromancer)))
@@ -250,7 +250,7 @@ else throw skulls, or close in."
         (let ((loc (location necromancer))
               (at (location corpse)))
           (turn-to necromancer (atan (- (vx at) (vx loc)) (- (vz loc) (vz at))) dt))
-        (face-player necromancer dt))))
+        (face-target necromancer dt))))
 
 (defun raise-corpse (necromancer)
   "Tear the corpse NECROMANCER channelled into apart, and stand a skeleton up out of it."

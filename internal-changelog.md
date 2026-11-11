@@ -7,6 +7,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A creature's hunt asks about its target, not the player.** The first step toward one combat
+  for every actor: the hunt's helpers (`target-within-p`, `target-angle`, `target-distance`,
+  `face-target`, `target-bearing`, `sees-target-p`, attack slots, flanks, retreats, the plain
+  blow and spell) read `hunt-target`, still always the player, through a small protocol with a
+  method for the player and one for a creature (`aim-height`, `target-facing`, `target-live-p`,
+  `target-guarding-p`, `target-swimming-p`, `strike-target`, `shove-target`). No change in play.
 - **A clip swapped into the running game no longer comes up silent.** `reload-sound` (the sfx
   picker's swap) freed the clip's old voices, and Harmony kept their unpackers for the next voices
   made, ended and, for a stopped loop or a cut one-shot, still paused: the new voices played

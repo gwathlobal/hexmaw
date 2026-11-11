@@ -230,7 +230,7 @@ while it climbs back to its hover, so it never dives from the floor."
             (T
              (nv/ dir length)
              (setf (dive-left flyer) (+ length (dive-overshoot flyer))))))
-    (face-player flyer)
+    (face-target flyer)
     (creature-noise flyer :dive)))
 
 (defun end-dive (flyer)
@@ -251,7 +251,7 @@ length, against a wall or a body, or on the strike."
       (lift-flyer flyer (if floor
                             (max (* step (vy dir)) (- (+ floor *dive-floor-margin*) (vy loc)))
                             (* step (vy dir))))
-      (cond ((player-within-p flyer (attack-reach flyer))
+      (cond ((target-within-p flyer (attack-reach flyer))
              (hurt-player *player* (roll (attack-damage flyer)) loc :by flyer)
              (end-dive flyer))
             ((or x-blocked z-blocked (<= (dive-left flyer) 0))
@@ -260,7 +260,7 @@ length, against a wall or a body, or on the strike."
 (defmethod attack-step ((flyer flyer) dt)
   (cond ((< (incf (attack-time flyer) dt) (dive-windup flyer))
          ;; The warning: it hangs, rising, turned to follow the player.
-         (face-player flyer dt)
+         (face-target flyer dt)
          (lift-flyer flyer (* dt (/ (dive-rise flyer) (dive-windup flyer)))))
         (T
          (unless (dive-left flyer)

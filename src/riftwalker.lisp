@@ -239,7 +239,7 @@ is a creature that nothing moves (a sleeping boss)."
         (when to
           (rift-move target to :yaw (bearing to at))
           (when (typep caster 'riftwalker)
-            (face-player caster)))))))
+            (face-target caster)))))))
 
 (defmethod apply-effect ((kind (eql :teleport-away)) effect target source)
   (unless (rift-stopped-p target source)
@@ -308,7 +308,7 @@ whatever it was doing. True if it went."
           (stagger riftwalker) 0.0
           (call-target riftwalker) NIL)
     (rift-move riftwalker to :container (container riftwalker))
-    (face-player riftwalker)
+    (face-target riftwalker)
     T))
 
 (defmethod react-to-hit ((riftwalker riftwalker))
@@ -332,7 +332,7 @@ whatever it was doing. True if it went."
        (not (whirl c))
        (not (flung c))
        (not (afloat-p c))
-       (< *call-min-distance* (player-distance c))
+       (< *call-min-distance* (target-distance c (hunt-target riftwalker)))
        ;; Not one another riftwalker is calling already.
        (loop for other across *creatures*
              never (and (typep other 'riftwalker) (not (eq other riftwalker)) (eq c (call-target other))))))
@@ -400,7 +400,7 @@ it would step out on; or NIL."
 (defmethod special-attack ((riftwalker riftwalker))
   "Call an ally; push away a player on top of it while it is hurt or they hide behind their
 shield; or throw a pull or a swap at one in range. True if it started one."
-  (let* ((distance (player-distance riftwalker))
+  (let* ((distance (target-distance riftwalker))
          (seen (clear-path-p (location riftwalker) (feet *player*) (cast-height riftwalker))))
     (or (and (ready-p riftwalker :call)
              (multiple-value-bind (ally spot) (ally-to-call riftwalker)

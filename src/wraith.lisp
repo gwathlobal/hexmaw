@@ -103,7 +103,7 @@
 (defmethod hunt-from-range ((wraith gale-wraith))
   "Back off from a player too close; with one in range and sight, cast a tornado at them
 if none is up and the player is on a floor to lay the sign on, else throw a gust; or close in."
-  (let* ((distance (player-distance wraith))
+  (let* ((distance (target-distance wraith))
          (seen (and (< distance (attack-range wraith))
                     (clear-path-p (location wraith) (feet *player*) (cast-height wraith)))))
     (cond ((and (< distance (keep-away wraith)) (retreat wraith)))

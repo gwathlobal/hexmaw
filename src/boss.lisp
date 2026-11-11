@@ -275,7 +275,7 @@ or *BOSS-OVERRIDE*'s."
                                                    :powers (or powers (pick-boss-powers kind *block-random*)))))
 
 (defun boss-sees-player-p (boss range)
-  (and (< (player-distance boss) range)
+  (and (< (target-distance boss) range)
        (clear-path-p (location boss) (feet *player*) (cast-height boss))))
 
 (defun cast-fan (boss spell count spread)
@@ -494,7 +494,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
       (v<- loc to)
       (let ((kb (momentum boss))) (setf (vx kb) 0.0 (vz kb) 0.0))
       (setf (path boss) ())
-      (face-player boss)
+      (face-target boss)
       (spawn-fx 'bolt-burst (vec (vx to) (+ (vy to) (* 0.5 (sprite-height boss))) (vz to)) (container boss)))))
 
 (define-boss-power :fire-volley
@@ -523,7 +523,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
 
 (define-boss-power :shockwave
   :label "Shockwave" :cooldown 9.0 :frame-times '(0.9 0.15 0.2 0.5) :pause 1.0 :deny '(:flyer)
-  :usable (lambda (boss) (< (player-distance boss) (+ (body-radius boss) 3.5)))
+  :usable (lambda (boss) (< (target-distance boss) (+ (body-radius boss) 3.5)))
   :release (lambda (boss)
              (let ((at (location boss)))
                (play-sound :ogre-land at)
@@ -560,8 +560,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
   :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4 :deny '("riftwalker")
   :usable (lambda (boss)
             (if (ranged-p boss)
-                (< (player-distance boss) 4.0)
-                (< 9.0 (player-distance boss))))
+                (< (target-distance boss) 4.0)
+                (< 9.0 (target-distance boss))))
   :release #'blink)
 
 (define-boss-power :warded
@@ -745,7 +745,7 @@ void main(){
   (unless (boss-power boss) (call-next-method)))
 
 (defmethod face-attack-target ((boss boss) dt)
-  (if (boss-power boss) (face-player boss dt) (call-next-method)))
+  (if (boss-power boss) (face-target boss dt) (call-next-method)))
 
 ;; Its attacks run faster with Haste and enraged; a power's runs as a plain attack, a flyer's
 ;; too (a cast in place, as the wraith's).

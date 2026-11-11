@@ -275,7 +275,7 @@ true if there is a landing cell and an arc OGRE's body fits."
 (defun try-leap (leaper)
   "Start a leap at the player if LEAPER may leap again and PLAN-LEAP finds one: true if it did."
   (when (and (<= (leap-cooldown leaper) 0) (not (airborne leaper)) (not (falling leaper))
-             (<= (leap-min-distance leaper) (player-distance leaper) (+ (leap-max-distance leaper) 1.0))
+             (<= (leap-min-distance leaper) (target-distance leaper) (+ (leap-max-distance leaper) 1.0))
              (plan-leap leaper))
     (setf (attack-kind leaper) :leap)
     (start-attack leaper)
@@ -318,8 +318,8 @@ true if there is a landing cell and an arc OGRE's body fits."
          (yaw (facing ogre))
          (impact (vec (+ (vx loc) (* *slam-impact* (sin yaw))) (vy loc)
                       (- (vz loc) (* *slam-impact* (cos yaw)))))
-         (hit (and (player-within-p ogre (attack-reach ogre))
-                   (< (player-angle ogre) (attack-arc ogre))
+         (hit (and (target-within-p ogre (attack-reach ogre))
+                   (< (target-angle ogre) (attack-arc ogre))
                    (clear-path-p loc (feet *player*) 1.0))))
     (when hit
       (hurt-player *player* (roll (attack-damage ogre)) loc :shove *slam-shove* :lift *slam-lift*
