@@ -121,14 +121,18 @@ the superclasses, so that its methods here come before the slot readers there.")
 (define-creature-sounds skeleton-warrior
   :alert :skeleton-alert :pain :skeleton-pain :death :skeleton-collapse :windup :skeleton-chop :step :step-bone)
 
-(defun spawn-raised-skeleton (corpse container)
-  "Raise a skeleton where CORPSE lies, getting up and already hunting. Returns it."
+(defun spawn-raised-skeleton (corpse container &optional summoner)
+  "Raise a skeleton where CORPSE lies, on SUMMONER's side, getting up and already hunting what
+SUMMONER hunts (or the player). Returns it."
   (let* ((loc (location corpse))
-         (feet (and *player* (feet *player*)))
-         (skeleton (make-instance 'skeleton-warrior :location (vcopy loc) :summoned T
+         (target (if summoner (hunt-target summoner) *player*))
+         (feet (and target (body-feet target)))
+         (skeleton (make-instance 'skeleton-warrior :location (vcopy loc) :summoned T :summoner summoner
                                             :facing (if feet
                                                         (atan (- (vx feet) (vx loc)) (- (vz loc) (vz feet)))
                                                         (facing corpse)))))
+    (when (and target (hostile-p skeleton target))
+      (set-target skeleton target))
     (setf (rising skeleton) (death-duration skeleton)
           (alert skeleton) (alert-time))
     (spawn-creature skeleton container)
@@ -205,6 +209,8 @@ the superclasses, so that its methods here come before the slot readers there.")
 
 (defmethod spares-p ((n necromancer) target) (undead target))
 
+(defmethod targets-creatures-p ((necromancer necromancer)) T)
+
 (defun raisable-p (corpse)
   "True if CORPSE can be raised: dead and done falling, whole, and of flesh or bone."
   (and (dead corpse)
@@ -229,20 +235,22 @@ the superclasses, so that its methods here come before the slot readers there.")
     best))
 
 (defmethod hunt-from-range ((necromancer necromancer))
-  "Back off from a player too close; raise a corpse if one is in reach; draw the grave
-circle under a player in range and sight, standing (not swimming: it is drawn on a floor);
+  "Back off from a target too close; raise a corpse if one is in reach; draw the grave
+circle under a target in range and sight, standing (not swimming: it is drawn on a floor);
 else throw skulls, or close in."
-  (let ((distance (target-distance necromancer))
-        (corpse NIL))
+  (let* ((distance (target-distance necromancer))
+         (target (hunt-target necromancer))
+         (feet (body-feet target))
+         (corpse NIL))
     (cond ((and (< distance (keep-away necromancer)) (retreat necromancer)))
           ((and (ready-p necromancer :raise) (setf corpse (corpse-to-raise necromancer)))
            (setf (raise-target necromancer) corpse)
            (start-ability necromancer :raise))
-          ((and (ready-p necromancer :nova) (< distance *nova-range*) (not (swimming *player*))
-                (clear-path-p (location necromancer) (feet *player*) (cast-height necromancer)))
+          ((and (ready-p necromancer :nova) (< distance *nova-range*) (not (target-swimming-p target))
+                (clear-path-p (location necromancer) feet (cast-height necromancer)))
            (start-ability necromancer :nova))
           ((and (< distance (attack-range necromancer))
-                (clear-path-p (location necromancer) (feet *player*) (cast-height necromancer)))
+                (clear-path-p (location necromancer) feet (cast-height necromancer)))
            (start-ability necromancer :skull))
           (T (chase necromancer)))))
 
@@ -262,11 +270,11 @@ else throw skulls, or close in."
     (when (and corpse (raisable-p corpse) (container necromancer))
       (play-sound :raise-release (location corpse))
       (tear-apart corpse :from (location necromancer))
-      (spawn-raised-skeleton corpse (container necromancer)))))
+      (spawn-raised-skeleton corpse (container necromancer) necromancer))))
 
 (defun cast-grave-circle (necromancer)
-  "Draw NECROMANCER's grave circle on the floor under the player as they stand now."
-  (let* ((feet (feet *player*))
+  "Draw NECROMANCER's grave circle on the floor under what it hunts as it stands now."
+  (let* ((feet (body-feet (hunt-target necromancer)))
          (floor (or (and *nav-grid* (nav-floor-at (vx feet) (vy feet) (vz feet))) (vy feet))))
     (play-sound :grave-cast (location necromancer))
     (cast-spell (find-spell (ability-spell (current-ability necromancer)))

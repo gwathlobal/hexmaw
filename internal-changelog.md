@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The necromancer fights creatures too.** Its grave circle is drawn under its target, its skulls
+  home on what it hunted as it cast (a projectile's `homing-target`, saved; NIL is the player), and
+  a skeleton it raises is on its side (`summoner`) and hunts its target.
 - **The harpy dives at creatures too.** Its dive aims at its target's head (`strike-height`, or a
   shorter target's chest, `aim-height`) and its talons strike through `strike-target`.
 - **The imp and the ogre fight creatures as they fight the player.** The leap (`plan-leap`,

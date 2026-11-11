@@ -218,8 +218,11 @@ burst over every body within it of point AT."
    (caster :initarg :caster :initform NIL :accessor caster
            :documentation "Who fired it (the player or a creature), whom it never hits.")
    (homing :initarg :homing :initform NIL :accessor homing
-           :documentation "Radians a second it turns after the player, or NIL; a shield that
+           :documentation "Radians a second it turns after HOMING-TARGET, or NIL; a shield that
 turns it aside ends it.")
+   (homing-target :initarg :homing-target :initform NIL :accessor homing-target
+                  :documentation "What it homes in on: what its creature caster hunted as it cast, or NIL
+for the player.")
    (projectile-velocity :initform (vec 0 0 0) :reader projectile-velocity)
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
@@ -264,6 +267,8 @@ its strike. The player's own casts sound from the hands (player.lisp).")
   (let ((projectile (make-instance 'spell-projectile
                                   :spell spell :caster caster :location (vcopy origin)
                                   :homing (spell-homing spell)
+                                  :homing-target (and (spell-homing spell) (typep caster 'creature)
+                                                      (hunt-target caster))
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
     (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T))
@@ -337,14 +342,14 @@ WATER it hisses out."
         (T
          (impact projectile))))
 
-(defun steer (projectile dt)
-  "Turn PROJECTILE's flight toward the player's chest by at most its HOMING rate for DT
-seconds, keeping its speed."
+(defun steer (projectile dt target)
+  "Turn PROJECTILE's flight toward TARGET's chest by at most its HOMING rate for DT seconds,
+keeping its speed."
   (let* ((v (projectile-velocity projectile))
          (loc (location projectile))
-         (feet (feet *player*))
+         (feet (body-feet target))
          (tx (- (vx feet) (vx loc)))
-         (ty (- (+ (vy feet) *cast-aim-height*) (vy loc)))
+         (ty (- (+ (vy feet) (aim-height target)) (vy loc)))
          (tz (- (vz feet) (vz loc)))
          (tl (sqrt (+ (* tx tx) (* ty ty) (* tz tz))))
          (speed (vlength v)))
@@ -394,8 +399,11 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
   (unless (frozen-p)
     (let* ((loc (location spell-projectile))
            (r (* 0.5 (float *projectile-size* 0f0))))
-      (when (and (homing spell-projectile) *player* (not (eq (caster spell-projectile) *player*)))
-        (steer spell-projectile (float dt 0f0)))
+      (when (homing spell-projectile)
+        (let ((target (or (homing-target spell-projectile)
+                          (and (not (eq (caster spell-projectile) *player*)) *player*))))
+          (when (and target (not (eq target (caster spell-projectile))) (target-live-p target))
+            (steer spell-projectile (float dt 0f0) target))))
       (when (and *player* (eq (caster spell-projectile) *player*))
         (look-ahead spell-projectile r))
       (nv+* loc (projectile-velocity spell-projectile) dt)

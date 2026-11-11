@@ -108,7 +108,7 @@ their values."
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing projectile-velocity submerged evade-asked))
+  '(spell caster homing homing-target projectile-velocity submerged evade-asked))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
