@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A clip swapped into the running game no longer comes up silent.** `reload-sound` (the sfx
+  picker's swap) freed the clip's old voices, and Harmony kept their unpackers for the next voices
+  made, ended and, for a stopped loop or a cut one-shot, still paused: the new voices played
+  nothing, until a second swap happened to get clean ones. `free-voices` now frees the unpackers
+  too (Harmony's internal `free-unpackers` pool), so new voices get fresh ones.
 - **The maul, a third weapon.** Two-handed, no shield (src/maul.lisp). The left button held charges
   the blow (15 stamina a blow, paid as it rises, and none without it; 0.4 s up, full at 1.35 s, 30
   stamina a second past the least, landing 0.19 s after the release and done 0.4 s later, the player slowed to 0.6
@@ -35,8 +40,7 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   The charge's cry is a one-shot, not a loop (a loop held while the charge grew sounded for good
   once stamina stopped it short of full), started once the button has been held `*maul-cry-delay*`
   (0.2 s, so a click has none) and cut off as the blow comes down: `cut-sound` (sound.lisp) pauses a
-  one-shot `play-sound` returned until it is next played. Setting its volume to 0 instead left the
-  voice silent at full volume after. `make_sfx.py` given clip names checks only their picks, since a worktree has only its own
+  one-shot `play-sound` returned until it is next played. `make_sfx.py` given clip names checks only their picks, since a worktree has only its own
   takes. The debug level's hotbar has it on key 6. The `:block`
   action reads "Block, alt attack" (the longer label ran into its key on Controls), and the Deepwardens' rule "No weapon is drawn".
 - **The spear counters and sweeps.** A thrust that lands on a creature charging through the air

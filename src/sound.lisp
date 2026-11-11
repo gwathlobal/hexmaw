@@ -139,11 +139,17 @@ enter the director."
     (enter (make-instance 'sound-director) scene)))
 
 (defun free-voices (voices)
-  "Free VOICES in the mixing thread, which may still be playing them."
+  "Free VOICES in the mixing thread, which may still be playing them. Harmony keeps a freed
+voice's unpacker for the next voice made, ended and still paused if it was: a voice made on
+one played nothing (a clip swapped in after its paused loop or a cut cry was freed came up
+silent). So the unpackers are freed too, and new voices get fresh ones."
   (when voices
     (harmony:with-server (harmony:*server* :synchronize T)
       (dolist (voice voices)
-        (mixed:free (sfx-voice-voice voice))))))
+        (mixed:free (sfx-voice-voice voice)))
+      (loop for unpacker = (pop (harmony::free-unpackers harmony:*server*))
+            while unpacker
+            do (mixed:free unpacker)))))
 
 (defun reload-sound (name)
   "Make clip NAME afresh from data/sfx/index.lisp, as tools/make_sfx.py just wrote it, while
@@ -422,8 +428,7 @@ asked for, and every loop's state."
                    (connect-voice voice)
                    (setf (mixed:volume hvoice) (voice-volume voice))
                    (place-voice voice)))
-        ;; A cut one stays connected, paused, until it is next played. Not its volume to 0:
-        ;; a voice so silenced stayed silent at full volume after.
+        ;; A cut one stays connected, paused, until it is next played.
         (loop for voice = (sb-ext:atomic-pop (symbol-value '*sound-cuts*))
               while voice
               unless (or (sfx-freed (voice-sfx voice)) (null (harmony:chain (sfx-voice-voice voice))))

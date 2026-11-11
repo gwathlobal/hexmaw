@@ -1345,7 +1345,10 @@ real time instead.
   voices of its own (Trial's sound assets play one copy at a time): `*sfx-voices*` per file,
   taken in turn, the oldest cut short when all are busy, and `*loop-voices*` per loop, made
   once by `add-sounds` (from `setup-scene`) and kept in `*sounds*` across rebuilds;
-  `(reload-sounds)` then a reset picks up re-made files. **The game thread never touches a
+  `(reload-sounds)` then a reset picks up re-made files. Freeing voices (`free-voices`) frees
+  their unpackers too: Harmony keeps a freed voice's for the next voice made, ended and still
+  paused if it was, and a clip swapped in on those (after its paused loop or a cut cry was freed)
+  played nothing until it was swapped in again. **The game thread never touches a
   voice's connection**: `play-sound` pushes a request, and the `sound-director`'s tick hands
   Harmony's mixing thread one function, `sound-frame`, that starts them, moves the listener
   (`*listener-location*`, the player's eye) and the loops, and pauses the loops whenever
