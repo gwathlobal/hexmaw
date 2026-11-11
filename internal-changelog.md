@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A creature's standing picture is always loaded with its scene.** A creature was staged with
+  only the picture it showed at that moment plus its strips, so one restored from a save mid-walk
+  left its turnaround out of the scene's staging area, and Trial unloaded it if the scene before
+  had loaded it fresh: once that creature stood still, every frame with it in view failed to draw
+  and the game looked frozen (seen after a quickload in a town, on a commoner). `stage :after` on
+  `creature` now stages its `body-texture` too. Reproduced on 1 in 4 tries of a quickload with a
+  commoner walking, none in 6 after.
 - **One combat for every actor: `fight-foe` is gone.** Every monster, boss power and townsperson
   fights a creature with the same hunt it uses on the player ("Targets and sides" in CLAUDE.md), so
   `fight-foe`, its `:around` methods, `foe-attack` and the conversion gate are removed. Fights against

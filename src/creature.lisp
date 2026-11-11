@@ -385,8 +385,12 @@ times (NOTE-GRUDGE): the two are hostile until one dies or it gives up the hunt.
   (setf (slot-value creature 'body-texture) (texture creature))
   (setf (slot-value creature 'base-scaling) (vcopy (scaling creature))))
 
-;; Only the current texture gets loaded with the scene; the other strips have to be too.
+;; Only the current texture gets loaded with the scene; the other strips have to be too, and
+;; so does the standing picture: a creature restored from a save mid-walk is staged showing its
+;; walk, and its turnaround, left out of the scene's area, was unloaded (render errors once it
+;; stood still).
 (defmethod stage :after ((creature creature) (area staging-area))
+  (stage (body-texture creature) area)
   (dolist (name (list (death-animation creature) (walk-animation creature) (attack-animation creature)
                     (hurt-animation creature) (block-animation creature)))
     (when name
