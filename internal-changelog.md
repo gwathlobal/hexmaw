@@ -7,6 +7,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A boss's powers aim at its target.** Fire volleys, skull barrages, the grave circle, the
+  shockwave's reach, the tornado's sign and the blink read `hunt-target` (`boss-sees-target-p`), and
+  its summons are on its side and hunt its target. Waking it and sealing the arena stay the
+  player's.
 - **The riftwalker fights creatures too.** Its pulls, swaps and pushes are aimed at its target,
   the push's "shield up" asks `target-guarding-p`, the swap's pounce lands behind any target, its
   blinks keep the target in sight, and its call brings only allies of its own side, set on its
