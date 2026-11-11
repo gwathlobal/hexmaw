@@ -608,7 +608,8 @@ killing blow that overkills by that fraction of its most, if its own needs more 
       (stop-walking creature *hurt-pause*)
       (when (< 0 (health creature))
         (creature-noise creature :pain)))
-    (when (felt-hit-p creature by)
+    ;; A blow between two creatures doesn't freeze the world: the player isn't in that fight.
+    (unless (typep by 'creature)
       (hit-stop))
     (when (<= (health creature) 0)
       (creature-noise creature :death)
@@ -622,16 +623,6 @@ killing blow that overkills by that fraction of its most, if its own needs more 
     (harmed creature amount by)
     (unless (dead creature)
       (react-to-hit creature))))
-
-(defparameter *hit-stop-reach* 10.0
-  "Metres from the player within which a blow between two creatures hit-stops the world: one
-across the town shouldn't freeze it.")
-
-(defun felt-hit-p (creature by)
-  "True if a blow at CREATURE by BY hit-stops: the player's or nothing's, or near the player."
-  (or (not (typep by 'creature))
-      (null *player*)
-      (< (vdistance (location creature) (feet *player*)) *hit-stop-reach*)))
 
 (defparameter *grudge-strikes* 3
   "Strikes by one creature of another kind that turn a creature on it (NOTE-GRUDGE), so one stray

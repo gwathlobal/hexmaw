@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A blow between two creatures never hit-stops.** The world-wide 0.06 s freeze stays on blows the
+  player deals or takes and on harm from no one (lava); a fight between creatures doesn't freeze the
+  game wherever it is (`felt-hit-p` and `*hit-stop-reach*`, its 10 m limit, are gone).
 - **A vertical move can't push the player through a solid, and a fall out of the world is
   logged.** `move-axis` put the feet under the bottom of whatever a rise overlapped, and on top of
   whatever a fall overlapped, even a solid the body was already inside: a jump from inside a

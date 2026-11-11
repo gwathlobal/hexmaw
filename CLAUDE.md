@@ -1692,7 +1692,7 @@ dead, at peace with it or out of its reach (`keeps-target-p`: a townsperson goes
 what it hunts is in its reach (`harmed`). Attack spots are claimed round each hunter's own target,
 among the hunters of that target; a new target starts its spots afresh (`set-target`). A creature
 `sent` at its quarry (a raid) keeps after it unseen and walks up to `*sent-max-walk*` (60 m). A blow
-between two creatures hit-stops only within `*hit-stop-reach*` (10 m) of the player (`felt-hit-p`).
+between two creatures doesn't hit-stop: only one the player deals or takes, or one from no one (lava).
 `(stage-fight a b)` (level.lisp) sets two fighting on the test level, a class, a townsfolk role
 (`"guard"`, preloaded there) or a creature each; a class takes a creature of it the level has, so
 set `*debug-level-monsters*` to the kinds wanted first.
