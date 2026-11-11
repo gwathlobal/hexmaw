@@ -263,8 +263,9 @@ void main(){
   (if (eq (caster vortex) *player*) *vortex-player-speed* *vortex-speed*))
 
 (defun vortex-target (vortex)
-  "Where VORTEX makes for: a creature's goes after the player, the player's after the
-nearest creature it can see. NIL, for keeping its heading, once its quarry is inside it."
+  "Where VORTEX makes for: a creature's goes after what its caster hunts (the player, if
+nothing), the player's after the nearest creature it can see. NIL, for keeping its heading,
+once its quarry is inside it."
   (let ((c (centre vortex)))
     (if (eq (caster vortex) *player*)
         (let ((best NIL) (best-distance *vortex-seek-range*))
@@ -275,8 +276,10 @@ nearest creature it can see. NIL, for keeping its heading, once its quarry is in
                           (clear-path-p c at 1.0))
                   do (setf best at best-distance d))
           best)
-        (when (and *player* (not (whirl *player*)))
-          (feet *player*)))))
+        (let ((target (or (and (typep (caster vortex) 'creature) (hunt-target (caster vortex)))
+                          *player*)))
+          (when (and target (target-live-p target) (not (whirl target)))
+            (body-feet target))))))
 
 (defun plan-vortex (vortex)
   (let ((c (centre vortex))

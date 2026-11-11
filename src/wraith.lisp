@@ -91,8 +91,8 @@
   (find wraith *vortices* :key #'caster))
 
 (defun begin-tempest (wraith)
-  "Start casting the tornado at the floor under the player, marked there by a sign."
-  (v<- (tempest-point wraith) (floor-under (feet *player*)))
+  "Start casting the tornado at the floor under what WRAITH hunts, marked there by a sign."
+  (v<- (tempest-point wraith) (floor-under (body-feet (hunt-target wraith))))
   (setf (getf (cooldowns wraith) :tempest) *tempest-retry*)
   (start-ability wraith :tempest)
   (enter (make-instance 'gale-sign :caster wraith :centre (vcopy (tempest-point wraith))
@@ -101,17 +101,20 @@
          (container wraith)))
 
 (defmethod hunt-from-range ((wraith gale-wraith))
-  "Back off from a player too close; with one in range and sight, cast a tornado at them
-if none is up and the player is on a floor to lay the sign on, else throw a gust; or close in."
+  "Back off from a target too close; with one in range and sight, cast a tornado at it if
+none is up and it is on a floor to lay the sign on, else throw a gust; or close in."
   (let* ((distance (target-distance wraith))
+         (target (hunt-target wraith))
          (seen (and (< distance (attack-range wraith))
-                    (clear-path-p (location wraith) (feet *player*) (cast-height wraith)))))
+                    (clear-path-p (location wraith) (body-feet target) (cast-height wraith)))))
     (cond ((and (< distance (keep-away wraith)) (retreat wraith)))
           ((and seen (ready-p wraith :tempest) (not (own-vortex wraith))
-                (not (swimming *player*)) (not (whirl *player*)))
+                (not (target-swimming-p target)) (not (whirl target)))
            (begin-tempest wraith))
           (seen (start-ability wraith :gust))
           (T (chase wraith)))))
+
+(defmethod targets-creatures-p ((wraith gale-wraith)) T)
 
 (defmethod release-attack ((wraith gale-wraith))
   (let ((ability (current-ability wraith)))

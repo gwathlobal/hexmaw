@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The gale wraith fights creatures too.** Its sign is laid under its target and a creature's
+  tornado chases what its caster hunts (`vortex-target`), so a wraith's tornado takes a guard.
 - **The necromancer fights creatures too.** Its grave circle is drawn under its target, its skulls
   home on what it hunted as it cast (a projectile's `homing-target`, saved; NIL is the player), and
   a skeleton it raises is on its side (`summoner`) and hunts its target.
