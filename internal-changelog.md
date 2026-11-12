@@ -13,9 +13,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   the camera and the fire burning behind the fingers, one generated picture a pose (rest, gather,
   the fireball held, the release, the hands flung open) placed by `tools/make_shield.py` from
   `art/hands/hands-frames.txt` at 0.2 art pixels a source pixel (the spear's 0.254 hid the middle
-  of the view), so they cover about what the old hands did and draw at `sword-scale` as one sprite
-  centred by its aim (`*hands-aim*`; `*hands-height*`, `*hands-stretch*`, `*hands-drop*`,
-  `*hands-spread*` and `*hands-together*` are gone). The idle flicker is the rest pose's hands over
+  of the view), so they cover about what the old hands did and draw at `sword-scale`, centred by
+  their aim (`*hands-aim*`; `*hands-height*`, `*hands-stretch*` and `*hands-drop*` are gone). Each
+  hand still draws its half of the frame, `*hands-spread*` (28 art pixels) out from the middle,
+  and they close up where the fire joins between them (`*hands-together*`). The idle flicker is the rest pose's hands over
   another take's fire (`tools/swap_fire.py`). `make_shield.py --glow` leaves fire out of its
   darkening. The six spell looks are recoloured from the new strip. CLAUDE.md has a rule against
   waiting on a `pgrep -f` loop that matches its own command line. (Players will see these.)

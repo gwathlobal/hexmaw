@@ -1375,9 +1375,11 @@ real time instead.
   `*sound-groups*` (`:music`, `:effects` for every clip), loops already playing too, and `(unmute)`
   brings everything back.
 - `src/hands.lisp`: the first-person casting hands, the weapons' steel gauntlets with fire burning
-  behind the fingers, sunk Hexen-style below the bottom edge (idle loop, cast, walking sway). One
-  sprite: each frame is both hands, drawn at `sword-scale` like the weapons and placed by its aim
-  (`*hands-aim*`, the pictures' middle) on the screen's middle. The cast's release frame is timed
+  behind the fingers, sunk Hexen-style below the bottom edge (idle loop, cast, walking sway). Each
+  frame is both hands, drawn at `sword-scale` like the weapons and placed by its aim (`*hands-aim*`,
+  the pictures' middle) on the screen's middle; each hand is its own entity drawing its half
+  (`hands-split`), `*hands-spread*` (28) art pixels out from the middle, closing up for the frames
+  where the fire joins between them (`*hands-together*`: the gather, the fireball held, the release). The cast's release frame is timed
   to `*cast-release*`. Their fire takes the look of the spell in them (`*hand-looks*`, by
   `spell-look`: a tornado's `:storm`, else its effects'), one strip per look, each the fire strip
   recoloured, `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/<look> --hue H`
