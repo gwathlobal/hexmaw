@@ -7,6 +7,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Art audit tools.** `tools/art_audit.py` measures every shipped image (art pixels per metre from
+  the `define-fx-animation` sizes, colours, part-transparent pixels, outline share, lightness range,
+  the first-person and HUD screen scale) and `--check` fails on a house-style rule broken that
+  `tools/art_audit_allow.txt` doesn't excuse. `tools/art_sheets.py` makes contact sheets of the art at
+  the size it reaches the screen, and `tools/art_shots.sh` staged screenshots on the debug level where
+  groups of art meet (a monster at a wall, a torch, an area burst, the hands, the circle, pickups).
 - **A blow between two creatures never hit-stops.** The world-wide 0.06 s freeze stays on blows the
   player deals or takes and on harm from no one (lava); a fight between creatures doesn't freeze the
   game wherever it is (`felt-hit-p` and `*hit-stop-reach*`, its 10 m limit, are gone).
