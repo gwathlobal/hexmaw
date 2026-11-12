@@ -2006,7 +2006,7 @@ sprites, each asset on colours of its own. The before and after shots are in
 - **Screen scale.** First-person art draws at `sword-scale` (3 screen pixels an art pixel at 720
   rows, 5 at 1080), with square pixels; the HUD's art at `hud-pixel-scale` (2 and 3); HUD text is
   Jersey 15 at its own 27 px grid, 1:1 (`tools/make_hud_font.py`). The casting hands draw at
-  `sword-scale` too, made at the spear's source scale.
+  `sword-scale` too.
 - **One palette.** Every sprite and texture is on `art/style/palette.txt`, 128 colours in ramps,
   made by `tools/make_palette.py` from the art itself; splash screens keep every colour. A slicer's
   or recolour's output goes through `tools/restyle.py --house` (below); a texture through
@@ -2375,7 +2375,8 @@ the chosen rest pose, `art/hands/idle-2.png`; the rest pose took the old bare-ha
 `art/hands/fire-hands.png`, as a third reference for how the hands are held). The idle flicker
 is the rest pose's hands over another take's fire (`tools/swap_fire.py`), since a take asked for
 only other flames moved the hands too. `art/hands/hands-frames.txt` places them, 4 idle frames
-and the 8 of the cast, at the spear's scale, and `--glow` keeps the fire out of the darkening
+and the 8 of the cast, at 0.2 art pixels a source pixel (the spear's 0.254 drew them so big
+they hid the middle of the view), and `--glow` keeps the fire out of the darkening
 (darkened, white fire went grey and the palette made it pale blue):
 
 ```bash

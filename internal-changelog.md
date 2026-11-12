@@ -12,7 +12,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   in two halves spread apart. Now they are the sword's and spear's steel gauntlets, their backs to
   the camera and the fire burning behind the fingers, one generated picture a pose (rest, gather,
   the fireball held, the release, the hands flung open) placed by `tools/make_shield.py` from
-  `art/hands/hands-frames.txt` at the spear's scale, so they draw at `sword-scale` as one sprite
+  `art/hands/hands-frames.txt` at 0.2 art pixels a source pixel (the spear's 0.254 hid the middle
+  of the view), so they cover about what the old hands did and draw at `sword-scale` as one sprite
   centred by its aim (`*hands-aim*`; `*hands-height*`, `*hands-stretch*`, `*hands-drop*`,
   `*hands-spread*` and `*hands-together*` are gone). The idle flicker is the rest pose's hands over
   another take's fire (`tools/swap_fire.py`). `make_shield.py --glow` leaves fire out of its

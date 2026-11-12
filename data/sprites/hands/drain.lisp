@@ -1,4 +1,4 @@
 ;;; Written by tools/recolor_strip.py from hands; do not edit.
 (:image "drain.png"
- :cell-width 369 :cell-height 209 :gap 2
+ :cell-width 292 :cell-height 166 :gap 2
  :frames 12)

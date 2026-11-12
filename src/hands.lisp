@@ -25,9 +25,9 @@
 (defparameter *weapon-depth* -1.0
   "HUD depth of the hands, the sword, the shield and the spear: behind the bars, the hotbar, the
 inventory and its tooltip, and the pain flash, which they reach into.")
-(defparameter *hands-aim* 195
+(defparameter *hands-aim* 154
   "Art pixels from the hands strip's screen corner to its aim, which goes on the screen's middle:
-the pictures' middle, (1536 - 768) * 0.254 (art/hands/hands-frames.txt).")
+the pictures' middle, (1536 - 768) * 0.2 (art/hands/hands-frames.txt).")
 (defparameter *hands-idle-sequence* '(0 1 2 3) "Strip frames the idle loop steps through.")
 (defparameter *hands-cast-first* 4 "Strip index of the cast's first frame.")
 (defparameter *hands-cast-frames* 8)
