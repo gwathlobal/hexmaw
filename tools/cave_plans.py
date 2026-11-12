@@ -598,6 +598,10 @@ def frost_shrine():
     put(g, 2, 8, '&&'); put(g, 2, 14, '&&'); put(g, 10, 7, '$$'); put(g, 10, 15, '$$')
     region(g, 5, L=[11, 9, 7, 7, 9, 11], R=[13, 15, 17, 17, 15, 13], fill='_', pairs={'/': '{', '\\': '}'})
     diamond(g, 4, 4); diamond(g, 4, 16)
+    # Where the rock's 45-degree wall meets the dais or its step, the ice fills the rock pair's
+    # open half up to the ice's height, and the dais runs square up to it: left open, the rock's
+    # diagonal and the dais's beside it made a slot 0.8 m deep that the player fell into.
+    put(g, 1, 5, 'aa%%'); put(g, 1, 15, '%%bb'); put(g, 2, 3, 'cc'); put(g, 2, 19, 'dd')
     g[4][0] = g[8][0] = g[4][23] = g[8][23] = 'T'
     return g
 

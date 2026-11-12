@@ -236,15 +236,16 @@ List it before CREATURE or a subclass in the superclasses."))
           finally (return T))))
 
 (defun plan-leap (ogre)
-  "Lay out a leap at the player, into LEAP-FROM, LEAP-TO, LEAP-APEX and LEAP-DURATION:
+  "Lay out a leap at what OGRE hunts, into LEAP-FROM, LEAP-TO, LEAP-APEX and LEAP-DURATION:
 true if there is a landing cell and an arc OGRE's body fits."
   (let* ((*leaper* ogre)
          (loc (ground-point ogre))
          (r (body-radius ogre))
-         (h (sprite-height ogre)))
-    (multiple-value-bind (i j k) (and *nav-grid* (nav-nearest-fitting (feet *player*) r h :search 4))
+         (h (sprite-height ogre))
+         (feet (body-feet (hunt-target ogre))))
+    (multiple-value-bind (i j k) (and *nav-grid* (nav-nearest-fitting feet r h :search 4))
       (unless i
-        (return-from plan-leap (leap-refused "no cell under the player fits")))
+        (return-from plan-leap (leap-refused "no cell under the target fits")))
       (let* ((to (nav-point i j k))
              (distance (sqrt (+ (expt (- (vx to) (vx loc)) 2) (expt (- (vz to) (vz loc)) 2))))
              (rise (- (vy to) (vy loc))))
@@ -252,8 +253,8 @@ true if there is a landing cell and an arc OGRE's body fits."
                (leap-refused "landing ~,1f m away" distance))
               ((< (leap-max-rise ogre) rise) (leap-refused "~,1f m up" rise))
               ((< (leap-max-drop ogre) (- rise)) (leap-refused "~,1f m down" (- rise)))
-              ((not (clear-path-p (location ogre) (feet *player*) (cast-height ogre)))
-               (leap-refused "no line to the player"))
+              ((not (clear-path-p (location ogre) feet (cast-height ogre)))
+               (leap-refused "no line to the target"))
               (T
                (let* ((top (max (vy loc) (vy to)))
                       (ceiling (lowest-ceiling-along loc to top))
@@ -273,9 +274,9 @@ true if there is a landing cell and an arc OGRE's body fits."
                         T)))))))))
 
 (defun try-leap (leaper)
-  "Start a leap at the player if LEAPER may leap again and PLAN-LEAP finds one: true if it did."
+  "Start a leap at what LEAPER hunts if it may leap again and PLAN-LEAP finds one: true if it did."
   (when (and (<= (leap-cooldown leaper) 0) (not (airborne leaper)) (not (falling leaper))
-             (<= (leap-min-distance leaper) (player-distance leaper) (+ (leap-max-distance leaper) 1.0))
+             (<= (leap-min-distance leaper) (target-distance leaper) (+ (leap-max-distance leaper) 1.0))
              (plan-leap leaper))
     (setf (attack-kind leaper) :leap)
     (start-attack leaper)
@@ -318,21 +319,25 @@ true if there is a landing cell and an arc OGRE's body fits."
          (yaw (facing ogre))
          (impact (vec (+ (vx loc) (* *slam-impact* (sin yaw))) (vy loc)
                       (- (vz loc) (* *slam-impact* (cos yaw)))))
-         (hit (and (player-within-p ogre (attack-reach ogre))
-                   (< (player-angle ogre) (attack-arc ogre))
-                   (clear-path-p loc (feet *player*) 1.0))))
+         (target (hunt-target ogre))
+         (hit (and target
+                   (target-within-p ogre (attack-reach ogre) target)
+                   (< (target-angle ogre target) (attack-arc ogre))
+                   (clear-path-p loc (body-feet target) 1.0))))
     (when hit
-      (hurt-player *player* (roll (attack-damage ogre)) loc :shove *slam-shove* :lift *slam-lift*
-                   :guard-break (guard-break ogre) :by ogre))
+      (strike-target target (roll (attack-damage ogre)) loc :shove *slam-shove* :lift *slam-lift*
+                     :guard-break (guard-break ogre) :by ogre))
     (play-sound :ogre-slam impact)
+    ;; What the blow struck flies on its shove: the maul's impact shakes the rest.
     (quake ogre impact *slam-quake-radius* NIL *slam-quake-shove*
-           (unless hit *slam-quake-shove*) *slam-quake-lift*)
+           (unless (and hit (eq target *player*)) *slam-quake-shove*) *slam-quake-lift*
+           :spare (and hit target))
     (kick-dust impact 0.0 1 (container ogre))))
 
 ;;; The shockwave.
 
-(defun quake (ogre centre radius damage shove player-shove player-lift &key (inner 0.0))
-  "Shake the floor at CENTRE out to RADIUS: everything but OGRE with its feet on that
+(defun quake (ogre centre radius damage shove player-shove player-lift &key (inner 0.0) spare)
+  "Shake the floor at CENTRE out to RADIUS: everything but OGRE (and SPARE) with its feet on that
 floor takes DAMAGE (a roll, NIL for none) and is thrown away at SHOVE m/s (the player at
 PLAYER-SHOVE, NIL to leave them, and up at PLAYER-LIFT). All of it is full within INNER
 of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIUS."
@@ -343,7 +348,7 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
              (when (and (< d radius) (< (abs (- (vy point) (vy centre))) *quake-reach-height*))
                (min 1.0 (- 1.0 (/ (- d inner) (- radius inner))))))))
     (loop for c across *creatures*
-          for f = (and (not (eq c ogre)) (not (dead c)) (falloff (location c) (body-radius c)))
+          for f = (and (not (eq c ogre)) (not (eq c spare)) (not (dead c)) (falloff (location c) (body-radius c)))
           when f
             do (leap-log "quake hits ~a at ~,2f" (type-of c) f)
                (when damage

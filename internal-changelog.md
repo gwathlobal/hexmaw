@@ -7,6 +7,80 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A blow between two creatures never hit-stops.** The world-wide 0.06 s freeze stays on blows the
+  player deals or takes and on harm from no one (lava); a fight between creatures doesn't freeze the
+  game wherever it is (`felt-hit-p` and `*hit-stop-reach*`, its 10 m limit, are gone).
+- **A vertical move can't push the player through a solid, and a fall out of the world is
+  logged.** `move-axis` put the feet under the bottom of whatever a rise overlapped, and on top of
+  whatever a fall overlapped, even a solid the body was already inside: a jump from inside a
+  ledge put them under the floor (the slab under it next, then the void), and a fall beside a tall
+  45° wall could put them on top of it. Now the feet never pass where the move started. The player
+  fell out of the world after jumping on ice by the frost shrine, but its cause wasn't found:
+  600,000 random moves through that level's geometry around the shrine left no one inside a solid
+  or moved them more than 0.6 m. So `report-fall` logs the last 2 s of movement
+  (`*fall-trace*`, kept by `note-fall-trace` every tick, no allocation) when the player drops
+  below `*kill-height*` and goes back to the start.
+- **No slot to fall into beside the frost shrine's dais.** Where the rock's 45° wall met the dais's
+  45° edge they ran parallel 1 m apart, leaving a slot of floor 0.8 m down between them (and a
+  triangle 0.4 m down beside the step); the player fell in. The rock pairs there now stand on ice
+  filled up to the dais's or step's height, and the dais runs square up to them (`tools/cave_plans.py`,
+  new legend characters `a` to `d`). `tools/levelcheck --kit --strict` is clean.
+- **A creature's standing picture is always loaded with its scene.** A creature was staged with
+  only the picture it showed at that moment plus its strips, so one restored from a save mid-walk
+  left its turnaround out of the scene's staging area, and Trial unloaded it if the scene before
+  had loaded it fresh: once that creature stood still, every frame with it in view failed to draw
+  and the game looked frozen (seen after a quickload in a town, on a commoner). `stage :after` on
+  `creature` now stages its `body-texture` too. Reproduced on 1 in 4 tries of a quickload with a
+  commoner walking, none in 6 after.
+- **One combat for every actor: `fight-foe` is gone.** Every monster, boss power and townsperson
+  fights a creature with the same hunt it uses on the player ("Targets and sides" in CLAUDE.md), so
+  `fight-foe`, its `:around` methods, `foe-attack` and the conversion gate are removed. Fights against
+  the player are unchanged: scripted fights of every kind against a standing player matched a
+  baseline recorded before the work, and run seeds 1 to 10 build the same levels, creatures and
+  pickups. For the player changelog at release: "Monsters fight the town's guards and townsfolk with
+  everything they have (an ogre leaps at a guard, a harpy dives at one, a necromancer draws its
+  circle under one), and a monster struck again and again by another kind turns on it."
+- **A boss's powers aim at its target.** Fire volleys, skull barrages, the grave circle, the
+  shockwave's reach, the tornado's sign and the blink read `hunt-target` (`boss-sees-target-p`), and
+  its summons are on its side and hunt its target. Waking it and sealing the arena stay the
+  player's.
+- **The riftwalker fights creatures too.** Its pulls, swaps and pushes are aimed at its target,
+  the push's "shield up" asks `target-guarding-p`, the swap's pounce lands behind any target, its
+  blinks keep the target in sight, and its call brings only allies of its own side, set on its
+  target.
+- **The gale wraith fights creatures too.** Its sign is laid under its target and a creature's
+  tornado chases what its caster hunts (`vortex-target`), so a wraith's tornado takes a guard.
+- **The necromancer fights creatures too.** Its grave circle is drawn under its target, its skulls
+  home on what it hunted as it cast (a projectile's `homing-target`, saved; NIL is the player), and
+  a skeleton it raises is on its side (`summoner`) and hunts its target.
+- **The harpy dives at creatures too.** Its dive aims at its target's head (`strike-height`, or a
+  shorter target's chest, `aim-height`) and its talons strike through `strike-target`.
+- **The imp and the ogre fight creatures as they fight the player.** The leap (`plan-leap`,
+  `try-leap`) aims at the leaper's target, so an imp pounces and an ogre leaps at a guard, and an
+  ogre's quake shakes it as it does anyone; the claw, the pounce's claw and the slam go through
+  `strike-target`, the imp springs back from its target (`spring-from-target`) and flees from it,
+  and its shriek sets its allies on its target. A slam's victim isn't shoved again by the slam's
+  own shake (`quake`'s `:spare`). Theft stays the player's: an imp steals only from them.
+- **Creatures hunt a target, and `hostile-p` says who fights whom.** A creature's `quarry` (the
+  player or a creature) replaces `foe`; `hunt-target` falls back to the player when it is hostile
+  to them, so off the settlement nothing changes. Sides (`allegiance`): the player, the monsters,
+  the settlement's faction, a summoned creature its `summoner`'s. Monsters are hostile to every
+  other side, townsfolk to the player while provoked, any other faction's people to the player at
+  standing -50 or under (`*hostile-reputation*`). `notice-targets` (was `notice-player`) looks for
+  the nearest hostile actor it sees, so monsters notice townsfolk on sight and guards notice
+  monsters (`guards-watch` is gone), within 20 m of their post (`*town-leash*`). Struck by a hostile
+  actor, a creature turns on it unless its target is in reach. **Grudges**: three blows within 12 s
+  from a creature of another kind it isn't hostile to turn it on that one (`note-grudge`), so a
+  stray ogre landing doesn't set the level fighting. Attack spots are claimed round each hunter's
+  own target. A raid sends its monsters (`sent`: kept after their guard unseen, a 60 m walk). A blow
+  between creatures hit-stops only within 10 m of the player. The acolyte, knight, skeleton and the
+  townsfolk hunt creatures with the full hunt; the rest still use `fight-foe` until converted.
+- **A creature's hunt asks about its target, not the player.** The first step toward one combat
+  for every actor: the hunt's helpers (`target-within-p`, `target-angle`, `target-distance`,
+  `face-target`, `target-bearing`, `sees-target-p`, attack slots, flanks, retreats, the plain
+  blow and spell) read `hunt-target`, still always the player, through a small protocol with a
+  method for the player and one for a creature (`aim-height`, `target-facing`, `target-live-p`,
+  `target-guarding-p`, `target-swimming-p`, `strike-target`, `shove-target`). No change in play.
 - **A clip swapped into the running game no longer comes up silent.** `reload-sound` (the sfx
   picker's swap) freed the clip's old voices, and Harmony kept their unpackers for the next voices
   made, ended and, for a stopped loop or a cut one-shot, still paused: the new voices played

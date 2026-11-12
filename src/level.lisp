@@ -69,6 +69,38 @@ empty. The annex's imp, the blocks' monsters and the arena's boss don't ask it."
              (or (null *debug-level-monsters*) (member (type-of creature) *debug-level-monsters*)))
     (spawn-creature creature container)))
 
+(defun stage-fight (a b &key (at (vec 0 0 -3)) (distance 8.0))
+  "Debug: set A and B fighting each other, DISTANCE metres apart along X about AT, each sent at
+the other so it keeps after it. A and B are creature classes, a townsfolk role (\"guard\"), or
+creatures, moved there. A class takes a creature of it the level has (*DEBUG-LEVEL-MONSTERS*):
+one spawned now draws nothing unless the level loaded its kind. Two of a side bear each other a
+grudge. Returns them."
+  (let ((container (scene +main+)))
+    (labels ((make (who x)
+             (let ((p (vec (+ (vx at) x) (vy at) (vz at))))
+               (cond ((typep who 'creature)
+                      (v<- (location who) p)
+                      who)
+                     ((stringp who)
+                      (place-npc who p 0.0 container)
+                      (aref *creatures* (1- (length *creatures*))))
+                     ((find-if (lambda (c) (and (eq (type-of c) who) (not (dead c)) (not (sent c)))) *creatures*)
+                      (make (find-if (lambda (c) (and (eq (type-of c) who) (not (dead c)) (not (sent c)))) *creatures*) x))
+                     (T
+                      (spawn-creature (make-instance who :location p) container)
+                      (aref *creatures* (1- (length *creatures*))))))))
+      (let* ((a (make a (* -0.5 distance)))
+             (b (progn (setf (sent a) T) (make b (* 0.5 distance)))))
+        (loop for (x y) in (list (list a b) (list b a))
+              do (unless (hostile-p x y)
+                   (setf (grudge x) y))
+                 (set-target x y)
+                 (face-target x 0.0 y)
+                 (setf (sent x) T
+                       (alert x) 30.0
+                       (idle-timer x) 0.0))
+        (list a b)))))
+
 (defun clear-level ()
   "Forget the level last built, ahead of the next."
   (setf (fill-pointer *solids*) 0

@@ -329,6 +329,19 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
 (defmethod body-height ((player player)) *player-height*)
 (defmethod body-solid-p ((player player)) (not (whirl player)))
 
+;; The player as a creature's target (creature.lisp).
+(defmethod allegiance ((player player)) :player)
+(defmethod aim-height ((player player)) *cast-aim-height*)
+(defmethod target-facing ((player player)) (vy (rotation player)))
+(defmethod target-live-p ((player player)) (< 0 (health player)))
+(defmethod target-guarding-p ((player player) from &optional (margin 0.0)) (shield-facing-p player from margin))
+(defmethod target-swimming-p ((player player)) (swimming player))
+(defmethod strike-target ((player player) amount from &rest args &key by shove lift guard-break unblockable)
+  (declare (ignore by shove lift guard-break unblockable))
+  (apply #'hurt-player player amount from args))
+(defmethod shove-target ((player player) from speed &optional lift)
+  (shove-player player from speed lift))
+
 (defvar *walk-through-bodies* NIL
   "True while the player already overlaps a body (something revived on it), so it can walk out.")
 
@@ -347,20 +360,24 @@ wedge whose diagonal stopped it, if one did, and how far short of DELTA it stopp
         (wedge NIL))
     (flet ((ref (v) (ecase axis (0 (vx v)) (1 (vy v)) (2 (vz v))))
            (put (v x) (ecase axis (0 (setf (vx v) x)) (1 (setf (vy v) x)) (2 (setf (vz v) x)))))
-      (let ((target (+ (ref feet) delta)))
+      (let* ((start (ref feet))
+             (target (+ start delta)))
         (put feet target)
         (loop repeat 8
               for s = (overlapping-solid feet)
               while s
+              ;; Up or down, a solid stops the move short of it, never past where it started:
+              ;; one the body already overlapped (beside it, not over or under) put the feet
+              ;; under its bottom, and so under the floor, or on its top, up through a ceiling.
               do (cond ((/= axis 1)
                         (multiple-value-bind (at diagonal)
                             (solid-flush s axis delta (vx feet) (vz feet) (float *player-radius* 0f0))
                           (put feet at)
                           (setf wedge (and diagonal s))))
                        ((< 0 delta)
-                        (put feet (- (aref s 1) (float *player-height* 0f0))))
+                        (put feet (max start (- (aref s 1) (float *player-height* 0f0)))))
                        (T
-                        (put feet (aref s 4))
+                        (put feet (min start (aref s 4)))
                         (setf (grounded player) T)))
                  (put vel 0f0)
                  (when (= 0 delta) (return)))
@@ -668,7 +685,9 @@ and not the last step of the stair.")
       (note-impacts player vx0 vy0 vz0 dt)
       (body-sounds player dt))
     (update-stamina player running dt)
+    (note-fall-trace player)
     (when (< (vy (feet player)) *kill-height*)
+      (report-fall player)
       (respawn player))
     ;; Standing in lava burns, and so does the wind of a vortex holding the player; under
     ;; water with no breath left, drowning.
@@ -934,6 +953,45 @@ Returns true if the shield took the blow."
   (when yaw
     (setf (vy (rotation player)) (float yaw 0f0)))
   (place-camera player))
+
+;;; Falling out of the world is a bug in the level or in collision, and by the time the player
+;;; is put back at the start nothing shows where it happened. So the last *FALL-TRACE-TICKS*
+;;; ticks of the player's movement are kept, and a fall logs them.
+
+(defparameter *fall-trace-ticks* 200 "Ticks of movement kept for REPORT-FALL: 2 s.")
+(defvar *fall-trace* (make-array (* 8 200) :element-type 'single-float :initial-element 0f0)
+  "Per tick: the feet, the velocity, grounded and whether the body overlaps a solid (1 or 0).")
+(defvar *fall-trace-index* 0 "The tick NOTE-FALL-TRACE writes next.")
+
+(defun note-fall-trace (player)
+  (let* ((trace *fall-trace*)
+         (i (* 8 (mod *fall-trace-index* *fall-trace-ticks*)))
+         (feet (feet player))
+         (vel (velocity player)))
+    (setf (aref trace i) (vx feet) (aref trace (+ i 1)) (vy feet) (aref trace (+ i 2)) (vz feet)
+          (aref trace (+ i 3)) (vx vel) (aref trace (+ i 4)) (vy vel) (aref trace (+ i 5)) (vz vel)
+          (aref trace (+ i 6)) (if (grounded player) 1f0 0f0)
+          (aref trace (+ i 7)) (if (overlapping-solid feet) 1f0 0f0))
+    (incf *fall-trace-index*)))
+
+(defun report-fall (player)
+  "Log where PLAYER fell out of the world: every tick that moved the feet more than 0.3 m up or
+down or ended inside a solid, and a sample every 0.2 s, oldest first."
+  (declare (ignore player))
+  (let ((trace *fall-trace*) (n *fall-trace-ticks*) (lines ()) (py NIL))
+    (loop for k from (max 0 (- *fall-trace-index* n)) below *fall-trace-index*
+          for i = (* 8 (mod k n))
+          for y = (aref trace (+ i 1))
+          for age = (* 0.01 (- *fall-trace-index* k))
+          do (when (or (zerop (mod k 20)) (< 0.5 (aref trace (+ i 7))) (and py (< 0.3 (abs (- y py)))))
+               (push (format NIL "-~,2fs feet ~,2f ~,2f ~,2f vel ~,1f ~,1f ~,1f~:[~; grounded~]~:[~; INSIDE A SOLID~]"
+                             age (aref trace i) y (aref trace (+ i 2))
+                             (aref trace (+ i 3)) (aref trace (+ i 4)) (aref trace (+ i 5))
+                             (< 0.5 (aref trace (+ i 6))) (< 0.5 (aref trace (+ i 7))))
+                     lines))
+             (setf py y))
+    (v:warn :hexmaw "The player fell out of the world (level ~a, seed ~a) and goes back to the start. Last ticks:~%~{  ~a~%~}"
+            *level* *last-level-seed* (nreverse lines))))
 
 (defun respawn (player)
   (clear-whirl player)

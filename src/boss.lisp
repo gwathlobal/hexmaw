@@ -274,18 +274,21 @@ or *BOSS-OVERRIDE*'s."
     (make-instance (second (boss-kind-entry kind)) :location at :facing facing :kind kind
                                                    :powers (or powers (pick-boss-powers kind *block-random*)))))
 
-(defun boss-sees-player-p (boss range)
-  (and (< (player-distance boss) range)
-       (clear-path-p (location boss) (feet *player*) (cast-height boss))))
+(defun boss-sees-target-p (boss range)
+  (let ((target (hunt-target boss)))
+    (and target
+         (< (target-distance boss target) range)
+         (clear-path-p (location boss) (body-feet target) (cast-height boss)))))
 
 (defun cast-fan (boss spell count spread)
-  "Cast COUNT of SPELL from in front of BOSS at the player, fanned over SPREAD radians."
+  "Cast COUNT of SPELL from in front of BOSS at what it hunts, fanned over SPREAD radians."
   (let* ((loc (location boss))
-         (feet (feet *player*))
+         (target (hunt-target boss))
+         (feet (body-feet target))
          (out (+ (body-radius boss) 0.15))
          (yaw (facing boss))
          (origin (vec (+ (vx loc) (* out (sin yaw))) (+ (vy loc) (cast-height boss)) (- (vz loc) (* out (cos yaw)))))
-         (aim (v- (vec (vx feet) (+ (vy feet) *cast-aim-height*) (vz feet)) origin)))
+         (aim (v- (vec (vx feet) (+ (vy feet) (aim-height target)) (vz feet)) origin)))
     (when (< 1f-4 (vlength aim))
       (nvunit aim)
       (dotimes (i count)
@@ -346,7 +349,11 @@ normal size, gets up out of it."
         (push entity sigils)))
     (dolist (sigil sigils)
       (let* ((at (centre sigil))
-             (minion (make-instance class :location (vcopy at) :facing (facing boss) :summoned T)))
+             (minion (make-instance class :location (vcopy at) :facing (facing boss) :summoned T
+                                          :summoner boss))
+             (target (hunt-target boss)))
+        (when (and target (hostile-p minion target))
+          (set-target minion target))
         (play-sound :summon-burst at)
         (setf (burst sigil) 0.0
               (rising minion) (death-duration minion)
@@ -467,17 +474,18 @@ given, and on the same side of the arena's walls as point FROM (default POINT). 
             to))))))
 
 (defun blink-destination (boss)
-  "Where BOSS's Blink takes it: a ranged kind 9 m from the player on its own side of them, a
-melee kind right behind them. A cell its body fits in the arena, in sight of the player, or NIL."
-  (let* ((feet (feet *player*))
+  "Where BOSS's Blink takes it: a ranged kind 9 m from what it hunts on its own side of it, a
+melee kind right behind it. A cell its body fits in the arena, in sight of the target, or NIL."
+  (let* ((target (hunt-target boss))
+         (feet (body-feet target))
          (loc (location boss))
          (r (body-radius boss))
          (h (sprite-height boss))
          (ranged (ranged-p boss))
          (base (if ranged
                    (atan (- (vx loc) (vx feet)) (- (vz feet) (vz loc)))
-                   (+ (vy (rotation *player*)) pi)))
-         (d (if ranged 9.0 (+ r *player-radius* 1.0))))
+                   (+ (target-facing target) pi)))
+         (d (if ranged 9.0 (+ r (body-radius target) 1.0))))
     (loop for turn in '(0.0 0.7 -0.7 1.4 -1.4 2.2 -2.2)
           for yaw = (+ base turn)
           for p = (vec (+ (vx feet) (* d (sin yaw))) (vy feet) (- (vz feet) (* d (cos yaw))))
@@ -494,24 +502,24 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
       (v<- loc to)
       (let ((kb (momentum boss))) (setf (vx kb) 0.0 (vz kb) 0.0))
       (setf (path boss) ())
-      (face-player boss)
+      (face-target boss)
       (spawn-fx 'bolt-burst (vec (vx to) (+ (vy to) (* 0.5 (sprite-height boss))) (vz to)) (container boss)))))
 
 (define-boss-power :fire-volley
   :label "Fire volley" :cooldown 6.0 :frame-times '(0.4 0.3 0.25 0.35)
-  :usable (lambda (boss) (boss-sees-player-p boss 14.0))
+  :usable (lambda (boss) (boss-sees-target-p boss 14.0))
   :release (lambda (boss) (cast-fan boss 'cinder 5 0.6)))
 
 (define-boss-power :skull-barrage
   :label "Skull barrage" :cooldown 8.0 :frame-times '(0.45 0.3 0.25 0.35)
-  :usable (lambda (boss) (boss-sees-player-p boss 16.0))
+  :usable (lambda (boss) (boss-sees-target-p boss 16.0))
   :release (lambda (boss) (cast-fan boss 'grave-skull 3 0.8)))
 
 (define-boss-power :grave-circle
   :label "Grave circle" :cooldown 12.0 :frame-times '(0.35 0.4 0.25 0.35) :deny '("necromancer")
-  :usable (lambda (boss) (and (boss-sees-player-p boss 12.0) (not (swimming *player*))))
+  :usable (lambda (boss) (and (boss-sees-target-p boss 12.0) (not (target-swimming-p (hunt-target boss)))))
   :release (lambda (boss)
-             (cast-spell (find-spell 'grave-spikes) (floor-under (feet *player*)) (vec 0 0 -1) (container boss)
+             (cast-spell (find-spell 'grave-spikes) (floor-under (body-feet (hunt-target boss))) (vec 0 0 -1) (container boss)
                          :caster boss)))
 
 ;; The ogre's leap (ogre.lisp), on its own cooldown, LEAP-COOLDOWN. The ogre and the imp leap
@@ -523,7 +531,7 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
 
 (define-boss-power :shockwave
   :label "Shockwave" :cooldown 9.0 :frame-times '(0.9 0.15 0.2 0.5) :pause 1.0 :deny '(:flyer)
-  :usable (lambda (boss) (< (player-distance boss) (+ (body-radius boss) 3.5)))
+  :usable (lambda (boss) (< (target-distance boss) (+ (body-radius boss) 3.5)))
   :release (lambda (boss)
              (let ((at (location boss)))
                (play-sound :ogre-land at)
@@ -537,11 +545,11 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
 (define-boss-power :tornado
   :label "Tornado" :cooldown 16.0 :frame-times '(0.3 1.2 0.25 0.35) :pause 1.0 :deny '("gale-wraith")
   :usable (lambda (boss)
-            (and (boss-sees-player-p boss 14.0) (not (own-vortex boss))
-                 (not (swimming *player*)) (not (whirl *player*))))
+            (and (boss-sees-target-p boss 14.0) (not (own-vortex boss))
+                 (not (target-swimming-p (hunt-target boss))) (not (whirl (hunt-target boss)))))
   :start (lambda (boss)
            (let ((point (power-point boss)))
-             (v<- point (floor-under (feet *player*)))
+             (v<- point (floor-under (body-feet (hunt-target boss))))
              (start-power-attack boss :tornado)
              (enter (make-instance 'gale-sign :caster boss :centre (vcopy point) :location (vcopy point)
                                               :animation (find-fx-animation 'gale-sign))
@@ -560,8 +568,8 @@ melee kind right behind them. A cell its body fits in the arena, in sight of the
   :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4 :deny '("riftwalker")
   :usable (lambda (boss)
             (if (ranged-p boss)
-                (< (player-distance boss) 4.0)
-                (< 9.0 (player-distance boss))))
+                (< (target-distance boss) 4.0)
+                (< 9.0 (target-distance boss))))
   :release #'blink)
 
 (define-boss-power :warded
@@ -745,7 +753,7 @@ void main(){
   (unless (boss-power boss) (call-next-method)))
 
 (defmethod face-attack-target ((boss boss) dt)
-  (if (boss-power boss) (face-player boss dt) (call-next-method)))
+  (if (boss-power boss) (face-target boss dt) (call-next-method)))
 
 ;; Its attacks run faster with Haste and enraged; a power's runs as a plain attack, a flyer's
 ;; too (a cast in place, as the wraith's).

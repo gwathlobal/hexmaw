@@ -149,17 +149,17 @@ floor: the player sees it happen, and the level's pickups don't drain away out o
 (defmethod leap-cooldown-time ((imp imp)) *pounce-cooldown*)
 
 (defun start-pounce (imp)
-  "Start a pounce at the player if IMP may: true if it did."
+  "Start a pounce at what IMP hunts if it may: true if it did."
   (when (try-leap imp)
     (setf (pounce-struck imp) NIL
           (knocked imp) NIL)
     T))
 
-(defun spring-from-player (imp speed &optional (turn 0.0))
-  "Send IMP sliding away from the player at SPEED m/s, TURN radians off straight back, its own
+(defun spring-from-target (imp speed &optional (turn 0.0))
+  "Send IMP sliding away from what it hunts at SPEED m/s, TURN radians off straight back, its own
 leap: no KNOCKBACK-SCALE."
   (let* ((loc (location imp))
-         (feet (feet *player*))
+         (feet (body-feet (hunt-target imp)))
          (dx (- (vx loc) (vx feet)))
          (dz (- (vz loc) (vz feet)))
          (len (sqrt (+ (* dx dx) (* dz dz))))
@@ -180,14 +180,15 @@ leap: no KNOCKBACK-SCALE."
         (pounce-struck imp) T))
 
 (defun pounce-strike (imp)
-  "IMP's pounce reaches the player: its claw, then it bounces off, thrown down by a raised shield."
+  "IMP's pounce reaches what it hunts: its claw, then it bounces off, thrown down by a raised shield."
   (setf (pounce-struck imp) T)
-  (let ((blocked (hurt-player *player* (max 1 (round (* *pounce-damage-scale* (roll (attack-damage imp)))))
-                              (location imp) :by imp)))
+  (let* ((target (hunt-target imp))
+         (blocked (strike-target target (max 1 (round (* *pounce-damage-scale* (roll (attack-damage imp)))))
+                                 (location imp) :by imp)))
     (setf (airborne imp) NIL
           (falling imp) T
           (fall-speed imp) 0.0)
-    (spring-from-player imp (if blocked *pounce-blocked-rebound* *pounce-rebound*))
+    (spring-from-target imp (if blocked *pounce-blocked-rebound* *pounce-rebound*))
     (when (skittish-p imp)
       (if blocked
           (setf (knocked imp) T)
@@ -231,8 +232,10 @@ leap: no KNOCKBACK-SCALE."
     (stop-walking imp *shriek-time*)))
 
 (defun raise-alarm (imp)
-  "IMP's shriek: every creature that can fight within *SHRIEK-RANGE*, on its storey, hunts."
-  (let ((loc (location imp)))
+  "IMP's shriek: every creature that can fight within *SHRIEK-RANGE*, on its storey, hunts what
+it hunts, if hostile to it and hunting nothing else."
+  (let ((loc (location imp))
+        (target (hunt-target imp)))
     (loop for c across *creatures*
           for at = (location c)
           when (and (not (eq c imp)) (not (dead c)) (attacker-p c) (not (dormant-p c))
@@ -240,9 +243,11 @@ leap: no KNOCKBACK-SCALE."
                     (< (+ (expt (- (vx at) (vx loc)) 2) (expt (- (vz at) (vz loc)) 2))
                        (expt *shriek-range* 2)))
             do (when (<= (alert c) 0)
-                 ;; As if it had just seen the player (NOTICE-PLAYER).
+                 ;; As if it had just seen it (NOTICE-TARGETS).
                  (setf (idle-timer c) (min (idle-timer c) *chase-pause*)
-                       (replan-timer c) 0.0))
+                       (replan-timer c) 0.0)
+                 (when (and target (hostile-p c target))
+                   (set-target c target)))
                (setf (alert c) (max (alert c) *shriek-alert-time*)))))
 
 (defmethod react-to-hit ((imp imp))
@@ -265,16 +270,16 @@ leap: no KNOCKBACK-SCALE."
                           (expt (- (+ (nav-z0 grid) (* (+ j 0.5) cell)) (vz feet)) 2)))))))
 
 (defun flee-path (imp)
-  "A path for IMP to the cell within *FLEE-WALK* that is furthest from the player, along a walk
-that comes no nearer them than it is now. NIL if there is none."
+  "A path for IMP to the cell within *FLEE-WALK* that is furthest from what it hunts, along a
+walk that comes no nearer it than it is now. NIL if there is none."
   (let ((grid *nav-grid*))
     (when grid
       (let* ((loc (ground-point imp))
              (r (body-radius imp))
              (h (sprite-height imp))
              (step (step-height imp))
-             (feet (feet *player*))
-             (now (player-distance imp))
+             (feet (body-feet (hunt-target imp)))
+             (now (target-distance imp))
              (closest (* 0.8 (min now 2.5))))
         (multiple-value-bind (si sj sk) (nav-nearest-fitting loc r h)
           (when si
@@ -299,7 +304,7 @@ that comes no nearer them than it is now. NIL if there is none."
                     (nav-smooth-path loc (nav-path-points (rest cells) grid) r h step grid)))))))))))
 
 (defun flee (imp)
-  "Set IMP running from the player: along FLEE-PATH, or a step straight back. True if it did."
+  "Set IMP running from what it hunts: along FLEE-PATH, or a step straight back. True if it did."
   (let ((path (flee-path imp)))
     (cond (path
            (setf (path imp) path
@@ -312,7 +317,7 @@ that comes no nearer them than it is now. NIL if there is none."
 (defun keep-fleeing (imp)
   "Go on running while IMP flees: true; NIL if it has nowhere to go, when it turns and fights."
   (cond ((and (eq (brain imp) :walking) (path imp)) T)
-        ((< *flee-safe-distance* (player-distance imp))
+        ((< *flee-safe-distance* (target-distance imp))
          ;; Far enough: watch from here.
          (stop-walking imp 0.3)
          T)
@@ -332,8 +337,8 @@ that comes no nearer them than it is now. NIL if there is none."
 ;;; again where it dies.
 
 (defun try-steal (imp)
-  "Maybe snatch one of the player's items, the claw having landed. True if it did."
-  (when (and (not (stolen imp)) (< (random 100 *roll-random*) *imp-steal-chance*))
+  "Maybe snatch one of the player's items, the claw having landed on them. True if it did."
+  (when (and (eq (hunt-target imp) *player*) (not (stolen imp)) (< (random 100 *roll-random*) *imp-steal-chance*))
     (let ((item (steal-item *player*)))
       (when item
         (setf (stolen imp) (item-pickup-kind item)
@@ -345,7 +350,7 @@ that comes no nearer them than it is now. NIL if there is none."
 
 (defun seek-loot (imp)
   "Set IMP walking to the nearest pickup within *THIEF-SNIFF-RANGE* it can reach: true if it did."
-  (let ((pickup (and *player* (< (player-distance imp) *thief-witness-range*)
+  (let ((pickup (and *player* (< (target-distance imp *player*) *thief-witness-range*)
                      (< (abs (- (vy (feet *player*)) (vy (location imp)))) *shriek-rise*)
                      (loose-pickup-near (location imp) *thief-sniff-range*))))
     (when (and pickup *nav-grid*)
@@ -415,7 +420,7 @@ that comes no nearer them than it is now. NIL if there is none."
         ((< 0 (shriek imp)) (stop-walking imp (shriek imp)) T)
         ((< 0 (fleeing imp)) (keep-fleeing imp))
         ((and (stolen imp) (<= (cornered imp) 0))
-         (cond ((< (player-distance imp) *thief-keep-away*)
+         (cond ((< (target-distance imp) *thief-keep-away*)
                 (setf (fleeing imp) *thief-flee-time*
                       (slot-yaw imp) NIL)
                 (keep-fleeing imp))
@@ -429,13 +434,14 @@ that comes no nearer them than it is now. NIL if there is none."
   (if (not (skittish-p imp))
       (call-next-method)
       (progn
-        (when (and (player-within-p imp (attack-reach imp))
-                   (< (player-angle imp) (attack-arc imp))
-                   (clear-path-p (location imp) (feet *player*) 1.0))
-          (unless (hurt-player *player* (roll (attack-damage imp)) (location imp) :by imp)
-            (try-steal imp)))
+        (let ((target (hunt-target imp)))
+          (when (and (target-within-p imp (attack-reach imp) target)
+                     (< (target-angle imp target) (attack-arc imp))
+                     (clear-path-p (location imp) (body-feet target) 1.0))
+            (unless (strike-target target (roll (attack-damage imp)) (location imp) :by imp)
+              (try-steal imp))))
         (destructuring-bind (lo hi) *imp-spring-angle*
-          (spring-from-player imp *imp-spring-speed*
+          (spring-from-target imp *imp-spring-speed*
                               (* (if (< (random 2) 1) -1 1) (+ lo (random (float (- hi lo) 0f0))))))
         (ban-slot imp))))
 
@@ -459,8 +465,9 @@ that comes no nearer them than it is now. NIL if there is none."
 (defmethod keep-height :after ((imp imp) dt)
   (declare (ignore dt))
   (when (and (eq (attack-kind imp) :leap) (or (airborne imp) (falling imp))
-             (not (pounce-struck imp)) (not (dead imp)) *player* (< 0 (health *player*))
-             (player-within-p imp *pounce-reach*))
+             (not (pounce-struck imp)) (not (dead imp))
+             (let ((target (hunt-target imp)))
+               (and target (target-live-p target) (target-within-p imp *pounce-reach* target))))
     (pounce-strike imp)))
 
 (defmethod show-own-pose ((imp imp) squash)

@@ -125,6 +125,13 @@ asset), :ATLAS (its index) and the animations, :WALK, :HURT, :DEATH and :ATTACK.
 
 (defmethod townsfolk-p ((townsfolk townsfolk)) T)
 (defmethod calm-p ((townsfolk townsfolk)) (not (provoked townsfolk)))
+(defmethod allegiance ((townsfolk townsfolk))
+  (if *settlement* (settlement-faction *settlement*) :free-company))
+(defmethod hostile-to-player-p ((townsfolk townsfolk)) (provoked townsfolk))
+(defparameter *town-leash* 20.0 "Metres from its post a townsperson goes after what it fights.")
+
+(defmethod keeps-target-p ((townsfolk townsfolk) target)
+  (< (vdistance (home townsfolk) (body-feet target)) *town-leash*))
 
 (defparameter *roles*
   '(("shopkeeper" shopkeeper "shopkeeper") ("priest" priest "priest") ("trainer" trainer "trainer")
@@ -141,6 +148,12 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
 
 (defun place-npc (role at yaw container)
   "A townsperson of ROLE standing at AT facing YAW, from a blueprint's npc action (PLACE-BLOCK)."
+  (let ((npc (make-npc role at yaw)))
+    (when npc
+      (spawn-creature npc container))))
+
+(defun make-npc (role at yaw)
+  "A townsperson of ROLE standing at AT facing YAW, or NIL for a role there is none of."
   (let ((entry (assoc role *roles* :test #'string-equal)))
     (if (null entry)
         (v:warn :hexmaw "No townsfolk role ~s; npc ignored." role)
@@ -150,7 +163,7 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
                  (atlas (if set (read-atlas (getf set :atlas)) (townsfolk-atlas sprite)))
                  (names (rest (or (assoc sprite *townsfolk-names* :test #'equal) (assoc class *townsfolk-names*))))
                  (greetings (rest (assoc class *townsfolk-greetings*))))
-            (spawn-creature (apply #'make-instance class
+            (apply #'make-instance class
                                    :role (string-downcase role)
                                    :location at :facing yaw
                                    :texture (// 'hexmaw (if set
@@ -163,8 +176,7 @@ from, or :FACTION for the settlement's own (the guard's tabard).")
                                    :greeting (nth (random (length greetings) *block-random*) greetings)
                                    (when set
                                      (list :walk-animation (getf set :walk) :hurt-animation (getf set :hurt)
-                                           :death-animation (getf set :death) :attack-animation (getf set :attack))))
-                            container))))))
+                                           :death-animation (getf set :death) :attack-animation (getf set :attack)))))))))
 
 (defun townsfolk-title (townsfolk)
   "What the HUD and the dialogue call TOWNSFOLK: its name and, for one with a name, its role."
@@ -257,10 +269,7 @@ against VICTIM (a townsperson) if anyone."
                                           (:rule (faction-property :rule-text s))
                                           (T "Hands off the townsfolk!")))))
         (when victim
-          (setf (provoked victim) (and (attacker-p-ignoring-calm victim) T)))))))
-
-(defun attacker-p-ignoring-calm (creature)
-  (or (attack-damage creature) (attack-spell creature)))
+          (setf (provoked victim) (and (attacker-p victim) T)))))))
 
 (defun demand-fine (shout)
   "Send the nearest guard to the player to collect a fine."
@@ -300,16 +309,14 @@ against VICTIM (a townsperson) if anyone."
 or a burn's every tick (magic.lisp), are the same assault.")
 
 (defmethod harmed ((townsfolk townsfolk) amount by)
-  (declare (ignore amount))
-  (cond ((dead townsfolk))
-        ((eq by *player*)
-         (let ((now (run-time *player*)) (last (last-assault townsfolk)))
-           (setf (last-assault townsfolk) now)
-           (when (or (null last) (< *assault-window* (- now last)))
-             (report-crime :assault townsfolk))))
-        ;; A monster's blow: a townsperson who can fight fights back.
-        ((and (typep by 'creature) (not (townsfolk-p by)) (fighter-p townsfolk) (not (foe townsfolk)))
-         (setf (foe townsfolk) by (replan-timer townsfolk) 0.0))))
+  ;; The player's blow is a crime first, which may provoke it; then it fights back as anyone does.
+  (when (and (not (dead townsfolk)) by (eq by *player*))
+    (let ((now (run-time *player*)) (last (last-assault townsfolk)))
+      (setf (last-assault townsfolk) now)
+      (when (or (null last) (< *assault-window* (- now last)))
+        (report-crime :assault townsfolk))))
+  (unless (dead townsfolk)
+    (call-next-method)))
 
 (defmethod creature-died :after ((townsfolk townsfolk) by)
   (when (eq by *player*)
@@ -341,15 +348,14 @@ or a burn's every tick (magic.lisp), are the same assault.")
 
 ;;; The settlement director: what the settlement does in play, ten times a second. On every
 ;;; level it keeps the HUD's E prompt; in the settlement also the fine's deadline and the guard sent for it, the Deepwardens' rule, a
-;;; hostile watch's hunt, the guards' eye for monsters in town, and the besieged town's raids.
+;;; hostile watch's hunt and the besieged town's raids. The guards see monsters for themselves (NOTICE-TARGETS).
 
 (defparameter *director-step* 0.1 "Seconds between the director's looks.")
 (defparameter *rule-grace* 3.0 "Seconds a warned player has to put the blade away before it counts.")
 (defparameter *raid-interval* 150.0 "Seconds of play between raids on a besieged town.")
 (defparameter *raid-size* '(2 3) "Fewest and most monsters in a raid.")
 (defparameter *raid-classes* '(imp knight acolyte skeleton-warrior)
-  "The monsters that raid: plain fighters, whose attacks FIGHT-FOE can aim at a guard.")
-(defparameter *guard-sight* 14.0 "Metres within which a guard takes on a monster in town.")
+  "The monsters that raid.")
 
 (defclass settlement-director (entity listener)
   ((name :initform :settlement-director)
@@ -391,7 +397,7 @@ or a burn's every tick (magic.lisp), are the same assault.")
                       (start-talk guard))
                      ((not (eq (brain guard) :walking))
                       (let ((path (nav-path-to (ground-point guard) (feet *player*) (body-radius guard)
-                                               (sprite-height guard) (step-height guard) :max-walk *foe-max-walk*)))
+                                               (sprite-height guard) (step-height guard) :max-walk *sent-max-walk*)))
                         (when path
                           (setf (path guard) path (brain guard) :walking)))))))))))
 
@@ -414,12 +420,12 @@ or a burn's every tick (magic.lisp), are the same assault.")
            (report-crime :rule)))))
 
 (defun raiders ()
-  (loop for c across *creatures* when (and (monster-p c) (not (dead c)) (foe c) (townsfolk-p (foe c))) collect c))
+  (loop for c across *creatures* when (and (monster-p c) (not (dead c)) (sent c) (typep (quarry c) 'townsfolk)) collect c))
 
 (defun raid-pool ()
   "The wing's monsters that may yet raid: plain fighters outside the town and not raiding now."
   (loop for c across *creatures*
-        when (and (monster-p c) (not (dead c)) (not (foe c))
+        when (and (monster-p c) (not (dead c)) (not (sent c))
                   (some (lambda (class) (typep c class)) *raid-classes*)
                   (not (in-settlement-p (location c))))
           collect c))
@@ -432,7 +438,9 @@ or a burn's every tick (magic.lisp), are the same assault.")
          (size (+ (first *raid-size*) (random (1+ (- (second *raid-size*) (first *raid-size*)))))))
     (loop for c in pool repeat size
           do (let ((guard (nearest-guard (location c))))
-               (when guard (setf (foe c) guard (replan-timer c) 0.0))))
+               (when guard
+                 (set-target c guard)
+                 (setf (sent c) T (alert c) (max (alert c) (alert-time))))))
     (hud-say "The watch: To the gates! The undercroft is coming!")))
 
 (defun run-siege (dt)
@@ -453,18 +461,6 @@ cleared it, or the raids used them up) the siege is broken for good, which holds
              (setf (raid-on-p s) T
                    (raid-timer s) *raid-interval*))))))
 
-(defun guards-watch ()
-  "Each free guard takes on the nearest monster in town it can see that is up to something."
-  (dolist (g (settlement-guards))
-    (unless (or (foe g) (hunting-p g))
-      (loop for c across *creatures*
-            when (and (monster-p c) (not (dead c)) (or (hunting-p c) (foe c))
-                      (in-settlement-p (location c))
-                      (< (vdistance (location c) (location g)) *guard-sight*)
-                      (clear-path-p (location g) (location c) 1.0))
-              do (setf (foe g) c (replan-timer g) 0.0)
-                 (return)))))
-
 (define-handler (settlement-director tick) (dt)
   (when *player*
     (when (<= (decf (director-clock settlement-director) dt) 0)
@@ -478,5 +474,4 @@ cleared it, or the raids used them up) the siege is broken for good, which holds
           (when (settlement-hostile *settlement*)
             (dolist (g (settlement-guards))
               (setf (provoked g) T (alert g) (max (alert g) *watch-alert*))))
-          (guards-watch)
           (run-siege dt))))))

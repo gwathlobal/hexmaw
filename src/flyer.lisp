@@ -216,12 +216,14 @@ while it climbs back to its hover, so it never dives from the floor."
                                     (min (* (climb-speed flyer) dt) (- y (vy (location flyer)))))))))))
 
 (defun aim-dive (flyer)
-  "Point FLYER's dive at the player's head as it is now."
+  "Point FLYER's dive at the head of what it hunts as it is now (STRIKE-HEIGHT up, or the chest
+of something shorter)."
   (let* ((loc (location flyer))
-         (feet (feet *player*))
+         (target (hunt-target flyer))
+         (feet (body-feet target))
          (dir (dive-direction flyer)))
     (setf (vx dir) (- (vx feet) (vx loc))
-          (vy dir) (- (+ (vy feet) (strike-height flyer)) (vy loc))
+          (vy dir) (- (+ (vy feet) (min (strike-height flyer) (aim-height target))) (vy loc))
           (vz dir) (- (vz feet) (vz loc)))
     (let ((length (vlength dir)))
       (cond ((< length 1f-3)
@@ -230,7 +232,7 @@ while it climbs back to its hover, so it never dives from the floor."
             (T
              (nv/ dir length)
              (setf (dive-left flyer) (+ length (dive-overshoot flyer))))))
-    (face-player flyer)
+    (face-target flyer)
     (creature-noise flyer :dive)))
 
 (defun end-dive (flyer)
@@ -238,7 +240,7 @@ while it climbs back to its hover, so it never dives from the floor."
   (stop-walking flyer (attack-pause flyer)))
 
 (defun fly-dive (flyer dt)
-  "Fly DT seconds of the dive, striking the player if they're in reach. It ends at its
+  "Fly DT seconds of the dive, striking what it hunts if that is in reach. It ends at its
 length, against a wall or a body, or on the strike."
   (let* ((loc (location flyer))
          (dir (dive-direction flyer))
@@ -251,8 +253,9 @@ length, against a wall or a body, or on the strike."
       (lift-flyer flyer (if floor
                             (max (* step (vy dir)) (- (+ floor *dive-floor-margin*) (vy loc)))
                             (* step (vy dir))))
-      (cond ((player-within-p flyer (attack-reach flyer))
-             (hurt-player *player* (roll (attack-damage flyer)) loc :by flyer)
+      (cond ((let ((target (hunt-target flyer)))
+               (and target (target-within-p flyer (attack-reach flyer) target)))
+             (strike-target (hunt-target flyer) (roll (attack-damage flyer)) loc :by flyer)
              (end-dive flyer))
             ((or x-blocked z-blocked (<= (dive-left flyer) 0))
              (end-dive flyer))))))
@@ -260,7 +263,7 @@ length, against a wall or a body, or on the strike."
 (defmethod attack-step ((flyer flyer) dt)
   (cond ((< (incf (attack-time flyer) dt) (dive-windup flyer))
          ;; The warning: it hangs, rising, turned to follow the player.
-         (face-player flyer dt)
+         (face-target flyer dt)
          (lift-flyer flyer (* dt (/ (dive-rise flyer) (dive-windup flyer)))))
         (T
          (unless (dive-left flyer)
