@@ -492,7 +492,9 @@ melee kind right behind it. A cell its body fits in the arena, in sight of the t
           for to = (free-spot p r h :ignore boss :sight-of feet :from loc)
           when to return to)))
 
-(defun blink (boss)
+(defun boss-blink (boss)
+  "The boss's Blink: a burst where it leaves and where it arrives. Not BLINK, the riftwalker's
+(riftwalker.lisp): one name for both had whichever file loaded last answer for both."
   (let ((to (blink-destination boss))
         (loc (location boss)))
     (when to
@@ -570,7 +572,7 @@ melee kind right behind it. A cell its body fits in the arena, in sight of the t
             (if (ranged-p boss)
                 (< (target-distance boss) 4.0)
                 (< 9.0 (target-distance boss))))
-  :release #'blink)
+  :release #'boss-blink)
 
 (define-boss-power :warded
   :label "Warded" :passive T :deny '("knight"))

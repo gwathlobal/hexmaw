@@ -82,6 +82,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   `tools/art_audit_allow.txt` doesn't excuse. `tools/art_sheets.py` makes contact sheets of the art at
   the size it reaches the screen, and `tools/art_shots.sh` staged screenshots on the debug level where
   groups of art meet (a monster at a wall, a torch, an area burst, the hands, the circle, pickups).
+- **The boss's Blink is `boss-blink`.** boss.lisp and riftwalker.lisp both defined `blink`, so
+  reloading boss.lisp (the live-reload hook, after an edit there) put the boss's in the
+  riftwalker's place: its tick then errored every blink ("FX-SPRITE is not of type BOOLEAN", since
+  the riftwalker's returns T) and its walk got a NIL path point. Every frame that errored, the runtime-error guard also skipped the tick of each entity
+  after the riftwalker in the scene's queue, so the creatures spawned before it stopped turning to
+  the camera and only caught up on frames without a blink.
 - **A blow between two creatures never hit-stops.** The world-wide 0.06 s freeze stays on blows the
   player deals or takes and on harm from no one (lava); a fight between creatures doesn't freeze the
   game wherever it is (`felt-hit-p` and `*hit-stop-reach*`, its 10 m limit, are gone).
