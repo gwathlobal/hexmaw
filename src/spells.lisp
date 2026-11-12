@@ -464,6 +464,8 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
 ;;; does it spare the caster's allies, only the caster and the undead.
 
 (defparameter *aurora-height* '(0.3 3.2) "Metres a circle's aurora rises from and to as it winds up.")
+(defparameter *aurora-light-steps* 10.0
+  "Brightness levels an aurora's light is stepped into, as the art's few hard tones are.")
 (defparameter *aurora-segments* 128 "Quads round an aurora's ring. Read when the ring is made (a restart).")
 (defparameter *circle-draw-in* 0.45 "Fraction of the wind-up a circle's sign takes to draw itself.")
 (defparameter *circle-pulse-fps* 8.0)
@@ -558,6 +560,8 @@ GPU. PRELOAD-SPELLS stages it with the scene.")
           (uniform program "spin") (float (aurora-spin aurora) 0f0)
           (uniform program "twist") (float (aurora-twist aurora) 0f0)
           (uniform program "arc") (float (aurora-arc aurora) 0f0)
+          (uniform program "texels_per_metre") *texels-per-metre*
+          (uniform program "light_steps") *aurora-light-steps*
           (uniform program "arc_middle") (float (aurora-arc-middle aurora) 0f0)
           (uniform program "time") (float (aurora-clock aurora) 0f0))
     (destructuring-bind (foot-1 foot-2 foot-3 top band) (aurora-colors aurora)
@@ -608,6 +612,10 @@ uniform float spin;
 uniform float twist;
 uniform float time;
 uniform float arc;
+uniform float radius;
+uniform float height;
+uniform float texels_per_metre;
+uniform float light_steps;
 uniform vec3 foot_1;
 uniform vec3 foot_2;
 uniform vec3 foot_3;
@@ -626,8 +634,12 @@ float ring_noise(float x, float period){
 }
 
 void main(){
-  float y = v_ah.y;
-  float u = v_ah.x + fract(spin * time) + twist * y;
+  // Whole texels of the world's grid round the ring and up it, as the art's pixels are.
+  float cols = max(16.0, floor(2.0 * arc * radius * texels_per_metre));
+  float rows = max(8.0, floor(height * texels_per_metre));
+  vec2 ah = (floor(v_ah * vec2(cols, rows)) + 0.5) / vec2(cols, rows);
+  float y = ah.y;
+  float u = ah.x + fract(spin * time) + twist * y;
   // Streaks: a broad set and a fine one, sharpened into separate rays, drifting.
   float broad = ring_noise(u * 70.0 + time * 0.8, 70.0);
   float fine = ring_noise(u * 190.0 - time * 1.9, 190.0);
@@ -639,12 +651,14 @@ void main(){
   float band = exp(-y * 14.0) * (0.45 + 0.55 * broad);
   float light = (streak * rise + 0.7 * band) * strength;
   // An arc fades out toward its ends; a whole ring meets itself.
-  if(arc < 3.14) light *= smoothstep(0.0, 0.12, min(v_ah.x, 1.0 - v_ah.x));
+  if(arc < 3.14) light *= smoothstep(0.0, 0.12, min(ah.x, 1.0 - ah.x));
+  // Stepped into a few levels, and its colour into a few hues, not a smooth gradient.
+  light = floor(light * light_steps + 0.35) / light_steps;
   // Its colour wanders round the ring through its three foot colours (the necromancer's
   // greens: emerald, acid and sea-green) and deepens toward the top.
-  float hue = ring_noise(u * 5.0 + time * 0.12, 5.0) * 2.0;
+  float hue = floor(ring_noise(u * 5.0 + time * 0.12, 5.0) * 4.0 + 0.5) / 2.0;
   vec3 low = hue < 1.0 ? mix(foot_1, foot_2, hue) : mix(foot_2, foot_3, hue - 1.0);
-  vec3 c = mix(low, top_color, smoothstep(0.25, 0.95, y / max(top, 0.3)));
+  vec3 c = mix(low, top_color, floor(4.0 * smoothstep(0.25, 0.95, y / max(top, 0.3)) + 0.5) / 4.0);
   c = mix(c, band_color, band * 0.6);
   color = vec4(c * light * 1.3, 1.0);
 }")

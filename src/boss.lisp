@@ -614,6 +614,10 @@ when it has none in *LAMPS*."
               (vy c) (* strength (vy color))
               (vz c) (* strength (vz color)))))))
 
+(defparameter *rim-mix* 0.85
+  "How far a rim texel goes toward its glow colour at full strength: below 1, it keeps some of
+the texel under it, so the rim reads as a lit edge of the sprite rather than a neon line.")
+
 (defmethod render :before ((entity rim-glow) (program shader-program))
   (let ((texture (texture entity))
         (texel (texel entity)))
@@ -621,7 +625,8 @@ when it has none in *LAMPS*."
           (vy texel) (/ (float (rim-width entity)) (height texture)))
     (setf (uniform program "rim_glow") (glow entity))
     (setf (uniform program "rim_texel") texel)
-    (setf (uniform program "rim_shade") (rim-shade entity))))
+    (setf (uniform program "rim_shade") (rim-shade entity))
+    (setf (uniform program "rim_mix") *rim-mix*)))
 
 (define-class-shader (rim-glow :fragment-shader)
   "in vec2 uv;
@@ -630,6 +635,7 @@ uniform sampler2D texture_image;
 uniform vec4 rim_glow;
 uniform vec2 rim_texel;
 uniform vec3 rim_shade;
+uniform float rim_mix;
 
 void main(){
   maybe_call_next_method();
@@ -639,7 +645,10 @@ void main(){
   rim = max(rim, step(texture(texture_image, uv - vec2(rim_texel.x, 0.0)).a, 0.5));
   rim = max(rim, step(texture(texture_image, uv + vec2(0.0, rim_texel.y)).a, 0.5));
   rim = max(rim, step(texture(texture_image, uv - vec2(0.0, rim_texel.y)).a, 0.5));
-  color.rgb = mix(color.rgb * rim_shade, rim_glow.rgb, rim * rim_glow.a);
+  vec3 body = color.rgb * rim_shade;
+  // Toward the glow colour, kept as bright as the texel would be lit to at least: a lit edge.
+  vec3 glow = max(rim_glow.rgb * 0.9, body);
+  color.rgb = mix(body, glow, rim * rim_glow.a * rim_mix);
 }")
 
 ;;; The boss.

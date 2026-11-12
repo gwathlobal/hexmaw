@@ -76,6 +76,9 @@ shot aura        0.4  "$(player 0.0 0.0 0.0 0.0)" "$(put imp 0.0 -3.0 3.1416)" "
                  "(afflict (find-if (lambda (c) (typep c 'imp)) *creatures*) :damage 1 8.0 :element :fire :caster *player*)"
 shot circle      1.0  "$(player 0.0 2.0 0.25 0.0)" "$(hold 1)" \
                  "(cast-spell (find-spell 'grave-spikes) (vec 0.0 0.0 -2.5) (vec 0 0 1) (scene +main+))"
+shot flash      0.04 "$(player 0.0 0.0 0.0 0.0)" "$(put imp 0.0 -2.5 3.1416)" "$(hold 1)" \
+                 "(let ((c (find-if (lambda (c) (typep c 'imp)) *creatures*))) (setf (flash c) *flash-time*))"
+shot lava        0.3  "$(player -7.5 9.5 0.45 0.0)" "$(hold 1)"
 shot pickups     0.05 "$(player -2.5 5.0 0.3 3.1416)" "$(hold 1)"
 shot boss        0.05 "$(player -2.0 29.0 -0.05 3.1416)" "$(hold 1)"
 shot corridor    0.05 "$(player 0.0 -8.5 0.0 0.0)" "$(hold 2)"

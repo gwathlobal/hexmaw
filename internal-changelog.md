@@ -7,6 +7,15 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Shader effects in whole texels and few tones.** The aurora (the grave circle, the boss's ward
+  and summoning flames, the gale sign) is laid on the world's 64-a-metre grid round its ring and up
+  it, its light stepped into `*aurora-light-steps*` (10) levels and its colour into a few hues, as the
+  funnel already was. Lava's and water's waves move whole texels (one offset per texel of the grid),
+  so their texture no longer smears finer than its pixels. The hit flash peaks at 0.5 (was 0.85,
+  which turned a close sprite into a flat cream shape) and leans warmer. The rim of bosses, elites
+  and enchanted weapons goes `*rim-mix*` (0.85) of the way to its colour and never darker than the
+  lit texel under it, a lit edge rather than a neon line. `tools/art_shots.sh` has `flash` and
+  `lava` shots. (Players will see these.)
 - **One palette for all the art; textures with the sprites' contrast; selective outlines.** Every
   shipped sprite and texture is quantized onto `art/style/palette.txt`, 128 colours in 16 ramps that
   `tools/make_palette.py` clusters (Lab k-means) from the art itself, each group given a share
