@@ -2,7 +2,7 @@
 
 ;;; The player's hands, Hexen-style: the casting gauntlets low at the bottom of the screen,
 ;;; fire in their palms. One strip (data/sprites/hands/hands, tools/make_shield.py from
-;;; art/hands/hands-frames.txt) holds 4 idle frames followed by an 8-frame cast, each frame a
+;;; art/hands/hands-frames.txt) holds 3 idle frames followed by an 8-frame cast, each frame a
 ;;; whole-screen picture of both hands, drawn at the weapons' art pixel size (SWORD-SCALE) and
 ;;; placed by its aim, the picture's middle, on the screen's. Each hand is its own entity drawing
 ;;; its half of the picture, pushed out from the middle for a wider stance; they close up for the
@@ -30,13 +30,13 @@ inventory and its tooltip, and the pain flash, which they reach into.")
 (defparameter *hands-aim* 154
   "Art pixels from the hands strip's screen corner to its aim, which goes on the screen's middle:
 the pictures' middle, (1536 - 768) * 0.2 (art/hands/hands-frames.txt).")
-(defparameter *hands-idle-sequence* '(0 1 2 3) "Strip frames the idle loop steps through.")
+(defparameter *hands-idle-sequence* '(0 1 2) "Strip frames the idle loop steps through.")
 (defparameter *hands-spread* 28 "Art pixels each hand sits out from where its picture draws it.")
-(defparameter *hands-together* '(5 6 7 8)
+(defparameter *hands-together* '(4 5 6 7)
   "Strip frames where the fire joins between the hands (the gather, the fireball held, the
 release), so the spread closes: split, the fire would tear in two.")
 (defparameter *hands-spread-ease* 30.0 "How fast the hands open again after meeting.")
-(defparameter *hands-cast-first* 4 "Strip index of the cast's first frame.")
+(defparameter *hands-cast-first* 3 "Strip index of the cast's first frame.")
 (defparameter *hands-cast-frames* 8)
 (defparameter *hands-release-frame* 4 "Cast frame the spell leaves on, counted from 0.")
 (defparameter *hands-bob* 3.0 "Sway at walking speed, in art pixels.")

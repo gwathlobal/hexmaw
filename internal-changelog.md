@@ -16,10 +16,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   of the view), so they cover about what the old hands did and draw at `sword-scale`, centred by
   their aim (`*hands-aim*`; `*hands-height*`, `*hands-stretch*` and `*hands-drop*` are gone). Each
   hand still draws its half of the frame, `*hands-spread*` (28 art pixels) out from the middle,
-  and they close up where the fire joins between them (`*hands-together*`). The idle flicker is the rest pose's hands over
-  another take's fire (`tools/swap_fire.py`). `make_shield.py --glow` leaves fire out of its
-  darkening. The six spell looks are recoloured from the new strip. CLAUDE.md has a rule against
-  waiting on a `pgrep -f` loop that matches its own command line. (Players will see these.)
+  and they close up where the fire joins between them (`*hands-together*`). The idle loop is
+  three frames: the rest pose, and its hands over two other takes' fire alone
+  (`tools/swap_fire.py`; a first version kept the rest pose's own fire too, and that frame showed
+  two flames at once). `make_shield.py --glow` leaves fire out of its darkening. The six spell
+  looks are recoloured from the new strip. CLAUDE.md has a rule against waiting on a `pgrep -f`
+  loop that matches its own command line. (Players will see these.)
 - **House style written down, and checked in CI.** CLAUDE.md's "House style" gives the rules the
   art now keeps (64 art pixels a metre, first-person and HUD screen scales, the master palette,
   upper-left shading with selective outlines and nothing part transparent, shaders on the texel

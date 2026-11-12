@@ -2375,15 +2375,16 @@ The casting hands are made the spear's way (below): one generated picture per po
 idle frame and the spear's rest pose as references, the other poses adding `hands-follow.txt` and
 the chosen rest pose, `art/hands/idle-2.png`; the rest pose took the old bare-handed sheet,
 `art/hands/fire-hands.png`, as a third reference for how the hands are held). The idle flicker
-is the rest pose's hands over another take's fire (`tools/swap_fire.py`), since a take asked for
-only other flames moved the hands too. `art/hands/hands-frames.txt` places them, 4 idle frames
-and the 8 of the cast, at 0.2 art pixels a source pixel (the spear's 0.254 drew them so big
+is the rest pose's hands over two other takes' fire (`tools/swap_fire.py`, each frame the other
+take's fire alone), since a take asked for only other flames moved the hands too.
+`art/hands/hands-frames.txt` places them, 3 idle frames and the 8 of the cast, at 0.2 art pixels a source pixel (the spear's 0.254 drew them so big
 they hid the middle of the view), and `--glow` keeps the fire out of the darkening
 (darkened, white fire went grey and the palette made it pale blue):
 
 ```bash
 tools/gen_image.py art/hands/gather.png --prompt "$(cat art/prompts/hands-{common,gather,follow}.txt)" --ref art/sword-shield/ref-sword-idle.png --ref art/spear/idle-2.png --ref art/hands/idle-2.png --size 1536x1024 -n 2
 tools/swap_fire.py art/hands/idle-2.png art/hands/flicker-1.png art/hands/flicker-1-fire.png
+tools/swap_fire.py art/hands/idle-2.png art/hands/flicker-2.png art/hands/flicker-2-fire.png
 tools/make_shield.py --corner right --glow art/hands/hands-frames.txt data/sprites/hands/hands
 tools/restyle.py --house data/sprites/hands/hands.png
 ```

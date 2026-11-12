@@ -6,8 +6,9 @@
 The casting hands' idle flicker (art/hands/hands-frames.txt): asked for the rest pose with other
 flames, the generator also moves the hands a few pixels, and the hands jitter between the two
 frames. So the frame is BASE (the rest pose) with its fire taken out, the fire of DONOR put in
-its place (BASE's own fire where the donor's hands hid it, and pinholes filled from the fire round
-them), and BASE's hands drawn over it, since the fire burns behind them. Fire is a warm,
+its place (the holes the donor's own hands left in it filled from the fire round them; never
+BASE's own fire, or the frame shows two flames at once), and BASE's hands drawn over it, since
+the fire burns behind them. Fire is a warm,
 saturated or white-hot pixel; the background is magenta, as the generator draws it.
 """
 
@@ -35,13 +36,11 @@ def main():
     hands = ~base_bg & ~base_fire
     out = np.zeros_like(base)
     out[...] = (255, 0, 255)
-    # Where the donor's own hands hid its fire, the base's fire shows instead.
-    keep = base_fire & ~donor_fire
-    out[keep] = base[keep]
+    # Only the donor's fire: kept with the base's too, the frame showed both flames at once.
     out[donor_fire] = donor[donor_fire]
-    # Pinholes in the fire where neither had any: filled from the fire around them.
-    fire = donor_fire | keep
-    for _ in range(3):
+    # Holes in it where the donor's own hands hid it: filled from the fire around them.
+    fire = donor_fire.copy()
+    for _ in range(12):
         holes = ~fire & ~hands
         count = np.zeros(fire.shape, int)
         for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):

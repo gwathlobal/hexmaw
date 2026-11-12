@@ -1,4 +1,4 @@
 ;;; Written by tools/recolor_strip.py from hands; do not edit.
 (:image "storm.png"
  :cell-width 292 :cell-height 166 :gap 2
- :frames 12)
+ :frames 11)

@@ -6,14 +6,14 @@
 ; off the bottom. The game puts the pictures' middle, (1536 - 768) * 0.2 = 154 art pixels left of
 ; that corner (*HANDS-AIM*), on the screen's middle. --glow keeps the fire out of the darkening.
 ;
-; The flicker is idle-2's hands over flicker-1's fire (tools/swap_fire.py), since the generator
-; moved the hands a few pixels when asked for other flames.
+; The flicker frames are idle-2's hands over flicker-1's and flicker-2's fire alone
+; (tools/swap_fire.py), since the generator moved the hands a few pixels when asked for other
+; flames.
 
-; Idle: the rest pose, its flames flickering, breathing a pixel.
+; Idle: the rest pose and its flames flickering, three fires in turn.
 idle-2.png            0.2   1536 1024 0 -38
 flicker-1-fire.png    0.2   1536 1024 0 -38
-idle-2.png            0.2   1536 1024 0 -37
-flicker-1-fire.png    0.2   1536 1024 0 -37
+flicker-2-fire.png    0.2   1536 1024 0 -38
 
 ; The cast: rest, gathering, the fireball held, held and lifted, the release (the spell leaves
 ; on this one, *HANDS-RELEASE-FRAME* 4), the hands flung open, sinking back, rest.
