@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **House style written down, and checked in CI.** CLAUDE.md's "House style" gives the rules the
+  art now keeps (64 art pixels a metre, first-person and HUD screen scales, the master palette,
+  upper-left shading with selective outlines and nothing part transparent, shaders on the texel
+  grid) and how to keep them: `tools/restyle.py --house` after every slicer or recolour (the palette,
+  and sel-out for the solid things, by path), the texture command lines with their `--contrast`,
+  `--tone` and `--palette`, `art/style/anchor.png` (`tools/art_sheets.py --anchor`) and
+  `art/prompts/style-common.txt` for new prompts. CI runs `tools/art_audit.py --check`. The casting
+  hands are allowlisted at 8 screen pixels an art pixel until they are made again.
 - **The script-drawn pickups are shaded as the generated ones are.** `pixelart.house_finish`
   (relief, sel-out, the palette) gives every frame `draw_glyphs.py`, `draw_loot.py` and
   `draw_gold.py` draw a light from the upper left (`relief`: a bevel on the edges, a gradient that

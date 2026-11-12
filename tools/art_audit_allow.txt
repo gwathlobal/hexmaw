@@ -3,3 +3,4 @@
 sprites/torch/ density   # twice the density, on purpose: coarser, its collar and wrapping turn to mush
 sprites/grave/flight density  # a small fast projectile; 100 px/m, the bolt's flight is 90
 splash/ palette  # full-screen pictures keep every colour: a 64-colour palette turned the knight's runes yellow
+sprites/hands/ screen  # 8 screen px an art pixel at 1080 rows against the weapons' 5, until the hands are made again the spear's way
