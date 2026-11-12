@@ -3,20 +3,32 @@
 ;;; Heads-up display: health, mana and stamina in the lower-left corner, each a label, a
 ;;; bar and the numbers, breath above them while it is short, and the frame counter in the upper-left when it's on. HUD elements are ordinary scene entities drawn with a
 ;;; pixel-space orthographic projection at the near plane, so they stay on top
-;;; whatever order the scene draws in. Text uses Trial's built-in 9x17 pixel font.
+;;; whatever order the scene draws in. Text is Jersey 15, the menus' typeface, from a bitmap of it
+;;; drawn at its own pixel grid (HUD-TEXT).
 
 (defparameter *hud-margin* 16 "Pixels from the window's left and bottom edges.")
-(defparameter *hud-bar-width* 180)
-(defparameter *hud-bar-height* 12)
+(defparameter *hud-pixel-rows* 360
+  "Window rows per HUD art pixel: the bars, slots and icons are drawn in art pixels
+HUD-PIXEL-SCALE screen pixels across, 2 at 720 rows and 3 at 1080, so they keep the size of
+the rest of the art's pixels as the window grows (the weapons' are 3 and 5).")
+(defparameter *hud-bar-width* 64 "Art pixels across a bar, its frame included.")
+(defparameter *hud-bar-height* 7 "Art pixels up a bar, its frame included.")
 (defparameter *hud-row-gap* 6)
-(defparameter *hud-text-color* (vec4 0.92 0.88 0.78 1))
-(defparameter *health-bar-color* (vec4 0.78 0.14 0.10 1))
-(defparameter *mana-bar-color* (vec4 0.22 0.38 0.90 1))
-(defparameter *stamina-bar-color* (vec4 0.30 0.68 0.24 1))
-(defparameter *breath-bar-color* (vec4 0.62 0.84 0.92 1))
-(defparameter *hud-bar-back-color* (vec4 0.06 0.05 0.06 0.8))
+(defparameter *hud-text-color* (vec4 0.87 0.81 0.67 1))
+;; The bars' colours are a ramp's middle tone: the shader lights the top row and darkens the bottom.
+(defparameter *health-bar-color* (vec4 0.54 0.14 0.10 1))
+(defparameter *mana-bar-color* (vec4 0.20 0.28 0.56 1))
+(defparameter *stamina-bar-color* (vec4 0.26 0.44 0.17 1))
+(defparameter *breath-bar-color* (vec4 0.42 0.58 0.66 1))
+(defparameter *hud-bar-back-color* (vec4 0.17 0.13 0.11 0.9))
+(defparameter *hud-frame-color* (vec4 0.07 0.05 0.04 1) "The dark frame round bars and slots.")
 
-(defconstant +glyph-height+ 17)
+(defun hud-pixel-scale ()
+  "Screen pixels across a HUD art pixel at the window's size."
+  (max 1 (round (height *context*) *hud-pixel-rows*)))
+
+(defparameter *glyph-height* 23
+  "Pixels a line of HUD text stands, its shadow included: the HUD font's row (data/fonts/hud-font).")
 
 (define-shader-entity hud-element () ())
 
@@ -48,12 +60,23 @@
 (define-shader-entity hud-bar (hud-element vertex-entity transformed-entity)
   ((vertex-array :initform (// 'hexmaw 'hud-quad))
    (fill-fraction :initform 1.0 :accessor fill-fraction)
-   (fill-color :initarg :fill-color :initform (vec4 1 1 1 1) :accessor fill-color)))
+   (fill-color :initarg :fill-color :initform (vec4 1 1 1 1) :accessor fill-color)
+   (art-size :initform (vec2 *hud-bar-width* *hud-bar-height*) :reader art-size
+             :documentation "Art pixels across and up, the frame included.")))
+
+(defun size-bar (bar width height)
+  "Make BAR WIDTH by HEIGHT art pixels, drawn at HUD-PIXEL-SCALE."
+  (let ((k (float (hud-pixel-scale) 0f0)))
+    (vsetf (art-size bar) width height)
+    (setf (vx (scaling bar)) (* k width)
+          (vy (scaling bar)) (* k height))))
 
 (defmethod render :before ((bar hud-bar) (program shader-program))
   (setf (uniform program "fill_fraction") (float (fill-fraction bar) 0f0))
   (setf (uniform program "fill_color") (fill-color bar))
-  (setf (uniform program "back_color") *hud-bar-back-color*))
+  (setf (uniform program "back_color") *hud-bar-back-color*)
+  (setf (uniform program "frame_color") *hud-frame-color*)
+  (setf (uniform program "art_size") (art-size bar)))
 
 (define-class-shader (hud-bar :vertex-shader)
   "layout (location = TRIAL_V_UV) in vec2 in_uv;
@@ -69,30 +92,109 @@ void main(){
 uniform float fill_fraction;
 uniform vec4 fill_color;
 uniform vec4 back_color;
+uniform vec4 frame_color;
+uniform vec2 art_size;
 out vec4 color;
 
 void main(){
-  // One screen pixel in UV units, so the frame is 1 px at any bar size.
-  vec2 px = fwidth(bar_uv);
-  bool border = any(lessThan(bar_uv, px)) || any(greaterThan(bar_uv, 1.0 - px));
-  bool filled = bar_uv.x <= fill_fraction;
+  // Worked out per art pixel, so the bar is drawn in whole art pixels at any scale.
+  vec2 px = min(floor(bar_uv * art_size), art_size - 1.0);
+  bool frame = px.x < 1.0 || px.y < 1.0 || art_size.x - 1.0 <= px.x || art_size.y - 1.0 <= px.y;
+  bool filled = px.x - 1.0 < floor(fill_fraction * (art_size.x - 2.0) + 0.5);
   color = filled ? fill_color : back_color;
-  // A lighter top edge on the filled part, so the bar reads as a solid tube.
-  if(filled && 1.0 - 4.0 * px.y < bar_uv.y) color.rgb = min(color.rgb * 1.35, 1.0);
-  if(border) color = vec4(0.0, 0.0, 0.0, 1.0);
+  // Three tones of the fill's ramp, so it reads as a solid bar lit from above.
+  if(filled && art_size.y - 2.0 <= px.y) color.rgb = min(color.rgb * 1.32, 1.0);
+  if(filled && px.y < 2.0) color.rgb *= 0.68;
+  if(frame) color = frame_color;
 }")
 
-;;; Text.
+;;; Text. Jersey 15 drawn at the size where its outlines fall on whole pixels (27 px, one
+;;; screen pixel per font pixel at any window size): scaled, or at another size, its strokes came
+;;; out of uneven widths. tools/make_hud_font.py draws the bitmap, its glyphs in red and their
+;;; shadows in green, a row *GLYPH-HEIGHT* tall; its index gives each glyph's cell and advance.
+;;; A HUD-TEXT is Trial's DEBUG-TEXT (its vertex layout, so subclasses such as the map's overlays
+;;; keep working) with this font, laid out by advance instead of in 9-pixel cells.
 
-(define-shader-entity hud-text (hud-element debug-text) ())
+(define-asset (hexmaw hud-font) image
+    #p"fonts/hud-font.png"
+  :min-filter :nearest :mag-filter :nearest)
+
+(defvar *hud-font* NIL "The HUD font's index: (:image :height :first :glyphs), read once.")
+
+(defun hud-font ()
+  (or *hud-font* (setf *hud-font* (read-atlas "fonts/hud-font.lisp"))))
+
+(defparameter *hud-shadow-color* (vec3 0.07 0.05 0.04) "The colour of HUD text's shadow.")
+
+(defun glyph-metrics (char)
+  "CHAR's cell in the HUD font: its x, width and advance; a character it lacks as a space."
+  (let* ((font (hud-font))
+         (glyphs (getf font :glyphs))
+         (i (- (char-code char) (getf font :first))))
+    (values-list (aref glyphs (if (< -1 i (length glyphs)) i 0)))))
+
+(defun text-width (string)
+  "Pixels STRING's longest line takes across in HUD text."
+  (let ((widest 0) (x 0))
+    (loop for char across string
+          do (if (char= char #\Linefeed)
+                 (setf widest (max widest x) x 0)
+                 (incf x (nth-value 2 (glyph-metrics char)))))
+    (max widest x)))
+
+(define-shader-entity hud-text (hud-element debug-text)
+  ((texture :initform (// 'hexmaw 'hud-font)))
+  (:inhibit-shaders (debug-text :fragment-shader)))
+
+(defun print-hud-text (string array)
+  "Fill ARRAY (adjustable single floats) with STRING's quads, as PRINT-ASCII-TEXT lays its own:
+x y z u v per vertex, two triangles a glyph, lines *GLYPH-HEIGHT* apart downward. Returns the
+floats written, the width and the height."
+  (adjust-array array (* 5 6 (count #\Linefeed string :test-not #'char=)))
+  (let ((i 0) (x 0.0) (y 0.0) (widest 0.0)
+        (h (float *glyph-height* 0f0)))
+    (flet ((vertex (&rest values)
+             (dolist (v values)
+               (setf (aref array i) (float v 0f0))
+               (incf i))))
+      (loop for char across string
+            do (if (char= char #\Linefeed)
+                   (setf widest (max widest x) x 0.0 y (- y h))
+                   (multiple-value-bind (u w advance) (glyph-metrics char)
+                     (let ((x1 (+ x w)) (u1 (+ u w)))
+                       (vertex x y 0 u 0  x1 y 0 u1 0  x1 (+ y h) 0 u1 h
+                               x1 (+ y h) 0 u1 h  x (+ y h) 0 u h  x y 0 u 0))
+                     (incf x advance)))))
+    (values i (max widest x) (- y))))
+
+(defmethod (setf text) :around (value (text hud-text))
+  ;; Instead of DEBUG-TEXT's layout in its own 9 x 17 cells.
+  (setf (slot-value text 'text) value)
+  (let* ((vao (vertex-array text))
+         (vbo (caar (bindings vao)))
+         (array (buffer-data vbo)))
+    (multiple-value-bind (i w h) (print-hud-text value array)
+      (vsetf (size text) w h)
+      (setf (size vao) (truncate i 5)))
+    (when (allocated-p vao)
+      (resize-buffer-data vbo (* 4 (length array)) :data array)))
+  value)
+
+(defmethod render :before ((text hud-text) (program shader-program))
+  (setf (uniform program "shadow_color") *hud-shadow-color*))
 
 (define-class-shader (hud-text :fragment-shader)
-  "out vec4 color;
+  "in vec2 uv;
+out vec4 color;
+uniform sampler2D texture_image;
+uniform vec4 foreground;
+uniform vec3 shadow_color;
 
 void main(){
-  maybe_call_next_method();
-  // Drop the transparent box around the glyphs so it can't cover anything.
-  if(color.a < 0.01) discard;
+  vec4 glyph = texture(texture_image, uv, 0);
+  if(0.5 < glyph.r) color = foreground;
+  else if(0.5 < glyph.g) color = vec4(shadow_color, foreground.a);
+  else discard;
 }")
 
 ;;; Breath: a bar over the others, only while the player has less than a full breath.
@@ -131,7 +233,7 @@ line of its own. Lines after the first keep the first's indent."
     (nreverse (cons line lines))))
 
 (defun make-hud-text (&optional (text "") (class 'hud-text))
-  (make-instance class :text text :font-size (float +glyph-height+ 0f0)
+  (make-instance class :text text :font-size (float *glyph-height* 0f0)
                            :foreground *hud-text-color* :background (vec4 0 0 0 0)))
 
 ;;; Frame counter: frames drawn per second, in the upper-left corner, when the
@@ -417,8 +519,8 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
 ;;; The boss bar: the boss's title, its health and its powers, across the top of the screen
 ;;; from the moment the arena's gate drops until it dies (boss.lisp).
 
-(defparameter *boss-bar-width* 480)
-(defparameter *boss-bar-height* 14)
+(defparameter *boss-bar-width* 160 "Art pixels across the boss bar, its frame included.")
+(defparameter *boss-bar-height* 6 "Art pixels up it.")
 (defparameter *boss-bar-color* (vec4 0.62 0.10 0.06 1))
 (defparameter *boss-bar-top* 28 "Pixels from the top of the screen to the top of the title.")
 
@@ -493,59 +595,62 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
 
 (defun hud-row-y (row)
   "Pixels from the bottom edge to the bottom of ROW, counted from 0 at the bottom."
-  (+ *hud-margin* (* row (+ +glyph-height+ *hud-row-gap*))))
+  (+ *hud-margin* (* row (+ *glyph-height* *hud-row-gap*))))
 
 (defun hud-top ()
   "Pixels from the bottom edge to the top of the bars, for what stacks above them."
-  (+ (hud-row-y (if (breath-shown-p) 3 2)) +glyph-height+))
+  (+ (hud-row-y (if (breath-shown-p) 3 2)) *glyph-height*))
 
 (defun layout-hud (hud)
   "Rows from the bottom: stamina, mana, health, then breath. Each row is a label, a bar and the
 numbers; breath has none."
   (let* ((margin *hud-margin*)
-         (bar-x (+ margin (* 3 9)))
+         (k (hud-pixel-scale))
+         (bar-x (+ margin (text-width "AIR") 8))
          ;; Whole pixels only: a bar on a half pixel loses an edge row.
-         (bar-dy (floor (- +glyph-height+ *hud-bar-height*) 2)))
+         (bar-dy (floor (- *glyph-height* (* k *hud-bar-height*)) 2)))
     (flet ((row (y label bar value)
              (place label margin y)
              (place bar bar-x (+ y bar-dy))
-             (setf (vx (scaling bar)) (float *hud-bar-width* 0f0)
-                   (vy (scaling bar)) (float *hud-bar-height* 0f0))
+             (size-bar bar *hud-bar-width* *hud-bar-height*)
              (when value
-               (place value (+ bar-x *hud-bar-width* 8) y))))
+               (place value (+ bar-x (* k *hud-bar-width*) 8) y))))
       (row (hud-row-y 0) (stamina-label hud) (stamina-bar hud) (stamina-text hud))
       (row (hud-row-y 1) (mana-label hud) (mana-bar hud) (mana-text hud))
       (row (hud-row-y 2) (health-label hud) (health-bar hud) (health-text hud))
       (row (hud-row-y 3) (breath-label hud) (breath-bar hud) NIL)))
   (place (pickup-banner hud)
-         (round (- (/ (width *context*) 2) (* 4.5 (length (text (pickup-banner hud))))))
+         (round (- (/ (width *context*) 2) (/ (text-width (text (pickup-banner hud))) 2)))
          (round (* *pickup-note-height* (height *context*))))
   (place (message-banner hud)
-         (round (- (/ (width *context*) 2) (* 4.5 (length (text (message-banner hud))))))
+         (round (- (/ (width *context*) 2) (/ (text-width (text (message-banner hud))) 2)))
          (round (* 0.62 (height *context*))))
-  (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* +glyph-height+))
+  (place (fps-display hud) *hud-margin* (- (height *context*) *hud-margin* *glyph-height*))
   (place (level-banner hud)
-         (round (- (/ (width *context*) 2) (* 4.5 (length (text (level-banner hud))))))
+         (round (- (/ (width *context*) 2) (/ (text-width (text (level-banner hud))) 2)))
          (round (* 0.75 (height *context*))))
   (place (prompt-line hud)
-         (round (- (/ (width *context*) 2) (* 4.5 (length (text (prompt-line hud))))))
+         (round (- (/ (width *context*) 2) (/ (text-width (text (prompt-line hud))) 2)))
          (round (* 0.4 (height *context*))))
   ;; The boss bar, centred across the top: the title, the bar, the powers under it.
   (let* ((w (width *context*))
-         (title-y (- (height *context*) *boss-bar-top* +glyph-height+))
-         (bar-y (- title-y 4 *boss-bar-height*))
-         (bar-x (round (- (/ w 2) (/ *boss-bar-width* 2)))))
+         (title-y (- (height *context*) *boss-bar-top* *glyph-height*))
+         (k (hud-pixel-scale))
+         (bar-w (* k *boss-bar-width*))
+         (bar-h (* k *boss-bar-height*))
+         (bar-y (- title-y 4 bar-h))
+         (bar-x (round (- (/ w 2) (/ bar-w 2)))))
     (flet ((centre (text y)
-             (place text (round (- (/ w 2) (* 4.5 (length (text text))))) y)))
+             (place text (round (- (/ w 2) (/ (text-width (text text)) 2))) y)))
       (centre (boss-name hud) title-y)
-      (centre (boss-powers-line hud) (- bar-y 4 +glyph-height+)))
+      (centre (boss-powers-line hud) (- bar-y 4 *glyph-height*)))
     (place (boss-bar hud) bar-x bar-y -0.1)
-    (setf (vx (scaling (boss-bar hud))) (float *boss-bar-width* 0f0)
-          (vy (scaling (boss-bar hud))) (float *boss-bar-height* 0f0))
-    ;; In front of the bar, at the middle.
-    (place (boss-half hud) (+ bar-x (round *boss-bar-width* 2)) bar-y)
-    (setf (vx (scaling (boss-half hud))) 2f0
-          (vy (scaling (boss-half hud))) (float *boss-bar-height* 0f0)))
+    (size-bar (boss-bar hud) *boss-bar-width* *boss-bar-height*)
+    ;; In front of the bar, at the middle: one art pixel of the frame's colour.
+    (place (boss-half hud) (+ bar-x (* k (floor *boss-bar-width* 2))) bar-y)
+    (vsetf (art-size (boss-half hud)) 1 *boss-bar-height*)
+    (setf (vx (scaling (boss-half hud))) (float k 0f0)
+          (vy (scaling (boss-half hud))) (float bar-h 0f0)))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
   (dolist (cover (list (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)))

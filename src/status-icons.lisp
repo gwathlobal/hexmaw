@@ -21,7 +21,7 @@
   "Left to right, the kinds of status shown; :BLESS is the priest's blessing.")
 (defparameter *status-warn-time* 3.0 "Seconds left from which a status's icon blinks.")
 (defparameter *status-blink-rate* 4.0 "Blinks a second in the last *STATUS-WARN-TIME*.")
-(defparameter *status-bar-height* 4 "Pixels: the time bar along a cell's bottom.")
+(defparameter *status-bar-height* 3 "HUD art pixels: the time bar along a cell's bottom, its frame included.")
 
 (defun status-key (status)
   "STATUS's key in *STATUS-ICON-FRAMES* and *STATUS-COLORS*: its element for damage."
@@ -80,7 +80,7 @@ with LEFT of WHOLE seconds to run, showing COUNT."
          (color (getf *status-colors* key))
          (size (item-cell-size))
          (icon-size (item-icon-size))
-         (pad *weapon-slot-padding*)
+         (pad (slot-padding))
          (left (max 0.0 left))
          (whole (max 0.001 whole)))
     (dolist (part (status-cell-parts cell))
@@ -99,23 +99,23 @@ with LEFT of WHOLE seconds to run, showing COUNT."
           (vx (scaling icon)) (float icon-size 0f0)
           (vy (scaling icon)) (float icon-size 0f0))
     (place icon (+ x pad) (+ y pad) -0.1)
-    (setf (fill-fraction bar) (min 1.0 (/ left whole))
-          (vx (scaling bar)) (float (- size pad pad) 0f0)
-          (vy (scaling bar)) (float *status-bar-height* 0f0))
+    (setf (fill-fraction bar) (min 1.0 (/ left whole)))
+    (size-bar bar (- (floor size (hud-pixel-scale)) (* 2 *weapon-slot-padding*)) *status-bar-height*)
     (v<- (fill-color bar) color)
-    (place bar (+ x pad) (+ y 1) -0.05)
+    (place bar (+ x pad) (+ y pad) -0.05)
     ;; Re-uploading text costs a buffer update, so only when the number changes.
     (unless (eql count (shown-number cell))
       (setf (shown-number cell) count
             (text number) (princ-to-string count)))
-    (place number (- (+ x size) pad (* 9 (length (text number)))) (+ y 1 *status-bar-height*) 0)))
+    (place number (- (+ x size) pad (text-width (text number)))
+           (+ y pad (* (hud-pixel-scale) *status-bar-height*)) 0)))
 
 (define-handler (status-icons tick) ()
   (when *player*
     (let* ((size (item-cell-size))
-           (step (+ size *weapon-slot-gap*))
+           (step (+ size (slot-gap)))
            ;; Under the frame counter's line while it shows.
-           (top (- (height *context*) *hud-margin* (if *show-fps* (+ +glyph-height+ *weapon-slot-gap*) 0)))
+           (top (- (height *context*) *hud-margin* (if *show-fps* (+ *glyph-height* (slot-gap)) 0)))
            (cells (status-cells status-icons))
            (index 0))
       (dolist (kind *status-order*)

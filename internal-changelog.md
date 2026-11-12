@@ -7,6 +7,17 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The HUD's text is Jersey 15, the menus' typeface, and its art is drawn in whole art pixels.**
+  Trial's 9 × 17 font is gone from the HUD: `hud-text` draws a bitmap of Jersey 15
+  (`data/fonts/hud-font`, made by `tools/make_hud_font.py`) at 27 px, where its outlines fall on
+  whole pixels, one screen pixel per font pixel, with a one-pixel shadow; text is laid out by its
+  advances (`text-width`), so `+glyph-height+` is now `*glyph-height*` (23). The bars, slots, icons
+  and the status time bar are in HUD art pixels, `hud-pixel-scale` screen pixels across
+  (`round(rows / *hud-pixel-rows*)`: 2 at 720 rows, 3 at 1080), so they no longer stay 2 px at any
+  window size; `*weapon-icon-scale*` is gone, and `*weapon-slot-padding*` and `*weapon-slot-gap*` are
+  art pixels (`slot-padding`, `slot-gap`). The bars are 64 × 7 art pixels in a dark frame, each fill
+  three tones of a darker, less saturated ramp. The rift burst is drawn at 0.6 m (48 px a metre, was
+  36). (Players will see these.)
 - **Effects keep the monsters' pixel size.** An area spell's impact was one burst scaled up to the
   area, its art pixels growing coarse (12 px a metre at a 2 m radius, against the monsters' 64): now
   it is scaled at most `*burst-scale-limit*` (1.5) and rings of bursts at their own size fill the

@@ -203,7 +203,7 @@ off screen when its block isn't on that storey or is behind the camera. CLIP is 
     (if (and (< (vy low) (+ floor *map-cut-height*)) (< floor (vy high)) (< 0.1 (vw clip)))
         (let ((x (* (+ 0.5 (* 0.5 (/ (vx clip) (vw clip)))) (width *context*)))
               (y (* (+ 0.5 (* 0.5 (/ (vy clip) (vw clip)))) (height *context*))))
-          (place label (round (- x (* 4.5 (length (text label))))) (round (- y (/ +glyph-height+ 2)))))
+          (place label (round (- x (/ (text-width (text label)) 2))) (round (- y (/ *glyph-height* 2)))))
         (place label -10000 -10000))))
 
 ;;; The controller: opening and closing, controls, revealing blocks as the player walks.
@@ -227,7 +227,7 @@ level is built: there is a label per block."
   (let ((view (make-instance 'map-view)))
     (flet ((label (class block text color &optional at)
              (make-instance class :block block :text text :at at
-                                  :font-size (float +glyph-height+ 0f0)
+                                  :font-size (float *glyph-height* 0f0)
                                   :foreground color :background (vec4 0 0 0 0))))
       (setf (map-labels view)
             (loop for block across *map-blocks*
