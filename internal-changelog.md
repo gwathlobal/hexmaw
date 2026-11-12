@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The script-drawn pickups are shaded as the generated ones are.** `pixelart.house_finish`
+  (relief, sel-out, the palette) gives every frame `draw_glyphs.py`, `draw_loot.py` and
+  `draw_gold.py` draw a light from the upper left (`relief`: a bevel on the edges, a gradient that
+  rounds the shape, a groove cut round each glowing stroke with its lip lit, seeded grain for wear,
+  the same pixels in every frame), selective outlines and the master palette, with nothing part
+  transparent: the glyphs' and runes' soft halos and the altar sigil's glow, which the game's
+  alpha test cut away anyway, are gone. (Players will see these.)
 - **Shader effects in whole texels and few tones.** The aurora (the grave circle, the boss's ward
   and summoning flames, the gale sign) is laid on the world's 64-a-metre grid round its ring and up
   it, its light stepped into `*aurora-light-steps*` (10) levels and its colour into a few hues, as the

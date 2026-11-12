@@ -155,3 +155,70 @@ def selout(img, darken=0.45, below=25.0):
     mean[:, 1:] *= 0.85
     rgba[has, :3] = _rgb(mean)
     return Image.fromarray(rgba, "RGBA")
+
+
+HOUSE_PALETTE = __import__("pathlib").Path(__file__).resolve().parent.parent / "art/style/palette.txt"
+
+
+def relief(img, glow=None, seed=1, bevel=9.0, carve=11.0, speckle=0.22, grain=5.0, gradient=8.0):
+    """Shade a flat, script-drawn IMG the way the generated sprites are: lit from the upper left.
+    Every opaque pixel that isn't outline (lightness under 20) or GLOW (a predicate on a pixel's
+    Lab, for the parts that shine) is a surface: lighter by BEVEL where its upper-left side meets
+    the outline or nothing, darker where its lower-right side does; a glowing stroke cut into it is a
+    groove, its upper-left wall in shadow (CARVE) and its lower-right lip lit; and SPECKLE of the
+    surface, picked by SEED (the same pixels in every frame of a strip), is a GRAIN lighter or
+    darker, the wear and chips a generated sprite has; and the whole surface is up to GRADIENT
+    lighter toward the shape's upper left and darker toward its lower right, so it reads round
+    rather than flat. Lightness only: house_finish then snaps the
+    colours onto the palette."""
+    rgba = np.asarray(img.convert("RGBA")).copy()
+    h, w = rgba.shape[:2]
+    op = rgba[:, :, 3] >= 128
+    lab = _lab(rgba[:, :, :3].astype(np.float64))
+    line = op & (lab[:, :, 0] < 20)
+    shine = np.zeros_like(op)
+    if glow is not None:
+        shine = op & np.apply_along_axis(glow, 2, lab)
+    body = op & ~line & ~shine
+    out = ~op | line
+
+    def near(mask, dy, dx):
+        """True where the pixel DY, DX away is in MASK (nothing beyond the image's edge)."""
+        m = np.zeros_like(mask)
+        ys, yd = (slice(0, h - dy), slice(dy, h)) if dy >= 0 else (slice(-dy, h), slice(0, h + dy))
+        xs, xd = (slice(0, w - dx), slice(dx, w)) if dx >= 0 else (slice(-dx, w), slice(0, w + dx))
+        m[ys, xs] = mask[yd, xd]
+        return m
+
+    edge_out = near(out, 0, -1) | near(out, -1, 0)    # nothing above or left of it
+    edge_in = near(out, 0, 1) | near(out, 1, 0)       # nothing below or right
+    d = np.zeros((h, w))
+    d += bevel * (edge_out & ~edge_in) - bevel * (edge_in & ~edge_out)
+    groove = near(shine, 0, 1) | near(shine, 1, 0) | near(shine, 1, 1)
+    lip = near(shine, 0, -1) | near(shine, -1, 0)
+    d -= carve * (groove & ~lip)
+    d += 0.6 * carve * (lip & ~groove)
+    if gradient and body.any():
+        ys, xs = np.nonzero(op)
+        diag = (np.arange(w)[None, :] - xs.mean()) / max(1, np.ptp(xs)) + (np.arange(h)[:, None] - ys.mean()) / max(1, np.ptp(ys))
+        d -= gradient * np.clip(diag, -1, 1)
+    noise = np.random.default_rng(seed).random((h, w))
+    d -= grain * (noise < speckle / 2)
+    d += grain * ((noise >= speckle / 2) & (noise < speckle))
+    lab[:, :, 0] = np.clip(lab[:, :, 0] + d * body, 0, 100)
+    rgba[body, :3] = _rgb(lab[body])
+    rgba[~op] = 0
+    rgba[op, 3] = 255
+    return Image.fromarray(rgba, "RGBA")
+
+
+def house_finish(img, glow=None, seed=1, palette=None, **relief_args):
+    """A script-drawn frame in the house style ("House style", CLAUDE.md): relief, sel-out, then
+    every pixel onto the master palette (opaque or clear, nothing between)."""
+    palette = read_palette(HOUSE_PALETTE) if palette is None else palette
+    return quantize_to_palette(selout(relief(img, glow, seed, **relief_args)), palette)
+
+
+def glowing(min_chroma=30.0, min_lightness=45.0):
+    """A predicate for relief's GLOW: saturated and bright, the strokes that shine."""
+    return lambda lab: bool(lab[1] ** 2 + lab[2] ** 2 > min_chroma ** 2 and lab[0] > min_lightness)

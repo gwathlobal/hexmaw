@@ -6,8 +6,10 @@ one strip per glyph in the format tools/slice_frames.py writes:
 
 writes glyph-<kind>.png and .lisp for each kind in GLYPHS. A glyph is a small standing tablet of
 dark stone, a rune cut into it glowing in the effect's colour, at the monsters' 64 px per metre.
-Its 4 frames pulse the glow: the rune brightens and a faint halo swells round the tablet. Each
-rune is its own shape, so two glyphs of near colours still read apart.
+Its 4 frames pulse the glow: the rune brightens. Each rune is its own shape, so two glyphs of
+near colours still read apart. Every frame goes through pixelart.house_finish: lit from the upper
+left, the rune a groove cut into the stone, grain, sel-out and the master palette, and no
+part-transparent pixels (the halo it once had was cut away by the game's alpha test anyway).
 
 It also writes altar-sigil.png and .lisp, the sign that hangs over a spellforge altar
 (forge.lisp): a ring of runes round a four-pointed star, 8 frames turning an eighth of the way
@@ -20,6 +22,8 @@ import sys
 from pathlib import Path
 
 from PIL import Image
+
+from pixelart import HOUSE_PALETTE, glowing, house_finish, quantize_to_palette, read_palette
 
 W, H = 22, 30
 GAP = 2
@@ -176,16 +180,6 @@ def frame(kind, step):
     pulse = (0.0, 0.5, 1.0, 0.5)[step]
     image = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     pixels = image.load()
-    # The halo, under the stone: a soft ring of the glow that swells with the pulse.
-    cx, cy = (W - 1) / 2, 14.0
-    for y in range(H):
-        for x in range(W):
-            d = ((x - cx) ** 2 / 1.0 + (y - cy) ** 2 / 2.2) ** 0.5
-            reach = 9.5 + 1.2 * pulse
-            if d < reach:
-                a = round(max(0.0, 1 - d / reach) * (50 + 50 * pulse))
-                if a > 0:
-                    pixels[x, y] = (*mid, a)
     for (x, y), color in outline(tablet()).items():
         pixels[x, y] = color
     # The rune, cut into the face: its strokes in the glow, a dark cut under each.
@@ -199,14 +193,13 @@ def frame(kind, step):
                 if below[0] <= 15 and below[1] <= 25 and pixels[below][:3] == STONE[:3]:
                     pixels[below] = (*blend(STONE_DARK, dark, 0.5), 255)
                 pixels[x, y] = (*blend(mid, light, pulse), 255)
-    return image
+    return house_finish(image, glow=glowing(), seed=len(kind), speckle=0.3, grain=6.0)
 
 
 SIGIL = 48
 SIGIL_FRAMES = 8
 SIGIL_LIGHT = (255, 236, 190)
 SIGIL_MID = (196, 140, 255)
-SIGIL_DARK = (96, 50, 170)
 
 
 def sigil_frame(step):
@@ -234,15 +227,10 @@ def sigil_frame(step):
             arm = min(abs(dx), abs(dy))
             if max(abs(dx), abs(dy)) <= 14 and arm <= 2.6 * (1 - max(abs(dx), abs(dy)) / 15):
                 color = (*(SIGIL_LIGHT if r < 3 + 3 * pulse else SIGIL_MID), 255)
-            # A soft glow round it all.
-            if color is None and r < 23:
-                k = max(0.0, 1 - abs(r - 12) / 11)
-                alpha = round(k * (40 + 50 * pulse))
-                if alpha > 0:
-                    color = (*SIGIL_DARK, alpha)
             if color:
                 pixels[x, y] = color
-    return image
+    # A light sign, so no relief: only the palette. Its lamp is its glow (pickups.lisp).
+    return quantize_to_palette(image, read_palette(HOUSE_PALETTE))
 
 
 def main():
