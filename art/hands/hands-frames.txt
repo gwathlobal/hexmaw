@@ -1,0 +1,27 @@
+; The casting hands' strip, for tools/make_shield.py --corner right --glow:
+;   SOURCE SCALE SX SY X Y
+; Every picture is the whole screen at the spear's scale (0.254 art pixels a source pixel, so the
+; gauntlets are the weapons' size and art pixel), placed by its bottom-right corner on the strip's
+; screen corner and 48 art pixels below it, so mostly the hands and fire show and the forearms run
+; off the bottom. The game puts the pictures' middle, (1536 - 768) * 0.254 = 195 art pixels left
+; of that corner (*HANDS-AIM*), on the screen's middle. --glow keeps the fire out of the darkening.
+;
+; The flicker is idle-2's hands over flicker-1's fire (tools/swap_fire.py), since the generator
+; moved the hands a few pixels when asked for other flames.
+
+; Idle: the rest pose, its flames flickering, breathing a pixel.
+idle-2.png            0.254 1536 1024 0 -48
+flicker-1-fire.png    0.254 1536 1024 0 -48
+idle-2.png            0.254 1536 1024 0 -47
+flicker-1-fire.png    0.254 1536 1024 0 -47
+
+; The cast: rest, gathering, the fireball held, held and lifted, the release (the spell leaves
+; on this one, *HANDS-RELEASE-FRAME* 4), the hands flung open, sinking back, rest.
+idle-2.png            0.254 1536 1024 0 -48
+gather-2.png          0.254 1536 1024 0 -48
+cupped-1.png          0.254 1536 1024 0 -48
+cupped-1.png          0.254 1536 1024 0 -45
+release-2.png         0.254 1536 1024 0 -48
+open-2.png            0.254 1536 1024 0 -48
+idle-2.png            0.254 1536 1024 0 -54
+idle-2.png            0.254 1536 1024 0 -50

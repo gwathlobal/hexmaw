@@ -7,6 +7,17 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The casting hands are remade: the weapons' gauntlets, at the weapons' pixel size.** They were
+  bare hands in red sleeves at 8 screen pixels an art pixel at 1080 rows, against the weapons' 5,
+  in two halves spread apart. Now they are the sword's and spear's steel gauntlets, their backs to
+  the camera and the fire burning behind the fingers, one generated picture a pose (rest, gather,
+  the fireball held, the release, the hands flung open) placed by `tools/make_shield.py` from
+  `art/hands/hands-frames.txt` at the spear's scale, so they draw at `sword-scale` as one sprite
+  centred by its aim (`*hands-aim*`; `*hands-height*`, `*hands-stretch*`, `*hands-drop*`,
+  `*hands-spread*` and `*hands-together*` are gone). The idle flicker is the rest pose's hands over
+  another take's fire (`tools/swap_fire.py`). `make_shield.py --glow` leaves fire out of its
+  darkening. The six spell looks are recoloured from the new strip. CLAUDE.md has a rule against
+  waiting on a `pgrep -f` loop that matches its own command line. (Players will see these.)
 - **House style written down, and checked in CI.** CLAUDE.md's "House style" gives the rules the
   art now keeps (64 art pixels a metre, first-person and HUD screen scales, the master palette,
   upper-left shading with selective outlines and nothing part transparent, shaders on the texel

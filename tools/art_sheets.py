@@ -8,8 +8,8 @@
 Sheets (PNG, named after them):
 - world: monsters, townsfolk, effects, pickups, the torch and the gate over the stone wall, each
   scaled as the camera (75 degree field of view) draws it at --distance metres on --rows rows.
-- first-person: the hands and weapons at their screen scale on --rows rows (sword-scale and the
-  hands' own, from src/ as tools/art_audit.py reads them), beside an imp 1.5 m away.
+- first-person: the hands and weapons at their screen scale on --rows rows (sword-scale, which the
+  hands share, from src/ as tools/art_audit.py reads it), beside an imp 1.5 m away.
 - monsters: every creature's and townsperson's front view at 3x, against one dark tone.
 - textures: a 2 m corner of every texture at 3x.
 - drawn: the HUD icons and the floor signs, at 4x and 1x.

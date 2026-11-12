@@ -1374,15 +1374,15 @@ real time instead.
   To find which sound misbehaves, `tools/hd '(game (mute :ambience))'` silences a clip or a group of
   `*sound-groups*` (`:music`, `:effects` for every clip), loops already playing too, and `(unmute)`
   brings everything back.
-- `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
-  edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
-  frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
-  whole numbers, with square pixels (`*hands-stretch*` 1.0; at 1.25 they were wider than tall, the
-  only non-square art pixels in the game). The cast's release frame is timed
+- `src/hands.lisp`: the first-person casting hands, the weapons' steel gauntlets with fire burning
+  behind the fingers, sunk Hexen-style below the bottom edge (idle loop, cast, walking sway). One
+  sprite: each frame is both hands, drawn at `sword-scale` like the weapons and placed by its aim
+  (`*hands-aim*`, the pictures' middle) on the screen's middle. The cast's release frame is timed
   to `*cast-release*`. Their fire takes the look of the spell in them (`*hand-looks*`, by
   `spell-look`: a tornado's `:storm`, else its effects'), one strip per look, each the fire strip
   recoloured, `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/<look> --hue H`
-  (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295); `add-hands`
+  (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295), then
+  `tools/restyle.py --palette art/style/palette.txt data/sprites/hands/<look>.png`; `add-hands`
   preloads them all, since `swap-animation` changes the strip mid-game. The recipes (the hotbar's
   defaults) work as before: `(select-weapon *player* :1)` is hotbar key 1, the sword at the start.
 - `src/sword.lisp` also has **enchantments**: a weapon's spell (a sword's or spear's its own stack's,
@@ -1948,6 +1948,14 @@ background are requests in the prompt (1536x1024 came back exact), and `--qualit
 nothing there. `--backend api` calls the paid Image API instead (key in `$OPENAI_API_KEY`
 or `~/.config/openai/api_key`), which honours size, quality and `--mask` exactly.
 
+**Waiting for a background job: never loop on `pgrep -f PATTERN` (or `pkill -f`, `ps | grep`)
+whose PATTERN is in the waiting command's own text.** The waiting shell's command line contains
+the pattern, so it matches itself and the loop never ends: `while pgrep -f "gen_image.py art/x"; do
+sleep 2; done` hung for an hour after a 93 s generation, and not for the first time. Run the job
+itself as the background command and be told when it exits, or wait on its PID (`wait $pid`, or
+`while kill -0 $pid`), or wait for its output file; if a pattern is unavoidable, bracket a
+character so it can't match itself (`pgrep -f '[g]en_image.py art/x'`).
+
 Neither keeps a conversation the way ChatGPT does: every call carries the full prompt and
 every reference it needs, so a follow-up pose attaches the earlier result as a `--ref`.
 Keep prompts worth repeating as files under `art/prompts/`, and `--dry-run` a new command
@@ -1997,8 +2005,8 @@ sprites, each asset on colours of its own. The before and after shots are in
   (`burst-rings`, the aura's copies).
 - **Screen scale.** First-person art draws at `sword-scale` (3 screen pixels an art pixel at 720
   rows, 5 at 1080), with square pixels; the HUD's art at `hud-pixel-scale` (2 and 3); HUD text is
-  Jersey 15 at its own 27 px grid, 1:1 (`tools/make_hud_font.py`). The casting hands are still
-  coarser (8 at 1080), until they are made again the spear's way.
+  Jersey 15 at its own 27 px grid, 1:1 (`tools/make_hud_font.py`). The casting hands draw at
+  `sword-scale` too, made at the spear's source scale.
 - **One palette.** Every sprite and texture is on `art/style/palette.txt`, 128 colours in ramps,
   made by `tools/make_palette.py` from the art itself; splash screens keep every colour. A slicer's
   or recolour's output goes through `tools/restyle.py --house` (below); a texture through
@@ -2359,15 +2367,22 @@ of one art pixel in the source:
 python3 tools/slice_frames.py art/spells/bolt.webp data/sprites/bolt --pixel 5 flight:5 burst:7
 ```
 
-First-person HUD sprites (the hands) have arms cut off by the screen edge, wherever the
-generator happened to cut them; `--anchor bottom` puts each frame's lowest solid row on
-the strip's bottom edge instead of keeping the cell centre. The hands are one 12-frame
-strip (4 idle, then 8 cast), so every frame shares one crop. Their sheet,
-`art/hands/fire-hands.png`, is two generated sheets (idle row, then the cast) stacked with a
-cyan line between:
+The casting hands are made the spear's way (below): one generated picture per pose, the whole
+1536 × 1024 screen, both gauntlets with their backs to the camera and the fire behind the fingers
+(`art/prompts/hands-common.txt`, which says so for every pose, plus `hands-<pose>.txt`; the sword's
+idle frame and the spear's rest pose as references, the other poses adding `hands-follow.txt` and
+the chosen rest pose, `art/hands/idle-2.png`; the rest pose took the old bare-handed sheet,
+`art/hands/fire-hands.png`, as a third reference for how the hands are held). The idle flicker
+is the rest pose's hands over another take's fire (`tools/swap_fire.py`), since a take asked for
+only other flames moved the hands too. `art/hands/hands-frames.txt` places them, 4 idle frames
+and the 8 of the cast, at the spear's scale, and `--glow` keeps the fire out of the darkening
+(darkened, white fire went grey and the palette made it pale blue):
 
 ```bash
-python3 tools/slice_frames.py art/hands/fire-hands.png data/sprites/hands --pixel 4 --anchor bottom hands:12
+tools/gen_image.py art/hands/gather.png --prompt "$(cat art/prompts/hands-{common,gather,follow}.txt)" --ref art/sword-shield/ref-sword-idle.png --ref art/spear/idle-2.png --ref art/hands/idle-2.png --size 1536x1024 -n 2
+tools/swap_fire.py art/hands/idle-2.png art/hands/flicker-1.png art/hands/flicker-1-fire.png
+tools/make_shield.py --corner right --glow art/hands/hands-frames.txt data/sprites/hands/hands
+tools/restyle.py --house data/sprites/hands/hands.png
 ```
 
 The sword is one 12-frame strip (4 idle, then an 8-frame slash), each cell about 326 × 250
@@ -2490,8 +2505,7 @@ Generators can't keep a motion sequence across a grid of first-person poses, and
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
 attach the first as the design reference, and describe each pose in screen positions.
 
-Most of that idle row has no palm fire, so `*hands-idle-sequence*` loops the cast's rest
-frames instead. A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
+A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
 `tools/hd reload src/<file that defines it>.lisp` reloads it and rebuilds the scene.
 
 A monster's walk is one strip of 4 frames per view, in the turnaround's view order. It

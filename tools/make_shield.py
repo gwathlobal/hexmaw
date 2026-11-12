@@ -21,7 +21,8 @@ and cut beyond. A ; starts a comment.
 Every frame shares one cell, sized to hold them all, its bottom-left corner --margin
 art pixels past the screen's. Keying is slice_frames.py's (blue well over green is
 background). Every frame is box-filtered down, darkened by --brightness, desaturated
-by --saturation, and mapped onto one --colors palette, so the frames match.
+by --saturation (but for its fire, with --glow: the casting hands'), and mapped onto one
+--colors palette, so the frames match.
 
 --corner right pins the frames to the screen's bottom-right corner instead, for a
 weapon held on the right (the spear, data/sprites/spear): X counts leftward from the right edge,
@@ -73,13 +74,23 @@ def keyed(path):
     return Image.fromarray(np.dstack([rgb, alpha]).astype(np.uint8), "RGBA")
 
 
-def grade(img, brightness, saturation):
-    """Darken and desaturate IMG's opaque pixels."""
+def glowing(rgb):
+    """Where RGB (0 to 1) is fire: bright, and orange to yellow or near white."""
+    hi, lo = rgb.max(-1), rgb.min(-1)
+    sat = (hi - lo) / np.maximum(hi, 1e-6)
+    warm = (rgb[..., 0] >= rgb[..., 1]) & (rgb[..., 1] >= rgb[..., 2])
+    return (hi > 0.85) & ((warm & (sat > 0.45)) | (sat < 0.2))
+
+
+def grade(img, brightness, saturation, glow=False):
+    """Darken and desaturate IMG's opaque pixels; with GLOW, not its fire, which is light."""
     a = np.asarray(img).astype(float) / 255
     rgb = a[..., :3]
+    keep = glowing(rgb) if glow else np.zeros(rgb.shape[:2], bool)
     grey = rgb @ np.array([0.299, 0.587, 0.114])
-    rgb = grey[..., None] + (rgb - grey[..., None]) * saturation
-    rgb = np.clip(rgb * brightness, 0, 1)
+    graded = grey[..., None] + (rgb - grey[..., None]) * saturation
+    graded = np.clip(graded * brightness, 0, 1)
+    rgb = np.where(keep[..., None], rgb, graded)
     out = np.dstack([rgb, a[..., 3:]]) * 255
     return Image.fromarray(np.round(out).astype(np.uint8), "RGBA")
 
@@ -94,6 +105,8 @@ def main():
     ap.add_argument("--brightness", type=float, default=0.8)
     ap.add_argument("--saturation", type=float, default=0.8)
     ap.add_argument("--colors", type=int, default=48)
+    ap.add_argument("--glow", action="store_true",
+                    help="leave fire (bright orange to yellow, and near white) out of --brightness and --saturation")
     ap.add_argument("--corner", choices=("left", "right"), default="left",
                     help="screen corner the frames are pinned to")
     args = ap.parse_args()
@@ -109,7 +122,7 @@ def main():
             img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
             sx = img.width - sx
         w, h = round(img.width * scale), round(img.height * scale)
-        small = grade(box_downscale(img, (w, h)), args.brightness, args.saturation)
+        small = grade(box_downscale(img, (w, h)), args.brightness, args.saturation, args.glow)
         left, top = round(x - sx * scale), round(-y - sy * scale)
         # Keep only what shows: past the margins nothing is drawn.
         small = small.crop((max(0, -side - left), 0, small.width, min(small.height, args.margin - top)))

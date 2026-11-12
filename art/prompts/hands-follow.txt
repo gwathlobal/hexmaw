@@ -1,0 +1,2 @@
+
+REFERENCE IMAGE 3 is these hands' rest pose, already drawn: keep exactly its two gauntlets, cuffs and vambraces, at the same scale and in the same style. Only the pose and the fire change.

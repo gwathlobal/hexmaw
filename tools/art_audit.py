@@ -126,10 +126,10 @@ def screen_scales(params, rows):
         return atlas(DATA / "sprites" / (rel + ".png")).get("cell-height", 1)
     sy = max(1, round(params.get("*sword-height*", 1.04) * rows / cell("sword/sword")))
     sword = (max(1, round(sy * params.get("*sword-stretch*", 1.0))), sy)
-    hy = max(1, round(params.get("*hands-height*", 0.62) * rows / cell("hands/hands")))
-    hands = (max(1, round(hy * params.get("*hands-stretch*", 1.0))), hy)
     hud = hud_scale(params, rows)
-    return {"sword/": sword, "spear/": sword, "maul/": sword, "hands/": hands,
+    # The hands draw at SWORD-SCALE too (layout-hands): their strip is made at the weapons'
+    # source scale, so the two share an art pixel.
+    return {"sword/": sword, "spear/": sword, "maul/": sword, "hands/": sword,
             "icons/": (hud, hud)}
 
 
