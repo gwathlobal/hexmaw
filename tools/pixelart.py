@@ -56,3 +56,102 @@ def reduce_colors(img, colors):
     rgba[:, :, :3] = np.asarray(mapped.convert("RGB"))
     rgba[~solid] = 0
     return Image.fromarray(rgba, "RGBA")
+
+
+def read_palette(path):
+    """The colours of a palette file (tools/make_palette.py: a ramp a line, hex colours), as an
+    N x 3 uint8 array."""
+    import re
+    colours = []
+    for line in open(path):
+        if line.lstrip().startswith("#"):
+            continue
+        colours += [tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+                    for h in re.findall(r"\b([0-9a-fA-F]{6})\b", line)]
+    return np.array(colours, dtype=np.uint8)
+
+
+def _lab(rgb):
+    c = rgb / 255.0
+    c = np.where(c > 0.04045, ((c + 0.055) / 1.055) ** 2.4, c / 12.92)
+    m = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+    xyz = c @ m.T / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], -1)
+
+
+def quantize_to_palette(img, palette):
+    """Map IMG's opaque pixels onto PALETTE (read_palette), each to the nearest colour in CIE
+    Lab, with no dither. Transparent pixels stay transparent; part-transparent ones become
+    opaque or clear at half alpha, as the game's shader cuts them."""
+    rgba = np.asarray(img.convert("RGBA")).copy()
+    solid = rgba[:, :, 3] >= 128
+    pal_lab = _lab(palette.astype(np.float64))
+    px = rgba[solid][:, :3]
+    keys, inverse = np.unique(px.astype(np.int64) @ np.array([65536, 256, 1]), return_inverse=True)
+    unique = np.stack([keys >> 16, (keys >> 8) & 255, keys & 255], 1).astype(np.float64)
+    lab = _lab(unique)
+    pick = np.empty(len(unique), dtype=np.int64)
+    for s in range(0, len(unique), 20000):
+        pick[s:s + 20000] = ((lab[s:s + 20000, None, :] - pal_lab[None]) ** 2).sum(2).argmin(1)
+    rgba[solid, :3] = palette[pick[inverse.ravel()]]
+    rgba[solid, 3] = 255
+    rgba[~solid] = 0
+    return Image.fromarray(rgba, "RGBA")
+
+
+def _rgb(lab):
+    fy = (lab[..., 0] + 16) / 116
+    f = np.stack([fy + lab[..., 1] / 500, fy, fy - lab[..., 2] / 200], -1)
+    xyz = np.where(f > 0.206893, f ** 3, (f - 16 / 116) / 7.787) * np.array([0.95047, 1.0, 1.08883])
+    m = np.array([[3.2406, -1.5372, -0.4986], [-0.9689, 1.8758, 0.0415], [0.0557, -0.2040, 1.0570]])
+    c = np.clip(xyz @ m.T, 0, 1)
+    c = np.where(c > 0.0031308, 1.055 * c ** (1 / 2.4) - 0.055, 12.92 * c)
+    return np.clip(np.round(c * 255), 0, 255).astype(np.uint8)
+
+
+def adjust_tone(img, contrast=1.0, tone=None, chroma=1.0):
+    """Change IMG's opaque pixels in CIE Lab: lightness spread CONTRAST times as far about its
+    mean, the colour's mean moved to TONE (a*, b*) if given, keeping each pixel's difference
+    from it, and every colour's chroma times CHROMA."""
+    rgba = np.asarray(img.convert("RGBA")).copy()
+    solid = rgba[:, :, 3] > 0
+    if not solid.any():
+        return img
+    lab = _lab(rgba[solid][:, :3].astype(np.float64))
+    mean = lab.mean(0)
+    lab[:, 0] = np.clip(mean[0] + contrast * (lab[:, 0] - mean[0]), 0, 100)
+    if tone is not None:
+        lab[:, 1:] += np.array(tone) - mean[1:]
+    lab[:, 1:] *= chroma
+    rgba[solid, :3] = _rgb(lab)
+    return Image.fromarray(rgba, "RGBA")
+
+
+def selout(img, darken=0.45, below=25.0):
+    """Turn the near-black outline round IMG's shape (an opaque pixel beside a transparent one,
+    lightness under BELOW) into a dark tone of what it borders: the mean of its inner neighbours
+    at DARKEN of their lightness. Pixel artists' "selective outline": the shape keeps its edge
+    without a black line round it that nothing in the level has."""
+    rgba = np.asarray(img.convert("RGBA")).copy()
+    opaque = rgba[:, :, 3] > 0
+    clear = ~opaque
+    near = np.zeros_like(clear)
+    near[1:] |= clear[:-1]; near[:-1] |= clear[1:]; near[:, 1:] |= clear[:, :-1]; near[:, :-1] |= clear[:, 1:]
+    edge = opaque & near
+    lab = _lab(rgba[:, :, :3].astype(np.float64))
+    target = edge & (lab[:, :, 0] < below)
+    inner = opaque & ~edge
+    total = np.zeros(lab.shape)
+    count = np.zeros(lab.shape[:2])
+    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+        shifted = np.roll(np.roll(lab, dy, 0), dx, 1)
+        ok = np.roll(np.roll(inner, dy, 0), dx, 1)
+        total += shifted * ok[..., None]
+        count += ok
+    has = target & (count > 0)
+    mean = total[has] / count[has][:, None]
+    mean[:, 0] *= darken
+    mean[:, 1:] *= 0.85
+    rgba[has, :3] = _rgb(mean)
+    return Image.fromarray(rgba, "RGBA")

@@ -7,6 +7,18 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **One palette for all the art; textures with the sprites' contrast; selective outlines.** Every
+  shipped sprite and texture is quantized onto `art/style/palette.txt`, 128 colours in 16 ramps that
+  `tools/make_palette.py` clusters (Lab k-means) from the art itself, each group given a share
+  (`quantize_to_palette` in `tools/pixelart.py`; `--palette` on `make_texture.py`, `tools/restyle.py`
+  for strips). The textures were rebuilt from their sources with their contrast raised to the
+  sprites' (`--contrast`, 1.6 for the stones), the cool and off-family stones (stair, dressed stone,
+  sarcophagus, ceiling) shifted into the wall's warm grey-brown (`--tone`) and the pillar's orange
+  brick muted (`--chroma`). The creatures, townsfolk, pickups, gate, torch, hands and weapons have
+  their black outline turned into a dark tone of what it borders (`selout`, `restyle.py --house`), so
+  they no longer look cut out against the walls. Splash screens keep every colour (allowlisted). Of
+  three variants tried in a test room, this one: the light stays smooth (texel-snapped, banded light
+  was the third). (Players will see these.)
 - **The HUD's text is Jersey 15, the menus' typeface, and its art is drawn in whole art pixels.**
   Trial's 9 × 17 font is gone from the HUD: `hud-text` draws a bitmap of Jersey 15
   (`data/fonts/hud-font`, made by `tools/make_hud_font.py`) at 27 px, where its outlines fall on

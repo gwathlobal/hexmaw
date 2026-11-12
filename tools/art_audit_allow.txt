@@ -2,3 +2,4 @@
 # RULE is density, semi, palette, screen, or * for all.
 sprites/torch/ density   # twice the density, on purpose: coarser, its collar and wrapping turn to mush
 sprites/grave/flight density  # a small fast projectile; 100 px/m, the bolt's flight is 90
+splash/ palette  # full-screen pictures keep every colour: a 64-colour palette turned the knight's runes yellow
