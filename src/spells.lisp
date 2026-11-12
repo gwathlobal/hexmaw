@@ -279,21 +279,44 @@ its strike. The player's own casts sound from the hands (player.lisp).")
 
 (defparameter *burst-size* 0.45
   "Radius in metres an impact animation's burst stands for: one bursting over an area is
-drawn that much bigger.")
+drawn bigger, up to *BURST-SCALE-LIMIT*, and rings of bursts fill the rest of the area.")
+(defparameter *burst-scale-limit* 1.5
+  "The most an impact is scaled up. Further, its art pixels grow far coarser than everything
+around it (a 2 m burst was drawn at 12 px a metre, against the monsters' 64).")
+(defparameter *burst-ring-step* 1.0 "Metres between the rings of bursts over an area, and round each.")
 
 (defun impact-point (projectile)
   "Where PROJECTILE's impact plays: a little back along its flight, out of the wall."
   (let ((velocity (projectile-velocity projectile)))
     (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
 
+(defun burst-rings (name at radius container)
+  "Fill the area RADIUS metres round AT with bursts of NAME at their own size: rings
+*BURST-RING-STEP* apart out to RADIUS, the bursts round each as far apart, none inside a solid.
+They start a frame or two apart, so they don't pulse as one."
+  (let ((rings (max 1 (round radius *burst-ring-step*))))
+    (loop for ring from 1 to rings
+          for r = (float (* radius (/ ring rings)) 0f0)
+          for count = (max 4 (round (* 2 pi r) *burst-ring-step*))
+          do (dotimes (i count)
+               (let* ((angle (float (* 2 pi (/ (+ i (* 0.5 ring)) count)) 0f0))
+                      (x (+ (vx at) (* r (cos angle))))
+                      (z (+ (vz at) (* r (sin angle)))))
+                 (unless (solid-at x (vy at) z)
+                   (let ((sprite (spawn-fx name (vec x (vy at) z) container)))
+                     (setf (age sprite) (* 0.04 (mod (+ i ring) 3))))))))))
+
 (defun play-impact (spell at container &key water)
-  "Play SPELL's impact animation at AT, as big as its burst, with its glow and its sound. Into
+  "Play SPELL's impact animation at AT, its burst over its area, with its glow and its sound. Into
 WATER it hisses out."
   (let ((name (impact-animation spell)))
     (when (and name container)
-      (let ((sprite (spawn-fx name at container))
-            (k (max 1.0 (/ (spell-burst-radius spell) *burst-size*))))
-        (nv* (scaling sprite) k)
+      (let* ((radius (spell-burst-radius spell))
+             (k (max 1.0 (/ radius *burst-size*)))
+             (sprite (spawn-fx name at container)))
+        (nv* (scaling sprite) (min k *burst-scale-limit*))
+        (when (< *burst-scale-limit* k)
+          (burst-rings name at radius container))
         (attach-glow sprite (light-color spell) (* (light-radius spell) (sqrt k)))
         (play-sound (if water :bolt-hiss-water (spell-sound spell :impact)) at)))))
 

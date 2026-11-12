@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Effects keep the monsters' pixel size.** An area spell's impact was one burst scaled up to the
+  area, its art pixels growing coarse (12 px a metre at a 2 m radius, against the monsters' 64): now
+  it is scaled at most `*burst-scale-limit*` (1.5) and rings of bursts at their own size fill the
+  rest (`burst-rings`). A status aura was one strip stretched to its creature's height (46 px a metre
+  on an imp, about 23 on a boss): now it is copies at `*aura-texels-per-metre*` (64) up the body,
+  each scaled at most `*aura-stretch-limit*`, the first with the lamp. The casting hands' pixels are
+  square (`*hands-stretch*` 1.0, was 1.25), as every other art pixel is. (Players will see these.)
 - **Art audit tools.** `tools/art_audit.py` measures every shipped image (art pixels per metre from
   the `define-fx-animation` sizes, colours, part-transparent pixels, outline share, lightness range,
   the first-person and HUD screen scale) and `--check` fails on a house-style rule broken that

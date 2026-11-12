@@ -234,33 +234,61 @@ those CASTER spares."
     (:shock shock-aura 0.85 (0.9 0.9 1.4) 2.5 0.6)
     (:heal regen-aura 1.15 (0.2 0.55 0.18) 2.0 0.0))
   "(KEY ANIMATION SIZE LAMP-COLOR LAMP-RADIUS FLICKER) for each aura, keyed by a damage status's
-element or :HEAL for healing over time (AURA-KEY): SIZE its height
-against its creature's SPRITE-HEIGHT (drawn in proportion, wider than the body where it is more than
-about 1, so flames and flakes dance round its outline: a red imp swallowed flames on it), and its
-lamp, NIL for none.")
+element or :HEAL for healing over time (AURA-KEY): SIZE the height it covers against its creature's
+SPRITE-HEIGHT (more than about 1, so flames and flakes dance round its outline: a red imp swallowed
+flames on it), in copies of the strip at *AURA-TEXELS-PER-METRE* (AURA-COPIES), and its lamp, NIL
+for none.")
 (defparameter *aura-rise* 0.45 "Where the aura's middle stands, up its creature's height.")
 (defparameter *aura-pull* 0.35 "Metres the aura stands toward the camera from its creature's middle.")
 (defparameter *heal-aura-pull* 0.3
   "The same for healing over time's: a little behind damage's, so the two never flicker where
 they overlap.")
 
+(defparameter *aura-texels-per-metre* 64.0
+  "Art pixels per metre an aura's pieces are drawn at, the monsters' density. A body the aura's
+SIZE makes taller than one strip at that density gets more copies of it, up the body, rather than
+one stretched copy, whose pixels would stand out against the creature's.")
+(defparameter *aura-stretch-limit* 1.25
+  "How far one copy may be scaled up or down from that density to fit the body.")
+(defparameter *aura-sway* 0.12 "Copies sit this share of their width to either side, in turn.")
+
 (define-shader-entity status-aura (fx-sprite)
   ((host :initarg :host :reader aura-host :documentation "The creature it burns on.")
    (element :initarg :element :reader aura-element)
-   (size :initarg :size :initform 1.0 :reader aura-size)))
+   (size :initarg :size :initform 1.0 :reader aura-size)
+   (part :initarg :part :initform 0 :reader aura-part :documentation "Which copy, from the bottom.")
+   (parts :initarg :parts :initform 1 :reader aura-parts)
+   (lead :initarg :lead :initform NIL :reader aura-lead
+         :documentation "The first copy, which has the lamp; NIL on the first copy itself.")))
 
 (defun aura-entry (element)
   (or (assoc element *status-auras*) (assoc :fire *status-auras*)))
 
+(defun aura-strip-height (animation)
+  "Metres one copy of ANIMATION stands at *AURA-TEXELS-PER-METRE*."
+  (/ (getf (animation-atlas animation) :cell-height) *aura-texels-per-metre*))
+
+(defun aura-copies (animation height)
+  "How many copies of ANIMATION make an aura HEIGHT metres tall."
+  (max 1 (round height (aura-strip-height animation))))
+
 (defun spawn-status-aura (creature element)
+  "Enter CREATURE's aura for ELEMENT, its copies up the body, and return the first copy."
   (destructuring-bind (name size color radius flicker) (rest (aura-entry element))
-    (let ((aura (make-instance 'status-aura :animation (find-fx-animation name) :host creature
-                                            :element element :size size
-                                            :location (vcopy (location creature)))))
-      (enter aura (container creature))
-      (when color
-        (add-lamp (location aura) (apply #'vec color) radius :flicker flicker :source aura))
-      aura)))
+    (let* ((animation (find-fx-animation name))
+           (parts (aura-copies animation (* size (sprite-height creature))))
+           (lead NIL))
+      (dotimes (part parts lead)
+        (let ((aura (make-instance 'status-aura :animation animation :host creature
+                                                :element element :size size :part part :parts parts
+                                                :lead lead :location (vcopy (location creature)))))
+          ;; The copies play out of step, so they don't flicker as one.
+          (setf (age aura) (* part 0.37))
+          (enter aura (container creature))
+          (unless lead
+            (setf lead aura)
+            (when color
+              (add-lamp (location aura) (apply #'vec color) radius :flicker flicker :source aura))))))))
 
 (defun aura-key (creature kind)
   "The aura CREATURE's status of KIND calls for: a damage over time's element, or :HEAL for
@@ -287,29 +315,41 @@ healing over time's each in its own slot, and end each once its status or the cr
   (setf (status-aura creature) (sync-aura creature (status-aura creature) (aura-key creature :damage))
         (heal-aura creature) (sync-aura creature (heal-aura creature) (aura-key creature :heal))))
 
-;; After FX-SPRITE's tick: stand on the host and face the camera, its size the host's.
+;; After FX-SPRITE's tick: stand on the host and face the camera, the copies spread up its body.
 (define-handler (status-aura tick :after) ()
   (let ((host (aura-host status-aura))
+        (lead (aura-lead status-aura))
         (camera (camera (scene +main+))))
-    (if (or (dead host) (null (container host)))
+    (if (or (dead host) (null (container host)) (and lead (null (container lead))))
         (despawn status-aura)
         (let* ((at (location host))
                (loc (location status-aura))
                (height (float (sprite-height host) 0f0))
-               (h (* (aura-size status-aura) height))
+               (span (* (aura-size status-aura) height))
+               (parts (aura-parts status-aura))
+               (part (aura-part status-aura))
+               (strip (float (aura-strip-height (sprite-animation status-aura)) 0f0))
+               (h (max (/ strip *aura-stretch-limit*) (min (* strip *aura-stretch-limit*) (/ span parts))))
                (atlas (animation-atlas (sprite-animation status-aura)))
+               (w (* h (/ (getf atlas :cell-width) (float (getf atlas :cell-height) 0f0))))
                (scale (scaling status-aura)))
           (setf (vx loc) (vx at)
-                (vy loc) (+ (vy at) (* *aura-rise* height))
+                (vy loc) (+ (vy at) (* *aura-rise* height) (* span (- (/ (+ part 0.5) parts) 0.5)))
                 (vz loc) (vz at)
-                (vx scale) (* h (/ (getf atlas :cell-width) (float (getf atlas :cell-height) 0f0)))
+                (vx scale) w
                 (vy scale) h)
           (when camera
             (let* ((eye (location camera))
                    (dx (- (vx eye) (vx loc)))
                    (dy (- (vy eye) (vy loc)))
                    (dz (- (vz eye) (vz loc)))
-                   (d (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+                   (d (sqrt (+ (* dx dx) (* dy dy) (* dz dz))))
+                   (flat (sqrt (+ (* dx dx) (* dz dz)))))
+              (when (and (< 1 parts) (< 0.01 flat))
+                ;; Copies after the first sit to one side and the other, across the view.
+                (let ((side (* (if (evenp part) -1 1) (if (= part 0) 0 1) *aura-sway* w (/ flat))))
+                  (incf (vx loc) (* side dz))
+                  (decf (vz loc) (* side dx))))
               (when (< 0.01 d)
                 (let ((k (/ (min (if (eq :heal (aura-element status-aura)) *heal-aura-pull* *aura-pull*)
                                  (* 0.5 d))

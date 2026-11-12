@@ -30,9 +30,10 @@ inventory and its tooltip, and the pain flash, which they reach into.")
 (defparameter *hands-height* 0.62
   "Vertical art scale: the strip's cell height times the scale is about this fraction
 of the window height. Snaps to whole screen pixels per art pixel.")
-(defparameter *hands-stretch* 1.25
+(defparameter *hands-stretch* 1.0
   "Width over height of an art pixel on screen. The horizontal scale is a whole number
-too, so every art pixel stays a uniform block.")
+too, so every art pixel stays a uniform block. Square, as every other art pixel is: at 1.25
+the hands were the only art drawn with oblong pixels.")
 (defparameter *hands-drop* 28
   "Art pixels the hands sit below the bottom edge; Hexen shows little more than fingers.")
 (defparameter *hands-spread* 18"Art pixels each hand sits out from the centre.")
