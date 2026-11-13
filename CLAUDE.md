@@ -748,8 +748,13 @@ real time instead.
   forge.lisp, which warns as it loads: a forged range is `*magnitude-spread*` of its top up to it, and
   damage always has an element). An effect with an area
   bursts where its spell strikes (`burst-spell`, over `burst-victims` in magic.lisp: every body
-  within it with a clear line, but the caster and those it spares), the impact drawn that much
-  bigger (`play-impact`, `*burst-size*`); a strike without a projectile (a touch, an enchanted
+  the ball of that radius reaches, `burst-reaches-p`, sphere against the body's upright cylinder,
+  with a clear line to it, `clear-line-p` in gore.lisp, up, down or across, so no burst reaches
+  through a floor or ceiling; but the caster and those it spares), the impact drawn over the same
+  ball (`play-impact`: itself at most `*burst-scale-limit*` bigger, then `burst-shells`, copies at
+  their own size on shells `*burst-shell-step*` apart, Fibonacci spheres, at most
+  `*burst-max-copies*`, none in a solid or behind one from the middle: a dome on a floor, half a
+  ball on a wall); a strike without a projectile (a touch, an enchanted
   blow) goes through `strike-with-spell` and a `strike` source. A spell the player forged isn't in
   `*spells*`: `spell-spec` and `spec-spell` turn one into plain data and back (a save keeps it so),
   and its look is its element's or first effect's (`*spell-looks*`: the bolt's frames recoloured
@@ -2004,7 +2009,7 @@ sprites, each asset on colours of its own. The before and after shots are in
   strip's `define-fx-animation :size` is its cell height over 64. The torch (135) and the grave
   skull's flight (100) are the accepted exceptions (`tools/art_audit_allow.txt`). An effect that
   grows (an area burst, an aura on a boss) adds copies at its own size rather than scaling one
-  (`burst-rings`, the aura's copies).
+  (`burst-shells`, filling the burst's ball, and the aura's copies).
 - **Screen scale.** First-person art draws at `sword-scale` (3 screen pixels an art pixel at 720
   rows, 5 at 1080), with square pixels; the HUD's art at `hud-pixel-scale` (2 and 3); HUD text is
   Jersey 15 at its own 27 px grid, 1:1 (`tools/make_hud_font.py`). The casting hands draw at
