@@ -1009,8 +1009,8 @@ real time instead.
   strike, a delivery with nothing to, more than `*max-mana*`, a weapon's more than
   `*max-enchant-effects*` or `*max-enchant-cost*` a blow, too little dust, a full bag), and while it
   objects the screen shows it: the note says so in `*forge-warning-color*` (a `forge-status-note`),
-  and the Make button (a `forge-make-button`) is greyed, its label "Need 24 dust, have 10" while
-  dust is what's short (`dust-shortfall`, `make-label-text`); a click on it only plays `:refused`.
+  and the Make button (a `forge-make-button`) is greyed, with no orange on hover; a click on it
+  only plays `:refused`.
   `refresh-readout` keeps all of it current as a slider moves, with no remake. A draft's name
   is made from its effects (`draft-name`, "Frost Burst"). The screen is `forge-panel`, a `menu-panel`
   that lays itself out (`build-panel`, menu.lisp): the tabs and sinks down the left, labels cut to

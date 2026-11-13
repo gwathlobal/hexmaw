@@ -316,20 +316,14 @@ what it holds, not what making it takes (DRAFT-PROBLEM). Generated loot asks it 
           ((and (not weapon) (< max-mana (spell-cost spell)))
            (format NIL "It costs more mana than you can hold (~d)." (floor max-mana))))))
 
-(defun dust-shortfall (draft &optional (player *player*))
-  "The dust DRAFT costs when it is a spell the forge makes and PLAYER holds less than that, else NIL."
-  (and (not (draft-fault draft (max-mana player)))
-       (let ((cost (sink-dust (draft-sink draft) (draft-spell draft))))
-         (and (< (player-dust player) cost) cost))))
-
 (defun draft-problem (draft &optional (player *player*))
   "Why DRAFT can't be made, as a sentence, or NIL."
-  (let ((weapon (weapon-sink-p (draft-sink draft)))
-        (short (dust-shortfall draft player)))
+  (let ((sink (draft-sink draft))
+        (weapon (weapon-sink-p (draft-sink draft))))
     (cond ((draft-fault draft (max-mana player)))
-          (short
+          ((< (player-dust player) (sink-dust sink (draft-spell draft)))
            (format NIL "It needs ~d arcane dust and you have ~d: find more in the dungeon, or unweave a spell."
-                   short (player-dust player)))
+                   (sink-dust sink (draft-spell draft)) (player-dust player)))
           ((and (not weapon) (null (position NIL (inventory player))))
            "No free bag cell for the rune."))))
 
@@ -649,8 +643,6 @@ then only refuses (FORGE-MAKE)."))
          :documentation "*FORGE-NOTE*, an armed Unweave's question, or why the draft can't be made.")
    (note-widget :initform NIL :accessor note-widget
                 :documentation "The note's FORGE-STATUS-NOTE, which turns red with a problem.")
-   (make-label :initform (make-instance 'alloy:value-data :value "") :reader make-label
-               :documentation "The Make button's label: what it does, or the dust it lacks.")
    (make-button :initform NIL :accessor make-button
                 :documentation "The draft's FORGE-MAKE-BUTTON, greyed while it can't be made.")
    (about :initform (make-instance 'alloy:value-data :value "") :reader about
@@ -680,13 +672,6 @@ then only refuses (FORGE-MAKE)."))
           (problem (values problem T))
           (T (values "" NIL)))))
 
-(defun make-label-text (draft &optional (player *player*))
-  "The Make button's label: the dust it lacks while that is what stops it."
-  (let ((short (dust-shortfall draft player)))
-    (cond (short (format NIL "Need ~d dust, have ~d" short (player-dust player)))
-          ((weapon-sink-p (draft-sink draft)) "Enchant it")
-          (T "Make the spell"))))
-
 (defun forge-about-text ()
   (let ((effects (and *forge-draft* (draft-effects *forge-draft*))))
     (if effects
@@ -695,7 +680,7 @@ then only refuses (FORGE-MAKE)."))
 
 (defun refresh-readout (panel)
   "Everything a slider changes: the readout, the note and its colour, the explanation, and the
-Make button's label and greying."
+Make button's greying."
   (multiple-value-bind (note warns) (forge-note-text)
     (setf (alloy:value (readout panel)) (forge-readout-text)
           (alloy:value (note panel)) note
@@ -706,7 +691,6 @@ Make button's label and greying."
         (alloy:mark-for-render widget))))
   (let ((draft *forge-draft*))
     (when draft
-      (setf (alloy:value (make-label panel)) (make-label-text draft))
       (let ((button (make-button panel))
             (blocked (and (draft-problem draft) T)))
         (when (and button (not (eq blocked (blocked-p button))))
@@ -1072,7 +1056,8 @@ on, since a dial changes the text but doesn't remake the panel."
     (refresh-readout panel)
     (let ((row (forge-row right '(320 T 200))))
       (cond (draft
-             (let ((button (forge-button (make-label panel) 'forge-make row 0 focus :class 'forge-make-button)))
+             (let ((button (forge-button (if weapon "Enchant it" "Make the spell") 'forge-make row 0 focus
+                                         :class 'forge-make-button)))
                (setf (blocked-p button) (and (draft-problem draft) T)
                      (make-button panel) button)))
             (T
