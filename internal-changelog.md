@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- `tools/make_palette.py --data DIR` samples art from another folder, so a palette can be made
+  again from art not yet on one (an older commit's `data/`, from `git archive`): from master's art
+  before the palette, at 128 colours, it gives the shipped palette exactly. A 256-colour palette
+  made so halved the colour error (the sword's warm-shifted steel and leather most of all) but
+  spent most of its new colours on near-duplicate warm browns and greys; 128 was kept.
 - **The casting hands are remade: the weapons' gauntlets, at the weapons' pixel size.** They were
   bare hands in red sleeves at 8 screen pixels an art pixel at 1080 rows, against the weapons' 5,
   in two halves spread apart. Now they are the sword's and spear's steel gauntlets, their backs to

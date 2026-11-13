@@ -73,10 +73,10 @@ def opaque_pixels(path):
     return a[a[..., 3] == 255][:, :3]
 
 
-def sample(total, rng):
+def sample(total, rng, data=DATA):
     parts = []
     for name, (globs, share) in GROUPS.items():
-        files = sorted({f for g in globs for f in glob.glob(str(DATA / g))})
+        files = sorted({f for g in globs for f in glob.glob(str(Path(data) / g))})
         pix = np.concatenate([opaque_pixels(f) for f in files])
         n = int(total * share)
         parts.append(pix[rng.choice(len(pix), n, replace=len(pix) < n)])
@@ -130,9 +130,12 @@ def main():
     ap.add_argument("--colors", type=int, default=128)
     ap.add_argument("--sample", type=int, default=400000, help="pixels sampled from the art")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--data", default=str(DATA),
+                    help="the art to sample: data/ by default; art not yet on any palette (an older"
+                    " commit's data/, from git archive) to make one afresh")
     args = ap.parse_args()
     rng = np.random.default_rng(args.seed)
-    points = srgb_to_lab(sample(args.sample, rng))
+    points = srgb_to_lab(sample(args.sample, rng, args.data))
     centres = kmeans(points, args.colors, rng)
     rgb = lab_to_srgb(centres)
     # Back to Lab from the rounded colours, so the ramps sort what is written.
