@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The Spellforge shows when a draft can't be made.** A playtester couldn't tell they lacked the
+  dust: the reason was in the note, but in the same cream as every line, and Make looked and lit up
+  like any button (a click did nothing visible). Now the note turns ember red while it says why
+  (`forge-status-note`, `*forge-warning-color*`), and the Make or Enchant button is greyed, with no
+  orange on hover (`forge-make-button`). Every `draft-problem` reason shows the same way (over the mana you hold, a
+  weapon's caps, a full bag). A slider that pushes the cost past the dust held, or back under it,
+  updates it at once (`refresh-readout`, no remake); a click on the greyed button plays `:refused`.
+  For the player changelog: "The Spellforge greys out Make and says in red why, when you lack the
+  dust or the spell can't be made."
+
 - **Area bursts are a ball again, in look and in reach.** The copies that fill an area burst at its
   sprite's own size (`burst-rings`, from the art-consistency pass) lay on flat rings at the impact's
   height, a line of flames from the front and a disc from above: `burst-shells` lays them on shells

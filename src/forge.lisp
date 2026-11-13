@@ -449,14 +449,18 @@ glyphs would teach more."
 
 (defun forge-make (&optional (player *player*))
   "Make the draft, for its dust: a new rune in the bag, on the first free key, or the plain
-weapon's enchantment. The spell, or NIL (and *FORGE-NOTE* says why) if it can't be made."
+weapon's enchantment. The spell, or NIL (and the note says why) if it can't be made."
   (let* ((draft *forge-draft*)
          (sink *forge-sink*)
          (problem (and draft (draft-problem draft player))))
     (cond ((null draft) NIL)
           (problem
-           (setf *forge-note* problem)
-           (forge-changed)
+           ;; The greyed button's click: the note already says why, in red, unless an older
+           ;; message covers it, which the remake clears.
+           (play-sound :refused)
+           (when *forge-note*
+             (setf *forge-note* NIL)
+             (forge-changed))
            NIL)
           (T
            (let* ((spell (draft-spell draft))
@@ -596,12 +600,51 @@ call only arms it (*FORGE-ARMED*); a second does it."
 (defmethod presentations::compute-sizing-strategy ((renderer presentations:default-look-and-feel) (note forge-note))
   presentations::*fit-to-all-shapes*)
 
+(defparameter *forge-warning-color* (chroma:color 0.95 0.45 0.32) "The note's text while it says why a draft can't be made.")
+(defparameter *forge-blocked-text* (chroma:color 0.52 0.48 0.42) "The Make button's label while the draft can't be made.")
+(defparameter *forge-blocked-border* (chroma:color 0.34 0.28 0.20) "Its border then.")
+(defparameter *forge-blocked-focus* (chroma:color 0.20 0.17 0.14 0.95)
+  "Its fill then, hovered or focused: a lift too faint to read as clickable.")
+
+(defclass forge-status-note (forge-note)
+  ((warns :initarg :warns :initform NIL :accessor warns-p))
+  (:documentation "The note under the readout: in *FORGE-WARNING-COLOR* while it says why the
+draft can't be made."))
+
+(presentations:define-update (presentations:default-look-and-feel forge-status-note)
+  (:label
+   :text alloy:text
+   :pattern (if (warns-p alloy:renderable) *forge-warning-color* *menu-text-color*)))
+
+(defclass forge-make-button (menu-button)
+  ((blocked :initarg :blocked :initform NIL :accessor blocked-p))
+  (:documentation "Make the spell or Enchant it: greyed while the draft can't be made. A click
+then only refuses (FORGE-MAKE)."))
+
+(presentations:define-update (presentations:default-look-and-feel forge-make-button)
+  (:background
+   :pattern (let ((lit (or alloy:focus alloy:hovered-p)))
+              (cond ((not (blocked-p alloy:renderable))
+                     (if lit *menu-button-hover-color* *menu-button-color*))
+                    (lit *forge-blocked-focus*)
+                    (T *menu-button-color*))))
+  (:border
+   :pattern (if (blocked-p alloy:renderable) *forge-blocked-border* *menu-border-color*)
+   :hidden-p NIL)
+  (:label
+   :text alloy:text
+   :pattern (if (blocked-p alloy:renderable) *forge-blocked-text* *menu-text-color*)))
+
 (defclass forge-panel (menu-panel)
   ((revision :initform *forge-revision* :reader panel-revision)
    (readout :initform (make-instance 'alloy:value-data :value "") :reader readout
             :documentation "The draft's name and costs: a slider changes it.")
    (note :initform (make-instance 'alloy:value-data :value "") :reader note
          :documentation "*FORGE-NOTE*, an armed Unweave's question, or why the draft can't be made.")
+   (note-widget :initform NIL :accessor note-widget
+                :documentation "The note's FORGE-STATUS-NOTE, which turns red with a problem.")
+   (make-button :initform NIL :accessor make-button
+                :documentation "The draft's FORGE-MAKE-BUTTON, greyed while it can't be made.")
    (about :initform (make-instance 'alloy:value-data :value "") :reader about
           :documentation "The explanation of the effect *FORGE-ABOUT-INDEX* names.")
    (effect-buttons :initform () :accessor effect-buttons
@@ -619,12 +662,15 @@ call only arms it (*FORGE-ARMED*); a second does it."
         "")))
 
 (defun forge-note-text ()
-  (or *forge-note*
-      (and *forge-armed*
-           (format NIL "~:[Unweave~;Disenchant~] ~a? Click again to do it."
-                   (weapon-sink-p *forge-armed*) (spell-title (sink-spell *player* *forge-armed*))))
-      (and *forge-draft* (draft-problem *forge-draft*))
-      ""))
+  "The note's text, and whether it is why the draft can't be made."
+  (let ((problem (and *forge-draft* (draft-problem *forge-draft*))))
+    (cond (*forge-note* (values *forge-note* NIL))
+          (*forge-armed*
+           (values (format NIL "~:[Unweave~;Disenchant~] ~a? Click again to do it."
+                           (weapon-sink-p *forge-armed*) (spell-title (sink-spell *player* *forge-armed*)))
+                   NIL))
+          (problem (values problem T))
+          (T (values "" NIL)))))
 
 (defun forge-about-text ()
   (let ((effects (and *forge-draft* (draft-effects *forge-draft*))))
@@ -633,9 +679,23 @@ call only arms it (*FORGE-ARMED*); a second does it."
         "")))
 
 (defun refresh-readout (panel)
-  (setf (alloy:value (readout panel)) (forge-readout-text)
-        (alloy:value (note panel)) (forge-note-text)
-        (alloy:value (about panel)) (forge-about-text)))
+  "Everything a slider changes: the readout, the note and its colour, the explanation, and the
+Make button's greying."
+  (multiple-value-bind (note warns) (forge-note-text)
+    (setf (alloy:value (readout panel)) (forge-readout-text)
+          (alloy:value (note panel)) note
+          (alloy:value (about panel)) (forge-about-text))
+    (let ((widget (note-widget panel)))
+      (when (and widget (not (eq warns (warns-p widget))))
+        (setf (warns-p widget) warns)
+        (alloy:mark-for-render widget))))
+  (let ((draft *forge-draft*))
+    (when draft
+      (let ((button (make-button panel))
+            (blocked (and (draft-problem draft) T)))
+        (when (and button (not (eq blocked (blocked-p button))))
+          (setf (blocked-p button) blocked)
+          (alloy:mark-for-render button))))))
 
 (defun explain-effect (panel index)
   "Show the explanation of the draft's effect INDEX, and mark its Effect button."
@@ -711,17 +771,19 @@ border, a warm fill and a gold label, apart from the hover's orange."))
    :text alloy:text
    :pattern (if (selected-p alloy:renderable) *forge-selected-text* *menu-text-color*)))
 
-(defun forge-button (label action row col focus &key (selected NIL choice) effect)
-  "A button LABEL in ROW's cell COL that runs ACTION, a function, on the next tick. With
-:SELECTED, one of a set (FORGE-CHOICE), drawn chosen when it is true. With :EFFECT, (PANEL
-INDEX), a control of that draft effect (EFFECT-CONTROL): its Effect button if :SELECTED is given
-too, which is drawn chosen while that effect is explained."
+(defun forge-button (label action row col focus &key (selected NIL choice) effect class)
+  "A button LABEL (a string, or an ALLOY:VALUE-DATA to change it later) in ROW's cell COL that
+runs ACTION, a function, on the next tick. With :SELECTED, one of a set (FORGE-CHOICE), drawn
+chosen when it is true. With :EFFECT, (PANEL INDEX), a control of that draft effect
+(EFFECT-CONTROL): its Effect button if :SELECTED is given too, which is drawn chosen while that
+effect is explained. :CLASS names another MENU-BUTTON class to make."
   (let ((button (apply #'alloy:represent-with
-                       (cond ((and effect choice) 'forge-effect-button)
+                       (cond (class class)
+                             ((and effect choice) 'forge-effect-button)
                              (effect 'forge-effect-action)
                              (choice 'forge-choice)
                              (T 'menu-button))
-                       (make-instance 'alloy:value-data :value label)
+                       (if (stringp label) (make-instance 'alloy:value-data :value label) label)
                        :focus-parent focus
                        (append (when choice (list :selected selected))
                                (when effect (list :effect-panel (first effect) :effect-index (second effect)))))))
@@ -739,13 +801,15 @@ too, which is drawn chosen while that effect is explained."
 too short for its text draws none of it, so count words, not characters."
   (max 1 (length (wrap-text text chars))))
 
-(defun forge-note-row (parent data &optional (lines 1))
-  "A row of wrapping text LINES rows tall, showing DATA, a string or an ALLOY:VALUE-DATA."
-  (let ((row (forge-row parent '(T) (+ (* lines (- *forge-row-height* 10)) 10))))
-    (alloy:enter (alloy:represent-with 'forge-note
-                                       (if (stringp data) (make-instance 'alloy:value-data :value data) data))
-                 row :row 0 :col 0)
-    row))
+(defun forge-note-row (parent data &optional (lines 1) (class 'forge-note) &rest initargs)
+  "A row of wrapping text LINES rows tall, showing DATA, a string or an ALLOY:VALUE-DATA, in a
+CLASS made with INITARGS. The row, and the text's widget."
+  (let ((row (forge-row parent '(T) (+ (* lines (- *forge-row-height* 10)) 10)))
+        (note (apply #'alloy:represent-with class
+                     (if (stringp data) (make-instance 'alloy:value-data :value data) data)
+                     initargs)))
+    (alloy:enter note row :row 0 :col 0)
+    (values row note)))
 
 (defun forge-dial (panel label getter setter range step describe row col focus index)
   "A dial of the draft's effect INDEX."
@@ -986,11 +1050,16 @@ on, since a dial changes the text but doesn't remake the panel."
           (T
            (dolist (line (shown-spell-lines player sink))
              (forge-note-row right line (note-lines line)))))
-    (forge-note-row right (note panel) 2)
+    (setf (note-widget panel)
+          (nth-value 1 (forge-note-row right (note panel) 2 'forge-status-note
+                                       :warns (nth-value 1 (forge-note-text)))))
     (refresh-readout panel)
     (let ((row (forge-row right '(320 T 200))))
       (cond (draft
-             (forge-button (if weapon "Enchant it" "Make the spell") 'forge-make row 0 focus))
+             (let ((button (forge-button (if weapon "Enchant it" "Make the spell") 'forge-make row 0 focus
+                                         :class 'forge-make-button)))
+               (setf (blocked-p button) (and (draft-problem draft) T)
+                     (make-button panel) button)))
             (T
              (forge-button (format NIL "~a~:[~;: sure?~] (+~d dust)"
                                    (if weapon "Disenchant" "Unweave") (eq *forge-armed* sink)
