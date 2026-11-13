@@ -1263,6 +1263,14 @@ real time instead.
   through the menu pass, and the points Alloy doesn't call that row hovered at); NIL from both
   means every row clicks wherever it is drawn. Check at 1280 × 720 and at a bigger window, where
   Alloy's scale changes (`(game (trial:resize *context* 1920 1080))`: 1.25 from 1920 px across).
+  **The menu pass owns the mouse cursor, not Alloy.** Alloy set the hand on every move over a
+  button and then, since nothing in it takes a pointer move, the arrow, so the cursor flickered
+  while the mouse moved. `menu-ui` drops Alloy's sets (`(setf alloy:cursor)`), and after each move
+  `set-menu-cursor` makes it the hand over any row (`menu-focusable`, sliders and toggles too) and
+  the arrow elsewhere, only when that changes; hiding the last panel puts the arrow back. The third
+  check, `tools/hd '(game (menu-cursor-problems))'`, moves the pointer over the same grid and off
+  the rows after each, records every cursor set (`*cursor-trace*`), and lists the moves that set it
+  other than once on entering or leaving a row; NIL when it is right.
   Settings (`open-settings`, on both menus) covers the menu it came from while
   `*settings-open*` is true; Back or Esc (`close-settings`, which writes the settings file)
   returns to it. It has Fullscreen (`*fullscreen*`), Render scale (`*render-scale-setting*`: the

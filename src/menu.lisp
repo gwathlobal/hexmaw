@@ -103,6 +103,33 @@ throat, under the upper fangs of its splash.")
     (play-sound :menu-hover)
     (setf (alloy:focus row) :weak)))
 
+;; The menu pass sets the cursor, not Alloy. On every mouse move over a button Alloy sets the hand
+;; (the button), and then, since nothing in it ever takes a pointer move, the arrow (the layout
+;; tree and the ui, for the move that went unhandled): the cursor flickered between the two while
+;; the mouse moved, and rested on the arrow. So Alloy's sets are dropped here, and after each move
+;; the cursor is the hand over any row the player clicks, the arrow elsewhere, set only when that
+;; changes.
+(defvar *menu-cursor* :arrow "The cursor the menu pass last set.")
+
+(defmethod (setf alloy:cursor) (value (ui menu-ui))
+  value)
+
+(defun set-menu-cursor (shape)
+  (unless (eq shape *menu-cursor*)
+    (setf *menu-cursor* shape)
+    (setf (trial:cursor *context*) shape)))
+
+(defun menu-cursor (ui)
+  "The hand while the pointer is on a row (Alloy's hover cache: what the last pointer event
+hovered), else the arrow."
+  (if (find-if (lambda (element) (typep element 'menu-focusable))
+               (alloy::hover-cache (alloy:layout-tree ui)))
+      :hand
+      :arrow))
+
+(defmethod trial:handle :after ((ev trial:mouse-move) (ui menu-ui))
+  (set-menu-cursor (menu-cursor ui)))
+
 (defclass menu-button (menu-focusable alloy:button) ())
 
 (presentations:define-realization (presentations:default-look-and-feel menu-button)
@@ -832,7 +859,10 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
     (unless (and shown (eq (type-of shown) wanted) (not *menu-refresh*) (not (panel-stale-p shown)))
       (setf *menu-refresh* NIL)
       (when shown (trial-alloy:hide-panel 'menu-panel))
-      (when wanted (trial:show (make-instance wanted))))))
+      (if wanted
+          (trial:show (make-instance wanted))
+          ;; No hand left over the game or the map.
+          (set-menu-cursor :arrow)))))
 
 ;;; Checking a panel's layout. Alloy sends a pointer event only to the children of a layout that
 ;;; contains it, so the part of a row outside its parent's bounds is drawn but can't be hovered
@@ -917,4 +947,52 @@ focus. Run it in (GAME ...)."
                                               collect (list (round (vx pos)) (round (vy pos)))))))
               (when misses
                 (push (list (element-name row) :box (mapcar #'round (list x y w h)) :missed misses) problems)))))))
+    (nreverse problems)))
+
+;;; Checking the cursor. Every value anything gives the window's cursor goes onto *CURSOR-TRACE*
+;;; while it is bound, so a check sees each change a mouse move makes, not only the last.
+
+(defvar *cursor-trace* :off "While a list, every cursor set pushes its value here.")
+
+(defmethod (setf trial:cursor) :before (value (context trial:context))
+  (unless (eq *cursor-trace* :off)
+    (push value *cursor-trace*)))
+
+(defun cursor-shape (value)
+  "VALUE as the shape it shows: :HAND, or :ARROW for any of the arrow's names."
+  (if (member value '(:hand :pointing-hand)) :hand :arrow))
+
+(defun menu-cursor-problems (&optional (panel (trial-alloy:find-panel 'menu-panel)))
+  "Move the pointer, through the menu pass as the mouse does, over the 5 × 3 grid
+MENU-CLICK-PROBLEMS uses on each of PANEL's rows and off them to the screen's bottom-left
+corner after each, and list every move that set the cursor other than once to the shape it
+should change to (the hand over a row, the arrow off one) or at all when that shape is already
+showing: its row, the point and the values set. NIL means the cursor changes only as the pointer
+enters or leaves a row. Run it in (GAME ...)."
+  (let ((ui (trial-alloy:ui)) (problems ()) (last NIL) (shown NIL)
+        (*muted* (cons :menu-hover *muted*)))
+    (flet ((probe (pos row)
+             (let ((*cursor-trace* ()))
+               (trial:handle (make-event 'mouse-move :pos pos :old-pos (or last pos)) ui)
+               (setf last pos)
+               (let* ((sets (reverse *cursor-trace*))
+                      (wanted (if row :hand :arrow))
+                      (expected (if (eq wanted shown) 0 1)))
+                 (when sets (setf shown (cursor-shape (car (last sets)))))
+                 (unless (and (= (length sets) expected) (eq shown wanted))
+                   (push (list (if row (element-name row) "off the rows")
+                               :at (list (round (vx pos)) (round (vy pos)))
+                               :set sets :showing shown)
+                         problems))))))
+      (when panel
+        ;; Start off the rows, so the first row's hand is a change.
+        (probe (vec2 2 2) NIL)
+        (setf problems ())
+        (dolist (row (menu-rows panel))
+          (destructuring-bind (x y w h) (alloy:with-unit-parent (alloy:layout-element panel) (element-box row))
+            (when (and (< 2 w) (< 2 h))
+              (dolist (py (list (+ y 2) (+ y (* h 1/2)) (+ y h -2)))
+                (dolist (px (list (+ x 2) (+ x (* w 1/4)) (+ x (* w 1/2)) (+ x (* w 3/4)) (+ x w -2)))
+                  (probe (vec2 px py) row)))
+              (probe (vec2 2 2) NIL))))))
     (nreverse problems)))
