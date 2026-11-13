@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The mouse cursor no longer flickers over menu buttons.** Each mouse move over a button had
+  Alloy set the hand (the button) and then the arrow (the layout tree and the ui, since nothing in
+  Alloy takes a pointer move, so the move counted as unhandled). The cursor rested on the arrow and
+  flashed the hand while the mouse moved, on every menu. The menu pass now owns the cursor: it drops
+  Alloy's sets and, after each move, shows the hand over any row the player clicks (sliders and
+  toggles too, which never had it) and the arrow elsewhere, set only when that changes
+  (`set-menu-cursor`, menu.lisp). `menu-cursor-problems` checks it beside the layout and click checks;
+  it found every point of every button before the fix and nothing on any menu after, at 1280 × 720
+  and 1920 × 1080. For players' CHANGELOG at the next release: "The mouse cursor no longer flickers
+  between the arrow and the hand over menu buttons."
 - **The Spellforge shows when a draft can't be made.** A playtester couldn't tell they lacked the
   dust: the reason was in the note, but in the same cream as every line, and Make looked and lit up
   like any button (a click did nothing visible). Now the note turns ember red while it says why
