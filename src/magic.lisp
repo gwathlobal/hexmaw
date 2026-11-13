@@ -131,26 +131,31 @@ Damage over time shows as its aura (STATUS-AURA) instead: a tint drowned a burni
 
 ;;; Bursts (BURST-SPELL, spells.lisp).
 
+(defun burst-reaches-p (point radius body)
+  "True if the ball RADIUS metres round POINT reaches BODY's upright cylinder (BODY-FEET,
+BODY-RADIUS, BODY-HEIGHT) with nothing solid on the line to the nearest point of its middle."
+  (let* ((feet (body-feet body))
+         (top (+ (vy feet) (body-height body)))
+         (across (sqrt (+ (expt (- (vx feet) (vx point)) 2) (expt (- (vz feet) (vz point)) 2))))
+         (out (max 0.0 (- across (body-radius body))))
+         (up (max 0.0 (- (vy feet) (vy point)) (- (vy point) top))))
+    (and (< (+ (* out out) (* up up)) (* radius radius))
+         ;; Its middle at the burst's height, or as near as it comes, off the floor under it.
+         (clear-line-p point (vec (vx feet)
+                                  (max (+ (vy feet) 0.1) (min (- top 0.1) (vy point)))
+                                  (vz feet))))))
+
 (defun burst-victims (point radius caster)
-  "The live bodies within RADIUS of POINT with nothing solid between, but CASTER and
-those CASTER spares."
+  "The live bodies the ball RADIUS metres round POINT reaches with nothing solid between, but
+CASTER and those CASTER spares."
   (let ((victims ()))
     (loop for c across *creatures*
-          for loc = (location c)
           when (and (not (dead c)) (not (eq c caster))
                     (not (and caster (spares-p caster c)))
-                    (< (+ (expt (- (vx loc) (vx point)) 2) (expt (- (vz loc) (vz point)) 2))
-                       (expt (+ radius (body-radius c)) 2))
-                    (< (- (vy loc) radius) (vy point) (+ (vy loc) (sprite-height c) radius))
-                    (clear-path-p point loc 0.0))
+                    (burst-reaches-p point radius c))
             do (push c victims))
-    (when (and *player* (not (eq caster *player*)))
-      (let ((feet (feet *player*)))
-        (when (and (< (+ (expt (- (vx feet) (vx point)) 2) (expt (- (vz feet) (vz point)) 2))
-                      (expt (+ radius *player-radius*) 2))
-                   (< (- (vy feet) radius) (vy point) (+ (vy feet) *player-height* radius))
-                   (clear-path-p point feet 0.0))
-          (push *player* victims))))
+    (when (and *player* (not (eq caster *player*)) (burst-reaches-p point radius *player*))
+      (push *player* victims))
     victims))
 
 ;;; Effects.

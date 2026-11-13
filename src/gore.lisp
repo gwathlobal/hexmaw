@@ -277,6 +277,17 @@ A creature whose DEATH-BLOOD is 0 does neither."
       (return-from solid-at s)))
   NIL)
 
+(defun clear-line-p (from to)
+  "True if nothing solid stands on the straight line from point FROM to point TO, up, down or
+across (CLEAR-PATH-P, sword.lisp, looks across at one height only)."
+  (let* ((dx (- (vx to) (vx from)))
+         (dy (- (vy to) (vy from)))
+         (dz (- (vz to) (vz from)))
+         (steps (ceiling (sqrt (+ (* dx dx) (* dy dy) (* dz dz))) 0.1)))
+    (loop for i from 1 below steps
+          for k = (float (/ i steps) 0f0)
+          never (solid-at (+ (vx from) (* k dx)) (+ (vy from) (* k dy)) (+ (vz from) (* k dz))))))
+
 (defun crossed-face (p b s nx ny nz)
   "The face of solid S that the particle at P, from index B, crossed on its way to NX NY
 NZ: its axis (0 to 2, or -1 if the particle was already inside), true if it is the

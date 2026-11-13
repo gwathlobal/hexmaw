@@ -279,32 +279,50 @@ its strike. The player's own casts sound from the hands (player.lisp).")
 
 (defparameter *burst-size* 0.45
   "Radius in metres an impact animation's burst stands for: one bursting over an area is
-drawn bigger, up to *BURST-SCALE-LIMIT*, and rings of bursts fill the rest of the area.")
+drawn bigger, up to *BURST-SCALE-LIMIT*, and shells of bursts fill the rest of its ball.")
 (defparameter *burst-scale-limit* 1.5
   "The most an impact is scaled up. Further, its art pixels grow far coarser than everything
 around it (a 2 m burst was drawn at 12 px a metre, against the monsters' 64).")
-(defparameter *burst-ring-step* 1.0 "Metres between the rings of bursts over an area, and round each.")
+(defparameter *burst-shell-step* 1.0 "Metres between the shells of bursts filling an area, and over each.")
+(defparameter *burst-max-copies* 120
+  "The most bursts that fill an area: past it, the shells and the bursts on them are spaced wider.")
 
 (defun impact-point (projectile)
   "Where PROJECTILE's impact plays: a little back along its flight, out of the wall."
   (let ((velocity (projectile-velocity projectile)))
     (v- (location projectile) (v* velocity (/ *impact-pullback* (max 0.001 (vlength velocity)))))))
 
-(defun burst-rings (name at radius container)
-  "Fill the area RADIUS metres round AT with bursts of NAME at their own size: rings
-*BURST-RING-STEP* apart out to RADIUS, the bursts round each as far apart, none inside a solid.
-They start a frame or two apart, so they don't pulse as one."
-  (let ((rings (max 1 (round radius *burst-ring-step*))))
-    (loop for ring from 1 to rings
-          for r = (float (* radius (/ ring rings)) 0f0)
-          for count = (max 4 (round (* 2 pi r) *burst-ring-step*))
+(defun shell-counts (radius step)
+  "How many bursts go on each shell filling a ball of RADIUS STEP metres apart, innermost first."
+  (let ((shells (max 1 (round radius step))))
+    (loop for shell from 1 to shells
+          for r = (* radius (/ shell shells))
+          collect (max 4 (round (* 4 pi r r) (* step step))))))
+
+(defun burst-shells (name at radius container)
+  "Fill the ball RADIUS metres round AT with bursts of NAME at their own size: shells
+*BURST-SHELL-STEP* apart out to RADIUS, the bursts on each as far apart (a Fibonacci sphere,
+turned from shell to shell so they don't line up), spaced wider when there would be more than
+*BURST-MAX-COPIES*. None goes inside a solid or behind one from AT, so on a floor it is a dome
+and on a wall half a ball. They start a frame or two apart, so they don't pulse as one."
+  (let* ((total (reduce #'+ (shell-counts radius *burst-shell-step*)))
+         (step (* *burst-shell-step* (max 1.0 (sqrt (/ total *burst-max-copies*)))))
+         (counts (shell-counts radius step))
+         (shells (length counts))
+         (golden (float (* pi (- 3 (sqrt 5.0))) 0f0)))
+    (loop for shell from 1
+          for count in counts
+          for r = (float (* radius (/ shell shells)) 0f0)
           do (dotimes (i count)
-               (let* ((angle (float (* 2 pi (/ (+ i (* 0.5 ring)) count)) 0f0))
-                      (x (+ (vx at) (* r (cos angle))))
-                      (z (+ (vz at) (* r (sin angle)))))
-                 (unless (solid-at x (vy at) z)
-                   (let ((sprite (spawn-fx name (vec x (vy at) z) container)))
-                     (setf (age sprite) (* 0.04 (mod (+ i ring) 3))))))))))
+               (let* ((y (- 1.0 (/ (* 2.0 (+ i 0.5)) count)))
+                      (across (* r (sqrt (- 1.0 (* y y)))))
+                      (angle (+ (* i golden) (* 1.3 shell)))
+                      (point (vec (+ (vx at) (* across (cos angle)))
+                                  (+ (vy at) (* r y))
+                                  (+ (vz at) (* across (sin angle))))))
+                 (unless (or (solid-at (vx point) (vy point) (vz point))
+                             (not (clear-line-p at point)))
+                   (setf (age (spawn-fx name point container)) (* 0.04 (mod (+ i shell) 3)))))))))
 
 (defun play-impact (spell at container &key water)
   "Play SPELL's impact animation at AT, its burst over its area, with its glow and its sound. Into
@@ -316,7 +334,7 @@ WATER it hisses out."
              (sprite (spawn-fx name at container)))
         (nv* (scaling sprite) (min k *burst-scale-limit*))
         (when (< *burst-scale-limit* k)
-          (burst-rings name at radius container))
+          (burst-shells name at radius container))
         (attach-glow sprite (light-color spell) (* (light-radius spell) (sqrt k)))
         (play-sound (if water :bolt-hiss-water (spell-sound spell :impact)) at)))))
 

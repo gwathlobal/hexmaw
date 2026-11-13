@@ -7,6 +7,15 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Area bursts are a ball again, in look and in reach.** The copies that fill an area burst at its
+  sprite's own size (`burst-rings`, from the art-consistency pass) lay on flat rings at the impact's
+  height, a line of flames from the front and a disc from above: `burst-shells` lays them on shells
+  1 m apart, Fibonacci spheres, at most `*burst-max-copies*` (120; a 3 m burst has room for 96, about 1.2 ms a
+  frame), none in a solid or behind one from the middle, so on a floor it is a dome and on a wall half
+  a ball. `burst-victims` reached a cylinder, the area across and above and below the body, with a
+  clear line only across at the burst's height, so a burst under a ceiling hit what stood on the
+  storey above: it is a sphere against the body's cylinder now (`burst-reaches-p`), with a line up,
+  down or across to it (`clear-line-p`, gore.lisp). (Players will see this.)
 - `tools/make_palette.py --data DIR` samples art from another folder, so a palette can be made
   again from art not yet on one (an older commit's `data/`, from `git archive`): from master's art
   before the palette, at 128 colours, it gives the shipped palette exactly. A 256-colour palette
