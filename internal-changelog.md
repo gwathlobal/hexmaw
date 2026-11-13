@@ -7,10 +7,92 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- `tools/make_palette.py --data DIR` samples art from another folder, so a palette can be made
+  again from art not yet on one (an older commit's `data/`, from `git archive`): from master's art
+  before the palette, at 128 colours, it gives the shipped palette exactly. A 256-colour palette
+  made so halved the colour error (the sword's warm-shifted steel and leather most of all) but
+  spent most of its new colours on near-duplicate warm browns and greys; 128 was kept.
+- **The casting hands are remade: the weapons' gauntlets, at the weapons' pixel size.** They were
+  bare hands in red sleeves at 8 screen pixels an art pixel at 1080 rows, against the weapons' 5,
+  in two halves spread apart. Now they are the sword's and spear's steel gauntlets, their backs to
+  the camera and the fire burning behind the fingers, one generated picture a pose (rest, gather,
+  the fireball held, the release, the hands flung open) placed by `tools/make_shield.py` from
+  `art/hands/hands-frames.txt` at 0.2 art pixels a source pixel (the spear's 0.254 hid the middle
+  of the view), so they cover about what the old hands did and draw at `sword-scale`, centred by
+  their aim (`*hands-aim*`; `*hands-height*`, `*hands-stretch*` and `*hands-drop*` are gone). Each
+  hand still draws its half of the frame, `*hands-spread*` (28 art pixels) out from the middle,
+  and they close up where the fire joins between them (`*hands-together*`). The idle loop is
+  three frames: the rest pose, and its hands over two other takes' fire alone
+  (`tools/swap_fire.py`; a first version kept the rest pose's own fire too, and that frame showed
+  two flames at once). `make_shield.py --glow` leaves fire out of its darkening. The six spell
+  looks are recoloured from the new strip. CLAUDE.md has a rule against waiting on a `pgrep -f`
+  loop that matches its own command line. (Players will see these.)
+- **House style written down, and checked in CI.** CLAUDE.md's "House style" gives the rules the
+  art now keeps (64 art pixels a metre, first-person and HUD screen scales, the master palette,
+  upper-left shading with selective outlines and nothing part transparent, shaders on the texel
+  grid) and how to keep them: `tools/restyle.py --house` after every slicer or recolour (the palette,
+  and sel-out for the solid things, by path), the texture command lines with their `--contrast`,
+  `--tone` and `--palette`, `art/style/anchor.png` (`tools/art_sheets.py --anchor`) and
+  `art/prompts/style-common.txt` for new prompts. CI runs `tools/art_audit.py --check`. The casting
+  hands are allowlisted at 8 screen pixels an art pixel until they are made again.
+- **The script-drawn pickups are shaded as the generated ones are.** `pixelart.house_finish`
+  (relief, sel-out, the palette) gives every frame `draw_glyphs.py`, `draw_loot.py` and
+  `draw_gold.py` draw a light from the upper left (`relief`: a bevel on the edges, a gradient that
+  rounds the shape, a groove cut round each glowing stroke with its lip lit, seeded grain for wear,
+  the same pixels in every frame), selective outlines and the master palette, with nothing part
+  transparent: the glyphs' and runes' soft halos and the altar sigil's glow, which the game's
+  alpha test cut away anyway, are gone. (Players will see these.)
+- **Shader effects in whole texels and few tones.** The aurora (the grave circle, the boss's ward
+  and summoning flames, the gale sign) is laid on the world's 64-a-metre grid round its ring and up
+  it, its light stepped into `*aurora-light-steps*` (10) levels and its colour into a few hues, as the
+  funnel already was. Lava's and water's waves move whole texels (one offset per texel of the grid),
+  so their texture no longer smears finer than its pixels. The hit flash peaks at 0.5 (was 0.85,
+  which turned a close sprite into a flat cream shape) and leans warmer. The rim of bosses, elites
+  and enchanted weapons goes `*rim-mix*` (0.85) of the way to its colour and never darker than the
+  lit texel under it, a lit edge rather than a neon line. `tools/art_shots.sh` has `flash` and
+  `lava` shots. (Players will see these.)
+- **One palette for all the art; textures with the sprites' contrast; selective outlines.** Every
+  shipped sprite and texture is quantized onto `art/style/palette.txt`, 128 colours in 16 ramps that
+  `tools/make_palette.py` clusters (Lab k-means) from the art itself, each group given a share
+  (`quantize_to_palette` in `tools/pixelart.py`; `--palette` on `make_texture.py`, `tools/restyle.py`
+  for strips). The textures were rebuilt from their sources with their contrast raised to the
+  sprites' (`--contrast`, 1.6 for the stones), the cool and off-family stones (stair, dressed stone,
+  sarcophagus, ceiling) shifted into the wall's warm grey-brown (`--tone`) and the pillar's orange
+  brick muted (`--chroma`). The creatures, townsfolk, pickups, gate, torch, hands and weapons have
+  their black outline turned into a dark tone of what it borders (`selout`, `restyle.py --house`), so
+  they no longer look cut out against the walls. Splash screens keep every colour (allowlisted). Of
+  three variants tried in a test room, this one: the light stays smooth (texel-snapped, banded light
+  was the third). (Players will see these.)
+- **The HUD's text is Jersey 15, the menus' typeface, and its art is drawn in whole art pixels.**
+  Trial's 9 × 17 font is gone from the HUD: `hud-text` draws a bitmap of Jersey 15
+  (`data/fonts/hud-font`, made by `tools/make_hud_font.py`) at 27 px, where its outlines fall on
+  whole pixels, one screen pixel per font pixel, with a one-pixel shadow; text is laid out by its
+  advances (`text-width`), so `+glyph-height+` is now `*glyph-height*` (23). The bars, slots, icons
+  and the status time bar are in HUD art pixels, `hud-pixel-scale` screen pixels across
+  (`round(rows / *hud-pixel-rows*)`: 2 at 720 rows, 3 at 1080), so they no longer stay 2 px at any
+  window size; `*weapon-icon-scale*` is gone, and `*weapon-slot-padding*` and `*weapon-slot-gap*` are
+  art pixels (`slot-padding`, `slot-gap`). The bars are 64 × 7 art pixels in a dark frame, each fill
+  three tones of a darker, less saturated ramp. The rift burst is drawn at 0.6 m (48 px a metre, was
+  36). (Players will see these.)
+- **Effects keep the monsters' pixel size.** An area spell's impact was one burst scaled up to the
+  area, its art pixels growing coarse (12 px a metre at a 2 m radius, against the monsters' 64): now
+  it is scaled at most `*burst-scale-limit*` (1.5) and rings of bursts at their own size fill the
+  rest (`burst-rings`). A status aura was one strip stretched to its creature's height (46 px a metre
+  on an imp, about 23 on a boss): now it is copies at `*aura-texels-per-metre*` (64) up the body,
+  each scaled at most `*aura-stretch-limit*`, the first with the lamp. The casting hands' pixels are
+  square (`*hands-stretch*` 1.0, was 1.25), as every other art pixel is. (Players will see these.)
+- **Art audit tools.** `tools/art_audit.py` measures every shipped image (art pixels per metre from
+  the `define-fx-animation` sizes, colours, part-transparent pixels, outline share, lightness range,
+  the first-person and HUD screen scale) and `--check` fails on a house-style rule broken that
+  `tools/art_audit_allow.txt` doesn't excuse. `tools/art_sheets.py` makes contact sheets of the art at
+  the size it reaches the screen, and `tools/art_shots.sh` staged screenshots on the debug level where
+  groups of art meet (a monster at a wall, a torch, an area burst, the hands, the circle, pickups).
 - **The boss's Blink is `boss-blink`.** boss.lisp and riftwalker.lisp both defined `blink`, so
   reloading boss.lisp (the live-reload hook, after an edit there) put the boss's in the
   riftwalker's place: its tick then errored every blink ("FX-SPRITE is not of type BOOLEAN", since
-  the riftwalker's returns T) and its walk got a NIL path point.
+  the riftwalker's returns T) and its walk got a NIL path point. Every frame that errored, the runtime-error guard also skipped the tick of each entity
+  after the riftwalker in the scene's queue, so the creatures spawned before it stopped turning to
+  the camera and only caught up on frames without a blink.
 - **A blow between two creatures never hit-stops.** The world-wide 0.06 s freeze stays on blows the
   player deals or takes and on harm from no one (lava); a fight between creatures doesn't freeze the
   game wherever it is (`felt-hit-p` and `*hit-stop-reach*`, its 10 m limit, are gone).

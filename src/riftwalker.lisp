@@ -38,7 +38,9 @@
 (define-fx-animation rift-pull-flight "sprites/rift/pull" :fps 10 :loop T :size 0.45)
 (define-fx-animation rift-swap-flight "sprites/rift/swap" :fps 10 :loop T :size 0.45)
 (define-fx-animation rift-push-flight "sprites/rift/push" :fps 10 :loop T :size 0.45)
-(define-fx-animation rift-burst "sprites/rift/burst" :fps 14 :size 0.8)
+;; 0.6 m, 48 px a metre, the least the house style allows: its art is coarse, and at 0.8 its
+;; pixels stood out against the riftwalker's.
+(define-fx-animation rift-burst "sprites/rift/burst" :fps 14 :size 0.6)
 ;; What is left in the air where something stepped through a rift: a crack as tall as a
 ;; body tearing open into void, snapping shut and scattering.
 (define-fx-animation rift-flash "sprites/rift/flash" :fps 14 :size 1.8)

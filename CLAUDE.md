@@ -595,7 +595,7 @@ real time instead.
   gibs that fall in are gone. The surface is a `liquid-surface` quad, fullbright and fogged
   as lamp light, its texture (`data/textures/lava-flow.png`, from
   `art/prompts/texture-lava.txt` like the other textures, `tools/make_texture.py
-  art/textures/lava-2.png data/textures/lava-flow --metres 4`) swirled by crossed waves. On
+  art/textures/lava-2.png data/textures/lava-flow --metres 4 --palette art/style/palette.txt`) swirled by crossed waves. On
   the test level, `add-lava` digs a pit in the hall's south-west (x −9 to −6, z 3 to 7),
   its floor slab left with a hole there; the hall's room reaches down to the slab's
   underside so the glow lights the pit's rim.
@@ -614,7 +614,7 @@ real time instead.
   view, the hands too, is multiplied by `*underwater-tint*` (a blue; `underwater-tint`,
   hud.lisp, a quad like the pain flash drawn with `:dst-color :zero` blending). The texture is
   `data/textures/water.png` (`art/prompts/texture-water.txt`, made like the other textures:
-  `tools/make_texture.py art/textures/water-1.png data/textures/water --metres 4`).
+  `tools/make_texture.py art/textures/water-1.png data/textures/water --metres 4 --contrast 1.3 --palette art/style/palette.txt`).
   The nav grid makes deep water's surface a floor (`water-surfaces`), so a walker shoved in
   settles onto it like any floor. Afloat (`afloat-p`; never a flyer, `floats-p`) it is drawn
   sunk by `*float-sink*` of its height (in `apply-transforms`, so the surface covers the
@@ -1374,14 +1374,17 @@ real time instead.
   To find which sound misbehaves, `tools/hd '(game (mute :ambience))'` silences a clip or a group of
   `*sound-groups*` (`:music`, `:effects` for every clip), loops already playing too, and `(unmute)`
   brings everything back.
-- `src/hands.lisp`: the first-person casting hands, sunk Hexen-style below the bottom
-  edge (idle loop, cast, walking sway). Each hand is its own entity drawing half the
-  frame, spread apart and closing up where they meet (`*hands-together*`). Scales are
-  whole numbers, wider than tall (`*hands-stretch*`). The cast's release frame is timed
+- `src/hands.lisp`: the first-person casting hands, the weapons' steel gauntlets with fire burning
+  behind the fingers, sunk Hexen-style below the bottom edge (idle loop, cast, walking sway). Each
+  frame is both hands, drawn at `sword-scale` like the weapons and placed by its aim (`*hands-aim*`,
+  the pictures' middle) on the screen's middle; each hand is its own entity drawing its half
+  (`hands-split`), `*hands-spread*` (28) art pixels out from the middle, closing up for the frames
+  where the fire joins between them (`*hands-together*`: the gather, the fireball held, the release). The cast's release frame is timed
   to `*cast-release*`. Their fire takes the look of the spell in them (`*hand-looks*`, by
   `spell-look`: a tornado's `:storm`, else its effects'), one strip per look, each the fire strip
   recoloured, `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/<look> --hue H`
-  (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295); `add-hands`
+  (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295), then
+  `tools/restyle.py --palette art/style/palette.txt data/sprites/hands/<look>.png`; `add-hands`
   preloads them all, since `swap-animation` changes the strip mid-game. The recipes (the hotbar's
   defaults) work as before: `(select-weapon *player* :1)` is hotbar key 1, the sword at the start.
 - `src/sword.lisp` also has **enchantments**: a weapon's spell (a sword's or spear's its own stack's,
@@ -1947,6 +1950,14 @@ background are requests in the prompt (1536x1024 came back exact), and `--qualit
 nothing there. `--backend api` calls the paid Image API instead (key in `$OPENAI_API_KEY`
 or `~/.config/openai/api_key`), which honours size, quality and `--mask` exactly.
 
+**Waiting for a background job: never loop on `pgrep -f PATTERN` (or `pkill -f`, `ps | grep`)
+whose PATTERN is in the waiting command's own text.** The waiting shell's command line contains
+the pattern, so it matches itself and the loop never ends: `while pgrep -f "gen_image.py art/x"; do
+sleep 2; done` hung for an hour after a 93 s generation, and not for the first time. Run the job
+itself as the background command and be told when it exits, or wait on its PID (`wait $pid`, or
+`while kill -0 $pid`), or wait for its output file; if a pattern is unavoidable, bracket a
+character so it can't match itself (`pgrep -f '[g]en_image.py art/x'`).
+
 Neither keeps a conversation the way ChatGPT does: every call carries the full prompt and
 every reference it needs, so a follow-up pose attaches the earlier result as a `--ref`.
 Keep prompts worth repeating as files under `art/prompts/`, and `--dry-run` a new command
@@ -1981,6 +1992,61 @@ was chosen). Run it before committing art. Candidates go to
 first lot), or are deleted. A folder whose files are all untracked is taken as work in
 progress and left alone.
 
+## House style
+
+The art comes from many generations and scripts; these rules keep it reading as one set. A viewer
+of the first trailer called it "amalgamated": the art pixels of an area burst were five times the
+monsters', the hands' wider than tall, the walls soft and low in contrast beside sharply outlined
+sprites, each asset on colours of its own. The before and after shots are in
+`../hexmaw-art-attic/consistency/`.
+
+- **Density.** World art is 64 art pixels a metre (`*texels-per-metre*`), 48 to 96 at most: a
+  strip's `define-fx-animation :size` is its cell height over 64. The torch (135) and the grave
+  skull's flight (100) are the accepted exceptions (`tools/art_audit_allow.txt`). An effect that
+  grows (an area burst, an aura on a boss) adds copies at its own size rather than scaling one
+  (`burst-rings`, the aura's copies).
+- **Screen scale.** First-person art draws at `sword-scale` (3 screen pixels an art pixel at 720
+  rows, 5 at 1080), with square pixels; the HUD's art at `hud-pixel-scale` (2 and 3); HUD text is
+  Jersey 15 at its own 27 px grid, 1:1 (`tools/make_hud_font.py`). The casting hands draw at
+  `sword-scale` too.
+- **One palette.** Every sprite and texture is on `art/style/palette.txt`, 128 colours in ramps,
+  made by `tools/make_palette.py` from the art itself; splash screens keep every colour. A slicer's
+  or recolour's output goes through `tools/restyle.py --house` (below); a texture through
+  `make_texture.py --palette art/style/palette.txt`, with the stones at `--contrast 1.6` and the
+  off-family ones moved into the wall's warm grey-brown with `--tone 3 8`.
+- **Shading.** Lit from the upper left with a few hard tones, no gradients finer than the pixels,
+  no part-transparent pixels (the shader cuts at half alpha). Solid things (creatures, townsfolk,
+  pickups, the gate, the torch, the hands and weapons) have selective outlines: the black outline
+  turned into a dark tone of what it borders (`pixelart.selout`). Effects keep theirs.
+- **Script-drawn art** finishes each frame with `pixelart.house_finish` (`relief`: bevel, a
+  rounding gradient, grooves round glowing strokes, seeded grain; then sel-out and the palette), as
+  `draw_glyphs.py`, `draw_loot.py` and `draw_gold.py` do.
+- **Shaders** that draw over the art keep to its grid: the funnel, the aurora and the liquids'
+  waves work in whole texels of the 64-a-metre grid, and the aurora steps its light
+  (`*aurora-light-steps*`). The hit flash peaks at 0.5 and the rim glow is a lit edge (`*rim-mix*`).
+  The light itself stays smooth (`*wall-light-snap*` and the bands at 0): stepped, texel-snapped
+  light was tried and not taken.
+
+After slicing or recolouring a strip:
+
+```bash
+tools/restyle.py --house data/sprites/imp/walk.png
+```
+
+(the house rule by path: the palette for every strip, sel-out for the solid things; run it once on
+fresh output.) Every command line in "Monster sprites" and the sections after it that writes into
+`data/sprites/` is followed by this. New prompts attach `art/style/anchor.png` (the imp, knight,
+wall, floor, flask and sword together, made by `tools/art_sheets.py --anchor art/style/anchor.png`)
+as a style reference and include `art/prompts/style-common.txt`; the palette step holds the colours
+whatever the generator does.
+
+Checking: `tools/art_audit.py` measures every shipped image (art pixels a metre, colours off the
+palette, part-transparent pixels, outline share, lightness range, screen scale) and `--check` fails
+on a broken rule not in the allowlist; CI runs it. `tools/art_sheets.py DIR` makes contact sheets
+(the world at a distance and screen size, first-person, monsters, textures, drawn art, the
+palette), and `tools/art_shots.sh DIR` staged in-game shots (`ROWS=1080`, `SHOTS="burst hands"`).
+Run the audit and look at the sheets before committing art.
+
 ## Level textures
 
 Level faces are textured in world space: the greybox shader lays a texture flat on each
@@ -2007,41 +2073,42 @@ tools/gen_image.py art/textures/wall-stone.png --prompt "$(cat art/prompts/textu
 ```
 
 `tools/make_texture.py` crops it square, box-filters it to `--metres` × 64 px, flattens it
-to one palette (`--colors`, 32) and writes a 3 × 3 tiled preview beside the source to check
+(`--colors`, 32 of its own, or with `--palette` the master palette, as every shipped texture
+is: see "House style"), raises or moves its tone (`--contrast`, `--tone`, `--chroma`) and writes a 3 × 3 tiled preview beside the source to check
 the seams. The generator's 1254 px squares have art pixels about 5 px wide, so 4 m
 (256 px) keeps their detail; a small-patterned one (pillar blocks, planks) is 2 m. Asked
 for seamless, they mostly tile; `--blend PX` cross-fades the edges when they don't, but
 ghosts joints, so a fresh image is often better.
 
 ```bash
-tools/make_texture.py art/textures/wall-stone-2.png data/textures/wall-stone --metres 4
-tools/make_texture.py art/textures/floor-flags-2.png data/textures/floor-flags --metres 4
-tools/make_texture.py art/textures/ceiling-1.png data/textures/ceiling-stone --metres 4
-tools/make_texture.py art/textures/pillar-stone-1.png data/textures/pillar-stone --metres 2
-tools/make_texture.py art/textures/platform-top-1.png data/textures/planks --metres 2
-tools/make_texture.py art/textures/stair-side-2.png data/textures/stair-side --metres 2
-tools/make_texture.py art/textures/stair-tread-1.png data/textures/stair-tread --metres 2
-tools/make_texture.py art/textures/stone-2.png data/textures/dressed-stone --metres 2 --brightness 0.78
-tools/make_texture.py art/textures/beam-2.png data/textures/timber --metres 2
-tools/make_texture.py art/textures/sarcophagus-side-3.png data/textures/sarcophagus-side --metres 2 --strip 0.8 --brightness 0.78
-tools/make_texture.py art/textures/sarcophagus-lid-1.png data/textures/sarcophagus-lid --metres 2 --brightness 0.78
-tools/make_texture.py art/textures/rock-1.png data/textures/rock --metres 4
-tools/make_texture.py art/textures/cave-floor-2.png data/textures/cave-floor --metres 4
+tools/make_texture.py art/textures/wall-stone-2.png data/textures/wall-stone --metres 4 --contrast 1.6 --palette art/style/palette.txt
+tools/make_texture.py art/textures/floor-flags-2.png data/textures/floor-flags --metres 4 --contrast 1.6 --palette art/style/palette.txt
+tools/make_texture.py art/textures/ceiling-1.png data/textures/ceiling-stone --metres 4 --contrast 1.6 --tone 3 8 --palette art/style/palette.txt
+tools/make_texture.py art/textures/pillar-stone-1.png data/textures/pillar-stone --metres 2 --contrast 1.6 --chroma 0.6 --palette art/style/palette.txt
+tools/make_texture.py art/textures/platform-top-1.png data/textures/planks --metres 2 --contrast 1.6 --palette art/style/palette.txt
+tools/make_texture.py art/textures/stair-side-2.png data/textures/stair-side --metres 2 --contrast 1.6 --tone 3 8 --palette art/style/palette.txt
+tools/make_texture.py art/textures/stair-tread-1.png data/textures/stair-tread --metres 2 --contrast 1.6 --tone 3 8 --palette art/style/palette.txt
+tools/make_texture.py art/textures/stone-2.png data/textures/dressed-stone --metres 2 --brightness 0.78 --contrast 1.6 --tone 3 8 --palette art/style/palette.txt
+tools/make_texture.py art/textures/beam-2.png data/textures/timber --metres 2 --contrast 1.6 --palette art/style/palette.txt
+tools/make_texture.py art/textures/sarcophagus-side-3.png data/textures/sarcophagus-side --metres 2 --strip 0.8 --brightness 0.78 --contrast 1.6 --tone 3 8 --palette art/style/palette.txt
+tools/make_texture.py art/textures/sarcophagus-lid-1.png data/textures/sarcophagus-lid --metres 2 --brightness 0.78 --contrast 1.6 --tone 3 8 --palette art/style/palette.txt
+tools/make_texture.py art/textures/rock-1.png data/textures/rock --metres 4 --contrast 1.6 --palette art/style/palette.txt
+tools/make_texture.py art/textures/cave-floor-2.png data/textures/cave-floor --metres 4 --contrast 1.6 --palette art/style/palette.txt
 ```
 
 The `ice` surface (`data/textures/ice.png`, dark clear ice with white crack planes; its sides
 too, stone under it) is the common prompt plus `art/prompts/texture-ice.txt` (ice only, nothing
 showing through) plus a look: `texture-ice-dark.txt`, the one used, `-frosted` or `-glacier`.
 `ice-1` and `ice-2` are an earlier ice-over-flagstones version, dropped.
-`tools/make_texture.py art/textures/ice-dark-2.png data/textures/ice --metres 4`.
+`tools/make_texture.py art/textures/ice-dark-2.png data/textures/ice --metres 4 --palette art/style/palette.txt`.
 The ice caves' walls are `ice-rock` (faceted glacier ice with dark rock locked in it,
 `texture-ice-rock.txt`) and their floor `snow` (trodden snow and hoarfrost with rock showing
 through, `texture-snow.txt`, snow on its sides too); both took the floor ice, `ice-dark-2.png`,
 as a second reference for the palette:
 
 ```bash
-tools/make_texture.py art/textures/ice-rock-3.png data/textures/ice-rock --metres 4
-tools/make_texture.py art/textures/snow-1.png data/textures/snow --metres 4
+tools/make_texture.py art/textures/ice-rock-3.png data/textures/ice-rock --metres 4 --palette art/style/palette.txt
+tools/make_texture.py art/textures/snow-1.png data/textures/snow --metres 4 --palette art/style/palette.txt
 ```
 
 The caves' `rock` is fractured bedrock with no courses, for their walls and ceilings;
@@ -2072,7 +2139,7 @@ whichever way the block is turned. It is a picture: there is nothing behind it.
 
 ```bash
 tools/gen_image.py art/descent/door.png --prompt-file art/prompts/descent-door.txt --ref art/splash/loading-2.png --ref art/textures/wall-stone-1.png --size 1024x1024 -n 3
-tools/make_texture.py art/descent/door-1.png data/textures/descent-arch --metres 4 --panel 2.8 --on data/textures/wall-stone.png --period 5 --colors 48
+tools/make_texture.py art/descent/door-1.png data/textures/descent-arch --metres 4 --panel 2.8 --on data/textures/wall-stone.png --period 5 --contrast 1.2 --palette art/style/palette.txt
 ```
 
 `beam` (`timber`) has its grain running along x: a beam turned to run along z shows the
@@ -2302,15 +2369,24 @@ of one art pixel in the source:
 python3 tools/slice_frames.py art/spells/bolt.webp data/sprites/bolt --pixel 5 flight:5 burst:7
 ```
 
-First-person HUD sprites (the hands) have arms cut off by the screen edge, wherever the
-generator happened to cut them; `--anchor bottom` puts each frame's lowest solid row on
-the strip's bottom edge instead of keeping the cell centre. The hands are one 12-frame
-strip (4 idle, then 8 cast), so every frame shares one crop. Their sheet,
-`art/hands/fire-hands.png`, is two generated sheets (idle row, then the cast) stacked with a
-cyan line between:
+The casting hands are made the spear's way (below): one generated picture per pose, the whole
+1536 × 1024 screen, both gauntlets with their backs to the camera and the fire behind the fingers
+(`art/prompts/hands-common.txt`, which says so for every pose, plus `hands-<pose>.txt`; the sword's
+idle frame and the spear's rest pose as references, the other poses adding `hands-follow.txt` and
+the chosen rest pose, `art/hands/idle-2.png`; the rest pose took the old bare-handed sheet,
+`art/hands/fire-hands.png`, as a third reference for how the hands are held). The idle flicker
+is the rest pose's hands over two other takes' fire (`tools/swap_fire.py`, each frame the other
+take's fire alone), since a take asked for only other flames moved the hands too.
+`art/hands/hands-frames.txt` places them, 3 idle frames and the 8 of the cast, at 0.2 art pixels a source pixel (the spear's 0.254 drew them so big
+they hid the middle of the view), and `--glow` keeps the fire out of the darkening
+(darkened, white fire went grey and the palette made it pale blue):
 
 ```bash
-python3 tools/slice_frames.py art/hands/fire-hands.png data/sprites/hands --pixel 4 --anchor bottom hands:12
+tools/gen_image.py art/hands/gather.png --prompt "$(cat art/prompts/hands-{common,gather,follow}.txt)" --ref art/sword-shield/ref-sword-idle.png --ref art/spear/idle-2.png --ref art/hands/idle-2.png --size 1536x1024 -n 2
+tools/swap_fire.py art/hands/idle-2.png art/hands/flicker-1.png art/hands/flicker-1-fire.png
+tools/swap_fire.py art/hands/idle-2.png art/hands/flicker-2.png art/hands/flicker-2-fire.png
+tools/make_shield.py --corner right --glow art/hands/hands-frames.txt data/sprites/hands/hands
+tools/restyle.py --house data/sprites/hands/hands.png
 ```
 
 The sword is one 12-frame strip (4 idle, then an 8-frame slash), each cell about 326 × 250
@@ -2433,8 +2509,7 @@ Generators can't keep a motion sequence across a grid of first-person poses, and
 a depth move (pulling a weapon back toward the viewer) badly. Ask for one pose per image,
 attach the first as the design reference, and describe each pose in screen positions.
 
-Most of that idle row has no palm fire, so `*hands-idle-sequence*` loops the cast's rest
-frames instead. A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
+A re-sliced PNG isn't picked up by `tools/hd reset` (loaded assets stay);
 `tools/hd reload src/<file that defines it>.lisp` reloads it and rebuilds the scene.
 
 A monster's walk is one strip of 4 frames per view, in the turnaround's view order. It

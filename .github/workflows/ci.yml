@@ -43,6 +43,14 @@ jobs:
           head -c 40 art/splash/maw-1.png | grep -q 'git-lfs' \
             || { echo "::error::art/splash/maw-1.png is not an LFS pointer"; exit 1; }
 
+      # The shipped art keeps the house style ("House style" in CLAUDE.md): data/ and src/ only,
+      # so the LFS pointers above are enough.
+      - name: Audit the shipped art
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends python3-pil python3-numpy
+          python3 tools/art_audit.py --check < /dev/null
+
       - uses: ./.github/actions/setup-lisp
         with:
           sbcl-version: ${{ env.SBCL_VERSION }}

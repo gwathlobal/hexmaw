@@ -29,6 +29,11 @@ wall TEXTURE repeated as it would lie there, its rows and columns starting at th
 Walls lie on the world's grid and rows start at y = 0, so it stays in place on a wall whose
 middle is a cell's as long as --metres is the cell's size and --period divides the storey height.
 
+The house style ("House style" in CLAUDE.md) ends with --contrast (the lightness spread about
+its mean, times this: generated surfaces come out flatter than the sprites), --tone (the mean
+colour moved to a CIE a* b*, so the stones of one dungeon are one family) and --chroma, then
+--palette, the master palette in place of --colors' own.
+
 --brightness scales every colour first, for a generated surface that came
 out too light or dark beside the rest of the level. Writes <out>.png and, beside the source, <source stem>-tiled.png: the
 texture 3 x 3 at 4x zoom, to check the seams by eye. It prints how far the wrapped
@@ -39,6 +44,8 @@ import argparse
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageStat
+
+from pixelart import adjust_tone, quantize_to_palette, read_palette
 
 PIXELS_PER_METRE = 64
 
@@ -134,6 +141,17 @@ def make_panel(src, args):
     return tex
 
 
+def finish(tex, args):
+    """The house style's last steps: --contrast, --tone and --chroma, then the --palette."""
+    if args.contrast != 1.0 or args.tone or args.chroma != 1.0:
+        tex = adjust_tone(tex, args.contrast, args.tone, args.chroma)
+    if args.palette:
+        alpha = tex.mode == "RGBA"
+        tex = quantize_to_palette(tex, read_palette(args.palette))
+        tex = tex if alpha else tex.convert("RGB")
+    return tex
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source")
@@ -148,11 +166,17 @@ def main():
     ap.add_argument("--panel", type=float, default=0, help="metres wide: the source is a picture on magenta")
     ap.add_argument("--on", help="the wall texture a panel stands on")
     ap.add_argument("--brightness", type=float, default=1.0, help="factor every colour is scaled by (default 1)")
+    ap.add_argument("--contrast", type=float, default=1.0,
+                    help="lightness spread about its mean, times this (CIE L*; house style 1.6)")
+    ap.add_argument("--tone", type=float, nargs=2, metavar=("A", "B"),
+                    help="move the mean colour to this CIE a* b*, keeping each texel's difference from it")
+    ap.add_argument("--chroma", type=float, default=1.0, help="every colour's saturation, times this")
+    ap.add_argument("--palette", help="map onto this palette file (art/style/palette.txt) instead of --colors")
     args = ap.parse_args()
 
     src = Image.open(args.source).convert("RGB")
     if args.strip or args.panel:
-        tex = make_panel(src, args) if args.panel else make_strip(src, args)
+        tex = finish(make_panel(src, args) if args.panel else make_strip(src, args), args)
         out = Path(args.out).with_suffix(".png")
         out.parent.mkdir(parents=True, exist_ok=True)
         tex.save(out)
@@ -168,8 +192,9 @@ def main():
     tex = img.resize((size, size), Image.BOX)
     if args.brightness != 1.0:
         tex = tex.point(lambda v: min(255, round(v * args.brightness)))
-    if args.colors:
+    if args.colors and not args.palette:
         tex = tex.quantize(args.colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
+    tex = finish(tex, args)
 
     out = Path(args.out).with_suffix(".png")
     out.parent.mkdir(parents=True, exist_ok=True)

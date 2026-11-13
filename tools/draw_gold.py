@@ -4,10 +4,13 @@
     tools/draw_gold.py data/sprites/pickups/gold
 
 writes gold.png (frames side by side, 2 px apart, as tools/slice_frames.py does) and gold.lisp,
-its index. At the monsters' 64 px per metre the pile is about 0.35 m across.
+its index. At the monsters' 64 px per metre the pile is about 0.35 m across. Each frame goes
+through pixelart.house_finish (upper-left light, grain, sel-out, the master palette).
 """
 import sys
 from PIL import Image
+
+from pixelart import house_finish
 
 W, H, GAP, FRAMES = 22, 14, 2, 4
 OUTLINE = (58, 36, 10, 255)
@@ -47,7 +50,7 @@ def frame(n):
     for x, y in ((gx, gy), (gx - 1, gy), (gx + 1, gy), (gx, gy - 1), (gx, gy + 1)):
         if 0 <= x < W and 0 <= y < H and img.getpixel((x, y))[3]:
             img.putpixel((x, y), GLINT if (x, y) == (gx, gy) else LIGHT)
-    return img
+    return house_finish(img, seed=2, bevel=6.0)
 
 
 def main():

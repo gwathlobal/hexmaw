@@ -44,7 +44,9 @@ budget, so keep the two the same. A weapon's :WEAPON is what it puts in the play
 (defparameter *tooltip-padding* 7 "Pixels between the tooltip's edge and its text.")
 (defparameter *tooltip-offset* 20 "Pixels between the pointer and the tooltip.")
 (defparameter *tooltip-line-gap* 3 "Pixels between the tooltip's lines.")
-(defparameter *glyph-width* 9 "Pixels a HUD text character takes across.")
+(defparameter *glyph-width* 11
+  "Pixels a HUD text character takes across on average, for wrapping by characters (TEXT-WIDTH,
+hud.lisp, measures a line).")
 (defparameter *inventory-border-color* (vec4 0.60 0.48 0.28 1))
 
 (defun item-property (kind key)
@@ -594,25 +596,25 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
 ;;; Where things are, in HUD pixels.
 
 (defun item-icon-size ()
-  (* *weapon-icon-scale* (getf (animation-atlas (find-fx-animation 'item-icons)) :cell-width)))
+  (* (hud-pixel-scale) (getf (animation-atlas (find-fx-animation 'item-icons)) :cell-width)))
 
 (defun item-cell-size ()
-  (+ (item-icon-size) *weapon-slot-padding* *weapon-slot-padding*))
+  (+ (item-icon-size) (slot-padding) (slot-padding)))
 
 (defun hotbar-rows ()
   (ceiling *hotbar-size* *hotbar-columns*))
 
 (defun hot-position (index)
   "The corner of hotbar slot INDEX: in rows over the bars on the left, keys 1 to 5 on top."
-  (let ((step (+ (item-cell-size) *weapon-slot-gap*)))
+  (let ((step (+ (item-cell-size) (slot-gap))))
     (multiple-value-bind (row column) (floor index *hotbar-columns*)
       (values (+ *hud-margin* (* column step))
-              (+ (hud-top) *weapon-slot-gap* (* step (- (hotbar-rows) row 1)))))))
+              (+ (hud-top) (slot-gap) (* step (- (hotbar-rows) row 1)))))))
 
 (defun quick-position ()
   "The quickslot's corner: on the left, in a row of its own above the hotbar."
   (values *hud-margin*
-          (+ (hud-top) *weapon-slot-gap* (* (hotbar-rows) (+ (item-cell-size) *weapon-slot-gap*)))))
+          (+ (hud-top) (slot-gap) (* (hotbar-rows) (+ (item-cell-size) (slot-gap))))))
 
 (defun inventory-rows ()
   (ceiling *inventory-size* *inventory-columns*))
@@ -621,7 +623,7 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
 
 (defun bag-panel-width ()
   (+ *inventory-padding* *inventory-padding*
-     (- (* (+ (item-cell-size) *weapon-slot-gap*) *inventory-columns*) *weapon-slot-gap*)))
+     (- (* (+ (item-cell-size) (slot-gap)) *inventory-columns*) (slot-gap))))
 
 (defun hotbar-keys-text ()
   "The hotbar's keys for a hint: \"1-9\" while they run 1 to 9, else each slot's."
@@ -646,24 +648,24 @@ wrapped again only when the bindings or the panel's width change."
 (defun panel-box ()
   "The panel's corner and size: on the left, right above the quickslot, tall enough for its
 title, its cells and its hint's lines."
-  (let* ((step (+ (item-cell-size) *weapon-slot-gap*))
+  (let* ((step (+ (item-cell-size) (slot-gap)))
          (pad *inventory-padding*)
          (lines (length (hint-lines)))
-         (hint (+ pad (* lines +glyph-height+) (* (1- lines) *hint-line-gap*))))
+         (hint (+ pad (* lines *glyph-height*) (* (1- lines) *hint-line-gap*))))
     (values *hud-margin*
             (+ (nth-value 1 (quick-position)) step)
             (bag-panel-width)
-            (+ pad pad +glyph-height+ pad hint (- (* step (inventory-rows)) *weapon-slot-gap*)))))
+            (+ pad pad *glyph-height* pad hint (- (* step (inventory-rows)) (slot-gap))))))
 
 (defun bag-position (cell)
   "The corner of bag cell number CELL, counted across from the top left."
   (multiple-value-bind (x y w h) (panel-box)
     (declare (ignore w))
-    (let ((step (+ (item-cell-size) *weapon-slot-gap*))
+    (let ((step (+ (item-cell-size) (slot-gap)))
           (pad *inventory-padding*))
       (multiple-value-bind (row column) (floor cell *inventory-columns*)
         (values (+ x pad (* column step))
-                (- (+ y h) pad +glyph-height+ pad (item-cell-size) (* row step)))))))
+                (- (+ y h) pad *glyph-height* pad (item-cell-size) (* row step)))))))
 
 (defun slot-position (slot)
   (let ((hot (hotbar-index slot)))
@@ -754,7 +756,7 @@ title, its cells and its hint's lines."
          (icon (cell-icon cell))
          (size (item-cell-size))
          (icon-size (item-icon-size))
-         (pad *weapon-slot-padding*)
+         (pad (slot-padding))
          (dragged (and *inventory-view* (eql (cell-slot cell) (dragging *inventory-view*))))
          (weapon (and stack (item-property (first stack) :weapon)))
          (enchantment (and weapon (weapon-enchantment *player* stack))))
@@ -787,10 +789,10 @@ title, its cells and its hint's lines."
     (place frame x y frame-z)
     (place icon (+ x pad) (+ y pad) icon-z)
     ;; The count in the bottom-right corner, right-aligned.
-    (place (cell-number cell) (- (+ x size) pad (* *glyph-width* (length (text (cell-number cell))))) (+ y 1) number-z)
+    (place (cell-number cell) (- (+ x size) pad (text-width (text (cell-number cell)))) (+ y 1) number-z)
     ;; A hotbar slot's key in the top-left corner, which the icons leave empty.
     (when (cell-key cell)
-      (place (cell-key cell) (+ x pad) (- (+ y size) pad +glyph-height+) number-z))))
+      (place (cell-key cell) (+ x pad) (- (+ y size) pad *glyph-height*) number-z))))
 
 (defun update-panel-hint (view hovered)
   "The panel's hint, blank while the pointer is on a stack: its tooltip says what it is."
@@ -819,9 +821,9 @@ is re-uploaded only when the stack under the pointer changes."
     (setf (shown back) (and stack T))
     (when stack
       (let* ((pad *tooltip-padding*)
-             (step (+ +glyph-height+ *tooltip-line-gap*))
+             (step (+ *glyph-height* *tooltip-line-gap*))
              (count (count-if #'shown lines))
-             (w (+ pad pad (* *glyph-width* (loop for line in lines when (shown line) maximize (length (text line))))))
+             (w (+ pad pad (loop for line in lines when (shown line) maximize (text-width (text line)))))
              (h (+ pad pad (- (* step count) *tooltip-line-gap*)))
              (px (floor (vx (pointer view))))
              (py (floor (vy (pointer view))))
@@ -839,7 +841,7 @@ is re-uploaded only when the stack under the pointer changes."
         (loop for line in lines
               for i from 0
               when (shown line)
-                do (place line (+ x pad) (- top pad +glyph-height+ (* i step)) -0.01))))))
+                do (place line (+ x pad) (- top pad *glyph-height* (* i step)) -0.01))))))
 
 (defun name-keys (view)
   "Name the quickslot's and the hotbar's keys as bound, and have the bag cells name theirs again."
@@ -863,15 +865,15 @@ is re-uploaded only when the stack under the pointer changes."
       ;; The frames light up under the pointer: where a click takes a stack or a drag drops it.
       (multiple-value-bind (qx qy) (quick-position)
         (place-item-cell (quick-cell view) qx qy -0.2 -0.1 -0.08 (eq hovered :quick))
-        (place (quick-key view) (+ qx *weapon-slot-padding*)
-               (- (+ qy (item-cell-size)) *weapon-slot-padding* +glyph-height+) -0.08)
+        (place (quick-key view) (+ qx (slot-padding))
+               (- (+ qy (item-cell-size)) (slot-padding) *glyph-height*) -0.08)
         ;; The spell in hand right of it, re-uploaded only when it changes.
         (let ((spell (wanted-spell *player*))
               (label (spell-label view)))
           (unless (eq spell (shown-spell view))
             (setf (shown-spell view) spell
                   (text label) (if spell (format NIL "~a  ~d MP" (spell-title spell) (spell-cost spell)) "")))
-          (place label (+ qx (item-cell-size) *weapon-slot-gap*) (+ qy 2) -0.08)))
+          (place label (+ qx (item-cell-size) (slot-gap)) (+ qy 2) -0.08)))
       ;; The slot asked for is framed in gold, and in play the others' icons are dimmed.
       (loop for cell in (hot-cells view)
             for index from 0
@@ -886,12 +888,12 @@ is re-uploaded only when the stack under the pointer changes."
             (setf (vx (scaling back)) (float pw 0f0)
                   (vy (scaling back)) (float ph 0f0))
             (place back px py -0.4)
-            (place (panel-title-text view) (+ px pad) (- (+ py ph) pad +glyph-height+) -0.15)
+            (place (panel-title-text view) (+ px pad) (- (+ py ph) pad *glyph-height*) -0.15)
             ;; The hint's lines from the bottom up.
             (let ((n (length (hint-lines))))
               (loop for line in (panel-hints view)
                     for i from 0 below n
-                    do (place line (+ px pad) (+ py pad (* (- n 1 i) (+ +glyph-height+ *hint-line-gap*))) -0.15)))))
+                    do (place line (+ px pad) (+ py pad (* (- n 1 i) (+ *glyph-height* *hint-line-gap*))) -0.15)))))
         (dolist (cell (bag-cells view))
           (multiple-value-bind (cx cy) (bag-position (cell-slot cell))
             (place-item-cell cell cx cy -0.3 -0.2 -0.15 (eql hovered (cell-slot cell)))))

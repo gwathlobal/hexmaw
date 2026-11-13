@@ -1,0 +1,18 @@
+# Hexmaw's master palette: written by tools/make_palette.py (--colors 128 --seed 1).
+# A line per ramp, dark to light. Every shipped sprite and texture is quantized onto it.
+warm-grey      0c0808 18110e 20110c 211b16 312721 32322c 3f3430 4a443a 5c5247 66665b 82796d a4a19a f9f9f3
+cool-grey      1b141e 2c2529 48464a 605e61 b5c3cc
+pale-red       2a0b09 feccd4
+red            3a0d08 490404 5b1a17 7e2225 ce326c f52a5a f98497
+pale-orange    2a1c12 341a15 3a2213 3d2c1f 4c2f1b 4a2f29 48382b 543d2c 56433a 673c30 604936 6c482e 725740 706053 8c6d54
+orange         4b1d16 5f100d 750e0c 5c361d 6b301c 890b08 90281e 774726 8c3d24 ac0f07 ac3323 8a5127 88513d cd1106 bb3a0f b74925 90633f a6613f a86834 f11402 c76733 ef4736 b87f55 fb6403 d08b47 fe901f e0a16f
+pale-yellow    2d2819 453c23 5e4f32 77613d a08a71 c3b698
+yellow         5c441a 5c5c2c 8d6b24 897245 a08553 b8995e c39e76 d8aa38 e6bc82 fcb918 f8e87c f8ec3b fceab6
+pale-green     e5fdd3
+green          123c1c 225411 317918 3caa3b 32c110 29e613 b4ee93 96ff77
+pale-teal      0e2f35 204550 52979d
+teal           73daea
+pale-blue      0a1e26 18313d 3c606e 636e7f 6b8798 90a6b7 a9d4fa deebfd
+blue           254670 45b1f5 94bdfe
+pale-violet    131434 3a2f41 53485e 846d8d
+violet         231241 182680 5a3e73 6f23b4 0a3be1 6141ba 4663c4 ba23f4 d860f5 c58bfd bb94ff efc9fc

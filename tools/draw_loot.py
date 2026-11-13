@@ -8,7 +8,8 @@ writes loot-sword, loot-spear, loot-maul and loot-rune-<look> (.png and .lisp) f
 (*SPELL-LOOKS*, spells.lisp, and the tornado's storm), at the monsters' 64 px per metre. The sword
 stands planted point down, 0.75 m; the spear upright, 1.25 m; the maul upright on its head, 0.9 m; a rune is a round stone the size of
 a palm, a sign cut into it glowing in its look's colours, apart from the glyphs' upright tablets.
-4 frames each: a glint runs down the weapons' steel, and a rune's sign and halo pulse.
+4 frames each: a glint runs down the weapons' steel, and a rune's sign pulses. Every frame goes
+through pixelart.house_finish (upper-left light, the sign a groove, grain, sel-out, the palette).
 """
 
 import math
@@ -16,6 +17,8 @@ import sys
 from pathlib import Path
 
 from PIL import Image
+
+from pixelart import glowing, house_finish
 
 GAP = 2
 FRAMES = 4
@@ -160,21 +163,13 @@ SIGN = [
 
 
 def rune(look, step):
-    """A round stone lit from the upper left, its sign glowing, a halo pulsing round it."""
+    """A round stone lit from the upper left, its sign glowing and pulsing."""
     w, h = 22, 22
     shades = LOOKS[look]
     pulse = (0.0, 0.5, 1.0, 0.5)[step]
     image = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     pixels = image.load()
     c = (w - 1) / 2
-    for y in range(h):
-        for x in range(w):
-            d = math.hypot(x - c, y - c)
-            reach = 10.5 + 0.8 * pulse
-            if 7 < d < reach:
-                a = round(max(0.0, 1 - (d - 7) / (reach - 7)) * (60 + 60 * pulse))
-                if a > 0:
-                    pixels[x, y] = (*shades[2], a)
     stone = {}
     for y in range(h):
         for x in range(w):
@@ -193,7 +188,7 @@ def rune(look, step):
                 if pixels[x + 1, y + 1][:3] == STONE[:3]:
                     pixels[x + 1, y + 1] = (*shades[4], 255)
                 pixels[x, y] = (*glow, 255)
-    return image
+    return house_finish(image, glow=glowing(), seed=7, speckle=0.3, grain=6.0)
 
 
 def from_pixels(px, w, h):
@@ -219,9 +214,9 @@ def write(out, name, frames):
 def main():
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "data/sprites/pickups")
     out.mkdir(parents=True, exist_ok=True)
-    write(out, "loot-sword", [from_pixels(*sword(s)) for s in range(FRAMES)])
-    write(out, "loot-spear", [from_pixels(*spear(s)) for s in range(FRAMES)])
-    write(out, "loot-maul", [from_pixels(*maul(s)) for s in range(FRAMES)])
+    write(out, "loot-sword", [house_finish(from_pixels(*sword(s)), seed=3, speckle=0.1) for s in range(FRAMES)])
+    write(out, "loot-spear", [house_finish(from_pixels(*spear(s)), seed=4, speckle=0.1) for s in range(FRAMES)])
+    write(out, "loot-maul", [house_finish(from_pixels(*maul(s)), seed=5) for s in range(FRAMES)])
     for look in LOOKS:
         write(out, f"loot-rune-{look}", [rune(look, s) for s in range(FRAMES)])
 

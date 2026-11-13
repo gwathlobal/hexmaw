@@ -11,7 +11,9 @@
 
 (defparameter *hit-stop-time* 0.06 "Seconds the world freezes when a hit lands.")
 (defparameter *flash-time* 0.15)
-(defparameter *flash-color* (vec4 1.0 0.95 0.8 0.85) "RGB and peak strength of the hit flash.")
+(defparameter *flash-color* (vec4 1.0 0.9 0.75 0.5)
+  "RGB and peak strength of the hit flash. Under 0.5 a sprite keeps its shading through it; at
+0.85 a close one turned into a flat cream silhouette.")
 (defparameter *stagger-time* 0.35)
 (defparameter *stagger-squash* 0.12 "How much a flinch squashes the sprite, as a fraction of its height.")
 (defparameter *knockback-friction* 14.0 "Deceleration of knockback, in m/s², on floors other than ice.")

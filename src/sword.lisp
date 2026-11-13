@@ -597,12 +597,15 @@ tornado for a vortex."
 
 (defun spell-icon (spell)
   (getf *spell-icons* (spell-icon-key spell) 1))
-(defparameter *weapon-icon-scale* 2 "Screen pixels per icon art pixel. Whole numbers only.")
-(defparameter *weapon-slot-padding* 3 "Pixels between a slot's edge and its icon.")
-(defparameter *weapon-slot-gap* 6 "Pixels between slots, and between the slots and the bars.")
+(defparameter *weapon-slot-padding* 1 "Art pixels between a slot's edge and its icon.")
+(defparameter *weapon-slot-gap* 2 "Art pixels between slots, and between the slots and the bars.")
+
+;; The icons, slots and their spacing are in HUD art pixels (HUD-PIXEL-SCALE, hud.lisp).
+(defun slot-padding () (* *weapon-slot-padding* (hud-pixel-scale)))
+(defun slot-gap () (* *weapon-slot-gap* (hud-pixel-scale)))
 (defparameter *weapon-slot-color* (vec4 0.06 0.05 0.06 0.8))
 (defparameter *weapon-slot-active-color* (vec4 0.24 0.17 0.07 0.85))
-(defparameter *weapon-slot-border* (vec4 0 0 0 1))
+(defparameter *weapon-slot-border* (vec4 0.07 0.05 0.04 1))
 (defparameter *weapon-slot-active-border* (vec4 0.95 0.78 0.30 1))
 (defparameter *weapon-icon-dim* 0.45 "Brightness of the icons of the weapons not asked for.")
 
@@ -621,7 +624,8 @@ tornado for a vortex."
     (setf (uniform program "border_color") (cond ((enchanted slot) (enchant-color slot))
                                                  (active *weapon-slot-active-border*)
                                                  (T *weapon-slot-border*)))
-    (setf (uniform program "border_width") (if (or active (enchanted slot)) 2.0 1.0))))
+    ;; One HUD art pixel; the asked-for and enchanted slots show by their border's colour.
+    (setf (uniform program "border_width") (float (hud-pixel-scale) 0f0))))
 
 (defun spell-tint (spell color brightness)
   "Set vec4 COLOR to SPELL's look's colour (*SPELL-LOOKS*), brightest channel at BRIGHTNESS."

@@ -1,0 +1,5 @@
+HOUSE STYLE (Hexmaw; attach art/style/anchor.png as a style reference, and say which reference it is):
+- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.
+- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.
+- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.
+- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.

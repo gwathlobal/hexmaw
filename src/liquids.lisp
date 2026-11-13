@@ -132,8 +132,9 @@ uniform float time;
 out vec4 color;
 
 void main(){
-  // Laid flat in world XZ like a floor, swirled by crossed waves and drifting slowly.
-  vec2 p = v_world_position.xz;
+  // Laid flat in world XZ like a floor, swirled by crossed waves and drifting slowly. The
+  // waves move whole texels: each texel of the world's grid takes one offset.
+  vec2 p = (floor(v_world_position.xz * texels_per_metre) + 0.5) / texels_per_metre;
   vec2 st = p + 0.18 * sin(p.yx * 1.7 + time * vec2(0.9, 1.1)) + time * vec2(0.05, 0.03);
   vec3 c = texture(surface_texture, st * texels_per_metre / vec2(textureSize(surface_texture, 0))).rgb;
   // A slow throb that rolls across the pool.
@@ -165,8 +166,9 @@ uniform float water_alpha;
 out vec4 color;
 
 void main(){
-  // Laid flat in world XZ like a floor, rippled by small crossed waves and drifting.
-  vec2 p = v_world_position.xz;
+  // Laid flat in world XZ like a floor, rippled by small crossed waves and drifting, a
+  // texel of the world's grid at a time.
+  vec2 p = (floor(v_world_position.xz * texels_per_metre) + 0.5) / texels_per_metre;
   vec2 st = p + 0.06 * sin(p.yx * 2.3 + time * vec2(0.7, 0.9)) + time * vec2(0.02, 0.015);
   vec3 c = texture(surface_texture, st * texels_per_metre / vec2(textureSize(surface_texture, 0))).rgb;
   // Lit on the side it is seen from, as a floor or, from under the water, a ceiling.
