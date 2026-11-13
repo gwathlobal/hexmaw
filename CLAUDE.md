@@ -1007,7 +1007,11 @@ real time instead.
   known, the Element or Effect button doesn't change it but says so in the note, naming the glyphs
   that teach the rest (`forge-cycle-element`, `forge-cycle-kind`). `draft-problem` says why a draft can't be made (self delivery with something to
   strike, a delivery with nothing to, more than `*max-mana*`, a weapon's more than
-  `*max-enchant-effects*` or `*max-enchant-cost*` a blow, too little dust, a full bag). A draft's name
+  `*max-enchant-effects*` or `*max-enchant-cost*` a blow, too little dust, a full bag), and while it
+  objects the screen shows it: the note says so in `*forge-warning-color*` (a `forge-status-note`),
+  and the Make button (a `forge-make-button`) is greyed, its label "Need 24 dust, have 10" while
+  dust is what's short (`dust-shortfall`, `make-label-text`); a click on it only plays `:refused`.
+  `refresh-readout` keeps all of it current as a slider moves, with no remake. A draft's name
   is made from its effects (`draft-name`, "Frost Burst"). The screen is `forge-panel`, a `menu-panel`
   that lays itself out (`build-panel`, menu.lisp): the tabs and sinks down the left, labels cut to
   `*forge-label-width*` (`fit-label`), each a `forge-choice` (a `menu-button` that draws the chosen
