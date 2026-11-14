@@ -328,6 +328,7 @@ true if there is a landing cell and an arc OGRE's body fits."
       (strike-target target (roll (attack-damage ogre)) loc :shove *slam-shove* :lift *slam-lift*
                      :guard-break (guard-break ogre) :by ogre))
     (play-sound :ogre-slam impact)
+    (floor-sparks (vx impact) (vy impact) (vz impact))
     ;; What the blow struck flies on its shove: the maul's impact shakes the rest.
     (quake ogre impact *slam-quake-radius* NIL *slam-quake-shove*
            (unless (and hit (eq target *player*)) *slam-quake-shove*) *slam-quake-lift*
@@ -384,7 +385,8 @@ of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIU
       (dotimes (k count)
         (let ((a (+ turn (* k (/ (* 2 pi) count)))))
           (spawn-standing-fx *ogre-dust* (+ (vx centre) (* radius (cos a))) (vy centre)
-                             (+ (vz centre) (* radius (sin a))) container))))))
+                             (+ (vz centre) (* radius (sin a))) container)
+          (kick-grit (+ (vx centre) (* radius (cos a))) (vy centre) (+ (vz centre) (* radius (sin a)))))))))
 
 (defgeneric leap-landed (leaper)
   (:documentation "LEAPER, alive, has just come down from a leap, or from a fall that cut one
@@ -394,6 +396,9 @@ short: the ogre's quake, by default.")
       (setf (recover ogre) (leap-recover-time ogre))
       (stop-walking ogre (leap-recover-time ogre))
       (play-sound :ogre-land at)
+      ;; Its maul comes down in front of it.
+      (let ((yaw (facing ogre)))
+        (floor-sparks (+ (vx at) (* *slam-impact* (sin yaw))) (vy at) (- (vz at) (* *slam-impact* (cos yaw)))))
       ;; Brought down by the spear's counter, it lands in a heap: no quake.
       (unless (impaled ogre)
         (quake ogre at *quake-radius* *quake-damage* *quake-shove* *quake-player-shove* *quake-player-lift*

@@ -771,6 +771,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (when *player* (reset-player *player*))
   (setf *hit-stop* 0.0)
   (clear-blood)
+  (clear-sparks)
   ;; A new run explores the level afresh.
   (clear-map-reveals)
   (restore-pickups)

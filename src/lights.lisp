@@ -116,6 +116,7 @@ within *TORCH-WALL-REACH*, if there is one."
            (base (/ (getf atlas :overlay-bottom) (getf atlas :cell-height)))
            (torch (make-instance 'torch :animation animation
                                         :location (vec x (+ y (* (- base 0.5) *torch-size*)) z))))
+      (add-torch-embers x y z (* base *torch-size*))
       (vector-push-extend
        (location (add-lamp (vec x (+ y (* 0.5 base *torch-size*)) z) *torch-color* *torch-radius*
                            :flicker *torch-flicker*))

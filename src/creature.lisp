@@ -699,6 +699,7 @@ seen from FROM is one its shield covers, and the maul hasn't knocked it aside (R
 and a moment's brace, unless it's in the middle of an attack."
   (setf (flash creature) (max (flash creature) (* 0.4 *flash-time*))
         (alert creature) (alert-time))
+  (shield-sparks creature)
   (unless (eq (brain creature) :attacking)
     (setf (brace creature) *block-time*)
     (stop-walking creature *block-time*))

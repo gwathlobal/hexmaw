@@ -329,14 +329,14 @@ HIGH TT of the way to NX NZ, lies in the cut-away half."
                  (z (if (= axis 2) (aref s (if high 5 2)) (+ (aref p (+ b 2)) (* tt (- nz (aref p (+ b 2))))))))
              (< (%wedge-depth s x z x z) -1f-5)))))
 
-(defun reflect-off-diagonal (v b s)
-  "Turn the velocity at V, from index B, back off wedge S's diagonal, as a bounce."
+(defun reflect-off-diagonal (v b s &optional (bounce *gib-bounce*))
+  "Turn the velocity at V, from index B, back off wedge S's diagonal, as a bounce keeping BOUNCE of it."
   (multiple-value-bind (cu cv) (cut-sides (solid-cut s))
     ;; Mirroring about a 45° wall swaps the horizontal parts, signed by its normal.
     (let ((sign (* (if (= cu 1) -1 1) (if (= cv 1) 1 -1)))
           (vx (aref v b)) (vz (aref v (+ b 2))))
-      (setf (aref v b) (* sign vz *gib-bounce*)
-            (aref v (+ b 2)) (* sign vx *gib-bounce*)))))
+      (setf (aref v b) (* sign vz bounce)
+            (aref v (+ b 2)) (* sign vx bounce)))))
 
 (defun land-drop (pool i s nx ny nz)
   "Drop I of POOL has moved from where it is to NX NY NZ, into solid S: stick it where it

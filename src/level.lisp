@@ -107,6 +107,7 @@ grudge. Returns them."
         (fill-pointer *creatures*) 0
         (fill-pointer *lamps*) 0
         (fill-pointer *torch-points*) 0
+        (fill-pointer *ember-sources*) 0
         (fill-pointer *vortices*) 0
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
