@@ -35,6 +35,7 @@
                (:file "liquids")
                (:file "waterfall")
                (:file "gore")
+               (:file "sparks")
                (:file "spells")
                (:file "player")
                (:file "magic")

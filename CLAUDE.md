@@ -734,6 +734,39 @@ real time instead.
   python3 tools/slice_frames.py art/gibs/flesh-gibs-2.png art/gibs/strips --pixel 9 --filter box --colors 32 flesh:8
   tools/draw_blood.py data/sprites/blood/blood --gibs imp=art/gibs/strips/imp --gibs flesh=art/gibs/strips/flesh --gibs bones=art/gibs/strips/bones
   ```
+- `src/sparks.lisp`: sparks, embers and grit, simulated like the blood (`spark-pool`,
+  `*spark-pool*`, entered by `add-spark-pool` in `setup-scene`): plain arrays of `*max-sparks*`
+  (512) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
+  allocated a frame. They draw no art: each is a quad in the view plane on which the shader lays
+  whole texels of the 64-a-metre grid, at least a pixel each (`view_rows`), in three colours of the
+  house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`), fullbright,
+  unfogged and opaque. A **spark** is a streak, its tail as far behind its head as it moves across
+  the view in `*spark-streak-time*`, 1 to `*spark-max-streak*` (9) texels, the first third its
+  ramp's hotter colour; it falls under `*spark-gravity*`, bounces off solids (`bounce-spark`, on
+  gore's `crossed-face`, `move-to-face` and `reflect-off-diagonal`), lies on a floor it strikes
+  slower than `*spark-rest-speed*`, cools down its ramp over `*spark-life*` and goes. An **ember**
+  climbs to the rise it left at, wanders on two crossed waves, keeps its heat longer and blinks
+  out over the last `*ember-blink*` of its life; rock or a liquid puts it out. **Grit** (a texel,
+  or a 2 × 2 chip lit from the upper left, `*grit-big-chance*`) falls, bounces once, settles for
+  `*grit-rest*` and dissolves a texel at a time. A liquid swallows any of them.
+  `(spray-sparks at dir count &key kind ramp speed spread)` throws them (DIR NIL: up, any way above
+  level); the hooks are `shield-sparks` (off a shield's face, its ward's violet for anyone but a
+  knight: `block-hit`, so a spell, bash or sweep glancing off, and a sword or spear blow on a
+  covered view, `swing-strike`), `strike-sparks` (the spear's counter, `*counter-sparks*`; the
+  maul's blow, `*maul-sparks*` 6 to 26 by charge, faster too), `floor-sparks` (the earthshake, in
+  front of the player; the ogre's landing and slam, where its maul comes down) and `kick-grit`,
+  from `kick-dust` (ogre.lisp), `*grit-per-puff*` round every dust puff. Embers rise from
+  `*ember-sources*` (`add-torch-embers` from `add-torch`, `add-lava-embers` from `add-liquid` for a
+  surface that glows, as many as its area, `*lava-ember-area*`; `clear-level` empties them), each on
+  its own timer, only within `*ember-reach*` of the player (`send-up-embers`), and only while the
+  world runs; they never take a slot from a blow's sparks (`spark-slot`'s AMBIENT). A save leaves
+  them out, as status auras are, and `reset-run` clears the pool (`clear-sparks`). `map-hot-sparks`
+  hands a glow layer every spark and ember (place, heat, ramp); nothing calls it yet.
+  `tools/spark_shots.sh DIR` stages a shot of each hook (`BEFORE=1` without the pool), stepping the
+  pool by hand while the world is frozen. Cost, 495 particles in the middle of the view, world
+  frozen, vsync off: GPU 2.32 ms a frame against 2.30 with none, writing the buffer 0.07 ms of CPU
+  and a tick of `step-sparks` 0.08 ms; under llvmpipe ("Slow machines") 120.4 against 119.3–119.8
+  ms at full scale and 41.4–41.6 against 40.9–41.3 at ½.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
   projectile delivery, the player's `bolt` and `heal`, the acolyte's `cinder` and the necromancer's
   `grave-skull` and `grave-spikes`. An effect has a kind, a magnitude range, a duration, an area, a

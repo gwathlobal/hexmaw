@@ -37,6 +37,7 @@ the screen's middle: held in both hands, the spear points where the player looks
 ;;; wide arc, to clear space, and no enchantment.
 
 (defparameter *counter-damage* '(18 26) "Damage of a thrust that meets a charge.")
+(defparameter *counter-sparks* 12 "Sparks the spearhead throws as it meets a charge.")
 (defparameter *counter-knockback* 5.0 "Speed in m/s a counter throws the creature back.")
 (defparameter *counter-pain-bonus* 100
   "Percent a counter adds to a boss's PAIN-CHANCE: anything else always flinches.")
@@ -80,6 +81,7 @@ broken (IMPALE)."
   (let ((feet (feet player)))
     (setf (spear-jolt player) *spear-jolt-time*)
     (play-sound :spear-impale (location target))
+    (strike-sparks target feet *counter-sparks*)
     (impale target)
     (hurt target (roll *counter-damage*) :from feet :by player
                                           :pain-bonus *counter-pain-bonus*

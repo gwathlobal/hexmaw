@@ -106,6 +106,7 @@ RGBA-ICON would put them. An icon that won't load only logs."
       ;; And the sigils they rise from.
       (preload (make-instance 'summon-sigil :centre (vec 0 0 0) :animation (find-fx-animation 'summon-sigil)) scene)))
   (add-blood-pool scene)
+  (add-spark-pool scene)
   (add-settlement-director scene)
   (add-hud scene)
   (add-inventory-view scene)

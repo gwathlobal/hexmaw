@@ -7,6 +7,21 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Sparks, embers and grit.** Hexmaw's impacts were all strips playing in place; now blows throw
+  simulated particles (`src/sparks.lisp`), built as the blood pool is: 512 slots of plain arrays, one
+  stream-draw buffer, one draw call, nothing allocated a frame, no art (the shader lays whole
+  64-a-metre texels in palette colours, fullbright and opaque). Sparks are two-tone streaks as long as
+  their speed across the view, falling, bouncing off solids and cooling down a three-colour ramp:
+  off a shield (the knight's steel, a ward's violet) whenever a spell, bash, sweep, sword or spear
+  glances off it, from the spear's counter, from the maul's blow (more and faster with the charge)
+  and where an earthshake or an ogre's maul hits the floor. Grit flies from every dust puff, bounces
+  once, settles and dissolves. Embers rise from torches and lava near the player, each source on its
+  own timer, and blink out. Left out of saves. The idea of the kinds is pixelfx's (Patch and Hugo
+  Duprez), written anew for 3D; no code was taken. `tools/spark_shots.sh` stages each hook. GPU cost
+  is within noise (2.32 ms a frame against 2.30 with 495 particles in view), and about 1% under
+  llvmpipe. For players' CHANGELOG at the next release: "Blows on steel and stone throw sparks and
+  grit, and embers rise from torches and lava."
+
 - **Camera shake for heavy blows.** The view jerks up and down and across and rolls, about 21
   screen pixels at 720 rows at full strength, swinging back and forth some seven times as it dies
   away evenly over 0.5 s (eased out, as first made, it was one nod: a slam seemed to shake once), when the maul lands (strongest

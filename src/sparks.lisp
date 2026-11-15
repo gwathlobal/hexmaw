@@ -1,0 +1,611 @@
+(in-package #:hexmaw)
+
+;;; Sparks, embers and grit: one pool of tiny simulated particles, built like the blood pool
+;;; (gore.lisp): plain arrays of *MAX-SPARKS* slots, written each frame into one stream-draw
+;;; vertex buffer and drawn in one call, each particle a quad in the view plane. They are
+;;; fullbright, unfogged and opaque, as effects are, and they draw no art: the shader lays
+;;; whole texels of the 64-a-metre grid (*TEXELS-PER-METRE*) in colours of the house palette.
+;;;
+;;; - A spark is a streak of 1 to *SPARK-MAX-STREAK* texels, its length how far it moves
+;;;   across the view in *SPARK-STREAK-TIME*, two-toned (a hot head, a cooler tail). It
+;;;   falls, bounces off what it hits and cools down its ramp's three colours, then goes.
+;;; - An ember rises, wanders and blinks out (torches, lava): a short streak, as a spark is.
+;;; - Grit is a texel or a 2 x 2 chip that falls, bounces once, settles and dissolves.
+;;;
+;;; The kinds are reworked for 3D from the idea of pixelfx's simulated particles (Patch and
+;;; Hugo Duprez, MIT); nothing is lifted from its code. They are left out of saves, as
+;;; status auras are: a load starts with none in flight.
+
+(defparameter *max-sparks* 512 "Slots in the spark pool. Past that a new spark takes the next slot, whatever it holds.")
+(defparameter *spark-streak-time* 0.025 "Seconds of a spark's movement across the view its streak covers.")
+(defparameter *spark-max-streak* 9 "Most texels a streak is long.")
+
+(defparameter *spark-gravity* 12.0 "Metres per second² a spark falls by.")
+(defparameter *spark-drag* 1.5 "Fraction of its speed a spark loses per second to the air.")
+(defparameter *spark-bounce* 0.4 "Fraction of its speed into a surface a spark bounces back with.")
+(defparameter *spark-friction* 0.6 "Fraction of its speed along the floor a spark keeps when it bounces.")
+(defparameter *spark-rest-speed* 0.6 "A spark striking the floor slower than this, in m/s, lies there until it cools.")
+(defparameter *spark-speed* '(3.0 7.5) "Slowest and fastest a spark leaves at, in m/s.")
+(defparameter *spark-spread* 0.8 "Radians either side of the way they are thrown that sparks fan out.")
+(defparameter *spark-life* '(0.3 0.75) "Least and most seconds a spark lasts, cooling all the while.")
+
+(defparameter *ember-rise* '(0.4 1.0) "Least and most m/s an ember rises at.")
+(defparameter *ember-buoyancy* 2.5 "How fast, per second, an ember's climb comes to its rise.")
+(defparameter *ember-wander* 1.2 "M/s² of an ember's sideways wandering.")
+(defparameter *ember-damping* 1.5 "Fraction of its sideways speed an ember loses per second.")
+(defparameter *ember-life* '(0.9 2.0) "Least and most seconds an ember lasts.")
+(defparameter *ember-blink* 0.4 "The last fraction of an ember's life, in which it blinks out.")
+(defparameter *ember-blink-rate* 14.0 "Blinks a second while an ember goes out.")
+
+(defparameter *grit-gravity* 9.8)
+(defparameter *grit-drag* 0.5)
+(defparameter *grit-bounce* 0.3 "Fraction of its speed into the floor grit bounces back with, the once.")
+(defparameter *grit-friction* 0.4 "Fraction of its speed along the floor grit keeps when it bounces.")
+(defparameter *grit-speed* '(1.0 3.2))
+(defparameter *grit-spread* 1.1)
+(defparameter *grit-rest* '(0.8 1.8) "Least and most seconds settled grit lies before it dissolves.")
+(defparameter *grit-dissolve-time* 0.6 "Seconds grit takes to dissolve, a texel at a time.")
+(defparameter *grit-big-chance* 0.35 "Chance a piece of grit is a 2 x 2 chip, not one texel.")
+(defparameter *grit-flight* 3.0 "Seconds grit flies before it goes, if it lands nowhere.")
+
+;; Three colours of art/style/palette.txt each, hottest (or lightest) first.
+(defparameter *spark-ramps*
+  '((:steel "fceab6" "fcb918" "c76733")   ; Steel on steel or stone.
+    (:ward "efc9fc" "c58bfd" "6f23b4")    ; A boss's or elite's ward.
+    (:fire "fcb918" "fb6403" "ac0f07")    ; A torch's embers.
+    (:lava "fcb918" "fe901f" "f11402")    ; Lava's.
+    (:dust "c3b698" "a08a71" "77613d"))   ; Grit, as pale as the ogre's dust.
+  "Per ramp: its name and three hex colours from the house palette.")
+
+(defun spark-ramp-colors ()
+  (let ((colors (make-array (* 9 (length *spark-ramps*)) :element-type 'single-float)))
+    (loop for (nil . hexes) in *spark-ramps*
+          for o from 0 by 9
+          do (loop for hex in hexes
+                   for k from o by 3
+                   do (dotimes (c 3)
+                        (setf (aref colors (+ k c))
+                              (/ (parse-integer hex :start (* 2 c) :end (+ 2 (* 2 c)) :radix 16) 255f0)))))
+    colors))
+
+(defparameter *spark-ramp-colors* (spark-ramp-colors) "*SPARK-RAMPS*' colours, nine floats a ramp.")
+
+(defun spark-ramp-index (name)
+  (or (position name *spark-ramps* :key #'first)
+      (error "No spark ramp ~s." name)))
+
+(defvar *spark-pool* NIL "The spark pool in the current scene.")
+
+;; Each vertex: position (3), velocity (3), head colour (3), tail colour (3), then the
+;; quad's corner (2, 0 or 1), the size in texels (1; above 1 a square chip, else a streak)
+;; and dissolve (1, 0 to 1), and a seed (1) for the dissolve's order.
+(defparameter *spark-vertex-floats* 17)
+
+(define-shader-entity spark-pool (renderable listener)
+  ((size :reader pool-size)
+   (cursor :initform 0 :accessor pool-cursor :documentation "Where the search for a free slot starts.")
+   (state :reader pool-state
+          :documentation "Per particle: 0 free, 1 a flying spark, 2 a spark lying cooling, 3 an ember,
+4 flying grit, 5 settled grit, 6 dissolving grit.")
+   (ramp :reader pool-ramp :documentation "Per particle: its ramp, an index into *SPARK-RAMPS*.")
+   (chip :reader pool-chip :documentation "Per grit: its size in texels; per particle else 1.")
+   (tone :reader pool-tone :documentation "Per grit: the colour of its ramp it is, 1 or 2.")
+   (bounces :reader pool-bounces)
+   (positions :reader pool-positions)
+   (velocities :reader pool-velocities)
+   (ages :reader pool-ages)
+   (lives :reader pool-lives :documentation "Per particle: seconds it lasts, or settled grit lies.")
+   (seeds :reader pool-seeds :documentation "Per particle: a random number, 0 to 2 pi, for its wander and blink.")
+   (rises :reader pool-rises :documentation "Per ember: the m/s it climbs toward.")
+   (data :reader pool-data :documentation "Vertex data, 6 vertices per particle.")
+   (vbo :reader pool-vbo)
+   (vao :reader pool-vao)))
+
+(defmethod initialize-instance :after ((pool spark-pool) &key)
+  (let* ((n *max-sparks*)
+         (data (make-array (* n 6 *spark-vertex-floats*) :element-type 'single-float :initial-element 0f0))
+         (vbo (make-instance 'vertex-buffer :buffer-data data :data-usage :stream-draw))
+         (stride (* 4 *spark-vertex-floats*)))
+    (flet ((bytes () (make-array n :element-type '(unsigned-byte 8) :initial-element 0))
+           (floats (&optional (k 1)) (make-array (* k n) :element-type 'single-float :initial-element 0f0)))
+      (setf (slot-value pool 'size) n
+            (slot-value pool 'state) (bytes)
+            (slot-value pool 'ramp) (bytes)
+            (slot-value pool 'chip) (bytes)
+            (slot-value pool 'tone) (bytes)
+            (slot-value pool 'bounces) (bytes)
+            (slot-value pool 'positions) (floats 3)
+            (slot-value pool 'velocities) (floats 3)
+            (slot-value pool 'ages) (floats)
+            (slot-value pool 'lives) (floats)
+            (slot-value pool 'seeds) (floats)
+            (slot-value pool 'rises) (floats)))
+    (setf (slot-value pool 'data) data
+          (slot-value pool 'vbo) vbo
+          (slot-value pool 'vao) (make-instance 'vertex-array
+                                                :vertex-form :triangles
+                                                :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
+                                                            (,vbo :size 3 :offset 12 :stride ,stride :index 1)
+                                                            (,vbo :size 3 :offset 24 :stride ,stride :index 2)
+                                                            (,vbo :size 3 :offset 36 :stride ,stride :index 3)
+                                                            (,vbo :size 4 :offset 48 :stride ,stride :index 4)
+                                                            (,vbo :size 1 :offset 64 :stride ,stride :index 5))))))
+
+(defmethod stage :after ((pool spark-pool) (area staging-area))
+  (stage (pool-vao pool) area))
+
+(defun add-spark-pool (scene)
+  (setf *spark-pool* (make-instance 'spark-pool))
+  (enter *spark-pool* scene))
+
+(defun clear-sparks ()
+  "Take every spark, ember and piece of grit away."
+  (when *spark-pool*
+    (fill (pool-state *spark-pool*) 0)
+    (setf (pool-cursor *spark-pool*) 0)))
+
+(defun spark-slot (pool ambient)
+  "The next free slot of POOL after the last one taken. With none free, the slot after it
+whatever it holds, unless AMBIENT (an ember from a torch), when NIL: a blow's sparks matter more."
+  (let* ((state (pool-state pool))
+         (n (pool-size pool))
+         (start (pool-cursor pool))
+         (i (or (loop for k from 0 below n
+                      for j = (mod (+ start k) n)
+                      when (= 0 (aref state j)) return j)
+                (if ambient (return-from spark-slot NIL) start))))
+    (declare (type (simple-array (unsigned-byte 8) (*)) state)
+             (type fixnum n start))
+    (setf (pool-cursor pool) (mod (1+ i) n))
+    i))
+
+(defun spawn-spark (state ramp x y z vx vy vz life &key (chip 1) (tone 1) ambient)
+  "Put a particle in state STATE (see SPARK-POOL) of ramp index RAMP at X Y Z, moving at VX VY
+VZ m/s, for LIFE seconds. Returns its slot, or NIL if AMBIENT and the pool is full."
+  (let* ((pool *spark-pool*)
+         (i (and pool (spark-slot pool ambient))))
+    (when i
+      (let ((p (pool-positions pool))
+            (v (pool-velocities pool))
+            (b (* 3 i)))
+        (setf (aref (pool-state pool) i) state
+              (aref (pool-ramp pool) i) ramp
+              (aref (pool-chip pool) i) chip
+              (aref (pool-tone pool) i) tone
+              (aref (pool-bounces pool) i) 0
+              (aref (pool-ages pool) i) 0f0
+              (aref (pool-lives pool) i) (float life 0f0)
+              (aref (pool-seeds pool) i) (random #.(float (* 2 pi) 0f0))
+              (aref (pool-rises pool) i) (float vy 0f0)
+              (aref p b) (float x 0f0) (aref p (+ b 1)) (float y 0f0) (aref p (+ b 2)) (float z 0f0)
+              (aref v b) (float vx 0f0) (aref v (+ b 1)) (float vy 0f0) (aref v (+ b 2)) (float vz 0f0))
+        i))))
+
+(defun spray-sparks (at dir count &key (kind :spark) ramp speed spread)
+  "Throw COUNT particles of KIND (:SPARK, :EMBER or :GRIT) from point AT, fanned SPREAD radians
+about the direction DIR (any length; NIL for up, and by default any way above level). RAMP
+names their colours in *SPARK-RAMPS*, SPEED is the least and most m/s they leave at."
+  (when *spark-pool*
+    (let* ((ramp (spark-ramp-index (or ramp (ecase kind (:spark :steel) (:ember :fire) (:grit :dust)))))
+           (speed (or speed (ecase kind (:spark *spark-speed*) (:ember *ember-rise*) (:grit *grit-speed*))))
+           (spread (float (or spread (if dir
+                                         (ecase kind (:spark *spark-spread*) (:ember 0.4) (:grit *grit-spread*))
+                                         (/ pi 2)))
+                          0f0))
+           (dx (if dir (float (vx dir) 0f0) 0f0))
+           (dy (if dir (float (vy dir) 0f0) 1f0))
+           (dz (if dir (float (vz dir) 0f0) 0f0))
+           (len (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+      (if (< len 1f-5)
+          (setf dx 0f0 dy 1f0 dz 0f0)
+          (setf dx (/ dx len) dy (/ dy len) dz (/ dz len)))
+      ;; Two directions square to DIR and each other, to fan about it.
+      (multiple-value-bind (ux uy uz)
+          (if (< (abs dy) 0.9)
+              (let ((l (sqrt (+ (* dx dx) (* dz dz))))) (values (/ (- dz) l) 0f0 (/ dx l)))
+              (let ((l (sqrt (+ (* dy dy) (* dz dz))))) (values 0f0 (/ dz l) (/ (- dy) l))))
+        (let ((wx (- (* dy uz) (* dz uy)))
+              (wy (- (* dz ux) (* dx uz)))
+              (wz (- (* dx uy) (* dy ux))))
+          (dotimes (n count)
+            (let* ((theta (* spread (sqrt (random 1f0))))
+                   (phi (random #.(float (* 2 pi) 0f0)))
+                   (s (range-random speed))
+                   (c (cos theta)) (r (sin theta))
+                   (a (* r (cos phi))) (bb (* r (sin phi)))
+                   (vx (* s (+ (* c dx) (* a ux) (* bb wx))))
+                   (vy (* s (+ (* c dy) (* a uy) (* bb wy))))
+                   (vz (* s (+ (* c dz) (* a uz) (* bb wz)))))
+              (ecase kind
+                (:spark (spawn-spark 1 ramp (vx at) (vy at) (vz at) vx vy vz (range-random *spark-life*)))
+                (:ember (spawn-spark 3 ramp (vx at) (vy at) (vz at) vx vy vz (range-random *ember-life*)))
+                (:grit (spawn-spark 4 ramp (vx at) (vy at) (vz at) vx vy vz *grit-flight*
+                                    :chip (if (< (random 1f0) *grit-big-chance*) 2 1)
+                                    :tone (+ 1 (random 2))))))))))))
+
+;;; Where sparks come from in the game.
+
+(defparameter *shield-sparks* 10 "Sparks a blow or spell glancing off a shield throws.")
+(defparameter *shield-spark-height* 0.55 "Height of a shield's face, as a fraction of its bearer's.")
+
+(defun shield-sparks (creature &optional (count *shield-sparks*))
+  "Throw sparks off the face of CREATURE's shield, the way it faces: steel off a knight's,
+its ward's violet off anyone else's."
+  (let* ((yaw (facing creature))
+         (fx (sin yaw)) (fz (- (cos yaw)))
+         (loc (location creature))
+         (r (* 0.9 (body-radius creature))))
+    (spray-sparks (vec (+ (vx loc) (* r fx)) (+ (vy loc) (* *shield-spark-height* (sprite-height creature))) (+ (vz loc) (* r fz)))
+                  (vec fx 0.35 fz) count
+                  :ramp (if (typep creature 'knight) :steel :ward))))
+
+(defun strike-sparks (creature from count &key (speed *spark-speed*))
+  "Throw COUNT sparks from where a blow from point FROM strikes CREATURE: its front toward FROM,
+at the height a wound bleeds, back toward FROM and up."
+  (let* ((loc (location creature))
+         (dx (- (vx from) (vx loc)))
+         (dz (- (vz from) (vz loc)))
+         (len (max 1f-4 (sqrt (+ (* dx dx) (* dz dz)))))
+         (r (* 0.8 (body-radius creature))))
+    (setf dx (/ dx len) dz (/ dz len))
+    (spray-sparks (vec (+ (vx loc) (* r dx)) (+ (vy loc) (* *blood-wound-height* (sprite-height creature))) (+ (vz loc) (* r dz)))
+                  (vec dx 0.5 dz) count :speed speed)))
+
+(defparameter *grit-per-puff* 7 "Grit each puff of dust throws (KICK-DUST, ogre.lisp).")
+
+(defun kick-grit (x y z &optional (count *grit-per-puff*))
+  (spray-sparks (vec x (+ y 0.05) z) NIL count :kind :grit))
+
+(defparameter *floor-sparks* 12 "Sparks a heavy blow on the floor throws: the ogre's maul, the player's earthshake.")
+
+(defun floor-sparks (x y z &optional (count *floor-sparks*))
+  (spray-sparks (vec x (+ y 0.03) z) NIL count :spread 1.2))
+
+;;; Embers rise from torches and lava, each source on its own timer, only near the player.
+
+(defparameter *ember-reach* 14.0 "Metres from the player within which a source sends up embers.")
+(defparameter *torch-embers* '(0.3 0.8) "Least and most seconds between a torch's embers.")
+(defparameter *lava-ember-area* 1.0 "Square metres of lava per ember a second.")
+
+(defvar *ember-sources* (make-array 32 :adjustable T :fill-pointer 0)
+  "Per source: x y z, the half-sizes it spreads over along x, y and z, its timer, its least and
+most seconds between embers, its ramp index and its rise, all single floats. CLEAR-LEVEL
+empties it.")
+
+(defun add-ember-source (x y z hx hy hz lo hi ramp &optional (rise 1.0))
+  (vector-push-extend (make-array 11 :element-type 'single-float
+                                     :initial-contents (mapcar (lambda (v) (float v 0f0))
+                                                               (list x y z hx hy hz (random (float hi 0f0)) lo hi
+                                                                     (spark-ramp-index ramp) rise)))
+                      *ember-sources*))
+
+(defun add-torch-embers (x y z flame)
+  "A torch's flame, FLAME metres tall, stands on X Y Z: embers leave from its upper half."
+  (destructuring-bind (lo hi) *torch-embers*
+    (add-ember-source x (+ y (* 0.75 flame)) z 0.04 (* 0.2 flame) 0.04 lo hi :fire)))
+
+(defun add-lava-embers (x0 z0 x1 z1 top)
+  "Embers off a lava surface at TOP from X0 Z0 to X1 Z1, as many as its area."
+  (let* ((area (max 0.25 (* (- x1 x0) (- z1 z0))))
+         (mean (/ *lava-ember-area* area)))
+    (add-ember-source (* 0.5 (+ x0 x1)) (+ top 0.04) (* 0.5 (+ z0 z1)) (* 0.5 (- x1 x0)) 0.0 (* 0.5 (- z1 z0))
+                      (* 0.5 mean) (* 1.5 mean) :lava 1.6)))
+
+(defun send-up-embers (pool dt)
+  (declare (type single-float dt) (ignore pool))
+  (when *player*
+    (let* ((eye (location *player*))
+           (ex (vx eye)) (ey (vy eye)) (ez (vz eye))
+           (reach2 (expt (float *ember-reach* 0f0) 2)))
+      (declare (type single-float ex ey ez reach2))
+      (loop for s across *ember-sources*
+            do (let ((s s))
+                 (declare (type (simple-array single-float (11)) s))
+                 (when (< (+ (expt (- (aref s 0) ex) 2) (expt (- (aref s 1) ey) 2) (expt (- (aref s 2) ez) 2)) reach2)
+                   (when (<= (decf (aref s 6) dt) 0f0)
+                     (setf (aref s 6) (+ (aref s 7) (random (max 1f-3 (- (aref s 8) (aref s 7))))))
+                     (flet ((jitter (h) (if (< 0f0 h) (- (random (* 2 h)) h) 0f0)))
+                       (let ((rise (* (aref s 10) (range-random *ember-rise*))))
+                         (spawn-spark 3 (floor (aref s 9))
+                                      (+ (aref s 0) (jitter (aref s 3))) (+ (aref s 1) (jitter (aref s 4))) (+ (aref s 2) (jitter (aref s 5)))
+                                      (jitter 0.15) rise (jitter 0.15) (range-random *ember-life*)
+                                      :ambient T))))))))))
+
+;;; Flight.
+
+(defun bounce-spark (pool i s nx ny nz restitution friction rest-speed)
+  "Particle I of POOL moved from where it is to NX NY NZ, into solid S: put it on the face it
+crossed and bounce it back off it. Returns :REST if it struck the floor slower than
+REST-SPEED (and so stays on it), :GONE if it was inside already, else NIL."
+  (declare (type (simple-array single-float (*)) s)
+           (type single-float nx ny nz restitution friction rest-speed))
+  (let ((p (pool-positions pool))
+        (v (pool-velocities pool))
+        (b (* 3 i)))
+    (declare (type (simple-array single-float (*)) p v))
+    (multiple-value-bind (axis high tt) (crossed-face p b s nx ny nz)
+      (cond ((diagonal-entry-p p b s axis high tt nx nz)
+             (reflect-off-diagonal v b s restitution)
+             NIL)
+            ((< axis 0) :gone)
+            (T
+             (move-to-face p b s axis high tt nx ny nz)
+             (let ((into (abs (aref v (+ b axis))))
+                   (floor-p (and (= axis 1) high)))
+               (cond ((and floor-p (< into rest-speed))
+                      (setf (aref v b) 0f0 (aref v (+ b 1)) 0f0 (aref v (+ b 2)) 0f0)
+                      (incf (aref p (+ b 1)) 0.002)
+                      :rest)
+                     (T
+                      (setf (aref v (+ b axis)) (* (if high into (- into)) restitution))
+                      (incf (aref p (+ b axis)) (if high 0.002 -0.002))
+                      (when floor-p
+                        (setf (aref v b) (* (aref v b) friction)
+                              (aref v (+ b 2)) (* (aref v (+ b 2)) friction)))
+                      NIL))))))))
+
+(defun step-sparks (pool dt)
+  (declare (type single-float dt))
+  (let ((state (pool-state pool))
+        (bounces (pool-bounces pool))
+        (p (pool-positions pool))
+        (v (pool-velocities pool))
+        (ages (pool-ages pool))
+        (lives (pool-lives pool))
+        (seeds (pool-seeds pool))
+        (rises (pool-rises pool))
+        (spark-keep (max 0f0 (- 1f0 (* (float *spark-drag* 0f0) dt))))
+        (grit-keep (max 0f0 (- 1f0 (* (float *grit-drag* 0f0) dt))))
+        (spark-fall (* (float *spark-gravity* 0f0) dt))
+        (grit-fall (* (float *grit-gravity* 0f0) dt))
+        (buoyancy (min 1f0 (* (float *ember-buoyancy* 0f0) dt)))
+        (wander (* (float *ember-wander* 0f0) dt))
+        (damping (max 0f0 (- 1f0 (* (float *ember-damping* 0f0) dt))))
+        (spark-bounce (float *spark-bounce* 0f0))
+        (spark-friction (float *spark-friction* 0f0))
+        (spark-rest (float *spark-rest-speed* 0f0))
+        (grit-bounce (float *grit-bounce* 0f0))
+        (grit-friction (float *grit-friction* 0f0))
+        (dissolve (float *grit-dissolve-time* 0f0)))
+    (declare (type (simple-array (unsigned-byte 8) (*)) state bounces)
+             (type (simple-array single-float (*)) p v ages lives seeds rises)
+             (type single-float spark-keep grit-keep spark-fall grit-fall buoyancy wander damping
+                   spark-bounce spark-friction spark-rest grit-bounce grit-friction dissolve))
+    (dotimes (i (pool-size pool))
+      (let ((st (aref state i))
+            (b (* 3 i)))
+        (unless (= 0 st)
+          (let ((age (incf (aref ages i) dt)))
+            (declare (type single-float age))
+            (case st
+              ((1 3 4)
+               (case st
+                 (1 (decf (aref v (+ b 1)) spark-fall)
+                  (dotimes (k 3) (setf (aref v (+ b k)) (* spark-keep (aref v (+ b k))))))
+                 (3 (let ((seed (aref seeds i)))
+                      ;; Two waves crossed, so no two embers drift alike; its climb comes to its rise.
+                      (incf (aref v b) (* wander (sin (+ (* age 2.3) seed))))
+                      (incf (aref v (+ b 2)) (* wander (cos (+ (* age 1.7) (* 1.3 seed)))))
+                      (setf (aref v b) (* damping (aref v b))
+                            (aref v (+ b 2)) (* damping (aref v (+ b 2))))
+                      (incf (aref v (+ b 1)) (* buoyancy (- (aref rises i) (aref v (+ b 1)))))))
+                 (4 (decf (aref v (+ b 1)) grit-fall)
+                  (dotimes (k 3) (setf (aref v (+ b k)) (* grit-keep (aref v (+ b k)))))))
+               (let* ((nx (+ (aref p b) (* dt (aref v b))))
+                      (ny (+ (aref p (+ b 1)) (* dt (aref v (+ b 1)))))
+                      (nz (+ (aref p (+ b 2)) (* dt (aref v (+ b 2)))))
+                      (s (solid-at nx ny nz)))
+                 (cond ((< (aref lives i) age) (setf (aref state i) 0))
+                       ((liquid-at nx ny nz) (setf (aref state i) 0))
+                       ((null s) (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz))
+                       ((= st 3) (setf (aref state i) 0)) ; An ember that meets rock goes out.
+                       ((= st 1)
+                        (case (bounce-spark pool i s nx ny nz spark-bounce spark-friction spark-rest)
+                          (:gone (setf (aref state i) 0))
+                          (:rest (setf (aref state i) 2))))
+                       (T
+                        ;; Grit bounces once, then settles where it next comes down.
+                        (case (bounce-spark pool i s nx ny nz grit-bounce grit-friction
+                                            (if (< 0 (aref bounces i)) 1f6 0.8))
+                          (:gone (setf (aref state i) 0))
+                          (:rest (setf (aref state i) 5 (aref ages i) 0f0
+                                       (aref lives i) (float (range-random *grit-rest*) 0f0)))
+                          (T (setf (aref bounces i) 1)))))))
+              (2 (when (< (aref lives i) age) (setf (aref state i) 0)))
+              (5 (when (< (aref lives i) age) (setf (aref state i) 6 (aref ages i) 0f0)))
+              (6 (when (< dissolve age) (setf (aref state i) 0))))))))))
+
+(define-handler (spark-pool tick) (dt)
+  (unless (frozen-p)
+    (let ((dt (float (min dt 0.05) 0f0)))
+      (send-up-embers spark-pool dt)
+      (step-sparks spark-pool dt))))
+
+;;; Drawing.
+
+(defparameter *spark-corners* (coerce '(0 0 1 0 1 1 0 0 1 1 0 1) '(simple-array (unsigned-byte 8) (12))))
+
+(defun spark-heat (pool i)
+  "How far particle I of POOL has cooled, 0 to 1 over its life."
+  (min 1f0 (/ (aref (pool-ages pool) i) (max 1f-3 (aref (pool-lives pool) i)))))
+
+(defun write-spark-vertices (pool)
+  "Write every live particle's quad into POOL's vertex data. Returns the vertex count."
+  (let* ((state (pool-state pool))
+         (ramps (pool-ramp pool))
+         (chips (pool-chip pool))
+         (tones (pool-tone pool))
+         (p (pool-positions pool))
+         (v (pool-velocities pool))
+         (ages (pool-ages pool))
+         (lives (pool-lives pool))
+         (seeds (pool-seeds pool))
+         (data (pool-data pool))
+         (colors *spark-ramp-colors*)
+         (corners *spark-corners*)
+         (stride *spark-vertex-floats*)
+         (blink (float *ember-blink* 0f0))
+         (blink-rate (float *ember-blink-rate* 0f0))
+         (dissolve (float *grit-dissolve-time* 0f0))
+         (half-texel (/ 0.5 *texels-per-metre*))
+         (k 0))
+    (declare (type (simple-array (unsigned-byte 8) (*)) state ramps chips tones corners)
+             (type (simple-array single-float (*)) p v ages lives seeds data colors)
+             (type single-float blink blink-rate dissolve half-texel)
+             (type fixnum k stride))
+    (dotimes (i (pool-size pool))
+      (let ((st (aref state i)))
+        (unless (= 0 st)
+          (let* ((b (* 3 i))
+                 (age (aref ages i))
+                 (heat (max 0f0 (min 0.999f0 (/ age (max 1f-3 (aref lives i))))))
+                 ;; Embers keep their heat longer, and go out blinking.
+                 (stage (truncate (the (single-float 0f0 3f0) (* 3f0 (if (= st 3) (* heat heat) heat)))))
+                 (ramp (* 9 (aref ramps i)))
+                 (chip (aref chips i))
+                 (head (+ ramp (* 3 (case st ((4 5 6) (- (aref tones i) 1)) (T stage)))))
+                 (tail (+ ramp (* 3 (case st ((4 5 6) (aref tones i)) (T (min 2 (1+ stage)))))))
+                 ;; Sparks and embers streak as they move; the rest are still.
+                 (moving (or (= st 1) (= st 3)))
+                 ;; Lying on the floor, a particle stands on it rather than half in it.
+                 (lift (case st ((2 5 6) (* chip half-texel)) (T 0f0)))
+                 (fade (if (= st 6) (min 1f0 (/ age dissolve)) 0f0))
+                 (shown (or (/= st 3)
+                            (let ((out (/ (- heat (- 1f0 blink)) blink)))
+                              (or (<= out 0f0)
+                                  (let ((phase (the (single-float 0f0 1f6) (+ (* age blink-rate) (aref seeds i)))))
+                                    (< out (- phase (float (truncate phase) 0f0)))))))))
+            (declare (type single-float heat lift fade) (type fixnum stage ramp head tail))
+            (when shown
+              (loop for c from 0 below 12 by 2
+                    for o = (* k stride)
+                    do (setf (aref data o) (aref p b)
+                             (aref data (+ o 1)) (+ lift (aref p (+ b 1)))
+                             (aref data (+ o 2)) (aref p (+ b 2))
+                             (aref data (+ o 3)) (if moving (aref v b) 0f0)
+                             (aref data (+ o 4)) (if moving (aref v (+ b 1)) 0f0)
+                             (aref data (+ o 5)) (if moving (aref v (+ b 2)) 0f0)
+                             (aref data (+ o 6)) (aref colors head)
+                             (aref data (+ o 7)) (aref colors (+ head 1))
+                             (aref data (+ o 8)) (aref colors (+ head 2))
+                             (aref data (+ o 9)) (aref colors tail)
+                             (aref data (+ o 10)) (aref colors (+ tail 1))
+                             (aref data (+ o 11)) (aref colors (+ tail 2))
+                             (aref data (+ o 12)) (float (aref corners c) 0f0)
+                             (aref data (+ o 13)) (float (aref corners (1+ c)) 0f0)
+                             (aref data (+ o 14)) (float chip 0f0)
+                             (aref data (+ o 15)) fade
+                             (aref data (+ o 16)) (aref seeds i))
+                       (incf k)))))))
+    k))
+
+(defun map-hot-sparks (function)
+  "Call FUNCTION with x, y, z, how far it has cooled (0 to 1) and its ramp's name for every spark
+and ember in the pool: a hook for a glow layer to put halos round them. Nothing calls it yet."
+  (let ((pool *spark-pool*))
+    (when pool
+      (let ((p (pool-positions pool)))
+        (dotimes (i (pool-size pool))
+          (when (<= 1 (aref (pool-state pool) i) 3)
+            (funcall function (aref p (* 3 i)) (aref p (+ 1 (* 3 i))) (aref p (+ 2 (* 3 i)))
+                     (spark-heat pool i) (first (nth (aref (pool-ramp pool) i) *spark-ramps*)))))))))
+
+(defmethod render ((pool spark-pool) (program shader-program))
+  (let ((count (write-spark-vertices pool)))
+    (when (< 0 count)
+      (update-buffer-data (pool-vbo pool) (pool-data pool) :count (* count *spark-vertex-floats* 4))
+      (setf (uniform program "view_matrix") (view-matrix))
+      (setf (uniform program "projection_matrix") (projection-matrix))
+      (setf (uniform program "texels_per_metre") (float *texels-per-metre* 0f0))
+      (setf (uniform program "streak_time") (float *spark-streak-time* 0f0))
+      (setf (uniform program "max_streak") (float *spark-max-streak* 0f0))
+      (setf (uniform program "view_rows") (float (render-size (height *context*)) 0f0))
+      (render-array (pool-vao pool) :vertex-count count))))
+
+(define-class-shader (spark-pool :vertex-shader)
+  "layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 velocity;
+layout (location = 2) in vec3 in_head;
+layout (location = 3) in vec3 in_tail;
+layout (location = 4) in vec4 in_params;
+layout (location = 5) in float in_seed;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+uniform float texels_per_metre;
+uniform float streak_time;
+uniform float max_streak;
+uniform float view_rows;
+out vec2 texel_pos;
+flat out vec2 seg;
+flat out vec3 head;
+flat out vec3 tail;
+flat out float chip;
+flat out float fade;
+flat out float seed;
+
+void main(){
+  vec4 view_position = view_matrix * vec4(position, 1.0);
+  chip = in_params.z;
+  vec2 d = vec2(0.0);
+  vec2 lo, hi;
+  if(chip > 1.5){
+    lo = vec2(-0.5 * chip);
+    hi = vec2(0.5 * chip);
+  }else{
+    // The tail trails the head as far as the spark moves across the view in STREAK_TIME,
+    // in whole texels, at most MAX_STREAK of them along the longer axis.
+    vec2 back = -(mat3(view_matrix) * velocity).xy * (streak_time * texels_per_metre);
+    float m = max(abs(back.x), abs(back.y));
+    if(m > max_streak - 1.0) back *= (max_streak - 1.0) / m;
+    d = floor(back + 0.5);
+    lo = min(vec2(0.0), d) - 0.5;
+    hi = max(vec2(0.0), d) + 0.5;
+  }
+  texel_pos = mix(lo, hi, in_params.xy);
+  // A texel is never drawn smaller than a pixel, so a far streak stays a whole line.
+  float pixels_per_metre = projection_matrix[1][1] * 0.5 * view_rows / max(0.001, -view_position.z);
+  view_position.xy += texel_pos * max(1.0 / texels_per_metre, 1.0 / pixels_per_metre);
+  gl_Position = projection_matrix * view_position;
+  seg = d;
+  head = in_head;
+  tail = in_tail;
+  fade = in_params.w;
+  seed = in_seed;
+}")
+
+(define-class-shader (spark-pool :fragment-shader)
+  "in vec2 texel_pos;
+flat in vec2 seg;
+flat in vec3 head;
+flat in vec3 tail;
+flat in float chip;
+flat in float fade;
+flat in float seed;
+out vec4 color;
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+void main(){
+  vec3 c;
+  if(chip > 1.5){
+    // A chip of grit, lit from the upper left: its top-left texel the lighter tone.
+    vec2 t = floor(texel_pos + 0.5 * chip);
+    c = (t.x < 0.5 && t.y > chip - 1.5) ? head : tail;
+    if(fade > 0.0 && hash(t + seed) < fade) discard;
+  }else{
+    // A streak from the head's texel (0, 0) to SEG, a texel per step along the longer axis.
+    vec2 t = floor(texel_pos + 0.5);
+    bool along_x = abs(seg.x) >= abs(seg.y);
+    float m = along_x ? t.x : t.y;
+    float dm = along_x ? seg.x : seg.y;
+    float minor = along_x ? t.y : t.x;
+    float dminor = along_x ? seg.y : seg.x;
+    float k = (dm == 0.0) ? 0.0 : m / dm;
+    if(k < 0.0 || k > 1.0 || (dm == 0.0 && m != 0.0)) discard;
+    if(minor != floor(k * dminor + 0.5)) discard;
+    float count = abs(dm) + 1.0;
+    c = (abs(m) < max(1.0, floor(count / 3.0))) ? head : tail;
+    if(fade > 0.0 && hash(vec2(seed)) < fade) discard;
+  }
+  color = vec4(c, 1.0);
+}")

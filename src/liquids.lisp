@@ -193,6 +193,9 @@ CONTAINER: the volume, its surface and, if it glows, the lamps over it."
                    (vec (aref s 0) (- top 0.04) (aref s 2)) (vec (aref s 3) top (aref s 5)) :surface kind)
     ;; A liquid that fills its space to a ceiling (a flooded passage) shows no surface.
     (unless (solid-overlapping (/ (+ (aref s 0) (aref s 3)) 2) (+ top 0.01) (/ (+ (aref s 2) (aref s 5)) 2) 0.05 0.05)
+      ;; What glows sends up embers.
+      (when (liquid-property kind :glow)
+        (add-lava-embers (aref s 0) (aref s 2) (aref s 3) (aref s 5) top))
       (enter (make-instance (liquid-property kind :surface)
                             :surface-texture (// 'hexmaw (liquid-property kind :texture))
                             :location (vec (/ (+ (aref s 0) (aref s 3)) 2) top (/ (+ (aref s 2) (aref s 5)) 2))

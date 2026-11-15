@@ -286,6 +286,9 @@ be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
 The spear's thrust counters a charge instead (spear.lisp).")
   (:method (player weapon target)
     (play-sound (if (bleeds target) :blade-hit-flesh :blade-hit-bone) (location target))
+    ;; The shield doesn't stop the blade, but the blade rings off it.
+    (when (shielded-p target (feet player))
+      (shield-sparks target))
     (hurt target (roll (swing-damage weapon)) :from (feet player) :by player
                                               :pain-bonus (swing-pain-bonus weapon))
     (push-creature target (v- (location target) (feet player))
