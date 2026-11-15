@@ -7,10 +7,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
-- **Camera shake for heavy blows.** The view shakes a few centimetres and rolls a little, dying
-  away in a quarter second, when the maul lands (strongest at full charge), the earthshake strikes,
-  an ogre lands or slams nearby, the boss's Shockwave goes off, the player crashes into a wall or
-  floor, or takes a blow of 12 or more (`kick-camera`, player.lisp). It moves only the view matrix,
+- **Camera shake for heavy blows.** The view jerks up and down and across and rolls, about 21
+  screen pixels at 720 rows at full strength, dying away in 0.4 s, when the maul lands (strongest
+  at full charge), the earthshake strikes, an ogre lands or slams nearby, the boss's Shockwave goes
+  off, the player crashes into a wall or floor, or takes a blow of 8 or more (`kick-camera`,
+  player.lisp). It first moved the eye a few centimetres, which shifted nothing past a metre or two
+  by more than a pixel or two: an ogre's slam went unnoticed in play. It turns only the view matrix,
   so aim and hit tests don't shake, holds through hit-stop, shows only in play and is never saved.
   Settings has a Screen shake slider (`*screen-shake*`, kept in the settings file); at 0 it is off.
   The idea is pixelfx's {stop, shake, amp}; no code from it. For players' CHANGELOG at the next

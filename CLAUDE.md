@@ -1564,18 +1564,20 @@ real time instead.
   (`*breath-time*`, 20 s) runs down while the eye is under water and comes back at
   `*breath-refill*`; with none left the player drowns, `*drown-damage*` a second
   (`update-breath`, through `burn-due`). **Camera shake** for heavy blows: `(kick-camera strength)`
-  (0 to 1; a kick weaker than what is left of the running one does nothing) swings the view up to
-  `*camera-shake-offset*` (3.5 cm) right and up and rolls it up to `*camera-shake-roll*` (0.02 rad),
-  to and fro `*camera-shake-rate*` (30) times a second, eased out over `*camera-shake-time*` (0.25 s),
-  times Settings' Screen shake (`*screen-shake*`, saved). `kick-camera-from` scales a kick by distance
-  (full within 2 m, nothing past its reach). It moves only the view matrix (`project-view`), never
-  `location`, so aim, hearing and hit tests stay put; it runs in the player's tick (`update-camera-shake`,
-  allocating nothing), so it holds through hit-stop and starts after it, shows only in `:playing`, draws
-  from `random` and isn't saved. Kicks: the maul's blow (`*maul-camera-shake*` 0.3 to 0.65 by charge,
-  `*maul-full-camera-shake*` 0.85 full), the earthshake (`*shake-camera-shake*` 0.5), the ogre's landing
-  (`*quake-camera-shake*` 0.8, to 14 m) and slam (0.45, to 8 m), the boss's Shockwave (0.95, to 18 m), a
-  crash (`hit-surface`, `*camera-shake-impact*` 0.25 to 0.8 by damage) and a shoved blow taken of
-  `*camera-shake-hurt-from*` (12) or more (`hurt-shake`, up to 0.6 at 30). Not the sword or spear.
+  (0 to 1; a kick weaker than what is left of the running one does nothing) jerks the view's pitch and
+  yaw up to `*camera-shake-angle*` (0.045 rad, about 21 screen pixels at 720 rows) and its roll up to
+  `*camera-shake-roll*` (0.03 rad), to and fro `*camera-shake-rate*` (20) times a second, eased out over
+  `*camera-shake-time*` (0.4 s), times Settings' Screen shake (`*screen-shake*`, saved): moving the eye a
+  few centimetres instead shifted nothing past a metre or two by more than a pixel. `kick-camera-from`
+  scales a kick by distance (full within 2 m, nothing past its reach). It turns only the view matrix
+  (`project-view`), never `location` or `rotation`, so aim, hearing and hit tests stay put; it runs in the
+  player's tick (`update-camera-shake`, allocating nothing), so it holds through hit-stop and starts after
+  it, shows only in `:playing`, draws from `random` and isn't saved. Kicks: the maul's blow
+  (`*maul-camera-shake*` 0.45 to 0.8 by charge, `*maul-full-camera-shake*` 1 full), the earthshake
+  (`*shake-camera-shake*` 0.7), the ogre's landing (`*quake-camera-shake*` 1, to 16 m) and slam (0.7, to
+  10 m), the boss's Shockwave (1, to 20 m), a crash (`hit-surface`, `*camera-shake-impact*` 0.4 to 1 by
+  damage) and a shoved blow taken of `*camera-shake-hurt-from*` (8) or more (`hurt-shake`, 0.3 to 0.9 at
+  25: an ogre's slam that lands, 14 to 22, is 0.5 to 0.8). Not the sword or spear.
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or

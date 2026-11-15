@@ -39,12 +39,12 @@
 (defparameter *leap-recover* 1.2 "Seconds it stands after landing.")
 (defparameter *leap-cooldown* 6.0 "Seconds from one leap to the next.")
 (defparameter *leap-hit-stop* 0.12 "Hit-stop on landing.")
-(defparameter *quake-camera-shake* 0.8
+(defparameter *quake-camera-shake* 1.0
   "Strength of the camera shake (KICK-CAMERA-FROM, player.lisp) a landing's quake gives the
 player within 2 m of it, falling off to nothing *QUAKE-SHAKE-REACH* off.")
-(defparameter *quake-shake-reach* 14.0)
-(defparameter *slam-camera-shake* 0.45 "The same for the slam's impact, felt out to *SLAM-SHAKE-REACH*.")
-(defparameter *slam-shake-reach* 8.0)
+(defparameter *quake-shake-reach* 16.0)
+(defparameter *slam-camera-shake* 0.7 "The same for the slam's impact, felt out to *SLAM-SHAKE-REACH*.")
+(defparameter *slam-shake-reach* 10.0)
 (defparameter *leap-debug* NIL "When true, log why each leap was refused.")
 
 (defparameter *quake-radius* 3.5 "Metres from its centre that the landing's shockwave reaches.")
