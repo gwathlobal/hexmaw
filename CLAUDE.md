@@ -1568,7 +1568,7 @@ real time instead.
   yaw up to `*camera-shake-angle*` (0.045 rad, about 21 screen pixels at 720 rows) and its roll up to
   `*camera-shake-roll*` (0.03 rad), to and fro `*camera-shake-rate*` (15) times a second, each swing at
   least `*camera-shake-swing*` (0.6) of the most, falling evenly to nothing over `*camera-shake-time*`
-  (0.5 s), times Settings' Screen shake (`*screen-shake*`, saved). Moving the eye a few centimetres
+  (0.5 s), unless Settings' Screen shake is off (`*screen-shake*`, a toggle, saved). Moving the eye a few centimetres
   instead shifted nothing past a metre or two by more than a pixel, and a fade eased out (squared) with
   swings down to 0.4 was one nod and some wiggles: an ogre's slam seemed to shake the view once. `kick-camera-from`
   scales a kick by distance (full within 2 m, nothing past its reach). It turns only the view matrix

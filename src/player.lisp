@@ -478,7 +478,7 @@ which walking would otherwise cancel: the drag moves it but stays out of its vel
 ;;; comes first, then the shake), shows only in play, draws from RANDOM, never *ROLL-RANDOM*,
 ;;; and nothing of it is saved.
 
-(defvar *screen-shake* 1.0 "How strong camera shake is, 0 (none) to 1 (Settings).")
+(defvar *screen-shake* T "True if heavy blows shake the view (Settings).")
 (defparameter *camera-shake-angle* 0.045 "Radians the view pitches and turns at most at full strength.")
 (defparameter *camera-shake-roll* 0.03 "Radians the view rolls at most at full strength.")
 (defparameter *camera-shake-time* 0.5 "Seconds a shake takes to die away, whatever its strength.")
@@ -495,7 +495,7 @@ which walking would otherwise cancel: the drag moves it but stays out of its vel
   "Shake PLAYER's view with STRENGTH, 0 to 1 (more is taken as 1). A kick weaker than what the
 shake running has left does nothing."
   (let ((strength (min 1.0 (float strength 0f0))))
-    (when (and player (< 0.0 strength) (< 0.0 *screen-shake*) (< (camera-shake-left player) strength))
+    (when (and player (< 0.0 strength) *screen-shake* (< (camera-shake-left player) strength))
       ;; From rest, it swings out from the middle, a random way.
       (when (<= (shake-strength player) 0.0)
         (vsetf (shake-from player) 0.0 0.0 0.0)
@@ -542,7 +542,7 @@ Eased out (squared), it was down to a quarter by 0.2 s: one nod and some wiggles
                  (vsetf to (next (vx from) *camera-shake-angle*) (next (vy from) *camera-shake-angle*)
                         (next (vz from) *camera-shake-roll*))))
              (let ((u (/ (shake-step player) swing))
-                   (k (* (camera-shake-left player) *screen-shake*)))
+                   (k (camera-shake-left player)))
                (vsetf offset (* k (+ (vx from) (* u (- (vx to) (vx from)))))
                       (* k (+ (vy from) (* u (- (vy to) (vy from)))))
                       (* k (+ (vz from) (* u (- (vz to) (vz from))))))))))))

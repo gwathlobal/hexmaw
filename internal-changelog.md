@@ -15,9 +15,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   player.lisp). It first moved the eye a few centimetres, which shifted nothing past a metre or two
   by more than a pixel or two: an ogre's slam went unnoticed in play. It turns only the view matrix,
   so aim and hit tests don't shake, holds through hit-stop, shows only in play and is never saved.
-  Settings has a Screen shake slider (`*screen-shake*`, kept in the settings file); at 0 it is off.
+  Settings has a Screen shake checkbox (`*screen-shake*`, kept in the settings file) to turn it off.
   The idea is pixelfx's {stop, shake, amp}; no code from it. For players' CHANGELOG at the next
-  release: "Heavy blows shake the view a little; Settings → Screen shake turns it down or off."
+  release: "Heavy blows shake the view; Settings → Screen shake turns it off."
 - **The mouse cursor no longer flickers over menu buttons.** Each mouse move over a button had
   Alloy set the hand (the button) and then the arrow (the layout tree and the ui, since nothing in
   Alloy takes a pointer move, so the move counted as unhandled). The cursor rested on the arrow and
