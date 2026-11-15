@@ -197,7 +197,17 @@ blow knocked it aside (BREAK-GUARD).")
    (breath-under :initform NIL :accessor breath-under :documentation "True if the eye was under water last tick.")
    (slide-sound :initform NIL :accessor slide-sound :documentation "The loop of a slide on ice, or NIL.")
    (underwater-sound :initform NIL :accessor underwater-sound :documentation "The loop heard under water, or NIL.")
-   (whirl-sound :initform NIL :accessor whirl-sound :documentation "The wind's loop while a vortex holds the player, or NIL.")))
+   (whirl-sound :initform NIL :accessor whirl-sound :documentation "The wind's loop while a vortex holds the player, or NIL.")
+   (shake-strength :initform 0.0 :accessor shake-strength
+                   :documentation "Strength, 0 to 1, of the camera shake running (KICK-CAMERA), or 0.")
+   (shake-age :initform 0.0 :accessor shake-age :documentation "Seconds of play since the shake's kick.")
+   (shake-step :initform 0.0 :accessor shake-step
+               :documentation "Seconds into the shake's swing from SHAKE-FROM to SHAKE-TO.")
+   (shake-from :initform (vec 0 0 0) :accessor shake-from
+               :documentation "Where the swing started: pitch, yaw and roll in radians, at full strength.")
+   (shake-to :initform (vec 0 0 0) :accessor shake-to :documentation "Where the swing ends.")
+   (shake-offset :initform (vec 0 0 0) :accessor shake-offset
+                 :documentation "The view's turn now, pitch, yaw and roll, applied by PROJECT-VIEW.")))
 
 ;; Trial's camera has no roll; the player's view rolls as it falls dead (FALL-DEAD).
 ;; The starting kit, in the bag and bound to its keys (GIVE-STARTING-KIT, inventory.lisp).
@@ -205,11 +215,17 @@ blow knocked it aside (BREAK-GUARD).")
   (give-starting-kit player))
 
 (defmethod project-view ((camera player))
-  (let ((rot (rotation camera))
-        (loc (location camera)))
+  (let* ((rot (rotation camera))
+         (loc (location camera))
+         (shake (camera-shake-view camera))
+         (roll (if shake (+ (vz rot) (vz shake)) (vz rot))))
     (reset-matrix (view-matrix))
-    (unless (= 0.0 (vz rot))
-      (rotate +vz+ (vz rot) (view-matrix)))
+    ;; The shake turns the view about its own axes, after it has turned.
+    (when shake
+      (rotate +vx+ (vx shake) (view-matrix))
+      (rotate +vy+ (vy shake) (view-matrix)))
+    (unless (= 0.0 roll)
+      (rotate +vz+ roll (view-matrix)))
     (rotate +vx+ (vx rot) (view-matrix))
     (rotate +vy+ (vy rot) (view-matrix))
     (translate-by (- (vx loc)) (- (vy loc)) (- (vz loc)) (view-matrix))))
@@ -451,6 +467,91 @@ which walking would otherwise cancel: the drag moves it but stays out of its vel
           (vy loc) (+ (vy feet) (float (eye player) 0f0))
           (vz loc) (vz feet))
     (setf *eye-underwater* (swim-liquid-at (vx loc) (vy loc) (vz loc)))))
+
+;;; Camera shake, for heavy blows: the maul's, the earthshake, the ogre's landing and slam,
+;;; the boss's shockwave, a crash, a hard blow taken. A kick of a strength from 0 to 1 jerks
+;;; the view to and fro, up and down and across, and rolls it, dying away over
+;;; *CAMERA-SHAKE-TIME*. At full strength that is about 21 screen pixels at 720 rows (moving the
+;;; eye a few centimetres instead was invisible past a metre or two). It turns only the view
+;;; matrix (PROJECT-VIEW): the eye's LOCATION and ROTATION, which aim, hear and are hit,
+;;; stay put. It holds while the world is frozen (a hit-stop
+;;; comes first, then the shake), shows only in play, draws from RANDOM, never *ROLL-RANDOM*,
+;;; and nothing of it is saved.
+
+(defvar *screen-shake* T "True if heavy blows shake the view (Settings).")
+(defparameter *camera-shake-angle* 0.045 "Radians the view pitches and turns at most at full strength.")
+(defparameter *camera-shake-roll* 0.03 "Radians the view rolls at most at full strength.")
+(defparameter *camera-shake-time* 0.5 "Seconds a shake takes to die away, whatever its strength.")
+(defparameter *camera-shake-rate* 15.0 "Swings a second: how often the shake picks a new point to swing to.")
+(defparameter *camera-shake-swing* 0.6 "The least part of the most a swing goes, the rest at random.")
+(defparameter *camera-shake-hurt-from* 8 "The least damage a blow taken must do to shake the view.")
+(defparameter *camera-shake-hurt-full* 25 "Damage of a blow taken that shakes it at *CAMERA-SHAKE-HURT*.")
+(defparameter *camera-shake-hurt* '(0.3 0.9)
+  "Strength of the shake from a blow taken: of *CAMERA-SHAKE-HURT-FROM* damage, and of *CAMERA-SHAKE-HURT-FULL*.")
+(defparameter *camera-shake-impact* '(0.4 1.0)
+  "Strength of the shake from a crash (HIT-SURFACE): the least impact's, and one of *IMPACT-MAX*.")
+
+(defun kick-camera (strength &optional (player *player*))
+  "Shake PLAYER's view with STRENGTH, 0 to 1 (more is taken as 1). A kick weaker than what the
+shake running has left does nothing."
+  (let ((strength (min 1.0 (float strength 0f0))))
+    (when (and player (< 0.0 strength) *screen-shake* (< (camera-shake-left player) strength))
+      ;; From rest, it swings out from the middle, a random way.
+      (when (<= (shake-strength player) 0.0)
+        (vsetf (shake-from player) 0.0 0.0 0.0)
+        (vsetf (shake-to player) (* *camera-shake-angle* (- (random 2.0) 1.0))
+               (* *camera-shake-angle* (- (random 2.0) 1.0)) (* *camera-shake-roll* (- (random 2.0) 1.0)))
+        (setf (shake-step player) 0.0))
+      (setf (shake-strength player) strength
+            (shake-age player) 0.0))))
+
+(defun kick-camera-from (at strength reach &optional (player *player*))
+  "A kick of STRENGTH from something at AT, the vec it struck: full within 2 m of PLAYER's
+feet and falling off to nothing REACH metres off."
+  (when player
+    (let* ((feet (feet player))
+           (d (sqrt (+ (expt (- (vx at) (vx feet)) 2) (expt (- (vy at) (vy feet)) 2)
+                       (expt (- (vz at) (vz feet)) 2)))))
+      (kick-camera (* strength (max 0.0 (min 1.0 (/ (- reach d) (- reach 2.0))))) player))))
+
+(defun camera-shake-left (player)
+  "The strength the shake running has left: its kick's, falling evenly to 0 over *CAMERA-SHAKE-TIME*.
+Eased out (squared), it was down to a quarter by 0.2 s: one nod and some wiggles, not a shake."
+  (let ((left (- 1.0 (/ (shake-age player) *camera-shake-time*))))
+    (if (< 0.0 left)
+        (* (shake-strength player) left)
+        0.0)))
+
+(defun update-camera-shake (player dt)
+  "Run PLAYER's shake on DT seconds of play: on to the next swing, and SHAKE-OFFSET where it is now."
+  (let ((offset (shake-offset player)))
+    (cond ((<= (shake-strength player) 0.0))
+          ((<= *camera-shake-time* (incf (shake-age player) dt))
+           (setf (shake-strength player) 0.0)
+           (vsetf offset 0.0 0.0 0.0))
+          (T
+           (let ((from (shake-from player))
+                 (to (shake-to player))
+                 (swing (/ 1.0 *camera-shake-rate*)))
+             (when (<= swing (incf (shake-step player) dt))
+               (setf (shake-step player) (mod (shake-step player) swing))
+               (v<- from to)
+               ;; To the other side each swing, by a random part of the way.
+               (flet ((next (was most)
+                        (* (if (< 0.0 was) -1.0 1.0) most (+ *camera-shake-swing* (random (- 1.0 *camera-shake-swing*))))))
+                 (vsetf to (next (vx from) *camera-shake-angle*) (next (vy from) *camera-shake-angle*)
+                        (next (vz from) *camera-shake-roll*))))
+             (let ((u (/ (shake-step player) swing))
+                   (k (camera-shake-left player)))
+               (vsetf offset (* k (+ (vx from) (* u (- (vx to) (vx from)))))
+                      (* k (+ (vy from) (* u (- (vy to) (vy from)))))
+                      (* k (+ (vz from) (* u (- (vz to) (vz from))))))))))))
+
+(defun camera-shake-view (player)
+  "PLAYER's shake offset for the view, or NIL when there is none to show: only in play."
+  (and (< 0.0 (shake-strength player))
+       (eq *game-state* :playing)
+       (shake-offset player)))
 
 ;;; Swimming, Quake-style: in water to the waist the player swims where they look (W and S
 ;;; along the view, A and D level), Space up and C or Ctrl down, against the water's drag,
@@ -702,6 +803,7 @@ and not the last step of the stair.")
     ;; Ease the eye toward standing or crouching height, then place the camera.
     (let ((target (if (and crouching (not (swimming player))) *crouch-eye-height* *eye-height*)))
       (setf (eye player) (+ (eye player) (* (- target (eye player)) (min 1.0 (* *eye-height-speed* dt))))))
+    (update-camera-shake player dt)
     (place-camera player)))
 
 (defun body-sounds (player dt)
@@ -737,8 +839,12 @@ slide on ice, of the water round an eye under it and of a vortex's wind."
   ;; No shove, so the shield can't help.
   (when (< threshold speed)
     (play-sound :body-impact)
-    (hurt-player player (impact-damage speed threshold) (feet player) :shove NIL
-                 :by (or by (if (or (whirl player) (flung player)) :tornado :impact)))
+    (let ((damage (impact-damage speed threshold)))
+      (hurt-player player damage (feet player) :shove NIL
+                   :by (or by (if (or (whirl player) (flung player)) :tornado :impact)))
+      (kick-camera (destructuring-bind (least most) *camera-shake-impact*
+                     (+ least (* (- most least) (/ damage *impact-max*))))
+                   player))
     (hit-stop)))
 
 (defun note-impacts (player vx0 vy0 vz0 dt)
@@ -918,10 +1024,20 @@ Returns true if the shield took the blow."
       (when shove
         (let ((k (if blocked *block-shove-scale* 1.0)))
           (shove-player player from (* k (if (eq shove T) *player-knockback* shove)) (and lift (* k lift))))
-        (hit-stop)))
+        (hit-stop)
+        (kick-camera (hurt-shake amount) player)))
     (when (<= (health player) 0)
       (player-dies player by))
     blocked))
+
+(defun hurt-shake (amount)
+  "The camera shake a blow taken of AMOUNT damage gives: none under *CAMERA-SHAKE-HURT-FROM*."
+  (if (< amount *camera-shake-hurt-from*)
+      0.0
+      (destructuring-bind (least most) *camera-shake-hurt*
+        (+ least (* (- most least)
+                    (min 1.0 (/ (- amount *camera-shake-hurt-from*)
+                                (float (- *camera-shake-hurt-full* *camera-shake-hurt-from*)))))))))
 
 (defun player-at-p (player point margin)
   "True if POINT lies in PLAYER's body, grown by MARGIN metres."

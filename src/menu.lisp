@@ -539,6 +539,7 @@ victory screens share."
     ("Mouse sensitivity" :slider *mouse-sensitivity-setting* sensitivity-text)
     ("Music volume" :slider *music-volume*)
     ("Sound volume" :slider *sound-volume*)
+    ("Screen shake" :toggle *screen-shake*)
     ("Show FPS" :toggle *show-fps*)
     ,@(when *debug-version* '(("Debug minimap" :toggle *map-debug*)))
     ("Controls" open-controls)
