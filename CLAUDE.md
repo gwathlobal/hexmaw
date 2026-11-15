@@ -1309,7 +1309,7 @@ real time instead.
   returns to it. It has Fullscreen (`*fullscreen*`), Render scale (`*render-scale-setting*`: the
   world drawn at a whole fraction of the window, full to a quarter, `render-divisor`), Mouse sensitivity
   (`*mouse-sensitivity-setting*`, shown as `sensitivity-text` writes it), Music and Sound
-  volume (`*music-volume*`, `*sound-volume*`, music.lisp), Show FPS (`*show-fps*`), Controls
+  volume (`*music-volume*`, `*sound-volume*`, music.lisp), Screen shake (`*screen-shake*`, player.lisp), Show FPS (`*show-fps*`), Controls
   (`open-controls`) and, in a debug version (`*debug-version*`), Debug minimap (`*map-debug*`:
   the automap shows every block, creature markers and block names, not kept in the file).
   The rows' variables are in `src/settings.lisp`. A toggle or slider row calls
@@ -1332,7 +1332,7 @@ real time instead.
   Windows; it follows `*save-directory*`, so the build's boot hook covers it), a plist written
   by `save-settings-file` (on closing Settings or Controls, after each rebinding or reset) and
   read by `load-settings-file`, which `launch` (main.lisp) calls before the window opens. It
-  keeps `*settings-variables*` (fullscreen, mouse sensitivity, the volumes, Show FPS; a new
+  keeps `*settings-variables*` (fullscreen, mouse sensitivity, the volumes, screen shake, Show FPS; a new
   setting is a `defvar` there and a row in `settings-menu`) and `:bindings`. A value of the wrong
   kind is ignored with a warning, an action the file doesn't name keeps its default
   (`merge-bindings`), and a file that can't be read leaves the defaults. Trial's own settings file
@@ -1596,7 +1596,23 @@ real time instead.
   (a ford's sill, a waterfall's lip), climbs out (`climb-out`, `ledge-ahead-p`). `breath`
   (`*breath-time*`, 20 s) runs down while the eye is under water and comes back at
   `*breath-refill*`; with none left the player drowns, `*drown-damage*` a second
-  (`update-breath`, through `burn-due`).
+  (`update-breath`, through `burn-due`). **Camera shake** for heavy blows: `(kick-camera strength)`
+  (0 to 1; a kick weaker than what is left of the running one does nothing) jerks the view's pitch and
+  yaw up to `*camera-shake-angle*` (0.045 rad, about 21 screen pixels at 720 rows) and its roll up to
+  `*camera-shake-roll*` (0.03 rad), to and fro `*camera-shake-rate*` (15) times a second, each swing at
+  least `*camera-shake-swing*` (0.6) of the most, falling evenly to nothing over `*camera-shake-time*`
+  (0.5 s), unless Settings' Screen shake is off (`*screen-shake*`, a toggle, saved). Moving the eye a few centimetres
+  instead shifted nothing past a metre or two by more than a pixel, and a fade eased out (squared) with
+  swings down to 0.4 was one nod and some wiggles: an ogre's slam seemed to shake the view once. `kick-camera-from`
+  scales a kick by distance (full within 2 m, nothing past its reach). It turns only the view matrix
+  (`project-view`), never `location` or `rotation`, so aim, hearing and hit tests stay put; it runs in the
+  player's tick (`update-camera-shake`, allocating nothing), so it holds through hit-stop and starts after
+  it, shows only in `:playing`, draws from `random` and isn't saved. Kicks: the maul's blow
+  (`*maul-camera-shake*` 0.45 to 0.8 by charge, `*maul-full-camera-shake*` 1 full), the earthshake
+  (`*shake-camera-shake*` 0.7), the ogre's landing (`*quake-camera-shake*` 1, to 16 m) and slam (0.7, to
+  10 m), the boss's Shockwave (1, to 20 m), a crash (`hit-surface`, `*camera-shake-impact*` 0.4 to 1 by
+  damage) and a shoved blow taken of `*camera-shake-hurt-from*` (8) or more (`hurt-shake`, 0.3 to 0.9 at
+  25: an ogre's slam that lands, 14 to 22, is 0.5 to 0.8). Not the sword or spear.
 - `src/level.lisp`: `build-level`, which builds the level `*level*` names (`:test`, `:gallery`
   or `:generated`), then links rooms and builds the nav grid; and the greybox test level
   (`build-test-level`). A new room or doorway in it needs its `add-room` / `add-portal`, or

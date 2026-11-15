@@ -50,6 +50,8 @@ then gets, as (\"ogre\" :fire-volley :summon :blink). NIL for the seed's choice.
 (defparameter *haste-speed* 1.35 "How much faster Haste makes its walk and its attacks.")
 (defparameter *boss-max-minions* 4 "Most summoned creatures alive at once that Summon still calls more with.")
 (defparameter *boss-quake-radius* 5.0 "Metres its Shockwave reaches.")
+(defparameter *boss-quake-camera-shake* 1.0 "Strength of the camera shake its Shockwave gives up close (KICK-CAMERA-FROM).")
+(defparameter *boss-quake-shake-reach* 20.0 "Metres off its Shockwave shakes the view no more.")
 (defparameter *boss-quake-damage* '(12 20))
 (defparameter *victory-delay* 2.0 "Seconds from the end of its death animation to the victory screen.")
 (defparameter *arena-trigger-depth* 2.0 "Metres inside the arena's doorway at which the gate drops.")
@@ -540,6 +542,7 @@ melee kind right behind it. A cell its body fits in the arena, in sight of the t
                (quake boss at *boss-quake-radius* *boss-quake-damage* *quake-shove* *quake-player-shove*
                       *quake-player-lift* :inner (body-radius boss))
                (kick-dust at (* 0.6 *boss-quake-radius*) *ogre-dust-puffs* (container boss))
+               (kick-camera-from at *boss-quake-camera-shake* *boss-quake-shake-reach*)
                (hit-stop *leap-hit-stop*))))
 
 ;; The wraith's tornado: the sign is drawn under the player when the cast begins, and the
