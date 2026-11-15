@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Camera shake for heavy blows.** The view shakes a few centimetres and rolls a little, dying
+  away in a quarter second, when the maul lands (strongest at full charge), the earthshake strikes,
+  an ogre lands or slams nearby, the boss's Shockwave goes off, the player crashes into a wall or
+  floor, or takes a blow of 12 or more (`kick-camera`, player.lisp). It moves only the view matrix,
+  so aim and hit tests don't shake, holds through hit-stop, shows only in play and is never saved.
+  Settings has a Screen shake slider (`*screen-shake*`, kept in the settings file); at 0 it is off.
+  The idea is pixelfx's {stop, shake, amp}; no code from it. For players' CHANGELOG at the next
+  release: "Heavy blows shake the view a little; Settings → Screen shake turns it down or off."
 - **The mouse cursor no longer flickers over menu buttons.** Each mouse move over a button had
   Alloy set the hand (the button) and then the arrow (the layout tree and the ui, since nothing in
   Alloy takes a pointer move, so the move counted as unhandled). The cursor rested on the arrow and

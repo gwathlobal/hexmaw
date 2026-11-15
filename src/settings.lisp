@@ -103,6 +103,7 @@ screen.")
     (:mouse-sensitivity *mouse-sensitivity-setting* :fraction)
     (:music-volume *music-volume* :fraction)
     (:sound-volume *sound-volume* :fraction)
+    (:screen-shake *screen-shake* :fraction)
     (:show-fps *show-fps* :boolean))
   "What the settings file keeps besides the bindings: its key, the variable and the kind of
 value, :BOOLEAN or :FRACTION (a number from 0 to 1).")
