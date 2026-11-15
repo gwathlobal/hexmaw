@@ -481,8 +481,9 @@ which walking would otherwise cancel: the drag moves it but stays out of its vel
 (defvar *screen-shake* 1.0 "How strong camera shake is, 0 (none) to 1 (Settings).")
 (defparameter *camera-shake-angle* 0.045 "Radians the view pitches and turns at most at full strength.")
 (defparameter *camera-shake-roll* 0.03 "Radians the view rolls at most at full strength.")
-(defparameter *camera-shake-time* 0.4 "Seconds a shake takes to die away, whatever its strength.")
-(defparameter *camera-shake-rate* 20.0 "Swings a second: how often the shake picks a new point to swing to.")
+(defparameter *camera-shake-time* 0.5 "Seconds a shake takes to die away, whatever its strength.")
+(defparameter *camera-shake-rate* 15.0 "Swings a second: how often the shake picks a new point to swing to.")
+(defparameter *camera-shake-swing* 0.6 "The least part of the most a swing goes, the rest at random.")
 (defparameter *camera-shake-hurt-from* 8 "The least damage a blow taken must do to shake the view.")
 (defparameter *camera-shake-hurt-full* 25 "Damage of a blow taken that shakes it at *CAMERA-SHAKE-HURT*.")
 (defparameter *camera-shake-hurt* '(0.3 0.9)
@@ -514,10 +515,11 @@ feet and falling off to nothing REACH metres off."
       (kick-camera (* strength (max 0.0 (min 1.0 (/ (- reach d) (- reach 2.0))))) player))))
 
 (defun camera-shake-left (player)
-  "The strength the shake running has left: its kick's, eased out to 0 over *CAMERA-SHAKE-TIME*."
+  "The strength the shake running has left: its kick's, falling evenly to 0 over *CAMERA-SHAKE-TIME*.
+Eased out (squared), it was down to a quarter by 0.2 s: one nod and some wiggles, not a shake."
   (let ((left (- 1.0 (/ (shake-age player) *camera-shake-time*))))
     (if (< 0.0 left)
-        (* (shake-strength player) left left)
+        (* (shake-strength player) left)
         0.0)))
 
 (defun update-camera-shake (player dt)
@@ -536,7 +538,7 @@ feet and falling off to nothing REACH metres off."
                (v<- from to)
                ;; To the other side each swing, by a random part of the way.
                (flet ((next (was most)
-                        (* (if (< 0.0 was) -1.0 1.0) most (+ 0.4 (random 0.6)))))
+                        (* (if (< 0.0 was) -1.0 1.0) most (+ *camera-shake-swing* (random (- 1.0 *camera-shake-swing*))))))
                  (vsetf to (next (vx from) *camera-shake-angle*) (next (vy from) *camera-shake-angle*)
                         (next (vz from) *camera-shake-roll*))))
              (let ((u (/ (shake-step player) swing))

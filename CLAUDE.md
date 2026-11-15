@@ -1566,9 +1566,11 @@ real time instead.
   (`update-breath`, through `burn-due`). **Camera shake** for heavy blows: `(kick-camera strength)`
   (0 to 1; a kick weaker than what is left of the running one does nothing) jerks the view's pitch and
   yaw up to `*camera-shake-angle*` (0.045 rad, about 21 screen pixels at 720 rows) and its roll up to
-  `*camera-shake-roll*` (0.03 rad), to and fro `*camera-shake-rate*` (20) times a second, eased out over
-  `*camera-shake-time*` (0.4 s), times Settings' Screen shake (`*screen-shake*`, saved): moving the eye a
-  few centimetres instead shifted nothing past a metre or two by more than a pixel. `kick-camera-from`
+  `*camera-shake-roll*` (0.03 rad), to and fro `*camera-shake-rate*` (15) times a second, each swing at
+  least `*camera-shake-swing*` (0.6) of the most, falling evenly to nothing over `*camera-shake-time*`
+  (0.5 s), times Settings' Screen shake (`*screen-shake*`, saved). Moving the eye a few centimetres
+  instead shifted nothing past a metre or two by more than a pixel, and a fade eased out (squared) with
+  swings down to 0.4 was one nod and some wiggles: an ogre's slam seemed to shake the view once. `kick-camera-from`
   scales a kick by distance (full within 2 m, nothing past its reach). It turns only the view matrix
   (`project-view`), never `location` or `rotation`, so aim, hearing and hit tests stay put; it runs in the
   player's tick (`update-camera-shake`, allocating nothing), so it holds through hit-stop and starts after
