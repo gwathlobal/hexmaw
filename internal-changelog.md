@@ -9,6 +9,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## November 16, 2026 v0.1.1
 
+- **Windows lets the game hold 2048 files open.** Every sound voice keeps its Vorbis file open,
+  and with 0.1.1's clips that came to 548 (534 sound voices, 14 tracks) against v0.1.0's 492; the
+  Universal C runtime allows 512, so the next voice failed (FILE-OPEN-FAILURE) and the release
+  run's Windows self-test failed on its first level. `raise-open-file-limit` (main.lisp, from
+  `start-sound`) calls `_setmaxstdio` with `*max-open-files*`, looked up in ucrtbase.dll when the
+  game starts rather than linked into the image, and logs the limit it got.
 - **CI's art audit updates the package index first.** Its `apt-get install` of Pillow and NumPy
   ran on the runner image's index, which named a Pillow build the mirror no longer had (404), and
   failed CI on the release commit before it built anything. It now runs `apt-get update` first,

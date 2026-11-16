@@ -7,12 +7,40 @@
    ;; Sound is set up below instead.
    :initialize-audio NIL))
 
+(defparameter *max-open-files* 2048
+  "Files the C runtime may have open at once on Windows (RAISE-OPEN-FILE-LIMIT).")
+
+(defun raise-open-file-limit ()
+  "On Windows, let the C runtime hold *MAX-OPEN-FILES* files open instead of its default 512.
+Every sound voice keeps its Vorbis file open (stb_vorbis's fopen, in the Universal C runtime the
+vorbis DLL and the process share), and 0.1.1's clips came to 548, so the voice past the limit
+failed to open (FILE-OPEN-FAILURE) and broke the scene's update. _setmaxstdio is looked up when
+the game starts, not linked when it is built: foreign symbols of our own crashed the Windows dump
+(TERMINATE-PROCESS, dist.lisp)."
+  #+win32
+  (handler-case
+      (progn
+        (sb-alien:load-shared-object "ucrtbase.dll" :dont-save T)
+        (let ((address (sb-sys:find-foreign-symbol-address "_setmaxstdio")))
+          (if address
+              (let ((limit (sb-alien:alien-funcall
+                            (sb-alien:sap-alien (sb-sys:int-sap address)
+                                                (function sb-alien:int sb-alien:int))
+                            *max-open-files*)))
+                (if (< 0 limit)
+                    (v:info :hexmaw "Open file limit: ~d." limit)
+                    (v:warn :hexmaw "The C runtime refused an open file limit of ~d." *max-open-files*)))
+              (v:warn :hexmaw "No _setmaxstdio in ucrtbase.dll: the open file limit stays at 512."))))
+    (error (e)
+      (v:warn :hexmaw "Couldn't raise the open file limit: ~a" e))))
+
 (defun start-sound (main)
   "Set up sound, as Trial's Harmony MAIN would (its :INITIALIZE-AUDIO is off). Trial falls back
 to a silent output on any failure only when compiled as a release (:trial-release), which
 this build isn't: otherwise just on DEVICE-NOT-FOUND. A Windows machine with no sound device
 fails otherwise (XAudio2: \"Element not found\"), and the game stopped at start behind an error
 box. With no sound, play on silently."
+  (raise-open-file-limit)
   (handler-case (apply #'org.shirakumo.fraf.trial.harmony:initialize-audio-backend main NIL
                        (org.shirakumo.fraf.trial.harmony:server-initargs main))
     (error (e)
