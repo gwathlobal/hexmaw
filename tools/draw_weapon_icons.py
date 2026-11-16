@@ -8,7 +8,8 @@ writes weapons.png (frames left to right, 2 px transparent gaps) and weapons.lis
 Frames, in order: the sword, a flame (a rune whose first effect is fire damage), the spear, the
 tornado (the tornado's rune), then a rune's icon for each other first effect (*SPELL-ICONS*,
 sword.lisp): frost damage a snowflake, shock a lightning bolt, drain a drop of blood, heal a cross,
-ward a shield, slow an hourglass, knockback a shockwave pushing right; then the maul. Each is SIZE art pixels
+ward a shield, slow an hourglass, knockback a shockwave pushing right; then the maul, and absorb
+a whirlpool winding in to a bright point (Absorb Projectiles, magic.lisp). Each is SIZE art pixels
 square, drawn in the palettes of the sword and bolt sprites, then outlined in near-black so it
 reads on any background. The top-left corner of each icon is left empty: the game draws the slot's key
 number there.
@@ -66,6 +67,7 @@ LOOKS = {
     "drain": ((255, 228, 236), (255, 140, 170), (232, 60, 104), (176, 24, 66), (110, 10, 40)),
     "heal": ((240, 255, 230), (176, 250, 150), (100, 220, 80), (44, 166, 44), (20, 104, 30)),
     "arcane": ((250, 232, 255), (230, 160, 255), (196, 90, 240), (140, 40, 196), (84, 20, 130)),
+    "absorb": ((240, 248, 255), (170, 205, 255), (90, 140, 245), (50, 84, 200), (26, 44, 130)),
 }
 
 
@@ -310,6 +312,28 @@ def shockwave():
     return drawn(paint)
 
 
+def whirlpool():
+    """Two arms of light winding in to a bright middle, as a projectile is drawn into an Absorb."""
+    pale, light, mid, dark, deep = LOOKS["absorb"]
+    px = {}
+    cx, cy = 10.5, 10.5
+    for arm in (0, math.pi):
+        for i in range(60):
+            t = i / 59
+            r = 8.2 * (1 - t) + 0.6
+            a = arm + 3.6 * t
+            c = dark if t < 0.35 else mid if t < 0.7 else light
+            x, y = int(cx + r * math.cos(a)), int(cy + r * math.sin(a))
+            px[(x, y)] = c + (255,)
+            # Thick at the rim, thinning as it winds in.
+            if t < 0.6:
+                x2, y2 = int(cx + (r - 1) * math.cos(a)), int(cy + (r - 1) * math.sin(a))
+                px.setdefault((x2, y2), deep + (255,))
+    for x, y in ((10, 10), (9, 10), (10, 9), (9, 9), (10, 11), (11, 10)):
+        px[(x, y)] = pale + (255,)
+    return px
+
+
 def outlined(px):
     out = dict(px)
     for (x, y) in px:
@@ -323,7 +347,7 @@ def main():
     out = Path(sys.argv[1])
     out.parent.mkdir(parents=True, exist_ok=True)
     icons = [sword(), flame(), spear(), tornado(), snowflake(), lightning(), blood_drop(), cross(),
-             shield(), hourglass(), shockwave(), maul()]
+             shield(), hourglass(), shockwave(), maul(), whirlpool()]
     strip = Image.new("RGBA", (len(icons) * SIZE + (len(icons) - 1) * GAP, SIZE), (0, 0, 0, 0))
     for i, icon in enumerate(icons):
         for (x, y), c in outlined(icon).items():

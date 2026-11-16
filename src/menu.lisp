@@ -596,6 +596,7 @@ victory screens share."
 
 (defun reset-player (player)
   "PLAYER back at the spawn point, looking north, with full health, mana and stamina."
+  (end-channel player)
   (respawn player)
   (setf (health player) *player-max-health*
         (pain player) 0.0
@@ -611,6 +612,8 @@ victory screens share."
         ;; No cast in progress, or its bolt would leave at the start of the next game.
         (cast-time player) NIL
         (pending-spell player) NIL
+        (overcharge player) 0.0
+        (last-cast player) NIL
         ;; Nor a maul's charge (maul.lisp).
         (charge-time player) NIL
         (attack-held player) NIL

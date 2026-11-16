@@ -1,4 +1,6 @@
 ;;; Written by tools/make_sfx.py: the sound effects in this folder.
+(:name "absorb-channel" :files ("absorb-channel.ogg") :seconds (3.0) :space NIL :loop T)
+(:name "absorb-take" :files ("absorb-take.ogg") :seconds (0.832) :space NIL :loop NIL)
 (:name "acolyte-alert" :files ("acolyte-alert.ogg") :seconds (1.2) :space T :loop NIL)
 (:name "acolyte-cast" :files ("acolyte-cast.ogg") :seconds (0.8) :space T :loop NIL)
 (:name "acolyte-death" :files ("acolyte-death.ogg") :seconds (1.4) :space T :loop NIL)
@@ -7,6 +9,8 @@
 (:name "bag-open" :files ("bag-open.ogg") :seconds (0.297) :space NIL :loop NIL)
 (:name "bash-glance" :files ("bash-glance.ogg") :seconds (0.6) :space T :loop NIL)
 (:name "bash-hit" :files ("bash-hit.ogg") :seconds (0.48) :space T :loop NIL)
+(:name "beam-cast" :files ("beam-cast.ogg") :seconds (0.8) :space NIL :loop NIL)
+(:name "beam-channel" :files ("beam-channel.ogg") :seconds (3.0) :space NIL :loop T)
 (:name "blade-hit-bone" :files ("blade-hit-bone.ogg") :seconds (0.48) :space T :loop NIL)
 (:name "blade-hit-flesh" :files ("blade-hit-flesh.ogg") :seconds (0.48) :space T :loop NIL)
 (:name "blink-in" :files ("blink-in.ogg") :seconds (1.2) :space T :loop NIL)

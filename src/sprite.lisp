@@ -152,4 +152,5 @@ void main(){
   vec3 glow = color.rgb * lamp * (1.0 - tint.a);
   color.rgb = mix(color.rgb * light, tint.rgb, tint.a) - glow;
   color.rgb = fog_lit(color.rgb, glow, length(v_view_position));
+  color.rgb = nova_sweep(color.rgb, v_world_position, false);
 }")

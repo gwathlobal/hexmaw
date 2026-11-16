@@ -180,6 +180,12 @@ uniform float fog_start;
 uniform float fog_end;
 uniform float lamp_fog_start;
 uniform float lamp_fog_end;
+uniform vec3 nova_centre;
+uniform float nova_radius;
+uniform float nova_width;
+uniform vec3 nova_color;
+uniform int nova_style;
+uniform float nova_trail;
 
 bool in_box(vec3 p, vec3 low, vec3 high){
   return all(greaterThanEqual(p, low)) && all(lessThanEqual(p, high));
@@ -273,6 +279,44 @@ vec3 fog_lit(vec3 color, vec3 glow, float dist){
   float fog = clamp((dist - fog_start) / (fog_end - fog_start), 0.0, 1.0);
   float lamp_fog = clamp((dist - lamp_fog_start) / (lamp_fog_end - lamp_fog_start), 0.0, 1.0);
   return mix(color, fog_color, fog) + glow * (1.0 - lamp_fog);
+}
+
+// A Nova's sphere where it cuts through a surface at P: a bright band just inside its radius,
+// on whole texels of the 64-a-metre grid, its trail behind dithered away. Fullbright, unfogged.
+// COLOR is the surface's; SURFACE false for a sprite, which takes the band but no mark behind it:
+// fire's scorch (darker texels) and frost's rime (pale ones) left where the band has passed.
+vec3 nova_sweep(vec3 color, vec3 p, bool surface){
+  if(nova_radius <= 0.0) return color;
+  vec3 q = (floor(p * 64.0) + 0.5) / 64.0;
+  float d = nova_radius - distance(q, nova_centre);
+  if(d < 0.0) return color;
+  float grain = fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+  if(d > 4.0 * nova_width){
+    if(!surface || nova_trail <= 0.0) return color;
+    // In soft blobs about a third of a metre across, ragged at their texels.
+    vec3 g = q * 3.0;
+    vec3 i0 = floor(g);
+    vec3 f = fract(g);
+    f = f * f * (3.0 - 2.0 * f);
+    float n000 = fract(sin(dot(i0, vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float n100 = fract(sin(dot(i0 + vec3(1,0,0), vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float n010 = fract(sin(dot(i0 + vec3(0,1,0), vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float n110 = fract(sin(dot(i0 + vec3(1,1,0), vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float n001 = fract(sin(dot(i0 + vec3(0,0,1), vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float n101 = fract(sin(dot(i0 + vec3(1,0,1), vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float n011 = fract(sin(dot(i0 + vec3(0,1,1), vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float n111 = fract(sin(dot(i0 + vec3(1,1,1), vec3(39.3468, 11.135, 83.155))) * 43758.5453);
+    float blot = mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+                     mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
+    float mark = step(blot, 0.3 * nova_trail) * step(grain, 0.55 + blot);
+    if(nova_style == 1) return color * (1.0 - 0.5 * mark);
+    if(nova_style == 2) return mix(color, vec3(0.8, 0.9, 1.0), 0.45 * mark);
+    return color;
+  }
+  if(d < nova_width * 0.35) return color + mix(nova_color, vec3(1.0), 0.6);
+  if(d < nova_width) return color + nova_color;
+  float keep = step(grain, 1.0 - (d - nova_width) / (3.0 * nova_width));
+  return color + nova_color * (0.55 * keep);
 }")
 
 (define-shader-entity greybox (lit-entity vertex-entity colored-entity transformed-entity)
@@ -300,6 +344,16 @@ vec3 fog_lit(vec3 color, vec3 glow, float dist){
   (unless (eql (gethash program *programs-this-frame*) *render-frame*)
     (setf (gethash program *programs-this-frame*) *render-frame*)))
 
+;; The newest nova's sphere, where it meets the level (NOVA_SWEEP; SPELL-NOVA, spells.lisp, keeps
+;; these): its centre and radius (0 for none), its band's width and colour, its look (0 force, 1 fire,
+;; 2 frost, 3 shock, 4 drain) and how strong the scorch or rime behind the band is (0 to 1).
+(defvar *nova-sweep-centre* (vec 0 0 0))
+(defvar *nova-sweep-radius* 0.0)
+(defvar *nova-sweep-width* 0.12)
+(defvar *nova-sweep-color* (vec 1.0 0.55 0.2))
+(defvar *nova-sweep-style* 0)
+(defvar *nova-sweep-trail* 0.0)
+
 (defun set-fog-uniforms (program)
   "Set the fog uniforms FOG_LIT reads (lit-entity), shared by every shader that fogs."
   (let ((under *eye-underwater*))
@@ -307,7 +361,13 @@ vec3 fog_lit(vec3 color, vec3 glow, float dist){
     (setf (uniform program "fog_start") (float (if under *underwater-fog-start* *fog-start*) 0f0))
     (setf (uniform program "fog_end") (float (if under *underwater-fog-end* *fog-end*) 0f0))
     (setf (uniform program "lamp_fog_start") (float (if under *underwater-lamp-fog-start* *lamp-fog-start*) 0f0))
-    (setf (uniform program "lamp_fog_end") (float (if under *underwater-lamp-fog-end* *lamp-fog-end*) 0f0))))
+    (setf (uniform program "lamp_fog_end") (float (if under *underwater-lamp-fog-end* *lamp-fog-end*) 0f0))
+    (setf (uniform program "nova_centre") *nova-sweep-centre*
+          (uniform program "nova_radius") (float *nova-sweep-radius* 0f0)
+          (uniform program "nova_width") (float *nova-sweep-width* 0f0)
+          (uniform program "nova_color") *nova-sweep-color*
+          (uniform program "nova_style") *nova-sweep-style*
+          (uniform program "nova_trail") (float *nova-sweep-trail* 0f0))))
 
 (defmethod render :before ((box greybox) (program shader-program))
   (when (first-this-frame-p program)
@@ -379,6 +439,7 @@ void main(){
   vec3 light = band_light(light_at(snap_position(v_world_position), face, 1.0, v_world_position + face * 0.05));
   vec3 lamp = lamp_part(light);
   color.rgb = fog_lit(surface * (light - lamp), surface * lamp, length(v_view_position));
+  color.rgb = nova_sweep(color.rgb, v_world_position, true);
 }")
 
 ;;; Solids are axis-aligned boxes stored as #(min-x min-y min-z max-x max-y max-z).

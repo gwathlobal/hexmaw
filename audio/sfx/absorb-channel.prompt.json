@@ -1,0 +1,21 @@
+{
+  "prompt": "Seamless loop of a low, deep electrical hum held steady: a warm humming drone like a transformer charged with magic, a soft low buzz under it, faint slow pulsing, the same loudness throughout, no crackle bursts, no sparks, no silence, no fade in, no fade out, no start or end. Retro 1990s fantasy game sound effect, dry, no music.",
+  "prompt_file": "audio/prompts/sfx-absorb-channel.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": true,
+  "duration_seconds": 3.0,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794800996,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    3.0,
+    3.0,
+    3.0
+  ]
+}

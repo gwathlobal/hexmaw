@@ -55,8 +55,10 @@ level it takes the rest from (RUN-LEVELS), so a key it leaves out comes from the
 (defparameter *loot-strike-kinds* '((:damage 6) (:drain 2) (:slow 1) (:knockback 1))
   "What a delivered spell's or a weapon's first effect is, by weight; a second or third is any
 other of them, alike.")
-(defparameter *loot-self-kinds* '((:heal 7) (:ward 3)) "What a spell cast on yourself's first effect is.")
-(defparameter *loot-deliveries* '((:projectile 13) (:touch 4) (:self 3)))
+(defparameter *loot-self-kinds* '((:heal 7) (:ward 3) (:absorb 1))
+  "What a spell cast on yourself's first effect is. An Absorb stands alone, so one drawn with others
+is drawn again (DRAFT-FAULT).")
+(defparameter *loot-deliveries* '((:projectile 10) (:seeker 3) (:beam 2) (:nova 2) (:touch 4) (:self 3)))
 (defparameter *loot-durations*
   '((:damage 0.25 (2 5)) (:heal 0.3 (3 8)) (:slow 1.0 (2 8)) (:ward 1.0 (6 20)))
   "(KIND CHANCE RANGE): the chance an effect of KIND lasts, and for how many seconds.")
@@ -102,18 +104,18 @@ COST-OF the draft's spell stays at most TARGET. Bisected, so the effects keep th
 
 (defun loot-rune-draft (random)
   "A draft for a generated rune of this level: its delivery, effects and dials drawn, sized to a
-cost in its :RUNE-MANA."
+power in its :RUNE-POWER. Its tier follows from what it is (SPELL-TIER)."
   (let* ((delivery (weighted-choice *loot-deliveries* random))
          (count (random-range (list 1 (loot-property :rune-effects *run-depth* 1)) random))
          (kinds (loot-kinds (if (eq delivery :self) *loot-self-kinds* *loot-strike-kinds*) count random))
          (draft (make-instance 'forge-draft :sink :new :delivery delivery
                                             :effects (mapcar (lambda (k) (loot-effect k random)) kinds))))
     ;; A burst, now and then: every effect that can spread does.
-    (when (and (eq delivery :projectile) (< (random 1.0 random) (loot-property :area-chance *run-depth* 0)))
+    (when (and (projectile-delivery-p delivery) (< (random 1.0 random) (loot-property :area-chance *run-depth* 0)))
       (let ((area (* 0.5 (random-range '(2 5) random))))
         (dolist (e (draft-effects draft))
           (setf (draft-area e) (min area (kind-property (draft-kind e) :area))))))
-    (size-draft draft #'spell-cost (random-range (loot-property :rune-mana *run-depth* '(10 18)) random) random)))
+    (size-draft draft #'spell-power (random-range (loot-property :rune-power *run-depth* '(10 18)) random) random)))
 
 (defun loot-enchantment (stack random)
   "A generated enchantment for the weapon STACK, sized to a cost a blow in its level's :ENCHANT-COST."
@@ -136,20 +138,20 @@ enchanted with the level's :ENCHANT-CHANCE."
       (setf (stack-enchantment stack) (loot-enchantment stack random)))
     stack))
 
-(defparameter *rune-mana-slack* 2
-  "How far under its level's :RUNE-MANA a generated rune may cost: one whose effects can't reach it
-(a knockback alone) is drawn again, as one the forge would refuse is.")
+(defparameter *rune-power-slack* 2
+  "How far under its level's :RUNE-POWER a generated rune's power may be: one whose effects can't
+reach it (a knockback alone) is drawn again, as one the forge would refuse is.")
 
 (defun make-loot-rune (random &optional spell)
   "A rune of this level, a stack (:RUNE 1 SPELL): SPELL, or a generated one the forge would make,
-as cheap or dear as the level's :RUNE-MANA. Tried again while the forge would refuse it or it
-comes out too cheap."
+as strong as the level's :RUNE-POWER. Tried again while the forge would refuse it or it comes out
+too weak."
   (list :rune 1
         (or spell
-            (loop with least = (- (first (loot-property :rune-mana *run-depth* '(10 18))) *rune-mana-slack*)
+            (loop with least = (- (first (loot-property :rune-power *run-depth* '(10 18))) *rune-power-slack*)
                   repeat 20
                   for draft = (loot-rune-draft random)
-                  unless (or (draft-fault draft *max-mana*) (< (spell-cost (draft-spell draft)) least))
+                  unless (or (draft-fault draft *max-mana*) (< (spell-power (draft-spell draft)) least))
                     return (draft-spell draft)
                   finally (return (find-spell 'bolt))))))
 

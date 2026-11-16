@@ -7,6 +7,62 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Spell tiers: free, stamina and mana, decided by the spell.** A mage was an enchantment with no
+  sword under it: every cast paid all of its price in mana that doesn't regenerate (the Fire Bolt 14 mana
+  for 7-9, a full pool three bolts). Now a spell's tier follows from what it is (`spell-tier`,
+  spells.lisp), from its power (today's price formula, renamed `spell-power`), delivery, effects,
+  durations and area. **Free**: a projectile, touch or seeker of one damage effect (knockback up to 4
+  beside it), nothing lasting, no area, power up to 14: the Fire Bolt stays as it was and costs nothing,
+  every 0.5 s, its projectile flying 20 m; a free touch of fire 10-14 is the sword's equal. **Stamina**: up
+  to two effects of damage, knockback and slow, up to 4 s and 1.5 m, power up to 40 (a beam 20), costing
+  its power in stamina. **Mana**: everything else, every heal, ward and drain, at its power with striking
+  effects halved (`*cast-strike-scale*`, so a cast costs what the same spell does as an enchantment).
+  Dust, enchantments and found runes are priced by power as before. **Overcharge**: a striking stamina or
+  mana spell held grows to × 1.6 for twice its price by 1.35 s, slowing the player as the maul's charge
+  does; full, it knocks a shield or ward aside and always flinches (the knight took 37 through its shield).
+  **Absorb Projectiles** (`:absorb`, magic.lisp): a new self effect, held and free, that swallows hostile
+  projectiles carrying damage from in front for its percent of their power in mana, or of the mana an own
+  spell sent back cost (a free one gives none); rifts and gusts still strike. Held, it hums low
+  (`absorb-channel`), and a projectile swallowed swoops up and down in pitch (`absorb-take`, the hum
+  bent). **Off hands**: each hotbar
+  slot holding a rune can hold an off-hand rune, cast with the right button, set by dragging onto the
+  slot's corner (`offhands`, `offhand-cells` in saves and the stairs); the left hand's fire shows the
+  slot's rune, cast with the left button, the right hand's the off hand's; the hands share one cast at a time,
+  and a rune is in one place at a time. A held spell's button held down starts it once the hands are
+  free (`start-held-casts`), so a press during a cooldown or a weapon switch isn't lost. The forge's
+  Effect button cycles heal, ward and Absorb on a self spell (Absorb had no starting dials in
+  `*new-effects*`, and the click errored), and a save from before Absorb learns it on load and on the
+  stairs (`migrate-known-effects`). A run starts with the sword, the Fire Bolt with Absorb in its off
+  hand, and heal on key 3. **Deliveries**: Seeker and Beam ported from the spell-secondary branch (its
+  repricing left out; the beam's first-strike sound now plays, and a beam's self effects land), and Nova,
+  a sphere growing from the caster that strikes each body as it reaches it, its look the element's: an
+  aurora dome (fire's licking flames, frost's shards, drain's curtains hanging from the top, force's
+  plain streaks; a slow halves their pace), or for shock a crackling cage of lightning (`bolt-lines`,
+  sparks.lisp, a new renderer of jagged pixel-stepped bolts) with arcs round and between the
+  creatures struck; a band where it meets the level (`nova_sweep` in the lit shaders), fire's scorch
+  and frost's rime behind it, and each element's particles. **Art**: the hands show Absorb, healing and ward spells as their own magic,
+  not fire (`*hand-motifs*`, hands.lisp): Absorb a void in each palm and, held, a void between the hands
+  drinking in streaks of blue light (turned by `tools/turn_spiral.py --all`); healing ribbons of light
+  round the forearms that rise, wrap them as it lands and fade into motes; ward gold hexagons over
+  each palm that become a honeycomb pane. Their idles (4 frames, the ward's 3) move the magic over still
+  hands by `tools/animate_idle.py`: the void's specks orbit, and both voids have an ornate rim (a navy,
+  deep blue and ice-lit ring with a glint, pale dashes turning round it, the held void's streaks shaded
+  navy to ice as they fall in); only a band of light
+  running up the ribbons is drawn, the gauntlet showing elsewhere; three gold hexagons, one above two,
+  take turns bold. Each hand shows its own rune at rest, so fire in one and a
+  void in the other. The heal hand look (green fire) is gone, `make_shield.py`'s frames take a `magic`
+  flag for pictures whose light isn't fire, and an Absorb icon and status veils at the
+  screen's edges for a ward, the blessing and healing over time (`status-veil`, hud.lisp;
+  `tools/draw_status_veils.py`). The forge shows the derived tier, cost and reason, and its magnitude dial
+  is "Amount". Found runes over run seeds 1 to 30: level 1, 11 free, 7 stamina, 12 mana; deeper, about two
+  thirds mana; the layouts, creatures and health and mana pickups match master, the hoards' items and
+  piles move with the runes' draws. No save version change: old runes load as what they are, and an old
+  save has empty off hands. For players' CHANGELOG: "Spells now cost by their strength: weak ones are
+  free (the Fire Bolt among them), stronger ones cost stamina, and the strongest, and every heal, cost
+  mana. Hold a stamina or mana spell to overcharge it; a full charge breaks a shield. New: Absorb
+  Projectiles turns enemy spells into mana, every rune slot can hold a second rune for the right button,
+  and Seeker, Beam and Nova spells at the Spellforge."
+
 - **Sparks, embers and grit.** Hexmaw's impacts were all strips playing in place; now blows throw
   simulated particles (`src/sparks.lisp`), built as the blood pool is: 512 slots of plain arrays, one
   stream-draw buffer, one draw call, nothing allocated a frame, no art (the shader lays whole

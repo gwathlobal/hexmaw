@@ -1,0 +1,21 @@
+{
+  "prompt": "A short beam spell cast in a dark stone dungeon: a bright crackling ray of magic snapping out of an open palm in an instant, a sharp sizzling zap that cuts off cleanly, no whoosh of flight. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-beam-cast.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 0.8,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794580120,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.8,
+    0.8,
+    0.8
+  ]
+}

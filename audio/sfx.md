@@ -57,7 +57,11 @@ First-person, so stereo is fine (`:speech`).
 | bolt-flight | 1 | P L | 2 | 2 | `launch-projectile` spells.lisp:144 until `impact` 157 or despawn 252 |
 | bolt-impact | 1 | P | 1.2 | 3 | `impact` spells.lisp:157 |
 | bolt-hiss-water | 2 | P | 0.8 | 2 | `impact` from spells.lisp:250, liquid is water |
-| cast-fizzle | 1 | 1P | 0.5 | 3 | `player-cast` player.lisp:169 fails for mana |
+| cast-fizzle | 1 | 1P | 0.5 | 3 | `player-cast` player.lisp:169 fails for mana or stamina |
+| beam-cast | 1 | 1P | 0.8 | 3 | `update-beam` player.lisp, a held beam's first strike |
+| beam-channel | 1 | 1P L | 2 | 2 | `update-beam` player.lisp, while a beam is held |
+| absorb-channel | 1 | 1P L | 3 | 3 | `update-channel` player.lisp, while Absorb Projectiles is held |
+| absorb-take | 1 | 1P | 1 | 4 | `absorb-projectile` magic.lisp, a projectile swallowed |
 | tempest-cast | 1 | 1P | 1.2 | 3 | `release-spell` player.lisp:176, tempest |
 | tornado | 1 | P L | 4 | 2 | `start-vortex` vortex.lisp:332 until `leave :after` 380; volume by `vortex-strength` |
 | whirl-wind | 2 | 1P L | 3 | 2 | `note-caught` vortex.lisp:687 while `(whirl player)` |

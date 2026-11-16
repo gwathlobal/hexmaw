@@ -25,3 +25,54 @@ release-2.png         0.2   1536 1024 0 -38
 open-2.png            0.2   1536 1024 0 -38
 idle-2.png            0.2   1536 1024 0 -43
 idle-2.png            0.2   1536 1024 0 -39
+
+; Spells that show their own magic, not fire (hands.lisp's *HAND-MOTIFS*), each from pictures with no fire
+; (art/prompts/hands-common-magic.txt), marked "magic" so their blues and greens are kept and stay light.
+; The idles are made from one picture each by tools/animate_idle.py (its docstring has the command lines),
+; moving only the magic so the hands don't jitter: the void's specks orbit and its ring pulses, a band
+; of light runs up the healing ribbons and only it is drawn, the ward's three hexagons take turns bold.
+;
+; Absorb at rest, a small void in each palm (11-14), and held, a void between the hands drinking in
+; streaks of light (15-18), its streaks turned a quarter a frame by tools/turn_spiral.py --all:
+;   tools/turn_spiral.py art/hands/absorb-void-1.png art/hands/absorb-void-turn --centre 767,593 --radius 182 --all
+; and both voids' rims redrawn by tools/animate_idle.py rim (layered, the streaks lit inward, turning dashes),
+; the idle over the spin's frames, the stance over the turned ones; the spin's and turn's frames between
+; are made afresh, not kept:
+;   tools/animate_idle.py art/hands/absorb-idle-1.png art/hands/absorb-idle-anim spin --frames 4 --step 90 --core 31 --clear 150 --pulse 1,1.25,1,0.8 --at 588,650,60 --at 947,650,60
+;   tools/animate_idle.py art/hands/absorb-idle-anim-{1,2,3,4}.png art/hands/absorb-idle-rim rim --dashes 4 --at 588,650,25,42 --at 947,650,25,42
+;   tools/animate_idle.py art/hands/absorb-void-1.png art/hands/absorb-void-turn-{1,2,3}.png art/hands/absorb-void-rim rim --dashes 8 --streaks --at 767,593,85,107
+absorb-idle-rim-1.png   0.2   1536 1024 0 -38 magic
+absorb-idle-rim-2.png   0.2   1536 1024 0 -38 magic
+absorb-idle-rim-3.png   0.2   1536 1024 0 -38 magic
+absorb-idle-rim-4.png   0.2   1536 1024 0 -38 magic
+absorb-void-rim-1.png   0.2   1536 1024 0 -38 magic
+absorb-void-rim-2.png   0.2   1536 1024 0 -38 magic
+absorb-void-rim-3.png   0.2   1536 1024 0 -38 magic
+absorb-void-rim-4.png   0.2   1536 1024 0 -38 magic
+
+; Healing at rest, a band of light running up the ribbons round the forearms (19-22), and cast (23-28):
+; rising from the palms, wrapping the forearms tight as it lands (*HAND-MOTIFS* :RELEASE 2), coming
+; apart into motes, settling.
+heal-idle-anim-1.png    0.2   1536 1024 0 -38 magic
+heal-idle-anim-2.png    0.2   1536 1024 0 -38 magic
+heal-idle-anim-3.png    0.2   1536 1024 0 -38 magic
+heal-idle-anim-4.png    0.2   1536 1024 0 -38 magic
+heal-idle-2.png         0.2   1536 1024 0 -38 magic
+heal-rise-1.png         0.2   1536 1024 0 -38 magic
+heal-wrap-1.png         0.2   1536 1024 0 -38 magic
+heal-fade-2.png         0.2   1536 1024 0 -38 magic
+heal-idle-anim-1.png    0.2   1536 1024 0 -43 magic
+heal-idle-anim-1.png    0.2   1536 1024 0 -39 magic
+
+; Ward at rest, three gold hexagons over each palm, one bold in turn (29-31), and cast (32-37): the hands
+; pushing forward with gold lines between the fingers, the honeycomb pane as it lands, breaking up,
+; settling.
+ward-idle-anim-1.png    0.2   1536 1024 0 -38 magic
+ward-idle-anim-2.png    0.2   1536 1024 0 -38 magic
+ward-idle-anim-3.png    0.2   1536 1024 0 -38 magic
+ward-idle-anim-1.png    0.2   1536 1024 0 -38 magic
+ward-push-1.png         0.2   1536 1024 0 -38 magic
+ward-pane-2.png         0.2   1536 1024 0 -38 magic
+ward-fade-1.png         0.2   1536 1024 0 -38 magic
+ward-idle-anim-1.png    0.2   1536 1024 0 -43 magic
+ward-idle-anim-1.png    0.2   1536 1024 0 -39 magic

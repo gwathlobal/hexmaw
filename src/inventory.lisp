@@ -31,6 +31,8 @@ budget, so keep the two the same. A weapon's :WEAPON is what it puts in the play
 
 (defparameter *hotbar-slots* '(:hot-1 :hot-2 :hot-3 :hot-4 :hot-5 :hot-6 :hot-7 :hot-8 :hot-9)
   "The hotbar's slots, keys 1 to 9, *HOTBAR-SIZE* of them (player.lisp).")
+(defparameter *offhand-slots* '(:off-1 :off-2 :off-3 :off-4 :off-5 :off-6 :off-7 :off-8 :off-9)
+  "The hotbar slots' off hands, each the rune the right button casts while its slot's rune is in hand.")
 (defparameter *hotbar-columns* 5
   "Hotbar slots in a row, from the top one down: in one row of nine the hands covered the last.")
 
@@ -59,6 +61,10 @@ hud.lisp, measures a line).")
 (defun hotbar-index (slot)
   "SLOT's place on the hotbar, from 0, or NIL if it isn't one of *HOTBAR-SLOTS*."
   (position slot *hotbar-slots*))
+
+(defun offhand-index (slot)
+  "The hotbar slot, from 0, whose off hand SLOT is, or NIL if it isn't one of *OFFHAND-SLOTS*."
+  (position slot *offhand-slots*))
 
 (defvar *quick-view* (list NIL 0)
   "Scratch: the quickslot as a stack to draw, (KIND TOTAL), rewritten as it is asked for.")
@@ -90,8 +96,9 @@ of its own, comes back through this, after the bag (RESTORE-STATE): what won't f
 
 (defun slot-stack (player slot)
   "What SLOT shows: a bag cell's stack, the bag stack a hotbar slot points at, or for :QUICK
-its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound."
-  (let ((hot (hotbar-index slot)))
+its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound; an off hand's rune."
+  (let ((hot (hotbar-index slot))
+        (off (offhand-index slot)))
     (cond ((eq slot :quick)
            (let ((kind (quickslot player)))
              (when kind
@@ -99,6 +106,7 @@ its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound."
                      (second *quick-view*) (kind-total player kind))
                *quick-view*)))
           (hot (nth hot (hotbar player)))
+          (off (nth off (offhands player)))
           (T (nth slot (inventory player))))))
 
 (defun potion-p (stack)
@@ -149,19 +157,50 @@ sword.lisp), or NIL for a plain one: each weapon has its own, as a rune its spel
   "The hotbar slot, from 0, bound to STACK, or NIL."
   (position stack (hotbar player)))
 
+(defun offhand-key (player stack)
+  "The hotbar slot, from 0, whose off hand holds STACK, or NIL."
+  (position stack (offhands player)))
+
 (defun prune-bindings (player)
-  "Unbind every hotbar slot whose stack has left the bag. Allocates nothing."
+  "Unbind every hotbar slot and off hand whose stack has left the bag, and the off hand of a slot
+that holds no rune. Allocates nothing."
   (let ((bag (inventory player)))
     (loop for cell on (hotbar player)
           when (and (car cell) (not (member (car cell) bag :test #'eq)))
+            do (setf (car cell) NIL))
+    (loop for cell on (offhands player)
+          for main in (hotbar player)
+          when (and (car cell) (or (not (member (car cell) bag :test #'eq))
+                                   (not (eq :rune (first main)))))
             do (setf (car cell) NIL))))
 
+(defun unbind-stack (player stack)
+  "Take STACK off every hotbar slot and off hand: a rune is in one place at a time."
+  (loop for cell on (hotbar player)
+        when (eq (car cell) stack) do (setf (car cell) NIL))
+  (loop for cell on (offhands player)
+        when (eq (car cell) stack) do (setf (car cell) NIL)))
+
 (defun bind-stack (player stack index)
-  "Bind hotbar slot INDEX to STACK, a bag stack, taking it off any other slot."
-  (let ((hotbar (hotbar player)))
-    (loop for cell on hotbar
-          when (eq (car cell) stack) do (setf (car cell) NIL))
-    (setf (nth index hotbar) stack)))
+  "Bind hotbar slot INDEX to STACK, a bag stack, taking it off any other slot or off hand."
+  (unbind-stack player stack)
+  (setf (nth index (hotbar player)) stack)
+  (prune-bindings player))
+
+(defun bind-offhand (player stack index)
+  "Put STACK, a rune, in hotbar slot INDEX's off hand, taking it off any other: only while that
+slot holds a rune. True if it was put there."
+  (when (and (eq :rune (first stack)) (eq :rune (first (nth index (hotbar player)))))
+    (unbind-stack player stack)
+    (setf (nth index (offhands player)) stack)
+    T))
+
+(defun offhand-spell (player)
+  "The spell the right button casts: the off-hand rune of the hotbar slot asked for, while that
+slot's rune is what the hands hold."
+  (let ((slot (wanted-slot player)))
+    (and (eq (weapon player) :hands) (held-spell player)
+         (stack-spell (nth slot (offhands player))))))
 
 (defun give-stack (player stack)
   "Put STACK, a weapon or a rune, in the first empty bag cell, bound to the first free hotbar key
@@ -255,16 +294,30 @@ quickslot dropped anywhere else (TO NIL, nowhere) is unbound. True if anything c
         (from-hot (hotbar-index from))
         (to-hot (and to (hotbar-index to))))
     (cond ((or (null source) (eql from to)) NIL)
-          ;; From a key: onto another, the two swap; anywhere but the quickslot, it is unbound.
+          ;; From a key: onto another, the two swap, off hands and all; onto an off hand, its rune
+          ;; goes there; anywhere but the quickslot, it is unbound.
           (from-hot
-           (cond (to-hot (rotatef (nth from-hot (hotbar player)) (nth to-hot (hotbar player))) T)
+           (cond (to-hot (rotatef (nth from-hot (hotbar player)) (nth to-hot (hotbar player)))
+                         (rotatef (nth from-hot (offhands player)) (nth to-hot (offhands player)))
+                         (prune-bindings player)
+                         T)
+                 ((offhand-index to) (bind-offhand player source (offhand-index to)))
                  ((eq to :quick) NIL)
-                 (T (setf (nth from-hot (hotbar player)) NIL) T)))
+                 (T (setf (nth from-hot (hotbar player)) NIL) (prune-bindings player) T)))
+          ;; From an off hand: onto another, it moves there; onto a key, it is that key's rune;
+          ;; anywhere else, it is unbound.
+          ((offhand-index from)
+           (cond ((offhand-index to) (bind-offhand player source (offhand-index to)))
+                 (to-hot (bind-stack player source to-hot) T)
+                 ((eq to :quick) NIL)
+                 (T (setf (nth (offhand-index from) (offhands player)) NIL) T)))
           ((eq from :quick)
            (unless (or to-hot (eq to :quick))
              (setf (quickslot player) NIL)
              T))
           ;; From the bag.
+          ((offhand-index to)
+           (bind-offhand player source (offhand-index to)))
           (to-hot
            (when (bindable-p source)
              (bind-stack player source to-hot)
@@ -306,17 +359,37 @@ holds; a negative STEP goes back. True if it changed."
 
 ;;; The starting kit, and what a save or the stairs bring.
 
+(defun kit-spell (spell)
+  "A starting kit's SPELL: a defined spell's name, or a spec whose first element is its name."
+  (if (consp spell) (spec-spell spell) (find-spell spell)))
+
+(defun kit-entry (entry)
+  "A starting kit's ENTRY (*STARTING-HOTBAR*) as its slot's spell or weapon and its off hand's spell:
+a weapon's item kind, a spell, or a list of two spells."
+  (cond ((keywordp entry) (values entry NIL))
+        ((and (consp entry) (not (stringp (first entry)))) (values (first entry) (second entry)))
+        (T (values entry NIL))))
+
 (defun give-starting-kit (player)
   "Fill PLAYER's empty bag with *STARTING-HOTBAR*'s weapons and spells (player.lisp), each bound
-to its key; on the debug level, *DEBUG-STARTING-HOTBAR*'s."
+to its key and an off-hand rune to its key's off hand; on the debug level, *DEBUG-STARTING-HOTBAR*'s."
   (let ((bag (make-list *inventory-size*))
-        (hotbar (make-list *hotbar-size*)))
+        (hotbar (make-list *hotbar-size*))
+        (offhands (make-list *hotbar-size*))
+        (cell 0))
     (loop for entry in (if (eq *level* :test) *debug-starting-hotbar* *starting-hotbar*)
           for i from 0
-          for stack = (if (keywordp entry) (list entry 1) (list :rune 1 (find-spell entry)))
-          do (setf (nth i bag) stack (nth i hotbar) stack))
+          do (multiple-value-bind (main off) (kit-entry entry)
+               (let ((stack (if (keywordp main) (list main 1) (list :rune 1 (kit-spell main)))))
+                 (setf (nth cell bag) stack (nth i hotbar) stack)
+                 (incf cell))
+               (when off
+                 (let ((stack (list :rune 1 (kit-spell off))))
+                   (setf (nth cell bag) stack (nth i offhands) stack)
+                   (incf cell)))))
     (setf (inventory player) bag
-          (hotbar player) hotbar)))
+          (hotbar player) hotbar
+          (offhands player) offhands)))
 
 (defun hotbar-cells (player)
   "The hotbar as the bag cells its slots point at, NIL for an empty one: how a save keeps it."
@@ -328,6 +401,23 @@ to its key; on the debug level, *DEBUG-STARTING-HOTBAR*'s."
               for cell = (nth i cells)
               collect (and cell (nth cell (inventory player)))))
   cells)
+
+(defun offhand-cells (player)
+  "The off hands as the bag cells they point at, NIL for an empty one: how a save keeps them."
+  (mapcar (lambda (stack) (and stack (stack-slot player stack))) (offhands player)))
+
+(defun (setf offhand-cells) (cells player)
+  (setf (offhands player)
+        (loop for i from 0 below *hotbar-size*
+              for cell = (nth i cells)
+              collect (and cell (nth cell (inventory player)))))
+  cells)
+
+(defun migrate-known-effects (player)
+  "Teach PLAYER whatever a run now starts knowing (*STARTING-EFFECTS*) that a save made before it
+did not: Absorb, to a save from before it was. Harmless on a current one."
+  (dolist (effect *starting-effects*)
+    (pushnew effect (known-effects player))))
 
 (defun migrate-enchantments (player)
   "Bring PLAYER's enchantments from an older save's layout, where a sword's or spear's was the
@@ -377,6 +467,12 @@ to its kind. Whatever won't fit is lost. Harmless on a current one."
   (and (call-next-method) (eq *game-state* :inventory)))
 
 (define-shader-entity inventory-back (inventory-part weapon-slot) ())
+;; An off hand's cell, small in its hotbar slot's top-right corner: shown in play while it holds a
+;; rune, and in the panel for every slot that holds one, to drop a rune on.
+(define-shader-entity offhand-frame (weapon-slot)
+  ((shown :initform NIL :accessor shown)))
+(defmethod hud-shown-p ((frame offhand-frame))
+  (and (call-next-method) (shown frame)))
 (define-shader-entity inventory-cell (inventory-part weapon-slot) ())
 (define-shader-entity inventory-icon (inventory-part item-icon) ())
 (define-shader-entity inventory-text (inventory-part hud-text) ())
@@ -445,6 +541,8 @@ slot's key."))
                  (:slow (format NIL "Slows ~a% for ~d s~a" range duration burst))
                  (:drain (format NIL "Drains ~a health, you gain half" range))
                  (:ward (format NIL "Wards off ~a damage for ~d s" range duration))
+                 (:absorb (format NIL "Takes projectiles from in front, ~d% of their power as mana"
+                                  (second (effect-magnitude effect))))
                  (:whirl (format NIL "Whirls up all it catches, ~a a second" range))
                  (T (format NIL "~:(~a~) ~a" kind range)))))
     (append (list line)
@@ -452,17 +550,39 @@ slot's key."))
               (:frost (list (format NIL "  Chills: ~d% slower for ~d s" *frost-chill* (round *frost-chill-time*))))
               (:shock (list (format NIL "  Staggers: +~d% to the pain roll" *shock-pain-bonus*)))))))
 
+(defun spell-cost-text (spell)
+  "What a cast of SPELL takes, for the forge's readout and a tooltip: free, 28 SP a cast, 30 MP a second."
+  (multiple-value-bind (resource amount) (spell-price spell)
+    (let ((beam (eq (spell-delivery spell) :beam)))
+      (case resource
+        (:stamina (if beam (format NIL "~d SP a second" (beam-stamina-rate spell)) (format NIL "~d SP a cast" amount)))
+        (:mana (if beam (format NIL "~d MP a second" (beam-mana-rate spell)) (format NIL "~d MP a cast" amount)))
+        (T (if (absorb-spell-p spell) "Free, held" (format NIL "Free, every ~,1f s" *free-cast-cooldown*)))))))
+
+(defun tier-line (spell)
+  "Why SPELL isn't free, a line: Stamina: power 28 is over 14. NIL for a free one, whose cost says so."
+  (let ((reason (tier-reason spell)))
+    (when reason
+      (format NIL "~:(~a~): ~a" (spell-tier spell) reason))))
+
 (defun spell-lines (spell)
-  "SPELL's delivery and cost, then each effect, for a tooltip."
-  (cons (format NIL "~a, ~d MP a cast"
-                (case (spell-delivery spell)
-                  (:projectile "Projectile")
-                  (:touch "Touch")
-                  (:self "Cast on yourself")
-                  (:vortex (format NIL "Tornado for ~d s" (round (effect-duration (first (spell-effects spell))))))
-                  (T (string-capitalize (spell-delivery spell))))
-                (spell-cost spell))
-        (mapcan #'effect-lines (spell-effects spell))))
+  "SPELL's delivery and what it takes, why it isn't free, then each effect, for a tooltip."
+  (append (list (format NIL "~a, ~a"
+                        (case (spell-delivery spell)
+                          (:projectile "Projectile")
+                          (:seeker "Seeker, homing on what you aim at")
+                          (:beam "Beam held, to 12 m")
+                          (:nova (format NIL "Nova, ~,1f m round you" (+ *nova-radius* (spell-burst-radius spell))))
+                          (:touch "Touch")
+                          (:self (if (absorb-spell-p spell) "Held on yourself" "Cast on yourself"))
+                          (:vortex (format NIL "Tornado for ~d s" (round (effect-duration (first (spell-effects spell))))))
+                          (T (string-capitalize (spell-delivery spell))))
+                        (spell-cost-text spell)))
+          (let ((line (tier-line spell))) (when line (list line)))
+          (when (and (forged-kinds-p spell) (overchargeable-p spell))
+            (list (format NIL "Hold to overcharge: up to x~,1f for twice the cost; full, it breaks a guard"
+                          (+ 1 *overcharge-strength*))))
+          (mapcan #'effect-lines (spell-effects spell))))
 
 (defun enchantment-lines (label spell)
   (if spell
@@ -515,11 +635,6 @@ slot's key."))
                  (item-property kind :about)
                  (format NIL "~d here, ~d in all" (second stack) (kind-total player kind)))))))
 
-(define-shader-entity spell-label (hud-text) ())
-
-(defmethod hud-shown-p ((label spell-label))
-  (and (call-next-method) *player* (eq :hands (wanted-weapon *player*))))
-
 (defun stack-icon (stack)
   "The strip and frame of STACK's icon: a potion's in the item icons, a weapon's or a rune's in
 the weapon icons (sword.lisp), a rune's by its spell's look."
@@ -553,9 +668,12 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
                                                                 :number (make-hud-text)
                                                                 :key (make-hud-text)))
               :reader hot-cells)
-   (spell-label :initform (make-hud-text "" 'spell-label) :reader spell-label
-                :documentation "The spell in hand and its cost, right of the quickslot.")
-   (shown-spell :initform NIL :accessor shown-spell)
+   (off-cells :initform (loop for i from 0 below *hotbar-size*
+                              collect (make-instance 'item-cell :slot (nth i *offhand-slots*)
+                                                                :frame (make-instance 'offhand-frame)
+                                                                :icon (make-instance 'item-icon :animation (find-fx-animation 'weapon-icons))
+                                                                :number (make-hud-text)))
+              :reader off-cells)
    (back :initform (make-instance 'inventory-back) :reader panel-back)
    (title :initform (make-hud-text "Inventory" 'inventory-text) :reader panel-title-text)
    (hints :initform (loop repeat 3 collect (make-hud-text "" 'inventory-text)) :reader panel-hints
@@ -585,7 +703,8 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
     (enter view container)
     (dolist (part (append (cell-parts (quick-cell view))
                           (mapcan #'cell-parts (hot-cells view))
-                          (list (quick-key view) (spell-label view) (panel-back view) (panel-title-text view)
+                          (mapcan #'cell-parts (off-cells view))
+                          (list (quick-key view) (panel-back view) (panel-title-text view)
                                 (drag-icon view) (tooltip-back view))
                           (panel-hints view)
                           (tooltip-lines view)
@@ -610,6 +729,27 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
     (multiple-value-bind (row column) (floor index *hotbar-columns*)
       (values (+ *hud-margin* (* column step))
               (+ (hud-top) (slot-gap) (* step (- (hotbar-rows) row 1)))))))
+
+(defun offhand-icon-size ()
+  "Pixels across an off hand's icon: the icons' own art pixels, at half the HUD's scale or more."
+  (* (max 1 (floor (hud-pixel-scale) 2)) (getf (animation-atlas (find-fx-animation 'item-icons)) :cell-width)))
+
+(defun offhand-cell-size ()
+  (+ (offhand-icon-size) (* 2 (hud-pixel-scale))))
+
+(defun offhand-position (index)
+  "The corner of hotbar slot INDEX's off-hand cell: in its top-right corner."
+  (multiple-value-bind (x y) (hot-position index)
+    (let ((d (- (item-cell-size) (offhand-cell-size))))
+      (values (+ x d) (+ y d)))))
+
+(defun offhand-cell-shown-p (index open)
+  "True if hotbar slot INDEX's off-hand cell shows: while it holds a rune, and, with the panel
+OPEN, for every slot that holds one."
+  (and *player*
+       (eq :rune (first (nth index (hotbar *player*))))
+       (or open (nth index (offhands *player*)))
+       T))
 
 (defun quick-position ()
   "The quickslot's corner: on the left, in a row of its own above the hotbar."
@@ -670,6 +810,7 @@ title, its cells and its hint's lines."
 (defun slot-position (slot)
   (let ((hot (hotbar-index slot)))
     (cond ((eq slot :quick) (quick-position))
+          ((offhand-index slot) (offhand-position (offhand-index slot)))
           (hot (hot-position hot))
           (T (bag-position slot)))))
 
@@ -680,6 +821,14 @@ title, its cells and its hint's lines."
              (multiple-value-bind (sx sy) (slot-position slot)
                (and (<= sx x) (< x (+ sx size)) (<= sy y) (< y (+ sy size))))))
       (or (when (in-p :quick) :quick)
+          ;; The off hands lie over their slots' corners.
+          (loop for slot in *offhand-slots*
+                for index from 0
+                when (and (offhand-cell-shown-p index T)
+                          (multiple-value-bind (sx sy) (slot-position slot)
+                            (let ((size (offhand-cell-size)))
+                              (and (<= sx x) (< x (+ sx size)) (<= sy y) (< y (+ sy size))))))
+                  return slot)
           (loop for slot in *hotbar-slots*
                 when (in-p slot) return slot)
           (loop for cell from 0 below *inventory-size*
@@ -747,16 +896,19 @@ title, its cells and its hint's lines."
 
 ;;; Keeping it all in line with the player, a tick at a time.
 
-(defun place-item-cell (cell x y frame-z icon-z number-z active &optional (lit T))
-  "Lay CELL out at X, Y: its frame lit up if ACTIVE, its icon dimmed unless LIT."
+(defparameter *tier-colors* '(:stamina (0.35 0.85 0.3) :mana (0.3 0.5 1.0))
+  "The border a rune's cell takes by its spell's tier (SPELL-TIER, spells.lisp); a free one's is plain.")
+
+(defun place-item-cell (cell x y frame-z icon-z number-z active &optional (lit T)
+                                                                          (size (item-cell-size))
+                                                                          (icon-size (item-icon-size))
+                                                                          (pad (slot-padding)))
+  "Lay CELL out at X, Y, SIZE pixels across: its frame lit up if ACTIVE, its icon dimmed unless LIT."
   (let* ((slot (cell-slot cell))
          (stack (slot-stack *player* slot))
          (count (second stack))
          (frame (cell-frame cell))
          (icon (cell-icon cell))
-         (size (item-cell-size))
-         (icon-size (item-icon-size))
-         (pad (slot-padding))
          (dragged (and *inventory-view* (eql (cell-slot cell) (dragging *inventory-view*))))
          (weapon (and stack (item-property (first stack) :weapon)))
          (enchantment (and weapon (weapon-enchantment *player* stack))))
@@ -770,22 +922,32 @@ title, its cells and its hint's lines."
           (vy (scaling icon)) (float icon-size 0f0))
     (when stack
       (show-stack-icon icon stack))
-    ;; An enchanted weapon's border takes its spell's colour, dim while mana can't pay a blow.
-    (setf (enchanted frame) (and enchantment T))
-    (when enchantment
-      (spell-tint enchantment (enchant-color frame)
-                  (if (<= (enchant-cost enchantment) (mana *player*)) 1.0 *enchant-dim*)))
+    ;; An enchanted weapon's border takes its spell's colour, dim while mana can't pay a blow; a
+    ;; rune's its tier's, unless it is free.
+    (let ((tier (and stack (stack-spell stack) (getf *tier-colors* (spell-tier (stack-spell stack))))))
+      (setf (enchanted frame) (and (or enchantment tier) T))
+      (cond (enchantment
+             (spell-tint enchantment (enchant-color frame)
+                         (if (<= (enchant-cost enchantment) (mana *player*)) 1.0 *enchant-dim*)))
+            (tier
+             (destructuring-bind (r g b) tier
+               (let ((c (enchant-color frame)))
+                 (setf (vx c) r (vy c) g (vz c) b (vw c) 1.0))))))
     ;; Re-uploading text costs a buffer update, so only when the number changes. The quickslot
     ;; shows how many of its kind the bag holds, even one or none; a stack, more than one.
     (unless (eql count (shown-count cell))
       (setf (shown-count cell) count
             (text (cell-number cell)) (if (and count (or (eq slot :quick) (/= 1 count))) (princ-to-string count) "")))
-    ;; A bag cell marks the key its stack is bound to.
+    ;; A bag cell marks the key its stack is bound to, or whose off hand it is in (a ').
     (when (and (integerp slot) (cell-key cell))
-      (let ((key (and stack (stack-key *player* stack))))
-        (unless (eql key (shown-key cell))
-          (setf (shown-key cell) key
-                (text (cell-key cell)) (if key (action-key (nth key *hotbar-slots*)) "")))))
+      (let* ((key (and stack (stack-key *player* stack)))
+             (off (and stack (null key) (offhand-key *player* stack)))
+             (mark (or key (and off (+ 100 off)))))
+        (unless (eql mark (shown-key cell))
+          (setf (shown-key cell) mark
+                (text (cell-key cell)) (cond (key (action-key (nth key *hotbar-slots*)))
+                                             (off (format NIL "~a'" (action-key (nth off *hotbar-slots*))))
+                                             (T ""))))))
     (place frame x y frame-z)
     (place icon (+ x pad) (+ y pad) icon-z)
     ;; The count in the bottom-right corner, right-aligned.
@@ -866,14 +1028,7 @@ is re-uploaded only when the stack under the pointer changes."
       (multiple-value-bind (qx qy) (quick-position)
         (place-item-cell (quick-cell view) qx qy -0.2 -0.1 -0.08 (eq hovered :quick))
         (place (quick-key view) (+ qx (slot-padding))
-               (- (+ qy (item-cell-size)) (slot-padding) *glyph-height*) -0.08)
-        ;; The spell in hand right of it, re-uploaded only when it changes.
-        (let ((spell (wanted-spell *player*))
-              (label (spell-label view)))
-          (unless (eq spell (shown-spell view))
-            (setf (shown-spell view) spell
-                  (text label) (if spell (format NIL "~a  ~d MP" (spell-title spell) (spell-cost spell)) "")))
-          (place label (+ qx (item-cell-size) (slot-gap)) (+ qy 2) -0.08)))
+               (- (+ qy (item-cell-size)) (slot-padding) *glyph-height*) -0.08))
       ;; The slot asked for is framed in gold, and in play the others' icons are dimmed.
       (loop for cell in (hot-cells view)
             for index from 0
@@ -881,6 +1036,17 @@ is re-uploaded only when the stack under the pointer changes."
             do (multiple-value-bind (hx hy) (hot-position index)
                  (place-item-cell cell hx hy -0.2 -0.1 -0.08 (or wanted (eq hovered (cell-slot cell)))
                                   (or open wanted))))
+      ;; Each off hand over its slot's corner, in front of it.
+      (loop for cell in (off-cells view)
+            for index from 0
+            for shown = (offhand-cell-shown-p index open)
+            do (setf (shown (cell-frame cell)) shown)
+               (if shown
+                   (multiple-value-bind (ox oy) (offhand-position index)
+                     (place-item-cell cell ox oy -0.07 -0.06 -0.05 (eq hovered (cell-slot cell))
+                                      (or open (eql index (wanted-slot *player*)))
+                                      (offhand-cell-size) (offhand-icon-size) (hud-pixel-scale)))
+                   (setf (shown (cell-icon cell)) NIL)))
       (when open
         (multiple-value-bind (px py pw ph) (panel-box)
           (let ((back (panel-back view))

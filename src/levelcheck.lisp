@@ -75,6 +75,15 @@ same in any process and thread."
              (incf (gethash "amount" entry) (pickup-amount pickup)))
     table))
 
+(defun rune-tiers ()
+  "How many of the level's found runes (LOOT-PICKUPs, loot.lisp) are of each tier (SPELL-TIER)."
+  (let ((table (make-hash-table :test 'equal)))
+    (loop for pickup across *pickups*
+          for spell = (and (typep pickup 'loot-pickup) (stack-spell (loot-stack pickup)))
+          when spell
+            do (incf (gethash (string-downcase (spell-tier spell)) table 0)))
+    table))
+
 (defun resource-totals ()
   "What the level's pickups restore or give, by resource: health, mana, gold, dust."
   (let ((table (make-hash-table :test 'equal)))
@@ -120,6 +129,7 @@ same in any process and thread."
      "pickup_kinds" (pickup-report)
      "pickup_order" (sxhash (format NIL "~{~a~^ ~}" (map 'list (lambda (p) (string (pickup-kind p))) *pickups*)))
      "resources" (resource-totals)
+     "rune_tiers" (rune-tiers)
      "exits" (length *level-exits*)
      "altars" (length *level-altars*)
      "unreachable" (length (getf checks :unreachable))
