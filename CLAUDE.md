@@ -2067,7 +2067,9 @@ pounce.
   thumps (`step-light`). It claims the spot it lands on (`slot-yaw`), stands `*flank-leap-recover*`
   (0.25 s), and within `*flank-leap-strike-reach*` (1.8 m between bodies) goes straight into its
   claw, lunging in: about 0.6 s from landing to the blow. `flank-leaping` is the landing's yaw from
-  the crouch, `:landed` until it sets off again, and is saved. The spear's counter and any blow in
+  the crouch, `:landed` until it sets off again, and is saved: a quicksave with an imp 2.2 m up
+  over the player's head (run seed 6, level 2) loaded with it at the same point of its arc, and it
+  landed and clawed as the unsaved game went on to, blow for blow. The spear's counter and any blow in
   the air knock it down as they do a pounce; over the head nothing reaches it.
 - **Hit and run** (`release-attack`): after every claw it springs back `*imp-spring-speed*`
   (6 m/s, about 1.3 m) on its `momentum`, `*imp-spring-angle*` to one side, and gives up its spot
