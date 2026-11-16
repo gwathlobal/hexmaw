@@ -98,7 +98,7 @@ their values."
   '(powers dormant enraged boss-power power-cooldowns power-gap power-point roar))
 
 (defmethod saved-slots append ((imp imp))
-  '(downed knocked pounce-struck shriek shrieked fleeing cornered stolen))
+  '(downed knocked pounce-struck flank-leaping shriek shrieked fleeing cornered stolen))
 
 (defmethod saved-slots append ((leaper leaper))
   '(attack-kind leap-from leap-to leap-apex leap-duration leap-time airborne falling fall-speed
