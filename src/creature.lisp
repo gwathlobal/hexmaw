@@ -1962,54 +1962,8 @@ after the flinch, block and attack.")
   (update-creature-look creature)
   (update-death-glow creature))
 
-;;; The acolyte: a robed caster that keeps its distance and throws cinders (spells.lisp).
-;;; It has no walk: it glides in the standing pose, the robe hiding its feet.
-
-(defparameter *acolyte-height* 1.8 "Acolyte height in metres, cowl tip to hem.")
-
-;; Sliced at 115 px tall, so its art pixels are the imp's size (96 px for 1.5 m).
-(define-asset (hexmaw acolyte-turnaround) image
-    #p"sprites/acolyte/turnaround.png"
-  :min-filter :nearest :mag-filter :nearest)
-
-;; The cast: wind-up (a flame kindles in the hand), raised hand (a fireball held beside
-;; the cowl), release, recover; four frames per view. Its cells are 125 px tall to fit
-;; the fire, with the standing acolyte 115 px like the turnaround. The frames run on
-;; ATTACK-FRAME-TIMES, so :FPS is unused.
-(define-fx-animation acolyte-cast "sprites/acolyte/cast" :size (* *acolyte-height* 125/115))
-;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*. Its cells
-;; are 116 px tall, at the turnaround's scale.
-(define-fx-animation acolyte-hurt "sprites/acolyte/hurt" :size (* *acolyte-height* 116/115))
-;; The fire inside burns it away, leaving the empty robe as the corpse. Its cells are
-;; 133 px tall to fit the flames, the jolted acolyte in frame 1 115 px.
-(define-fx-animation acolyte-death "sprites/acolyte/death" :fps 10 :size (* *acolyte-height* 133/115))
-
-(define-shader-entity acolyte (creature)
-  ((texture :initform (// 'hexmaw 'acolyte-turnaround))
-   (atlas :initform (read-atlas "sprites/acolyte/turnaround.lisp"))
-   (sprite-height :initform *acolyte-height*)
-   (attack-animation :initform 'acolyte-cast)
-   (hurt-animation :initform 'acolyte-hurt)
-   (death-animation :initform 'acolyte-death)
-   ;; Up with the fire bursting out (frame 2), fading as the robe burns down (frames 5 to 8).
-   (death-glow :initform (vec 1.4 0.55 0.2))
-   ;; It burns from inside rather than bleeding out.
-   (death-blood :initform 0)
-   (attack-spell :initform 'cinder)
-   (attack-range :initform 12.0)
-   (keep-away :initform 4.0)
-   (cast-offset :initform 0.25)
-   ;; The fireball is held up longest, as the warning; it leaves on the release frame.
-   (attack-frame-times :initform '(0.3 0.25 0.3 0.3))
-   (attack-pause :initform 1.2)
-   (walk-speed :initform 1.2)
-   (chase-speed :initform 1.8)
-   (wander-radius :initform 2.0)
-   (pain-chance :initform 25)
-   (max-health :initform 24)))
-
-(define-creature-sounds acolyte
-  :alert :acolyte-alert :pain :acolyte-pain :death :acolyte-death :windup :acolyte-cast)
+;;; The acolyte, the ranged caster, is in acolyte.lisp: it needs the abilities (necromancer.lisp)
+;;; and the circle its firestorm is drawn as (spells.lisp).
 
 ;;; The knight: slow, in heavy plate, behind a tower shield from its feet to its helm.
 ;;; The shield turns spells away from the front and front-quarter views (and reflects

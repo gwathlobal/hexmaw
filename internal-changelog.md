@@ -7,6 +7,18 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The acolyte calls down a firestorm**, from the second level of a run on (`:abilities` in
+  `*run-levels*`, `level-ability-p`) and on the debug level. A lone acolyte had become a mana
+  spring: the player stood holding Absorb Projectiles and swallowed its cinders. Now, when the
+  player holds Absorb facing it or has swallowed two of its cinders, or on a 30% roll, with its
+  16 s cooldown up, it draws a sun-wheel sign under the player (1.6 s to step out), then holds a
+  storm of fire for 8 s that drifts after them at 2.5 m/s, faster than a walk with Absorb held,
+  burning about 9 a second; a flinch or its death puts it out, and holding it makes it easier to
+  flinch. The acolyte moved to `src/acolyte.lisp` as an `ability-user` (`:cinder`, `:firestorm`);
+  the storm is a `spell-circle` with a fire aurora, falling cinders, sparks, embers and a lamp
+  (0.23 ms of GPU), and its sign is drawn by `tools/draw_fire_sign.py`. Three new clips:
+  `firestorm-sign`, `firestorm-ignite`, `firestorm-roar`.
+
 ## November 16, 2026 v0.1.1
 
 - **Windows lets the game hold 2048 files open.** Every sound voice keeps its Vorbis file open,

@@ -260,8 +260,14 @@ CASTER and those CASTER spares."
     (* (absorb-share (channel player))
        (if (eq (launcher projectile) player) (spell-cost spell) (spell-power spell)))))
 
+(defgeneric note-absorbed (launcher projectile)
+  (:documentation "LAUNCHER's PROJECTILE was swallowed by the player's Absorb: the acolyte counts
+them toward its firestorm (acolyte.lisp).")
+  (:method (launcher projectile) NIL))
+
 (defmethod absorb-projectile ((player player) (projectile spell-projectile))
   (let ((mana (absorb-mana player projectile)))
+    (note-absorbed (launcher projectile) projectile)
     (pay player :stamina (absorb-stamina player projectile))
     (when (< 0 mana)
       (setf (mana player) (min (max-mana player) (+ (mana player) mana))))

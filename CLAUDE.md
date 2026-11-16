@@ -486,7 +486,7 @@ real time instead.
   whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`;
   on ice, over what its walk reaches there, `walk-top-speed`) it neither walks nor lunges, so a hunter doesn't walk straight back through a push. A killing blow and
   `always-pained-p` (a harpy mid-dive) always interrupt. The `acolyte`
-  is the ranged one (`attack-spell`), with a cast, flinch and death but no walk: it glides
+  (`src/acolyte.lisp`) is the ranged one, with a cast, flinch and death but no walk: it glides
   in the standing pose, its robe hiding its feet. Its death burns, so it has a `death-glow`:
   a lamp that rises and fades with the fire on `death-glow-times`, then leaves `*lamps*`.
   The `knight` is slow and heavy (`knockback-scale`), behind a tower shield: `shield-views`
@@ -948,6 +948,10 @@ real time instead.
   at a time. Otherwise it throws `gust`s: a `:gust` effect throws the player, toward its tornado
   if one is near, and with lift, since a shove on the floor dies at once. It has no walk.
   `casting-tempest-p` is a generic, so a boss's tornado cast keeps its sign up too.
+- `src/acolyte.lisp` (after wraith.lisp, before boss.lisp; it needs the abilities and the circle):
+  the `acolyte`, an `ability-user` with the cinder (`:cinder`, its first) and the firestorm
+  (`:firestorm`), the `firestorm` entity (a `spell-circle`) and its `falling-cinder`s. See "The
+  acolyte" under "Creature movement" below.
 - `src/riftwalker.lisp` (after boss.lisp, whose `free-spot` and `same-arena-side-p` it uses): the
   `riftwalker`, a masked assassin, an `ability-user` and a melee hunter (`ranged-p` is true only
   while a cast of its runs, so the cast turns after the player as a caster's does) that flanks.
@@ -1997,6 +2001,54 @@ crash as it lands, then sprawled, head down, as the corpse (`dead-frame`, `lande
 in the air it plays its `hurt-animation` like any creature (jolt, then stagger); hit while it
 lies downed or launches it keeps its knockdown frame, squashed (`flinch-p`, which
 `creature-hurting-p` asks).
+
+### The acolyte
+
+The `acolyte` (acolyte.lisp) hunts from range: it backs off within `keep-away` (4 m) and throws
+`cinder`s (fire, 5-8, 9 m/s). Since Absorb Projectiles (magic.lisp) turns hostile projectiles into
+mana, a lone acolyte was a mana spring: the player stood holding Absorb and swallowed its cinders
+without end. So, from the second level of a run on (`:abilities` in `*run-levels*`,
+`level-ability-p`, run.lisp: never on level 1; always off a generated level, the debug level
+included), it also calls down a **firestorm**, an ability (`:firestorm`, necromancer.lisp's
+`ability`) on `*firestorm-cooldown*` (16 s × `(depth-scale :cooldown)`, starting at
+`*firestorm-first*`, 4 s). Its `hunt-from-range` takes it when it is ready, none of its own is up
+(`acolyte-storm`), the target is within `*firestorm-range*` (10 m), in sight, on a floor and
+neither swimming nor whirled (`firestorm-ready-p`), and one of: the player holds Absorb with the
+acolyte in front of them (`absorbing-at-p`), the player has swallowed `*firestorm-swallow-trigger*`
+(2) of its cinders since its last storm (`swallowed`, counted by `note-absorbed`, which
+`absorb-projectile` calls on the projectile's `launcher`), or a `*firestorm-chance*` (30%) roll on
+`*roll-random*` each time it would throw a cinder (`wants-firestorm-p`).
+
+`begin-firestorm` lays a `firestorm` (a `spell-circle` of the spell `firestorm`, radius 2.5 m) at
+`floor-under` the target's feet and starts the ability, whose frames are `(0.35 1.25 8.0 0.4)` on
+the cast strip, hit frame 2: the raised fireball through the **telegraph** (`*firestorm-telegraph*`,
+1.6 s: the sign, `tools/draw_fire_sign.py data/sprites/firestorm`, draws itself in, a fire `aurora`
+in `*firestorm-aurora-colors*` rises round it and a lamp brightens), then the release frame held
+while it **burns** (`*firestorm-time*`, 8 s; `storming-p`). The storm follows its caster's state as
+the gale sign does: a flinch or death in the telegraph takes the sign away (`casting-firestorm-p`;
+`*firestorm-retry*`, 4 s, before it tries again), and once it burns, the moment the acolyte stops
+holding it (a flinch, its death, the 8 s over) it dies down over `*firestorm-fade*` (1 s). While it
+holds a storm, its pain chance is `*firestorm-pain-bonus*` (20) higher. Burning
+(`ignite-firestorm`, `burn-storm`), every `*firestorm-pulse*` (0.5 s) it strikes everything with feet
+in it but its caster (`storm-pulse`): the player through `hurt-player ... :shove NIL :unblockable T
+:by` the acolyte, a creature through `burn` (fire resisted; no flinch or grudge), and both an
+afterburn status (`*firestorm-afterburn*`, 2 a second for 2 s) that shows the burn aura and icon:
+about 9 a second standing in it. Its centre drifts after the target at `*firestorm-drift*` (2.5 m/s,
+`drift-storm`) along the floor, never up or down more than 0.5 m, onto deep water or into a solid:
+a walk (4 m/s) outruns it, a walk holding Absorb (2 m/s) doesn't. No shield stops it and Absorb
+can't take it. Cinders fall on it, `*firestorm-cinders*` (5) a second (`falling-cinder`, the
+cinder's strip, from `*firestorm-cinder-height*` or under the ceiling, `nav-room-around` once a
+second), bursting on the floor with `:lava` sparks; embers rise round its rim. Its sounds are
+`firestorm-sign`, `-ignite` and `-roar` (`*spell-sounds*`). A save keeps the storm (`target`,
+`burning`, `fading`, `pulse-timer`) and the acolyte's `swallowed`; the storm relinks to its caster on
+its first tick. The High Acolyte (boss.lisp) storms too, its pain chance 21 while it holds one.
+Measured frozen in the test hall, vsync off: GPU 2.55 ms a frame with a storm burning, 2.32 without.
+
+To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'acolyte))`,
+Debug level, then with the player 4 to 10 m from it
+`(let ((a (aref *creatures* 0))) (setf (getf (cooldowns a) :firestorm) 0.0 (swallowed a) 2 (alert a) 30.0))`.
+`(acolyte-storm a)` is the storm, `(burning storm)` how long it has burnt; `(hurt a 1 :force-pain t)`
+breaks it. With slot 2 in hand, `(setf (block-held *player*) t)` holds Absorb.
 
 ### The necromancer
 
@@ -3605,8 +3657,10 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
 - asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
   `*sight-range*` and `*hearing-range*` in `sees-target-p`, `:alert` the hunt's `alert-time`,
-  `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
-  abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+  `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's, riftwalker's and
+  acolyte's abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+  `:abilities` names the abilities a level's monsters may use beyond their first (`level-ability-p`):
+  none on level 1, the acolyte's `:firestorm` on levels 2 and 3 (and so in the settlement).
 
 Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
 budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,

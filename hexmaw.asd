@@ -41,6 +41,7 @@
                (:file "magic")
                (:file "vortex")
                (:file "wraith")
+               (:file "acolyte")
                (:file "boss")
                (:file "elite")
                (:file "riftwalker")

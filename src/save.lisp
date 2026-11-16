@@ -113,6 +113,12 @@ their values."
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
 
+(defmethod saved-slots append ((storm firestorm))
+  '(target burning fading pulse-timer))
+
+(defmethod saved-slots append ((acolyte acolyte))
+  '(swallowed))
+
 (defmethod saved-slots append ((nova spell-nova))
   '(spell caster centre floor-y reach victims))
 
