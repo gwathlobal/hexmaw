@@ -531,8 +531,9 @@ real time instead.
   are generics with the caster's behaviour as the default.
 - `src/ogre.lisp`: the `ogre`, the big one (2.7 m, `body-radius` 1.0), which leaps and pushes
   the player around. See "The ogre" under "Creature movement" below.
-- `src/imp.lisp`: the `imp`, a `leaper` that pounces, springs back after its claw, breaks and
-  shrieks when its courage fails, steals, and comes in packs. See "The imp" under "Creature
+- `src/imp.lisp`: the `imp`, a `leaper` that pounces, leaps round the player when its pack holds
+  their front, springs back after its claw, breaks and shrieks when its courage fails, steals, and
+  comes in packs. See "The imp" under "Creature
   movement" below.
 - `src/blocks.lisp`: level blocks from glTF (`find-block`, `place-block`, `attach-block`,
   `seal-connector`); see "Level blocks" below.
@@ -2043,6 +2044,31 @@ pounce.
   frame pressed flat), and so does any blow that lands while it flies (`knock-down`, from
   `react-to-hit`). A bash in the crouch interrupts it like any wind-up. `hurt-player` returns
   whether the shield took the blow.
+- **Flank leap** (`start-flank-leap`, asked before the pounce in `special-attack`): an imp in
+  front of the player (within `*flank-leap-front*`, 1.1 rad, of their facing, `*flank-leap-min*` to
+  `*flank-leap-max*`, 1.5 to 7 m) leaps past or over them to a free spot at their side or back,
+  with no claw in the air. Only when the front is held (`front-taken-p`: a packmate in reach there,
+  claiming a spot there, or pouncing) or the raised shield faces it; only in a pack
+  (`*flank-leap-courage*` 1.1, more than a lone imp's whole health); one imp of a pack at a time;
+  on the pounce's cooldown, so it is one or the other; never a boss, a thief or a fleeing imp; and
+  from level 2 of a run on (`flank-leap-allowed-p`, the run level's `:flank-leap`; always off a
+  generated level). `*imp-flank-leaps*` NIL turns it off. `plan-flank-leap` tries the back, the
+  back quarter on its own side, the other, then the sides, each free in `attack-slot`'s sense
+  (`slot-free-test`, creature.lisp), at the attack spot's radius, then `*flank-leap-radii*` (1.6
+  and 2.4 m); the spot must be `open-spot-p` with no body on it. Its arc is the pounce's low one
+  where that misses every body, else a vault `*vault-rise*` up (2.4 in a 4 m room, capped under the
+  ceiling, `leap-apex-under`): `arc-clear-p`'s `:bodies` sweeps its box past the player and its
+  packmates. Over the head it must come down 1.6 to 2.4 m behind them (it reaches the 1.9 m it
+  needs there only 0.25 s from the ground). In a 3 m corridor it can't vault (its feet reach
+  1.4 m), and the player fills too much of it to leap past, so it doesn't leap there. In flight it passes packmates that moved into its way since (`leap-passes-bodies-p`, in
+  `fly-leap`) but drops if the player steps into it. The tell: the crouch is longer
+  (`*flank-leap-windup*`, 0.55 s), lower (`*flank-leap-crouch*`, `attack-squash`), turned to where
+  it will land, and screeches (`:vault`, `imp-alert`, not the pounce's `imp-claw`); the landing
+  thumps (`step-light`). It claims the spot it lands on (`slot-yaw`), stands `*flank-leap-recover*`
+  (0.25 s), and within `*flank-leap-strike-reach*` (1.8 m between bodies) goes straight into its
+  claw, lunging in: about 0.6 s from landing to the blow. `flank-leaping` is the landing's yaw from
+  the crouch, `:landed` until it sets off again, and is saved. The spear's counter and any blow in
+  the air knock it down as they do a pounce; over the head nothing reaches it.
 - **Hit and run** (`release-attack`): after every claw it springs back `*imp-spring-speed*`
   (6 m/s, about 1.3 m) on its `momentum`, `*imp-spring-angle*` to one side, and gives up its spot
   (`ban-slot`), so it comes in again from elsewhere. Its `attack-pause` is 0.35 s.
@@ -2075,7 +2101,27 @@ To try it on the test level (with `*debug-hall-monsters*` on, the hall imp is `(
 off and `(setf (alert imp) 10.0 (idle-timer imp) 0.0)` for a pounce (`*leap-debug*` logs it), with
 `(setf (block-held *player*) t)` to see it thrown down; `(hurt imp 18)` on a lone one for the
 shriek and flight; `(setf *imp-steal-chance* 100)` and `(give-item *player* :health-potion)` for a
-theft. `tools/hd status` shows each imp's brain.
+theft. For the flank leap, on the debug level (any level but a generated one allows it) stand 4 m in
+front of the two hall imps with `*leap-debug*` on and set both hunting with
+`(leap-cooldown imp) 0.0`: one pounces or comes in, and the log says where the other leaps ("flank
+leap 3.14 rad round, 2.4 m off, apex 2.40"), or why not. `tools/hd status` shows each imp's brain.
+
+`tools/imp_surround.sh [TRIALS] [MODES]` measures how a pack of three surrounds the player
+(`tools/imp_surround.lisp`, loaded into the running game): on the debug level with only its imps,
+the player, health topped up, either tracks the nearest imp (`track`: turning to it at 3 rad/s and
+backing off 2 s in 4) or faces north and strafes (`strafe`), 20 s a trial, with the flank leap off
+and on and the shield down and up. It prints the seconds imps stood in reach in front, at the flank
+and at the back, the claws from each and those blocked, the flank leaps and those cut short, touches
+between imps, and when an imp first stood at the flank or back.
+Over 5 trials of each, the flank leap made 4.2 leaps a trial against a tracking player with the
+shield down, 5.2 with it up, 1.6 and 3.4 against a strafing one; 6 of those 72 were cut short. With
+it, the share of the time imps stood in reach at the flank or back rose from 37% to 43% against the
+tracking player with the shield down (claws from the back 0 to 0.8 a trial, the first flank or
+back contact 3.8 to 2.9 s), from 79% to 86% and 79% to 84% against the strafing one, and fell from
+51% to 48% against the tracking player with the shield up, where it turns to each imp as it lands.
+Walking round already put the pack at the player's flank: the leap gets there about a second
+sooner, more than it changes where the pack ends up. Touches between imps: 3.0 to 6.0, 10.8 to 5.0,
+5.4 to 7.0 and 8.0 to 8.8 a trial.
 
 ### The ogre
 
@@ -3607,6 +3653,7 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   `*sight-range*` and `*hearing-range*` in `sees-target-p`, `:alert` the hunt's `alert-time`,
   `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's and riftwalker's
   abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+  `:flank-leap` lets pack imps leap round the player (NIL on level 1, T below; see "The imp").
 
 Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
 budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,

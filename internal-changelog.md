@@ -7,6 +7,19 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Imps leap round the player.** An imp in a pack, in front of the player while a packmate holds
+  their front or their shield faces it, crouches lower and longer, turned to where it will land,
+  screeches, and leaps past or over them to a free attack spot at their side or back, with no claw
+  in the air; it claims that spot and claws at once from close (`start-flank-leap`,
+  `plan-flank-leap`, imp.lisp). On the pounce's cooldown, one imp of a pack at a time, from level 2
+  of a run on (`:flank-leap` in `*run-levels*`, `flank-leap-allowed-p`). A vault over the head
+  needs a 4 m ceiling and lands 1.6 to 2.4 m behind. The spear's counter brings it down with no
+  claw after. For it: `try-leap` takes a planner, `arc-clear-p` can sweep past bodies,
+  `leap-apex-under` and `leap-passes-bodies-p` (ogre.lisp), `slot-free-test` out of `attack-slot`,
+  and `attack-squash` (creature.lisp). `tools/imp_surround.sh` measures how a pack of three
+  surrounds a strafing or tracking player: the leap's gain is modest (37% to 43% of the time at the
+  flank or back against a tracking player, the first flank contact a second sooner).
+
 ## November 16, 2026 v0.1.1
 
 - **Windows lets the game hold 2048 files open.** Every sound voice keeps its Vorbis file open,

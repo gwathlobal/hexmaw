@@ -227,8 +227,13 @@ List it before CREATURE or a subclass in the superclasses."))
             do (setf lowest c))
     lowest))
 
-(defun arc-clear-p (ogre from to apex duration)
-  "True if OGRE's body fits all along the arc. Bodies don't count: the landing throws them."
+(defparameter *arc-body-margin* 0.1
+  "Metres an arc that must miss bodies (ARC-CLEAR-P's BODIES) keeps from them.")
+
+(defun arc-clear-p (ogre from to apex duration &key bodies)
+  "True if OGRE's body fits all along the arc. Bodies don't count (the landing throws them)
+unless BODIES: then its body must also miss every other, the one it hunts too, by
+*ARC-BODY-MARGIN*."
   (let* ((distance (sqrt (+ (expt (- (vx to) (vx from)) 2) (expt (- (vz to) (vz from)) 2))))
          (steps (max 2 (ceiling distance *leap-sample*)))
          (r (body-radius ogre))
@@ -239,7 +244,23 @@ List it before CREATURE or a subclass in the superclasses."))
           do (arc-point from to apex duration (* duration (/ i steps)) (leap-gravity ogre) p)
              (unless (fits-at-p (vx p) (vy p) (vz p) r h)
                (return (leap-refused "arc blocked at ~,2f ~,2f ~,2f" (vx p) (vy p) (vz p))))
+             (when (and bodies
+                        (body-overlapping (vx p) (- (vy p) *arc-body-margin*) (vz p)
+                                          (float (+ r *arc-body-margin*) 0f0)
+                                          (float (+ h *arc-body-margin* *arc-body-margin*) 0f0)
+                                          ogre))
+               (return (leap-refused "arc meets a body at ~,2f ~,2f ~,2f" (vx p) (vy p) (vz p))))
           finally (return T))))
+
+(defun leap-apex-under (leaper from to rise)
+  "Height LEAPER's feet reach over the arc from FROM to TO, RISE metres above the higher end,
+lowered under the lowest ceiling along it; and the higher end's height."
+  (let* ((top (max (vy from) (vy to)))
+         (ceiling (lowest-ceiling-along from to top)))
+    (values (if ceiling
+                (min (+ top rise) (- ceiling (sprite-height leaper) *leap-headroom*))
+                (+ top rise))
+            top)))
 
 (defun plan-leap (ogre)
   "Lay out a leap at what OGRE hunts, into LEAP-FROM, LEAP-TO, LEAP-APEX and LEAP-DURATION:
@@ -262,32 +283,31 @@ true if there is a landing cell and an arc OGRE's body fits."
               ((not (clear-path-p (location ogre) feet (cast-height ogre)))
                (leap-refused "no line to the target"))
               (T
-               (let* ((top (max (vy loc) (vy to)))
-                      (ceiling (lowest-ceiling-along loc to top))
-                      (apex (if ceiling
-                                (min (+ top (leap-rise ogre)) (- ceiling h *leap-headroom*))
-                                (+ top (leap-rise ogre))))
-                      (duration (arc-time (vy loc) (vy to) apex (leap-gravity ogre))))
-                 (cond ((< apex (+ top (leap-min-rise ogre)))
-                        (leap-refused "ceiling too low, apex ~,2f over ~,2f" apex top))
-                       ((< (* (leap-max-speed ogre) duration) distance)
-                        (leap-refused "~,1f m too far for a ~,2f s arc" distance duration))
-                       ((arc-clear-p ogre loc to apex duration)
-                        (v<- (leap-from ogre) loc)
-                        (v<- (leap-to ogre) to)
-                        (setf (leap-apex ogre) (float apex 0f0)
-                              (leap-duration ogre) (float duration 0f0))
-                        T)))))))))
+               (multiple-value-bind (apex top) (leap-apex-under ogre loc to (leap-rise ogre))
+                 (let ((duration (arc-time (vy loc) (vy to) apex (leap-gravity ogre))))
+                   (cond ((< apex (+ top (leap-min-rise ogre)))
+                          (leap-refused "ceiling too low, apex ~,2f over ~,2f" apex top))
+                         ((< (* (leap-max-speed ogre) duration) distance)
+                          (leap-refused "~,1f m too far for a ~,2f s arc" distance duration))
+                         ((arc-clear-p ogre loc to apex duration)
+                          (v<- (leap-from ogre) loc)
+                          (v<- (leap-to ogre) to)
+                          (setf (leap-apex ogre) (float apex 0f0)
+                                (leap-duration ogre) (float duration 0f0))
+                          T))))))))))
 
-(defun try-leap (leaper)
-  "Start a leap at what LEAPER hunts if it may leap again and PLAN-LEAP finds one: true if it did."
+(defun try-leap (leaper &key (plan #'plan-leap) (noise :leap)
+                             (min (leap-min-distance leaper)) (max (+ (leap-max-distance leaper) 1.0)))
+  "Start a leap if LEAPER may leap again, what it hunts is MIN to MAX metres across, and PLAN (a
+function of LEAPER, by default PLAN-LEAP at what it hunts) lays one out: true if it did. Its NOISE
+event sounds as it crouches."
   (when (and (<= (leap-cooldown leaper) 0) (not (airborne leaper)) (not (falling leaper))
-             (<= (leap-min-distance leaper) (target-distance leaper) (+ (leap-max-distance leaper) 1.0))
-             (plan-leap leaper))
+             (<= min (target-distance leaper) max)
+             (funcall plan leaper))
     (setf (attack-kind leaper) :leap)
     (start-attack leaper)
     ;; As it crouches, not as it leaves: the roar is the warning.
-    (creature-noise leaper :leap)
+    (creature-noise leaper noise)
     T))
 
 (defmethod special-attack ((ogre ogre))
@@ -439,6 +459,11 @@ short: the ogre's quake, by default.")
 
 (defvar *arc-point* (vec 0 0 0) "Where FLY-LEAP is on the arc this tick, reused.")
 
+(defgeneric leap-passes-bodies-p (leaper)
+  (:documentation "True if LEAPER's leap flies past bodies rather than being cut short by them:
+one planned clear of them (the imp's flank leap), which they may have walked into since.")
+  (:method ((leaper leaper)) NIL))
+
 (defun fly-leap (ogre dt)
   "Move OGRE DT seconds along its leap's arc. A wall, ceiling or body in the way cuts
 the leap short: it drops from there."
@@ -452,7 +477,9 @@ the leap short: it drops from there."
               *leap-peak* (max *leap-peak* (vy loc)))
         (setf (falling ogre) T))
     (unless (falling ogre)
-      (multiple-value-bind (x-blocked z-blocked) (move-creature ogre (- (vx p) (vx loc)) (- (vz p) (vz loc)) 0.05)
+      (multiple-value-bind (x-blocked z-blocked)
+          (let ((*ignore-bodies* (or *ignore-bodies* (leap-passes-bodies-p ogre))))
+            (move-creature ogre (- (vx p) (vx loc)) (- (vz p) (vz loc)) 0.05))
         (when (or x-blocked z-blocked)
           (let ((*leaper* ogre))
             (leap-log "leap cut short at ~,2f ~,2f ~,2f" (vx loc) (vy loc) (vz loc)))

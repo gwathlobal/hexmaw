@@ -12,21 +12,21 @@
      :loot (:weapons 1 :first-weapon :spear :enchant-chance 0.0
             :runes 1 :rune-power (10 18) :rune-effects 1 :area-chance 0.0 :authored-chance 0.0)
      :skip-scale 1.0 :elite-chance 0.0
-     :sight 1.0 :hearing 1.0 :alert 1.0 :pause 1.0 :cooldown 1.0)
+     :sight 1.0 :hearing 1.0 :alert 1.0 :pause 1.0 :cooldown 1.0 :flank-leap NIL)
     (:rooms 19 :exit "descent" :altar-chance 0.4
      :pool (("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1) ("gale-wraith" 1)
             ("riftwalker" 1))
      :loot (:weapons 1 :enchant-chance 0.5 :enchant-cost (2 3) :enchant-effects 1
             :runes 2 :rune-power (16 28) :rune-effects 2 :area-chance 0.3 :authored-chance 0.35)
      :skip-scale 0.75 :elite-chance 0.12
-     :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
+     :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9 :flank-leap T)
     (:rooms 22 :exit "arena" :altar-chance 0.4
      :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2)
             ("riftwalker" 2))
      :loot (:weapons 2 :enchant-chance 0.8 :enchant-cost (3 6) :enchant-effects 2
             :runes 2 :rune-power (24 40) :rune-effects 3 :area-chance 0.5 :authored-chance 0.5)
      :skip-scale 0.5 :elite-chance 0.2
-     :sight 1.3 :hearing 1.6 :alert 1.6 :pause 0.7 :cooldown 0.8))
+     :sight 1.3 :hearing 1.6 :alert 1.6 :pause 0.7 :cooldown 0.8 :flank-leap T))
   "A run's levels, first to last. :ROOMS is how many rooms the generator aims for, and :EXIT
 the block it puts on the doorway furthest from the start (or a list of them, tried in order):
 the descent, whose exit leaves the level, or the last level's arena, whose boss ends the run
@@ -47,7 +47,8 @@ spawns (a block naming only kinds outside it isn't used: BLOCK-FITS-POOL-P), :SK
 scales a spawn's chance of no monster (*SPAWN-SKIP-SCALE*), and :ELITE-CHANCE, a spawn's chance
 of an elite (*ELITE-CHANCE*, elite.lisp). Asked in play (DEPTH-SCALE): :SIGHT and :HEARING scale
 how far a creature notices the player, :ALERT how long it hunts after, :PAUSE its pause after an
-attack and :COOLDOWN its abilities' cooldowns. A key left out keeps the variable, or 1.")
+attack and :COOLDOWN its abilities' cooldowns, and :FLANK-LEAP whether an imp in a pack leaps
+round the player (FLANK-LEAP-ALLOWED-P, imp.lisp). A key left out keeps the variable, or 1.")
 
 (defparameter *settlement-level*
   '(:core "town" :rooms 6 :exit NIL :min-wing 3 :altar-chance NIL :loot (:weapons 0 :runes 1)
@@ -127,6 +128,12 @@ generated level."
   (if (eq *level* :generated)
       (float (run-level-property *run-depth* key 1.0) 0f0)
       1f0))
+
+(defun flank-leap-allowed-p ()
+  "True if imps on the level being played may leap round the player (imp.lisp): the run level's
+:FLANK-LEAP, and always but on a generated level."
+  (or (not (eq *level* :generated))
+      (run-level-property *run-depth* :flank-leap T)))
 
 (defun current-run-seed ()
   "The seed this run's levels come from, picked when first asked for; *LEVEL-SEED* fixes it for testing."

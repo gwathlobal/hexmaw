@@ -1298,6 +1298,32 @@ CREATURE, and not one it already touches. A walking one has moved on by the next
               do (consider (location c) (body-radius c) (sprite-height c))))
     (make-nav-bodies bodies)))
 
+(defun slot-free-test (creature)
+  "A function of a yaw round CREATURE's target and NEARER-ONLY, true if CREATURE may claim that
+spot: at least *SLOT-SPACING* from every other hunter's claim (with NEARER-ONLY, only those nearer
+the target than CREATURE count) and from every hunter already standing in reach there, and not
+near a spot it gave up (BAN-SLOT)."
+  (let* ((target (hunt-target creature))
+         (distance (target-distance creature))
+         (claims (loop for c across *creatures*
+                       when (and (not (eq c creature)) (slot-yaw c) (melee-hunter-p c)
+                                 (eq (hunt-target c) target)
+                                 (< (target-distance c) (+ *slot-range* 1.0)))
+                         collect (cons (slot-yaw c) (target-distance c))))
+         (standing (loop for c across *creatures*
+                         when (and (not (eq c creature)) (not (dead c)) (attacker-p c)
+                                   (eq (hunt-target c) target)
+                                   (target-within-p c (attack-reach c)))
+                           collect (target-bearing (hunt-target c) (location c)))))
+    (lambda (yaw nearer-only)
+      (and (loop for (claim . d) in claims
+                 never (and (or (not nearer-only) (< d distance))
+                            (< (angle-between yaw claim) (* 0.99 *slot-spacing*))))
+           (loop for b in standing
+                 never (< (angle-between yaw b) (* 0.99 *slot-spacing*)))
+           (loop for ban in (slot-bans creature)
+                 never (< (angle-between yaw ban) (* 0.5 *slot-spacing*)))))))
+
 (defun attack-slot (creature)
   "Where CREATURE, a melee hunter within *SLOT-RANGE* of the player, makes for to attack,
 so a pack surrounds the player instead of queuing. It claims a direction round the player
@@ -1310,33 +1336,15 @@ waits its turn); NIL further off, or for anything else."
   (let ((distance (target-distance creature)))
     (if (not (and *nav-grid* (melee-hunter-p creature) (< distance *slot-range*)))
         (setf (slot-yaw creature) NIL)
-        (let* ((target (hunt-target creature))
-               (claims (loop for c across *creatures*
-                            when (and (not (eq c creature)) (slot-yaw c) (melee-hunter-p c)
-                                      (eq (hunt-target c) target)
-                                      (< (target-distance c) (+ *slot-range* 1.0)))
-                              collect (cons (slot-yaw c) (target-distance c))))
-              (standing (loop for c across *creatures*
-                              when (and (not (eq c creature)) (not (dead c)) (attacker-p c)
-                                        (eq (hunt-target c) target)
-                                        (target-within-p c (attack-reach c)))
-                                collect (target-bearing (hunt-target c) (location c))))
+        (let ((free-p (slot-free-test creature))
               (own (slot-yaw creature)))
-          (flet ((free-p (yaw nearer-only)
-                   (and (loop for (claim . d) in claims
-                              never (and (or (not nearer-only) (< d distance))
-                                         (< (angle-between yaw claim) (* 0.99 *slot-spacing*))))
-                        (loop for b in standing
-                              never (< (angle-between yaw b) (* 0.99 *slot-spacing*)))
-                        (loop for ban in (slot-bans creature)
-                              never (< (angle-between yaw ban) (* 0.5 *slot-spacing*))))))
-            (or (and own (free-p own T) (slot-point creature own))
-                ;; A new claim: the free spot nearest the way it comes from.
-                (multiple-value-bind (spot yaw)
-                    (nearest-open-spot creature NIL (lambda (yaw) (free-p yaw NIL)))
-                  (setf (slot-yaw creature) yaw)
-                  spot)
-                (values NIL :wait)))))))
+          (or (and own (funcall free-p own T) (slot-point creature own))
+              ;; A new claim: the free spot nearest the way it comes from.
+              (multiple-value-bind (spot yaw)
+                  (nearest-open-spot creature NIL (lambda (yaw) (funcall free-p yaw NIL)))
+                (setf (slot-yaw creature) yaw)
+                spot)
+              (values NIL :wait))))))
 
 (defun chase-path (creature)
   "A path to the player, or to the creature's ATTACK-SLOT beside them: straight there when
@@ -1785,6 +1793,11 @@ after the flinch, block and attack.")
     (declare (ignore squash))
     NIL))
 
+(defgeneric attack-squash (creature squash)
+  (:documentation "How squashed CREATURE's attack frame is drawn, SQUASH being its flinch's (0 to
+1, more for a deeper crouch): an imp crouches lower to leap round the player (imp.lisp).")
+  (:method ((creature creature) squash) squash))
+
 (defun update-creature-look (creature)
   "Set texture, frame, tint and scaling from walking, attacking, flash, stagger and death."
   (let ((tint (tint creature))
@@ -1816,7 +1829,7 @@ after the flinch, block and attack.")
                               (min (1- frames) (floor (* (- 1 (/ (brace creature) *block-time*)) frames))) 0.0
                               views)))
           ((creature-attacking-p creature)
-           (show-view-frame creature (attack-animation creature) (attack-frame creature) s))
+           (show-view-frame creature (attack-animation creature) (attack-frame creature) (attack-squash creature s)))
           ((show-own-pose creature s))
           ((creature-walking-p creature)
            ;; The frame follows the distance walked, so feet don't skate.

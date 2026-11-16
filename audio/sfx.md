@@ -253,6 +253,9 @@ tables above:
   A vortex's burns, which make no flinch, make a creature it holds cry out every `*whirl-cry-gap*`
   (vortex.lisp).
 - The boss's shockwave plays `ogre-land`; its leap is the ogre's.
+- The imp's pounce crouches to `imp-claw` (`:leap`); its flank leap round the player crouches to
+  `imp-alert` (`:vault`), so the two sound apart, and lands with a `step-light` at full volume
+  (`leap-landed`, imp.lisp), so a player hears it come down behind them.
 - The player's footsteps, strokes and loops are `body-sounds` (player.lisp): a footstep every
   `*footstep-stride*` metres on foot, `footstep-snow` where the floor's tread is snow
   (`floor-tread`, greybox.lisp: snow is in `*footings*` with no friction, so it is no slipperier),

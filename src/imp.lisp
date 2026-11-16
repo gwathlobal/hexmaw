@@ -8,6 +8,11 @@
 ;;;   the air it claws them; the raised shield takes the claw and throws it down, and so
 ;;;   does any blow that lands while it flies (KNOCK-DOWN): it lies DOWNED a moment. A timed
 ;;;   bash in the crouch interrupts it like any wind-up.
+;;; - Flank leap. An imp in a pack, in front of the player while a packmate holds the front
+;;;   or the player's shield faces it, crouches lower and longer, turned to where it will
+;;;   land, screeches, and leaps past or over them to a free spot at their side or back
+;;;   (PLAN-FLANK-LEAP), with no claw in the air. It claims that spot and claws from there.
+;;;   From level 2 of a run on (FLANK-LEAP-ALLOWED-P, run.lisp).
 ;;; - Hit and run. After every claw it springs back out of reach (SPRING-FROM-PLAYER) and
 ;;;   gives up its spot round the player (BAN-SLOT), so it comes in again from elsewhere.
 ;;; - Morale. Its COURAGE is its health with a bonus for every packmate near. Once in a life,
@@ -39,6 +44,30 @@
 (defparameter *pounce-rebound* 3.0 "Speed in m/s it bounces back off the player its pounce struck.")
 (defparameter *pounce-blocked-rebound* 5.0 "Speed in m/s it bounces back off a raised shield.")
 (defparameter *imp-downed-time* 1.0 "Seconds it lies knocked down out of a pounce.")
+
+(defparameter *imp-flank-leaps* T "When NIL, no imp leaps round the player: for comparing.")
+(defparameter *flank-leap-courage* 1.1
+  "Least COURAGE an imp leaps round the player with: more than a lone imp's whole health, so only
+an imp with a packmate near does.")
+(defparameter *flank-leap-front* 1.1
+  "Radians either side of where the player faces within which an imp stands to leap round them,
+and within which a packmate holds the front.")
+(defparameter *flank-leap-min* 1.5
+  "Least distance, in metres across, from the player an imp leaps round them from: just out of
+reach, as it is once it has sprung back from a claw.")
+(defparameter *flank-leap-max* 7.0 "Furthest it leaps round them from: the pounce's furthest.")
+(defparameter *flank-leap-radii* '(1.6 2.4)
+  "Metres from the player, besides the attack spot's own, it tries to land: a vault over their
+head needs room behind them to come down in.")
+(defparameter *vault-rise* 2.5
+  "Metres its feet rise above the higher end of a leap that has to go over a body, where the
+ceiling allows: 2.4 in a 4 m room, which clears the player's 1.8 m.")
+(defparameter *flank-leap-windup* 0.55 "Seconds it crouches before it leaps round: longer than the pounce's.")
+(defparameter *flank-leap-crouch* 0.15 "How much lower, as a share of its height, it crouches for it.")
+(defparameter *flank-leap-recover* 0.25 "Seconds it stands after landing from it.")
+(defparameter *flank-leap-strike-reach* 1.8
+  "Metres between its body and the player's within which it claws as soon as it has recovered from
+landing, the claw's lunge carrying it in, rather than walking to its spot first.")
 
 (defparameter *imp-spring-speed* 6.0
   "Speed in m/s it springs back after a claw: about 1.3 m, out of the sword's reach.")
@@ -116,6 +145,9 @@ floor: the player sees it happen, and the level's pickups don't drain away out o
             :documentation "True while it falls out of a pounce, knocked: it lands DOWNED.")
    (pounce-struck :initform NIL :accessor pounce-struck
                   :documentation "True once this pounce's claw has landed, or can't any more.")
+   (flank-leaping :initform NIL :accessor flank-leaping
+                  :documentation "The yaw round what it hunts that it leaps to, from its crouch;
+:LANDED once down, until it sets off again; NIL otherwise.")
    (shriek :initform 0.0 :accessor shriek :documentation "Seconds left of its shriek, before it runs.")
    (shrieked :initform NIL :accessor shrieked :documentation "True once it has broken and run, this life.")
    (fleeing :initform 0.0 :accessor fleeing :documentation "Seconds it still runs from the player.")
@@ -125,9 +157,10 @@ floor: the player sees it happen, and the level's pickups don't drain away out o
    (steal-target :initform NIL :accessor steal-target :documentation "The pickup it walks to take, or NIL.")
    (loot-sprite :initform NIL :accessor loot-sprite :documentation "What it shows over its head while it carries loot.")))
 
-;; The pounce's crouch (:LEAP, TRY-LEAP) is the claw's wind-up; the shriek is its alert cry.
+;; The pounce's crouch (:LEAP, TRY-LEAP) is the claw's wind-up; the flank leap's (:VAULT) and the
+;; shriek are its alert cry.
 (define-creature-sounds imp
-  :alert :imp-alert :pain :imp-pain :death :imp-death :windup :imp-claw :leap :imp-claw
+  :alert :imp-alert :pain :imp-pain :death :imp-death :windup :imp-claw :leap :imp-claw :vault :imp-alert
   :shriek :imp-alert :step :step-light)
 
 (defgeneric skittish-p (imp)
@@ -144,12 +177,13 @@ floor: the player sees it happen, and the level's pickups don't drain away out o
 (defmethod leap-min-rise ((imp imp)) *pounce-min-rise*)
 (defmethod leap-max-speed ((imp imp)) *pounce-max-speed*)
 (defmethod leap-gravity ((imp imp)) *pounce-gravity*)
-(defmethod leap-windup ((imp imp)) *pounce-windup*)
+(defmethod leap-windup ((imp imp)) (if (realp (flank-leaping imp)) *flank-leap-windup* *pounce-windup*))
 (defmethod leap-recover-time ((imp imp)) *pounce-recover*)
 (defmethod leap-cooldown-time ((imp imp)) *pounce-cooldown*)
 
 (defun start-pounce (imp)
   "Start a pounce at what IMP hunts if it may: true if it did."
+  (setf (flank-leaping imp) NIL)
   (when (try-leap imp)
     (setf (pounce-struck imp) NIL
           (knocked imp) NIL)
@@ -197,11 +231,127 @@ leap: no KNOCKBACK-SCALE."
 (defmethod leap-landed ((imp imp))
   (cond ((knocked imp)
          (setf (knocked imp) NIL
+               (flank-leaping imp) NIL
                (downed imp) *imp-downed-time*)
          (stop-walking imp *imp-downed-time*))
+        ((and (flank-leaping imp) (not (impaled imp)))
+         ;; Down at the player's side or back: that is its spot now, and it hunts from there.
+         (setf (flank-leaping imp) :landed
+               (recover imp) *flank-leap-recover*)
+         (stop-walking imp *flank-leap-recover*)
+         (let ((target (hunt-target imp)))
+           (when target
+             (face-target imp)
+             (setf (slot-yaw imp) (float (target-bearing target (location imp)) 0f0))))
+         (play-sound :step-light (location imp)))
         (T
-         (setf (recover imp) (leap-recover-time imp))
+         ;; A pounce, or a flank leap the spear's counter brought down: no claw to follow.
+         (setf (flank-leaping imp) NIL
+               (recover imp) (leap-recover-time imp))
          (stop-walking imp (leap-recover-time imp)))))
+
+;;; The flank leap: past or over the player to their side or back, so a pack surrounds them.
+
+(defun front-taken-p (imp)
+  "True if another melee hunter of what IMP hunts holds its front: stands in reach there, claims
+a spot there, or is an imp pouncing at it."
+  (let* ((target (hunt-target imp))
+         (facing (target-facing target)))
+    (loop for c across *creatures*
+          thereis (and (not (eq c imp)) (melee-hunter-p c) (eq (hunt-target c) target)
+                       (< (target-distance c) (+ *flank-leap-max* 1.0))
+                       (or (and (typep c 'imp) (eq (attack-kind c) :leap) (not (flank-leaping c))
+                                (or (eq (brain c) :attacking) (airborne c)))
+                           (and (target-within-p c (+ (attack-reach c) 0.5))
+                                (< (angle-between (target-bearing target (location c)) facing) *flank-leap-front*))
+                           (and (slot-yaw c)
+                                (< (angle-between (slot-yaw c) facing) *flank-leap-front*)))))))
+
+(defun flank-leap-ready-p (imp)
+  "True if IMP, a pack imp in front of what it hunts, has cause to leap round it: the front held
+by a packmate, or a shield raised at it; and no packmate is leaping round the same target already."
+  (let ((target (hunt-target imp)))
+    (and *imp-flank-leaps* (flank-leap-allowed-p) (skittish-p imp) (not (stolen imp))
+         target (target-live-p target) (not (target-swimming-p target))
+         (<= (leap-cooldown imp) 0) (not (airborne imp)) (not (falling imp))
+         (<= *flank-leap-min* (target-distance imp) *flank-leap-max*)
+         (< (abs (- (vy (body-feet target)) (vy (location imp)))) 1.0)
+         (< (angle-between (target-bearing target (location imp)) (target-facing target)) *flank-leap-front*)
+         (<= *flank-leap-courage* (courage imp))
+         (or (target-guarding-p target (location imp) *flank-margin*)
+             (front-taken-p imp))
+         (loop for c across *creatures*
+               never (and (not (eq c imp)) (typep c 'imp) (flank-leaping c) (not (dead c))
+                          (eq (hunt-target c) target))))))
+
+(defun plan-flank-leap (imp)
+  "Lay out a leap for IMP to a free spot at the back, back quarter or side of what it hunts, in
+that order, on its own side first: low past their body where it can, else over it, and over no
+other. True if one fits; FLANK-LEAPING is then the spot's yaw."
+  (let* ((*leaper* imp)
+         (target (hunt-target imp))
+         (feet (body-feet target))
+         (facing (target-facing target))
+         (side (flank-side imp))
+         (free (slot-free-test imp))
+         (loc (ground-point imp))
+         (r (body-radius imp))
+         (h (sprite-height imp))
+         (near (+ r (body-radius target) (* 0.9 *attack-start-reach* (attack-reach imp))))
+         (gravity (leap-gravity imp)))
+    (dolist (turn (list pi (* side 0.75 pi) (* side -0.75 pi) (* side 0.5 pi) (* side -0.5 pi))
+                  (leap-refused "no flank spot to leap to"))
+      (let ((yaw (float (+ facing turn) 0f0)))
+        (when (funcall free yaw NIL)
+          (dolist (radius (cons near *flank-leap-radii*))
+            (let ((spot (vec (+ (vx feet) (* radius (sin yaw))) (vy feet) (- (vz feet) (* radius (cos yaw))))))
+              (when (open-spot-p imp spot)
+                (multiple-value-bind (i j k)
+                    (let ((*nav-bodies* NIL)) (nav-nearest-fitting spot r h :search 0 :reach (step-height imp)))
+                  (let* ((to (nav-point i j k))
+                         (distance (sqrt (+ (expt (- (vx to) (vx loc)) 2) (expt (- (vz to) (vz loc)) 2))))
+                         (rise (- (vy to) (vy loc)))
+                         (last-apex NIL))
+                    (when (and (<= 1.5 distance (leap-max-distance imp))
+                               (<= (- (leap-max-drop imp)) rise (leap-max-rise imp))
+                               (not (body-overlapping (vx to) (+ (vy to) 0.05) (vz to) r (- h 0.05) imp)))
+                      (dolist (lift (list (leap-rise imp) *vault-rise*))
+                        (multiple-value-bind (apex top) (leap-apex-under imp loc to lift)
+                          (let ((duration (arc-time (vy loc) (vy to) apex gravity)))
+                            (when (and (not (eql apex last-apex))
+                                       (<= (+ top (leap-min-rise imp)) apex)
+                                       (<= distance (* (leap-max-speed imp) duration))
+                                       (arc-clear-p imp loc to apex duration :bodies T))
+                              (v<- (leap-from imp) loc)
+                              (v<- (leap-to imp) to)
+                              (setf (leap-apex imp) (float apex 0f0)
+                                    (leap-duration imp) (float duration 0f0)
+                                    (flank-leaping imp) yaw)
+                              (leap-log "flank leap ~,2f rad round, ~,1f m off, apex ~,2f over ~,2f"
+                                        turn radius (- apex top) top)
+                              (return-from plan-flank-leap T))
+                            (setf last-apex apex)))))))))))))))
+
+(defun start-flank-leap (imp)
+  "Start a leap round what IMP hunts if it may (FLANK-LEAP-READY-P): true if it did."
+  (when (and (flank-leap-ready-p imp)
+             (try-leap imp :plan #'plan-flank-leap :noise :vault :min *flank-leap-min* :max *flank-leap-max*))
+    ;; No claw in the air; the spot is its claim from now, so its pack keeps off it.
+    (setf (pounce-struck imp) T
+          (knocked imp) NIL
+          (slot-yaw imp) (flank-leaping imp))
+    T))
+
+(defmethod attack-squash ((imp imp) squash)
+  (if (and (realp (flank-leaping imp)) (eq (attack-kind imp) :leap) (not (airborne imp)))
+      (max squash (/ *flank-leap-crouch* *stagger-squash*))
+      squash))
+
+(defmethod leap-passes-bodies-p ((imp imp))
+  (realp (flank-leaping imp)))
+
+(defmethod break-flight :after ((imp imp))
+  (setf (flank-leaping imp) NIL))
 
 ;;; Morale.
 
@@ -398,6 +548,7 @@ walk that comes no nearer it than it is now. NIL if there is none."
 (defmethod creature-revived ((imp imp))
   (setf (downed imp) 0.0
         (knocked imp) NIL
+        (flank-leaping imp) NIL
         (shriek imp) 0.0
         (shrieked imp) NIL
         (fleeing imp) 0.0
@@ -427,7 +578,12 @@ walk that comes no nearer it than it is now. NIL if there is none."
                (T
                 (stop-walking imp 0.4)
                 T)))
-        (T (start-pounce imp))))
+        ((and (eq (flank-leaping imp) :landed) (target-within-p imp *flank-leap-strike-reach*))
+         ;; Down from a flank leap: straight into the claw, lunging in.
+         (setf (flank-leaping imp) NIL)
+         (start-attack imp)
+         T)
+        (T (or (start-flank-leap imp) (start-pounce imp)))))
 
 ;; Hit and run: the claw, then a spring back out of reach, and another spot to come in from.
 (defmethod release-attack ((imp imp))
@@ -450,6 +606,15 @@ walk that comes no nearer it than it is now. NIL if there is none."
     (setf (downed imp) (down (downed imp))
           (fleeing imp) (down (fleeing imp))
           (cornered imp) (down (cornered imp)))
+    ;; A flank leap is over once it has landed, recovered and set off again (SPECIAL-ATTACK
+    ;; claws at once from close); one broken off in its crouch gives up the far spot it claimed.
+    (let ((leap (flank-leaping imp)))
+      (cond ((eq leap :landed)
+             (when (and (<= (recover imp) 0) (not (eq (brain imp) :idle)))
+               (setf (flank-leaping imp) NIL)))
+            ((and leap (not (eq (brain imp) :attacking)) (not (airborne imp)) (not (falling imp)))
+             (setf (slot-yaw imp) NIL
+                   (flank-leaping imp) NIL))))
     (when (< 0 (shriek imp))
       ;; A pale throb while it shrieks.
       (setf (flash imp) (max (flash imp) (* 0.7 *flash-time* (abs (sin (* 18.0 (shriek imp)))))))
@@ -464,6 +629,14 @@ walk that comes no nearer it than it is now. NIL if there is none."
 
 (defmethod keep-height :after ((imp imp) dt)
   (declare (ignore dt))
+  ;; A flank leap flies past packmates that moved into its way, but drops on meeting what it
+  ;; hunts, which stepped into it.
+  (when (and (realp (flank-leaping imp)) (airborne imp) (not (dead imp))
+             (let ((target (hunt-target imp)))
+               (and target (target-live-p target) (target-within-p imp 0.0 target))))
+    (setf (airborne imp) NIL
+          (falling imp) T
+          (fall-speed imp) 0.0))
   (when (and (eq (attack-kind imp) :leap) (or (airborne imp) (falling imp))
              (not (pounce-struck imp)) (not (dead imp))
              (let ((target (hunt-target imp)))
