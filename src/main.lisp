@@ -10,29 +10,48 @@
 (defparameter *max-open-files* 2048
   "Files the C runtime may have open at once on Windows (RAISE-OPEN-FILE-LIMIT).")
 
+(defparameter *c-runtimes* '("ucrtbase.dll" "msvcrt.dll")
+  "The C runtimes whose open file limit RAISE-OPEN-FILE-LIMIT raises, those loaded.")
+
 (defun raise-open-file-limit ()
-  "On Windows, let the C runtime hold *MAX-OPEN-FILES* files open instead of its default 512.
-Every sound voice keeps its Vorbis file open (stb_vorbis's fopen, in the Universal C runtime the
-vorbis DLL and the process share), and 0.1.1's clips came to 548, so the voice past the limit
-failed to open (FILE-OPEN-FAILURE) and broke the scene's update. _setmaxstdio is looked up when
-the game starts, not linked when it is built: foreign symbols of our own crashed the Windows dump
-(TERMINATE-PROCESS, dist.lisp)."
+  "On Windows, let each C runtime hold *MAX-OPEN-FILES* files open instead of its default 512.
+Every sound voice keeps its Vorbis file open (stb_vorbis's fopen, in the Universal C runtime,
+ucrtbase.dll), and 0.1.1's clips came to 534 voices, so the voice past the limit failed to open
+(FILE-OPEN-FAILURE, at water-lap.ogg) and the level's scene with it. Each runtime keeps its own
+limit, and msvcrt.dll, which SBCL's runtime may use, exports _setmaxstdio too: so each runtime's
+is asked for by its module (GetModuleHandleA, GetProcAddress), not by name alone, which found
+one that wasn't the vorbis DLL's. All of it is looked up when the game starts, not linked when
+it is built: foreign symbols of our own crashed the Windows dump (TERMINATE-PROCESS, dist.lisp)."
   #+win32
-  (handler-case
-      (progn
-        (sb-alien:load-shared-object "ucrtbase.dll" :dont-save T)
-        (let ((address (sb-sys:find-foreign-symbol-address "_setmaxstdio")))
-          (if address
-              (let ((limit (sb-alien:alien-funcall
-                            (sb-alien:sap-alien (sb-sys:int-sap address)
-                                                (function sb-alien:int sb-alien:int))
-                            *max-open-files*)))
-                (if (< 0 limit)
-                    (v:info :hexmaw "Open file limit: ~d." limit)
-                    (v:warn :hexmaw "The C runtime refused an open file limit of ~d." *max-open-files*)))
-              (v:warn :hexmaw "No _setmaxstdio in ucrtbase.dll: the open file limit stays at 512."))))
-    (error (e)
-      (v:warn :hexmaw "Couldn't raise the open file limit: ~a" e))))
+  (flet ((foreign (name)
+           (or (sb-sys:find-foreign-symbol-address name)
+               (error "No ~a." name))))
+    (handler-case
+        (let ((get-module (foreign "GetModuleHandleA"))
+              (get-proc (foreign "GetProcAddress")))
+          (sb-alien:load-shared-object "ucrtbase.dll" :dont-save T)
+          (dolist (runtime *c-runtimes*)
+            (let ((module (sb-alien:alien-funcall
+                           (sb-alien:sap-alien (sb-sys:int-sap get-module)
+                                               (function sb-sys:system-area-pointer sb-alien:c-string))
+                           runtime)))
+              (unless (zerop (sb-sys:sap-int module))
+                (let ((setmax (sb-alien:alien-funcall
+                               (sb-alien:sap-alien (sb-sys:int-sap get-proc)
+                                                   (function sb-sys:system-area-pointer
+                                                             sb-sys:system-area-pointer sb-alien:c-string))
+                               module "_setmaxstdio")))
+                  (if (zerop (sb-sys:sap-int setmax))
+                      (v:warn :hexmaw "No _setmaxstdio in ~a." runtime)
+                      (let ((limit (sb-alien:alien-funcall
+                                    (sb-alien:sap-alien setmax (function sb-alien:int sb-alien:int))
+                                    *max-open-files*)))
+                        (if (< 0 limit)
+                            (v:info :hexmaw "Open file limit in ~a: ~d." runtime limit)
+                            (v:warn :hexmaw "~a refused an open file limit of ~d."
+                                    runtime *max-open-files*)))))))))
+      (error (e)
+        (v:warn :hexmaw "Couldn't raise the open file limit: ~a" e)))))
 
 (defun start-sound (main)
   "Set up sound, as Trial's Harmony MAIN would (its :INITIALIZE-AUDIO is off). Trial falls back
