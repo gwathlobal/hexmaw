@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+## November 16, 2026 v0.1.1
+
 - **Four new music loops.** Two for exploration and two for combat, composed as MIDI and
   rendered through FluidR3_GM, each unlike every track before it (`tools/compose_explore_4.py`,
   `_explore_5.py`, `_combat_6.py`, `_combat_7.py`; `*music-moods*`): explore-4, a harpsichord
