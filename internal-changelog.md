@@ -15,8 +15,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   storm of fire for 8 s that drifts after them at 2.5 m/s, faster than a walk with Absorb held,
   burning about 9 a second; a flinch or its death puts it out, and holding it makes it easier to
   flinch. The acolyte moved to `src/acolyte.lisp` as an `ability-user` (`:cinder`, `:firestorm`);
-  the storm is a `spell-circle` with a fire aurora, falling cinders, sparks, embers and a lamp
-  (0.23 ms of GPU), and its sign is drawn by `tools/draw_fire_sign.py`. Three new clips:
+  the storm is a `spell-circle` with a fire aurora on its rim and, inside, two more turning
+  opposite ways, flame wisps (the burn aura's strip) going round its centre, whirling embers and
+  sparks, cinders slanting down with the swirl, and a lamp (0.6 ms of GPU seen from outside, 1.3
+  standing in it), and its sign is drawn by `tools/draw_fire_sign.py`. Three new clips:
   `firestorm-sign`, `firestorm-ignite`, `firestorm-roar`.
 
 ## November 16, 2026 v0.1.1

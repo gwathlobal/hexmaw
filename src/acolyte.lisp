@@ -46,6 +46,16 @@ throw a cinder.")
 (defparameter *firestorm-cinder-speed* 9.0 "M/s they fall at.")
 (defparameter *firestorm-cinder-sparks* 6 "Sparks each throws as it strikes the floor.")
 (defparameter *firestorm-embers* 8.0 "Embers a second rising round its rim.")
+(defparameter *firestorm-swirls* '((0.45 0.5 0.25) (0.75 -0.3 -0.15))
+  "The curtains of fire turning inside the storm, each (FRACTION SPIN TWIST): its radius as a
+fraction of the storm's, the turns a second its streaks run round (negative the other way), and how
+far they lean. Read when a storm is lit.")
+(defparameter *firestorm-swirl-strength* 0.8 "How bright the inner curtains burn against the rim's.")
+(defparameter *firestorm-flames* 14.0 "Flame wisps a second flaring up inside the storm.")
+(defparameter *firestorm-flame-life* '(0.5 1.0) "Least and most seconds a flame wisp lasts.")
+(defparameter *firestorm-whirl* 1.4 "Radians a second the flames and the falling cinders go round its centre.")
+(defparameter *firestorm-whirl-sparks* 36.0 "Embers and sparks a second whirling round inside it.")
+(defparameter *firestorm-whirl-speed* '(1.5 3.0) "Least and most m/s they leave at, round the centre.")
 
 ;; Sliced at 115 px tall, so its art pixels are the imp's size (96 px for 1.5 m).
 (define-asset (hexmaw acolyte-turnaround) image
@@ -68,6 +78,9 @@ throw a cinder.")
 ;; The sign: a sun wheel for a 2.5 m radius (tools/draw_fire_sign.py), its cell 348 px at 64 px
 ;; a metre, tongues of flame round it.
 (define-fx-animation firestorm-sign "sprites/firestorm/sign" :loop T :size (/ 348 64.0))
+;; The flames flaring up inside it: the burn aura's wisps (magic.lisp), at the monsters' 64 px a
+;; metre, so 1.36 m tall.
+(define-fx-animation storm-flame "sprites/status/burn" :fps 12 :loop T :size (/ 87 64.0))
 
 ;; What the storm burns with: its magnitude a burn, its area the sign's radius. The acolyte lays
 ;; the storm itself (BEGIN-FIRESTORM); the spell is its data, its sounds and its preloading.
@@ -217,11 +230,17 @@ may and wants to, else throw a cinder; or close in."
    (pulse-timer :initform 0.0 :accessor pulse-timer :documentation "Seconds to its next burn.")
    (cinder-timer :initform 0.0 :accessor cinder-timer :documentation "Seconds to the next cinder falling.")
    (ember-timer :initform 0.0 :accessor ember-timer)
+   (flame-timer :initform 0.0 :accessor flame-timer)
+   (whirl-timer :initform 0.0 :accessor whirl-timer)
+   (swirls :initform () :accessor storm-swirls :documentation "The auroras turning inside it.")
    (room-timer :initform 0.0 :accessor room-timer :documentation "Seconds to the next look at the ceiling.")
    (ceiling :initform NIL :accessor storm-ceiling :documentation "The lowest ceiling over it, or NIL.")
-   (scratch :initform (vec 0 0 0) :reader storm-scratch :documentation "A point for the sparks, reused.")))
+   (scratch :initform (vec 0 0 0) :reader storm-scratch :documentation "A point for the sparks, reused.")
+   (direction :initform (vec 0 0 0) :reader storm-direction :documentation "A way for the sparks, reused.")))
 
 (defmethod leave :after ((storm firestorm) container)
+  (mapc #'despawn (storm-swirls storm))
+  (setf (storm-swirls storm) ())
   (let ((caster (caster storm)))
     (when (and caster (eq storm (acolyte-storm caster)))
       (setf (acolyte-storm caster) NIL))))
@@ -235,8 +254,15 @@ may and wants to, else throw a cinder; or close in."
                                                        :colors *firestorm-aurora-colors*
                                                        :spin *firestorm-aurora-spin* :twist *firestorm-aurora-twist*)
           (circle-lamp storm) (add-lamp (vec (vx c) (+ (vy c) 0.8) (vz c)) *firestorm-light-color*
-                                        *firestorm-light-radius* :flicker 0.35))
-    (enter (circle-aurora storm) (container storm))))
+                                        *firestorm-light-radius* :flicker 0.35)
+          (storm-swirls storm) (loop for (fraction spin twist) in *firestorm-swirls*
+                                     collect (make-instance 'aurora :centre c
+                                                                    :radius (* fraction (circle-radius (spell storm)))
+                                                                    :colors *firestorm-aurora-colors*
+                                                                    :spin spin :twist twist)))
+    (enter (circle-aurora storm) (container storm))
+    (dolist (swirl (storm-swirls storm))
+      (enter swirl (container storm)))))
 
 (defun ignite-firestorm (storm)
   "The storm comes down: it burns from now on."
@@ -315,9 +341,43 @@ deep water or into a solid."
       (when (storm-ceiling storm)
         (setf top (min top (- (storm-ceiling storm) 0.3))))
       (unless (or (< top (+ floor 1.0)) (solid-at x (+ floor 0.5) z) (solid-at x top z))
-        (enter (make-instance 'falling-cinder :animation (find-fx-animation 'cinder-flight)
-                                              :location (vec x top z) :floor-y floor)
-               (container storm))))))
+        ;; Slanting round the centre with the flames, as the storm carries it.
+        (let ((speed (* *firestorm-whirl* r)))
+          (enter (make-instance 'falling-cinder :animation (find-fx-animation 'cinder-flight)
+                                                :location (vec x top z) :floor-y floor
+                                                :drift-x (* speed (- (sin a))) :drift-z (* speed (cos a)))
+                 (container storm)))))))
+
+(defun storm-flames (storm dt)
+  "Now and then a flame wisp flares up on a random point of STORM's floor, to go round its centre."
+  (when (<= (decf (flame-timer storm) dt) 0)
+    (incf (flame-timer storm) (/ (+ 0.5 (random 1.0)) *firestorm-flames*))
+    (let* ((c (centre storm))
+           (r (* 0.9 (circle-radius (spell storm)) (sqrt (random 1.0))))
+           (a (random (float (* 2 pi) 0f0)))
+           (x (+ (vx c) (* r (cos a))))
+           (z (+ (vz c) (* r (sin a)))))
+      (unless (solid-at x (+ (vy c) 0.5) z)
+        (let ((animation (find-fx-animation 'storm-flame)))
+          (enter (make-instance 'storm-flame :animation animation :storm-centre c :angle a :radius r
+                                             :life (range-random *firestorm-flame-life*)
+                                             :location (vec x (+ (vy c) (* 0.5 (animation-size animation))) z))
+                 (container storm)))))))
+
+(defun storm-whirl (storm dt)
+  "Embers and sparks thrown round STORM's centre, low and high inside it."
+  (when (<= (decf (whirl-timer storm) dt) 0)
+    (incf (whirl-timer storm) (/ (+ 0.5 (random 1.0)) *firestorm-whirl-sparks*))
+    (let* ((c (centre storm))
+           (r (* (circle-radius (spell storm)) (+ 0.2 (random 0.75))))
+           (a (random (float (* 2 pi) 0f0)))
+           (at (storm-scratch storm))
+           (dir (storm-direction storm)))
+      (setf (vx at) (+ (vx c) (* r (cos a))) (vy at) (+ (vy c) 0.2 (random 1.8)) (vz at) (+ (vz c) (* r (sin a)))
+            (vx dir) (- (sin a)) (vy dir) 0.25 (vz dir) (cos a))
+      (if (< (random 1.0) 0.6)
+          (spray-sparks at dir 1 :kind :ember :ramp :fire :speed *firestorm-whirl-speed* :spread 0.3)
+          (spray-sparks at dir 1 :kind :spark :ramp :lava :speed *firestorm-whirl-speed* :spread 0.3)))))
 
 (defun storm-embers (storm dt)
   "Embers rising from round STORM's rim."
@@ -341,6 +401,8 @@ deep water or into a solid."
     (setf (room-timer storm) 1.0)
     (update-storm-room storm))
   (rain-cinders storm dt)
+  (storm-flames storm dt)
+  (storm-whirl storm dt)
   (storm-embers storm dt))
 
 (defun show-firestorm (storm)
@@ -360,7 +422,14 @@ deep water or into a solid."
         (when ceiling
           (setf (aurora-height aurora) (max 0.3 (min (aurora-height aurora) (- ceiling (vy c) 0.2))))))
       (when (fading storm)
-        (setf (aurora-height aurora) (* (aurora-height aurora) k))))
+        (setf (aurora-height aurora) (* (aurora-height aurora) k)))
+      ;; The curtains inside burn only while the storm does, rising in its flash and sinking with it.
+      (let ((inner (cond ((fading storm) k)
+                         ((burning storm) (min 1.0 (/ (burning storm) *firestorm-flash-time*)))
+                         (T 0.0))))
+        (dolist (swirl (storm-swirls storm))
+          (setf (aurora-height swirl) (* inner (aurora-height aurora))
+                (aurora-strength swirl) (* inner *firestorm-swirl-strength*)))))
     (when lamp
       (let ((at (location lamp))
             (color (color lamp)))
@@ -397,7 +466,9 @@ deep water or into a solid."
 ;;; Only a look: the storm's burns do the harm.
 
 (define-shader-entity falling-cinder (fx-sprite)
-  ((floor-y :initarg :floor-y :initform 0.0 :reader floor-y)))
+  ((floor-y :initarg :floor-y :initform 0.0 :reader floor-y)
+   (drift-x :initarg :drift-x :initform 0.0 :reader drift-x :documentation "M/s it slants along x.")
+   (drift-z :initarg :drift-z :initform 0.0 :reader drift-z)))
 
 (defvar *cinder-sound-turn* NIL "Every other falling cinder sounds as it strikes.")
 
@@ -405,6 +476,8 @@ deep water or into a solid."
   (unless (frozen-p)
     (let ((loc (location falling-cinder)))
       (decf (vy loc) (* *firestorm-cinder-speed* dt))
+      (incf (vx loc) (* (drift-x falling-cinder) dt))
+      (incf (vz loc) (* (drift-z falling-cinder) dt))
       (when (<= (vy loc) (+ (floor-y falling-cinder) 0.2))
         (setf (vy loc) (+ (floor-y falling-cinder) 0.2))
         (spawn-fx 'bolt-burst loc (container falling-cinder))
@@ -413,9 +486,32 @@ deep water or into a solid."
           (play-sound :cinder-impact loc 0.7))
         (despawn falling-cinder)))))
 
+;;; The flames flaring up inside it: a wisp of fire standing upright on the floor, going round the
+;;; storm's centre for its short life. Only a look, as the cinders are.
+
+(define-shader-entity storm-flame (upright-fx)
+  ((storm-centre :initarg :storm-centre :reader storm-centre :documentation "The storm's centre, shared.")
+   (angle :initarg :angle :accessor flame-angle :documentation "Radians round the centre, from +X toward +Z.")
+   (radius :initarg :radius :reader flame-radius)
+   (life :initarg :life :reader flame-life)))
+
+(define-handler (storm-flame tick :after) (dt)
+  (unless (frozen-p)
+    (let* ((c (storm-centre storm-flame))
+           (a (incf (flame-angle storm-flame) (* *firestorm-whirl* dt)))
+           (r (flame-radius storm-flame))
+           (loc (location storm-flame)))
+      (setf (vx loc) (+ (vx c) (* r (cos a)))
+            (vz loc) (+ (vz c) (* r (sin a))))
+      (when (< (flame-life storm-flame) (age storm-flame))
+        (despawn storm-flame)))))
+
 (defun preload-firestorm (scene)
-  "Load what an acolyte's firestorm spawns mid-game: the storm and its falling cinders."
+  "Load what an acolyte's firestorm spawns mid-game: the storm, its falling cinders and its flames."
   (preload (make-instance 'firestorm :spell (find-spell 'firestorm) :centre (vec 0 0 0)
                                      :animation (find-fx-animation 'firestorm-sign))
            scene)
-  (preload (make-instance 'falling-cinder :animation (find-fx-animation 'cinder-flight)) scene))
+  (preload (make-instance 'falling-cinder :animation (find-fx-animation 'cinder-flight)) scene)
+  (preload (make-instance 'storm-flame :animation (find-fx-animation 'storm-flame) :storm-centre (vec 0 0 0)
+                                       :angle 0.0 :radius 0.0 :life 1.0)
+           scene))

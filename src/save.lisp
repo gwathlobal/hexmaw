@@ -240,7 +240,8 @@ status auras, which come back from their statuses."
   (let ((effects ()))
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura carried-loot)))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura carried-loot
+                                                                       storm-flame falling-cinder)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))
