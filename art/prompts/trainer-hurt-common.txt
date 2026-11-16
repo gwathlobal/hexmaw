@@ -1,0 +1,21 @@
+Pixel-art sprite sheet: the pain (flinch) animation of the TRAINER, a veteran fighter who drills the folk in a grim walled settlement deep underground, for a Doom/Hexen-style first-person game where characters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The trainer's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a broad-shouldered, heavily muscled veteran of average height, past his prime, with close-cropped grey hair, a hard scarred face and old scars on his bare arms; a sleeveless quilted brown padded gambeson closed with brass buckles down the front, a brown leather belt; dark leather bracers on both forearms; baggy dark brown trousers tucked into strapped leather boots; a plain WOODEN PRACTICE SWORD (a long wooden waster with a cross-guard and pommel, pale golden-brown wood, no metal). Also the shading style.
+2. The trainer standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+He has ONE wooden sword and no shield. Never draw a second sword, a metal blade, a shield or any other weapon.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 3 the 2 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the figure standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stand on the same ground line in every cell, at the same height as in reference 2. It does not hop or float.
+- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, sparks, dust, blood or impact effects. Only the figure.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
+
+THE FLINCH: a sharp, readable reaction to a blow, in the spirit of a Doom pain frame. It plays for a third of a second when struck by a sword or a fire bolt. It must read clearly as hurt, not as an attack. The feet stay planted.
+- Cell 2, JOLT: the instant of the hit. The head snapped back, the face grimacing through clenched teeth, the shoulders twisted, the free arm thrown out, the wooden sword tilting away in the right hand.
+- Cell 3, STAGGER: a moment later. He hunches forward, lower than standing, the head bowed, a hand pressed to his side, the sword's point dropped to the ground.

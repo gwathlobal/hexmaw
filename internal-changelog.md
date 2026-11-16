@@ -29,6 +29,17 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   sparks, cinders slanting down with the swirl, and a lamp (0.5 ms of GPU seen from outside, about 1.7
   standing in it), and its sign is drawn by `tools/draw_fire_sign.py`. Three new clips:
   `firestorm-sign`, `firestorm-ignite`, `firestorm-roar`.
+- **The settlement's trainer has a full sprite set**, so once the town is sacked it walks, chops
+  two-handed with its wooden sword, flinches and leaves a corpse like the guard, instead of gliding,
+  striking standing and sinking into the floor. Made the walkers' way from its lineup cell
+  (`art/trainer/`: a turnaround, then walk, attack, flinch and a front-only death, prompts
+  `art/prompts/trainer-*.txt`), sliced into `data/sprites/trainer/` at 118 px and hooked up with
+  `define-townsfolk-set trainer ... :attack T`; the old single picture is gone, and a thriving
+  town's trainer still stands at its post, now seen from every side, and talks. Its blow is timed to
+  its strip (0.4 s raised overhead, 0.9 m reach). Its sheets came with a cyan frame round their
+  edges, whose pale blends `slice_turnaround.py` and `stack_views.py` didn't key, scaling each view
+  by the whole sheet's height; both now skip such a frame (the guard's and townsman's slices are
+  unchanged).
 
 ## November 16, 2026 v0.1.1
 

@@ -92,6 +92,18 @@ def ungrid(img):
     return out
 
 
+def clear_frame(img, margin=2):
+    """Paint magenta over a cyan frame drawn round the sheet's top and bottom edges, MARGIN
+    rows further in: its pale blends aren't IS_CYAN, so they read as a sprite reaching the
+    sheet's edge, and the view was scaled by the sheet's whole height."""
+    for y0, y1 in cyan_rows(img):
+        if y0 == 0:
+            img.paste(MAGENTA, (0, 0, img.width, min(img.height, y1 + margin)))
+        elif y1 == img.height:
+            img.paste(MAGENTA, (0, max(0, y0 - margin), img.width, img.height))
+    return img
+
+
 def sprite_height(img, frame=None):
     """Height of the tallest frame, or of FRAME (0-based) alone."""
     spans = cells(img) if frame is None else [cells(img)[frame]]
@@ -117,6 +129,8 @@ def stack(args):
         img = Image.open(path).convert("RGB")
         if args.grid:
             img = ungrid(img)
+        else:
+            img = clear_frame(img)
         if n in args.mirror:
             for x0, x1 in cells(img):
                 img.paste(img.crop((x0, 0, x1, img.height)).transpose(Image.FLIP_LEFT_RIGHT), (x0, 0))

@@ -52,6 +52,26 @@ def separator_columns(img):
     return cols
 
 
+def frame_rows(img, margin):
+    """(first, last) rows inside a cyan frame drawn across the sheet's top and bottom edges,
+    MARGIN more inside it, or the whole height when there is none: the frame's blends into the
+    magenta aren't keyed, and would stretch the shared crop to the sheet's full height."""
+    w, h = img.size
+    px = img.load()
+
+    def cyan_row(y):
+        return sum(1 for x in range(0, w, 4)
+                   if px[x, y][2] > 150 and px[x, y][1] > 150 and px[x, y][0] < 120) > (w // 4) * 0.5
+
+    first = 0
+    while first < h // 4 and cyan_row(first):
+        first += 1
+    last = h - 1
+    while last > h - h // 4 and cyan_row(last):
+        last -= 1
+    return (first + margin if first else 0), (last - margin if last < h - 1 else h - 1)
+
+
 def panels(img, expected):
     """(left, right) pixel ranges of each view, split on the cyan lines."""
     w, _ = img.size
@@ -86,6 +106,7 @@ def main():
     src = Image.open(args.sheet).convert("RGBA")
     # Find the views before keying, which erases the cyan separators.
     ranges = [(l + args.margin, r - args.margin) for l, r in panels(src, len(VIEWS))]
+    first, last = frame_rows(src, args.margin)
     px = src.load()
     w, h = src.size
     for y in range(h):
@@ -97,11 +118,11 @@ def main():
     # Shared crop: one vertical span for all views, one half-width around each panel's centre.
     top, bottom, half = h, 0, 0
     for l, r in ranges:
-        bbox = src.crop((l, 0, r + 1, h)).getbbox()
+        bbox = src.crop((l, first, r + 1, last + 1)).getbbox()
         if not bbox:
             raise SystemExit(f"View at x {l}..{r} is empty after keying")
         centre = (r - l) / 2
-        top, bottom = min(top, bbox[1]), max(bottom, bbox[3])
+        top, bottom = min(top, first + bbox[1]), max(bottom, first + bbox[3])
         half = max(half, centre - bbox[0], bbox[2] - centre)
     half = int(half) + 1
 

@@ -3825,12 +3825,13 @@ raids the gates; **sacked**, no watch, a few survivors, each service there half 
 from the pool in the streets and loot on the town's four `pickup` spots (`place-settlement-pickups`).
 
 **Townsfolk** (`townsfolk`, a creature: `commoner`, `shopkeeper`, `priest`, `trainer`,
-`quest-giver`, `guard`). Those who stand at their posts to be talked to (the shopkeeper, priest,
-trainer and quest-giver) are one front-facing picture each: a billboard whose atlas has one view
-shows it from every side. Those who walk about, the guard and the commoners (a `townsman` and a
-`townswoman`), have a monster's full set (`define-townsfolk-set`, `*townsfolk-sets*`, by sprite
-name): a turnaround, a walk, a flinch, a death to a corpse and, for the guard, a spear thrust, the
-guard's one set recoloured per faction (`guard-<faction>`). Guards step in armour, commoners lightly;
+`quest-giver`, `guard`). Those who only stand at their posts to be talked to (the shopkeeper, priest
+and quest-giver) are one front-facing picture each: a billboard whose atlas has one view
+shows it from every side. Those who walk about or fight, the guard, the commoners (a `townsman` and a
+`townswoman`) and the trainer, have a monster's full set (`define-townsfolk-set`, `*townsfolk-sets*`, by sprite
+name): a turnaround, a walk, a flinch, a death to a corpse and, for the guard, a spear thrust, for the
+trainer a two-handed chop with its wooden sword, the
+guard's one set recoloured per faction (`guard-<faction>`). Guards step in armour, commoners and the trainer lightly;
 none of them has a voice. They keep to their posts (`wander-radius` 0; a commoner 3 m, a guard 1.5)
 and while calm (`calm-p`, not `provoked`) never notice the player, even if they could fight
 (`attacker-p`). `place-npc` makes one from a blueprint's npc by role (`*roles*`: class and sprite,
@@ -3923,12 +3924,15 @@ altar room (`:altar-chance` NIL in `*settlement-level*`).
 
 The townsfolk are one generated lineup, `art/townsfolk/lineup-1.png` (`art/prompts/townsfolk-lineup.txt`,
 the imp's and acolyte's turnarounds as references), sliced at the monsters' 64 px per metre (each
-sprite's height is its cell's, `/ 64`); only the four who stand are used from it now. The walkers
-were made the monsters' way (see "Monster sprites") from their lineup cells (`art/<who>/design.png`,
-`<who>` being `guard`, `townsman`, `townswoman`): a turnaround (`art/prompts/<who>-turnaround.txt`,
+sprite's height is its cell's, `/ 64`); only the three who only stand are used from it now. The walkers
+and the trainer were made the monsters' way (see "Monster sprites") from their lineup cells (`art/<who>/design.png`,
+`<who>` being `guard`, `townsman`, `townswoman`, `trainer`): a turnaround (`art/prompts/<who>-turnaround.txt`,
 the design, the imp's and acolyte's turnarounds as references), its standing cells cut by
 `tools/cut_stands.py`, then `tools/gen_monster_views.sh <who> <anim> ...` for the walk, flinch and the
-guard's attack, and a front-only death. Sliced so the standing figure is 118 px (the townsman), 114
+guard's and trainer's attack, and a front-only death. The trainer's sheets came with a cyan frame round
+their edges, which `slice_turnaround.py` and `stack_views.py` now skip (its pale blends weren't keyed, so
+the views were scaled by the whole sheet's height). Sliced so the standing figure is 118 px (the
+townsman and the trainer), 114
 (the townswoman) and 124 with the spear's tip (the guard, whose tabard is pure green until it is
 recoloured per faction: every strip, into `data/sprites/guard/<faction>/`). A strip's height in
 metres is its cells' over 64 (`strip-height`). The image service refused the townsman's flinch as
@@ -3936,20 +3940,22 @@ metres is its cells' over 64 (`strip-height`). The image service refused the tow
 (`art/prompts/relic.txt`), and the gold pile is drawn (`tools/draw_gold.py data/sprites/pickups/gold`):
 
 ```bash
-python3 tools/slice_frames.py art/townsfolk/lineup-1.png data/sprites/townsfolk --pixel 3.9 --filter box --anchor bottom shopkeeper:1 priest:1 trainer:1 quest-giver:1 && rm data/sprites/townsfolk/{commoner-*,guard}.*
-tools/cut_stands.py art/guard/turnaround-2.png art/guard    # and townsman/turnaround-2, townswoman/turnaround-1
+python3 tools/slice_frames.py art/townsfolk/lineup-1.png data/sprites/townsfolk --pixel 3.9 --filter box --anchor bottom shopkeeper:1 priest:1 trainer:1 quest-giver:1 && rm data/sprites/townsfolk/{commoner-*,guard,trainer}.*
+python3 -c "from PIL import Image; Image.open('art/townsfolk/lineup-1.png').crop((770, 3, 1150, 510)).save('art/trainer/design.png')"
+tools/cut_stands.py art/guard/turnaround-2.png art/guard    # and townsman/turnaround-2, townswoman/turnaround-1, trainer/turnaround-1
 python3 tools/slice_turnaround.py art/guard/turnaround-2.png data/sprites/guard/turnaround --height 124 --filter box
 python3 tools/slice_turnaround.py art/townsman/turnaround-2.png data/sprites/townsman/turnaround --height 118 --filter box
 python3 tools/slice_turnaround.py art/townswoman/turnaround-1.png data/sprites/townswoman/turnaround --height 114 --filter box
+python3 tools/slice_turnaround.py art/trainer/turnaround-1.png data/sprites/trainer/turnaround --height 118 --filter box
 V="front front-quarter side back-quarter back"
-for spec in guard:992:walk:20 guard:992:attack:20 guard:992:hurt:10 townsman:944:walk:20 townsman:944:hurt:10 townswoman:912:walk:20 townswoman:912:hurt:10; do IFS=: read who h a n <<< "$spec"; python3 tools/slice_views.py data/sprites/$who $a:$n $(for v in $V; do echo art/$who/$a-$v.png; done) --height $h --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
+for spec in guard:992:walk:20 guard:992:attack:20 guard:992:hurt:10 townsman:944:walk:20 townsman:944:hurt:10 townswoman:912:walk:20 townswoman:912:hurt:10 trainer:944:walk:20 trainer:944:attack:20 trainer:944:hurt:10; do IFS=: read who h a n <<< "$spec"; python3 tools/slice_views.py data/sprites/$who $a:$n $(for v in $V; do echo art/$who/$a-$v.png; done) --height $h --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
 python3 tools/slice_frames.py art/guard/death.png data/sprites/guard --pixel 3.5 --anchor bottom --filter box death:8
 python3 tools/slice_frames.py art/townsman/death.png data/sprites/townsman --pixel 3.73 --anchor bottom --filter box death:8
 python3 tools/slice_frames.py art/townswoman/death.png data/sprites/townswoman --pixel 3.86 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/trainer/death.png data/sprites/trainer --pixel 3.6 --anchor bottom --filter box death:8
 G=data/sprites/guard; for f in ashen-temple:30:0.25:0.55 deepwardens:212:0.7:0.55 free-company:355:0.75:0.6; do IFS=: read n h s v <<< "$f"; mkdir -p $G/$n; for strip in turnaround walk attack hurt death; do tools/recolor_hue.py $G/$strip $G/$n/$strip --from 120 --reach 30 --hue $h --saturation $s --value $v; done; done
 python3 tools/slice_frames.py art/relic/relic.png data/sprites/pickups --pixel 14 --filter box --colors 32 --anchor bottom relic:4
 ```
 
-Not yet: the trainer, who fights once the town is sacked, has no walk, attack, flinch or death
-strips (it glides, strikes standing and sinks into the floor), townsfolk have no voices, there are no faction banners, the town is one lighting room, and nothing is
+Not yet: townsfolk have no voices, there are no faction banners, the town is one lighting room, and nothing is
 stolen but from a dead shopkeeper.
