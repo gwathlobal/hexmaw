@@ -2,6 +2,8 @@ Pixel-art first-person view for a Doom/Hexen-style dungeon game: the player's ow
 
 REFERENCE IMAGE 1 is the game's existing first-person SWORD frame: a right gauntlet (steel plates, brass rivets, a leather-and-brass cuff, a steel vambrace running off the bottom of the screen). It sets the style: the pixel size, the dark outline weight, the shading, the colours, and the scale of the hand. REFERENCE IMAGE 2 is the same player holding a spear in both hands: the left gauntlet is the right one's mirror twin. Draw exactly these gauntlets, cuffs and vambraces, at the same size as in reference 2. Do not draw the sword or the spear: the hands are empty but for the magic.
 
+WHICH WAY THE HANDS FACE, in every pose: we see the BACKS of the hands, their armoured plates and knuckles toward the camera, as in reference 3. THE THUMBS: the hand on the left of the screen is a LEFT hand and the hand on the right a RIGHT hand. Seen from behind, each thumb is on the INNER edge of its hand, the edge toward the middle of the screen: the left hand's thumb sticks out from its right side, the right hand's thumb from its left side, so the two thumbs point toward each other, and the little fingers are on the OUTER edges, toward the sides of the screen. Never draw the hands swapped, with a thumb on the outside.
+
 THE MAGIC: there is NO FIRE in this picture at all: no flames, no embers, nothing orange or yellow but the gauntlets' small brass rivets and what THIS POSE describes. The magic is described under THIS POSE and is drawn as crisp pixel art with hard edges, a few flat tones, no smooth glow, no soft halo, and no light cast on the background. It never covers the upper half of the screen's middle unless the pose says so.
 
 THE PICTURE

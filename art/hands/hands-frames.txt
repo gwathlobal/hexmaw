@@ -16,13 +16,16 @@ flicker-1-fire.png    0.2   1536 1024 0 -38
 flicker-2-fire.png    0.2   1536 1024 0 -38
 
 ; The cast: rest, gathering, the fireball held, held and lifted, the release (the spell leaves
-; on this one, *HANDS-RELEASE-FRAME* 4), the hands flung open, sinking back, rest.
+; on this one, *HANDS-RELEASE-FRAME* 4), the hands flung open, sinking back, rest. The release and
+; the flung-open hands (and healing's rise, below) are the "-thumbs" takes, drawn again with the
+; thumbs on the hands' inner edges (art/prompts/hands-common.txt, "THE THUMBS"): the first takes
+; had them on the outside, a right hand on the left and a left on the right.
 idle-2.png            0.2   1536 1024 0 -38
 gather-2.png          0.2   1536 1024 0 -38
 cupped-1.png          0.2   1536 1024 0 -38
 cupped-1.png          0.2   1536 1024 0 -35
-release-2.png         0.2   1536 1024 0 -38
-open-2.png            0.2   1536 1024 0 -38
+release-thumbs-1.png  0.2   1536 1024 0 -38
+open-thumbs-3.png     0.2   1536 1024 0 -38
 idle-2.png            0.2   1536 1024 0 -43
 idle-2.png            0.2   1536 1024 0 -39
 
@@ -58,7 +61,7 @@ heal-idle-anim-2.png    0.2   1536 1024 0 -38 magic
 heal-idle-anim-3.png    0.2   1536 1024 0 -38 magic
 heal-idle-anim-4.png    0.2   1536 1024 0 -38 magic
 heal-idle-2.png         0.2   1536 1024 0 -38 magic
-heal-rise-1.png         0.2   1536 1024 0 -38 magic
+heal-rise-thumbs-1.png  0.2   1536 1024 0 -38 magic
 heal-wrap-1.png         0.2   1536 1024 0 -38 magic
 heal-fade-2.png         0.2   1536 1024 0 -38 magic
 heal-idle-anim-1.png    0.2   1536 1024 0 -43 magic
