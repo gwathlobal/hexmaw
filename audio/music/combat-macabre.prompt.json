@@ -1,0 +1,18 @@
+{
+  "prompt": "Combat music for a 1990s first-person dark fantasy game, played while the player fights skeletons and necromancers in a dungeon. A frantic danse macabre in fast 6/8 time, around 170 BPM, in F minor. A xylophone rattling like bones and pizzicato strings race through a whirling tarantella figure, a solo violin plays a wild devilish melody over them, answered by a shrill piccolo and a bassoon, tuba and contrabass stomp out the bass on every beat, bass drum, tambourine and castanets drive the rhythm, sharp col legno string hits on the accents. No taiko, no choir, no big brass fanfares, no electric guitars. Sounds like a General MIDI orchestral soundtrack played through a 1990s sound card wavetable: slightly synthetic, punchy, no modern cinematic trailer sound. Keeps one driving energy all the way through: no intro, no breakdown, no ending or fade-out, as it will loop for as long as the fight lasts.",
+  "prompt_file": "audio/prompts/music-combat-macabre.txt",
+  "music_length_ms": 120000,
+  "model_id": "music_v1",
+  "force_instrumental": true,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794792543,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    120.0,
+    120.1
+  ]
+}

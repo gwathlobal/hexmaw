@@ -7,6 +7,18 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Four new music loops.** Two for exploration and two for combat, composed as MIDI and
+  rendered through FluidR3_GM, each unlike every track before it (`tools/compose_explore_4.py`,
+  `_explore_5.py`, `_combat_6.py`, `_combat_7.py`; `*music-moods*`): explore-4, a harpsichord
+  lament in 12/8 in F# minor with English horn, bassoon and viola; explore-5, tense, B minor, a
+  footstep pulse and heartbeat under a cello's half-step theme; combat-6, a war dance in 7/8 in C#
+  Phrygian dominant on bassoon riff, hand drums, oboe and shanai; combat-7, G minor battle music in
+  the trailer's vein, a half-step violin figure over drums on every beat and bare brass fifths.
+  `tools/midi_music.py` takes the beats a bar (`beats`) for the 7/8. ElevenLabs takes of a
+  music-box waltz and a danse macabre were turned down, and the plans written to replace them
+  wait for credits (`audio/prompts/music-*-tense-plan.json`, `-battle-plan.json`). For players'
+  CHANGELOG at the next release: "Four new music tracks, two for exploring and two for fights."
+
 - **Sparks, embers and grit.** Hexmaw's impacts were all strips playing in place; now blows throw
   simulated particles (`src/sparks.lisp`), built as the blood pool is: 512 slots of plain arrays, one
   stream-draw buffer, one draw call, nothing allocated a frame, no art (the shader lays whole

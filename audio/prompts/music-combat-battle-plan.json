@@ -1,0 +1,69 @@
+{
+  "model_id": "music_v2_5",
+  "composition_plan": {
+    "chunks": [
+      {
+        "text": "[Battle] {a driving battle groove from the very first beat: violins and violas sawing a spiccato ostinato in sixteenths}\n{cellos and contrabasses hammering eighths, bass drum, taiko and timpani on every beat, a snare on the off-beats}\n{low brass and trombone stabs on the accents, an orchestra hit with a crash every fourth bar}\n{a dark trumpet and horn theme over it, answered by the trombones}",
+        "duration_ms": 60000,
+        "positive_styles": [
+          "instrumental",
+          "dark fantasy orchestral game music",
+          "1990s General MIDI orchestral soundtrack through a wavetable sound card, slightly synthetic and punchy",
+          "driving orchestral battle music",
+          "G minor",
+          "150 BPM",
+          "relentless, menacing",
+          "spiccato string ostinato in sixteenths",
+          "war drums, taiko and timpani",
+          "low brass stabs",
+          "choir chords"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "singing",
+          "modern cinematic trailer sound",
+          "electric guitar",
+          "synth pads",
+          "dubstep",
+          "intro",
+          "outro",
+          "fade-out",
+          "ending",
+          "breakdown"
+        ]
+      },
+      {
+        "text": "[Battle, rising] {the same drive and the same instruments, no let-up}\n{the theme on full brass, a choir holding chords under it, more hits, tom fills into every phrase}\n{full energy to the last beat, as if it will run on into the start again}",
+        "duration_ms": 60000,
+        "positive_styles": [
+          "instrumental",
+          "dark fantasy orchestral game music",
+          "1990s General MIDI orchestral soundtrack through a wavetable sound card, slightly synthetic and punchy",
+          "driving orchestral battle music",
+          "G minor",
+          "150 BPM",
+          "relentless, menacing",
+          "spiccato string ostinato in sixteenths",
+          "war drums, taiko and timpani",
+          "low brass stabs",
+          "choir chords"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "singing",
+          "modern cinematic trailer sound",
+          "electric guitar",
+          "synth pads",
+          "dubstep",
+          "intro",
+          "outro",
+          "fade-out",
+          "ending",
+          "breakdown"
+        ]
+      }
+    ]
+  }
+}
