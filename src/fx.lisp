@@ -38,14 +38,17 @@ an entity in the scene, or preloaded."
   (when (container entity)
     (leave entity (container entity))))
 
-(defvar *pitch-quat* (quat))
+(defvar *yaw-quat* (quat))
 
 (defun face-camera (entity camera)
-  "Turn ENTITY parallel to the view plane of fps-camera CAMERA."
+  "Turn ENTITY parallel to the view plane of fps-camera CAMERA: about X by the pitch, then
+about +Y by the yaw, as the camera turns. (NQ* A B turns by A first, so the pitch goes in A:
+the other way round turned it about world X after the yaw, which at any yaw but 0 laid it
+over toward the ceiling or floor.)"
   (let ((rotation (rotation camera)))
-    (!qfrom-angle (orientation entity) +vy+ (- (vy rotation)))
-    (!qfrom-angle *pitch-quat* +vx+ (- (vx rotation)))
-    (nq* (orientation entity) *pitch-quat*)))
+    (!qfrom-angle (orientation entity) +vx+ (- (vx rotation)))
+    (!qfrom-angle *yaw-quat* +vy+ (- (vy rotation)))
+    (nq* (orientation entity) *yaw-quat*)))
 
 (define-handler (fx-sprite tick) (dt)
   (unless (frozen-p)

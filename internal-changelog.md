@@ -7,6 +7,15 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Effects face the screen at any angle.** `face-camera` (fx.lisp) turned an effect sprite about
+  +Y by the yaw and then about world X by the pitch, which is the view's plane only when one of
+  them is 0: looking up or down at most headings tipped projectiles, bursts and flashes over (a
+  bolt's burst on the ceiling, seen from a stair below). It now turns by the pitch first and then
+  the yaw, as the camera does: at pitch ±0.6 and ±0.9, yaw 0.9 to 2.2, the sprite's right and
+  facing are the camera's. Taken from `claude/gifted-varahamihira-2db85e` (9b6a04e) without its
+  glow-layer half, which this branch doesn't have. For players' CHANGELOG at the next release:
+  "Spells and other effects no longer tip over when you look up or down."
+
 - **Fixed falling out of the world beside a 45° wall.** Walking into a monster with a 45° rock
   wall at the player's back (a cave passage, run seed 3269847334651320094) could put the player
   through the rock and out of the level: the push back off the monster left the feet a hair behind

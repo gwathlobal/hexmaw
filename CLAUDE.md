@@ -674,7 +674,9 @@ real time instead.
   slippery cell `*nav-ice-cost*` (1.5) times its length, so routes keep to the snow beside a
   frozen river and cross it the short way; a straight walk still goes straight over it, skidding.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
-  no fog. Projectiles are effect sprites.
+  no fog. Projectiles are effect sprites. `face-camera` turns a sprite parallel to the view
+  plane: about X by the pitch, then about +Y by the yaw (`nq*` turns by its first quaternion
+  first, so the pitch's goes first).
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
   passes the player's feet, a projectile its flight; NIL means the player), and `bleed`
   sprays drops from the wound away from it, `*blood-back-spray*` of them back toward the
