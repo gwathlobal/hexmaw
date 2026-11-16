@@ -3,7 +3,7 @@
 ;;; Townsfolk: the settlement's people (settlement.lisp), creatures that keep to their posts
 ;;; and never notice the player while calm (CALM-P). Those who stand at their posts to be talked
 ;;; to are one picture, seen from the front from every side, as Daggerfall's town folk are; those
-;;; who walk about (the guards, the commoners) have a monster's full set (DEFINE-TOWNSFOLK-SET). A blueprint's npc action places them
+;;; who walk about or fight (the guards, the commoners, the trainer) have a monster's full set (DEFINE-TOWNSFOLK-SET). A blueprint's npc action places them
 ;;; (PLACE-NPC), by role: the shopkeeper, the priest, the trainer and the quest-giver offer
 ;;; their services (dialogue.lisp), commoners stand about, and the watch's guards keep the
 ;;; faction's rule. A blow at one is a crime (REPORT-CRIME): the watch warns, then fines, then
@@ -15,10 +15,10 @@
 ;; metre (CLAUDE.md, "Townsfolk"): those who don't walk.
 (define-asset (hexmaw townsfolk-shopkeeper) image #p"sprites/townsfolk/shopkeeper.png" :min-filter :nearest :mag-filter :nearest)
 (define-asset (hexmaw townsfolk-priest) image #p"sprites/townsfolk/priest.png" :min-filter :nearest :mag-filter :nearest)
-(define-asset (hexmaw townsfolk-trainer) image #p"sprites/townsfolk/trainer.png" :min-filter :nearest :mag-filter :nearest)
 (define-asset (hexmaw townsfolk-quest-giver) image #p"sprites/townsfolk/quest-giver.png" :min-filter :nearest :mag-filter :nearest)
 
-;; Those who walk: a turnaround and strips (walk, flinch, death, and for the guard its thrust),
+;; Those who walk or fight: a turnaround and strips (walk, flinch, death, and for the guard its
+;; thrust and the trainer its chop, since it fights once the town is sacked),
 ;; sliced at the same 64 px per metre (CLAUDE.md, "Townsfolk"), so a strip's height in metres is
 ;; its cells' height over 64. The guard's is one set recoloured per faction, its tabard's green.
 (defvar *townsfolk-sets* (make-hash-table :test 'equal)
@@ -51,6 +51,7 @@ asset), :ATLAS (its index) and the animations, :WALK, :HURT, :DEATH and :ATTACK.
 (define-townsfolk-set guard-ashen-temple "sprites/guard/ashen-temple" :attack T)
 (define-townsfolk-set guard-deepwardens "sprites/guard/deepwardens" :attack T)
 (define-townsfolk-set guard-free-company "sprites/guard/free-company" :attack T)
+(define-townsfolk-set trainer "sprites/trainer" :attack T)
 
 (defvar *townsfolk-atlases* (make-hash-table :test 'equal)
   "Read atlases by sprite name: a strip of one cell, with one view.")
@@ -102,7 +103,10 @@ asset), :ATLAS (its index) and the animations, :WALK, :HURT, :DEATH and :ATTACK.
 (define-shader-entity quest-giver (townsfolk) ())
 (define-shader-entity trainer (townsfolk)
   ((attack-damage :initform '(4 8))
-   (attack-reach :initform 0.8)
+   ;; A two-handed chop with the wooden sword: raised overhead (the warning), brought down.
+   (attack-reach :initform 0.9)
+   (attack-frame-times :initform '(0.4 0.12 0.2 0.3))
+   (attack-pause :initform 0.45)
    (chase-speed :initform 3.0)
    (max-health :initform 50)
    (pain-chance :initform 20)))
@@ -122,6 +126,7 @@ asset), :ATLAS (its index) and the animations, :WALK, :HURT, :DEATH and :ATTACK.
 
 (define-creature-sounds guard :step :step-armour)
 (define-creature-sounds commoner :step :step-light)
+(define-creature-sounds trainer :step :step-light)
 
 (defmethod townsfolk-p ((townsfolk townsfolk)) T)
 (defmethod calm-p ((townsfolk townsfolk)) (not (provoked townsfolk)))
