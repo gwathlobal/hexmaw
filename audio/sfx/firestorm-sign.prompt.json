@@ -1,0 +1,19 @@
+{
+  "prompt": "A fire sign glowing on a stone floor before a firestorm: a low rising hiss of kindling flame, soft crackling and a tense swelling hum of heat, steady and ominous. Fire sounds only, no voices, no music. Retro 1990s first-person fantasy game sound effect, one even texture that loops seamlessly, no start or ending.",
+  "prompt_file": "audio/prompts/sfx-firestorm-sign.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": true,
+  "duration_seconds": 4.0,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794859072,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    4.0,
+    4.0
+  ]
+}

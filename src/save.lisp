@@ -113,6 +113,12 @@ their values."
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
 
+(defmethod saved-slots append ((storm firestorm))
+  '(target burning fading pulse-timer))
+
+(defmethod saved-slots append ((acolyte acolyte))
+  '(swallowed))
+
 (defmethod saved-slots append ((nova spell-nova))
   '(spell caster centre floor-y reach victims))
 
@@ -234,7 +240,8 @@ status auras, which come back from their statuses."
   (let ((effects ()))
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
-        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura carried-loot)))
+        (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura carried-loot
+                                                                       storm-flame falling-cinder)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))

@@ -15,6 +15,20 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   the thumbs are on, and the hands strip and its five recoloured looks rebuilt. Healing's rise
   turns the palms up to the camera, so its thumbs rightly stay outside. The code was right:
   `hands-split` cuts each picture in two and mirrors nothing. The old takes are in the art attic.
+- **The acolyte calls down a firestorm**, from the second level of a run on (`:abilities` in
+  `*run-levels*`, `level-ability-p`) and on the debug level. A lone acolyte had become a mana
+  spring: the player stood holding Absorb Projectiles and swallowed its cinders. Now, when the
+  player holds Absorb facing it or has swallowed two of its cinders, or on a 30% roll, with its
+  16 s cooldown up, it draws a sun-wheel sign under the player (1.6 s to step out), then holds a
+  storm of fire for 8 s that drifts after them at 2.5 m/s, faster than a walk with Absorb held,
+  burning about 9 a second; a flinch or its death puts it out, and holding it makes it easier to
+  flinch. The acolyte moved to `src/acolyte.lisp` as an `ability-user` (`:cinder`, `:firestorm`);
+  the storm is a `spell-circle` with a fire aurora on its rim and, inside, a column of fire whirling
+  like a tornado in its middle (`fire-column`, on the tornado's funnel mesh), two more auroras turning
+  opposite ways, flame wisps (the burn aura's strip) going round its centre, whirling embers and
+  sparks, cinders slanting down with the swirl, and a lamp (0.5 ms of GPU seen from outside, about 1.7
+  standing in it), and its sign is drawn by `tools/draw_fire_sign.py`. Three new clips:
+  `firestorm-sign`, `firestorm-ignite`, `firestorm-roar`.
 
 ## November 16, 2026 v0.1.1
 

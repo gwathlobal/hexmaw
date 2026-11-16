@@ -170,6 +170,8 @@ RGBA-ICON would put them. An icon that won't load only logs."
   (preload-status-auras scene)
   ;; And a riftwalker's rifts.
   (preload-riftwalker scene)
+  ;; And an acolyte's firestorm.
+  (preload-firestorm scene)
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
   ;; And on the test level the guards STAGE-FIGHT (level.lisp) sets against monsters.

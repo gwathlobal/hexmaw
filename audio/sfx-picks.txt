@@ -49,6 +49,9 @@ draw-sword 4
 draw-spear 2
 bolt-impact 5
 cinder-impact 4
+firestorm-sign 2
+firestorm-ignite 2
+firestorm-roar 1
 necro-pain 7
 skull-impact 5
 imp-claw 8

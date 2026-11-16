@@ -1,0 +1,19 @@
+{
+  "prompt": "A firestorm crashing down from above: a deep roaring whoosh of flame dropping onto stone, a heavy fiery thump and a burst of crackling fire spreading out. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-firestorm-ignite.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 1.2,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794859066,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    1.2,
+    1.2
+  ]
+}
