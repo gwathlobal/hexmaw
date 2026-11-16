@@ -1,0 +1,115 @@
+{
+  "model_id": "music_v2_5",
+  "composition_plan": {
+    "chunks": [
+      {
+        "text": "[Creeping] {from the first beat: cellos and contrabasses pulse a low ostinato in eighths like slow footsteps, a muffled heartbeat drum on the beats, pizzicato violas ticking a nervous off-beat figure}\n{a solo cello plays a dark, searching melody full of half steps, answered by a low flute; muted violins tremble in tremolo and swell up and fall back}\n{now and then a low brass swell and a soft gong stroke, a sharp pizzicato stinger}",
+        "duration_ms": 60000,
+        "positive_styles": [
+          "instrumental",
+          "dark fantasy orchestral game music",
+          "1990s General MIDI orchestral soundtrack through a wavetable sound card, slightly synthetic and punchy",
+          "tense dungeon exploration music",
+          "B minor",
+          "84 BPM",
+          "uneasy, ominous, something is watching",
+          "always a melody",
+          "constant low pulse"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "singing",
+          "modern cinematic trailer sound",
+          "electric guitar",
+          "synth pads",
+          "dubstep",
+          "intro",
+          "outro",
+          "fade-out",
+          "ending",
+          "breakdown",
+          "drone",
+          "ambient wash",
+          "pastoral",
+          "peaceful",
+          "lullaby",
+          "music box",
+          "waltz"
+        ]
+      },
+      {
+        "text": "[Watched] {the same pulse and instruments, tension held but never released}\n{the melody passes to a muted trumpet and the low flute in turn over the footsteps}\n{dissonant string chords change every bar, a timpani roll creeps in and dies away}",
+        "duration_ms": 60000,
+        "positive_styles": [
+          "instrumental",
+          "dark fantasy orchestral game music",
+          "1990s General MIDI orchestral soundtrack through a wavetable sound card, slightly synthetic and punchy",
+          "tense dungeon exploration music",
+          "B minor",
+          "84 BPM",
+          "uneasy, ominous, something is watching",
+          "always a melody",
+          "constant low pulse"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "singing",
+          "modern cinematic trailer sound",
+          "electric guitar",
+          "synth pads",
+          "dubstep",
+          "intro",
+          "outro",
+          "fade-out",
+          "ending",
+          "breakdown",
+          "drone",
+          "ambient wash",
+          "pastoral",
+          "peaceful",
+          "lullaby",
+          "music box",
+          "waltz"
+        ]
+      },
+      {
+        "text": "[Creeping on] {the same: the solo cello takes the melody back over the low pulse, the heartbeat drum and the tremolo violins}\n{uneasy to the last beat, as if it will run on into the start again}",
+        "duration_ms": 60000,
+        "positive_styles": [
+          "instrumental",
+          "dark fantasy orchestral game music",
+          "1990s General MIDI orchestral soundtrack through a wavetable sound card, slightly synthetic and punchy",
+          "tense dungeon exploration music",
+          "B minor",
+          "84 BPM",
+          "uneasy, ominous, something is watching",
+          "always a melody",
+          "constant low pulse"
+        ],
+        "negative_styles": [
+          "vocals",
+          "lyrics",
+          "singing",
+          "modern cinematic trailer sound",
+          "electric guitar",
+          "synth pads",
+          "dubstep",
+          "intro",
+          "outro",
+          "fade-out",
+          "ending",
+          "breakdown",
+          "drone",
+          "ambient wash",
+          "pastoral",
+          "peaceful",
+          "lullaby",
+          "music box",
+          "waltz"
+        ]
+      }
+    ]
+  }
+}

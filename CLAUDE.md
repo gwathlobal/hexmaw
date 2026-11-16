@@ -1355,8 +1355,8 @@ real time instead.
 - `src/music.lisp`: music, through Harmony (`trial-harmony`; `main` is its `main`, which starts
   the sound server: PulseAudio here). In play the `music-director` (entered by `add-music` in
   `setup-scene`, which stages every track's voice) plays the level's playlist at random
-  (`music-playlist`, from `*music-moods*`: the three exploration and five combat loops, assets
-  `music-explore-1` to `-3`, `music-combat-1` to `-5`, `data/music/<name>.ogg`, on Harmony's
+  (`music-playlist`, from `*music-moods*`: the five exploration and seven combat loops, assets
+  `music-explore-1` to `-5`, `music-combat-1` to `-7`, `data/music/<name>.ogg`, on Harmony's
   `:music` mixer; exploration only in the settlement, combat only on a run's level with the
   boss's arena, both elsewhere, the debug level too), crossfading over `*music-fade-time*` to
   another (`pick-track`, from `*music-random*`, never the one playing) every `*music-track-time*`
@@ -2271,8 +2271,8 @@ comes out a sample or two long. Loops come out at whole bars (72.0, 88.6, 60.0, 
 2 minutes:
 
 ```bash
-tools/gen_music.py audio/music/combat-6.wav -f audio/prompts/music-combat-6.txt -l 120
-tools/make_loop.py audio/music/combat-6.wav data/music/combat-6.ogg --min-loop 50 --loudness -11 --preview /tmp/join.wav
+tools/gen_music.py audio/music/combat-8.wav -f audio/prompts/music-combat-8.txt -l 120
+tools/make_loop.py audio/music/combat-8.wav data/music/combat-8.ogg --min-loop 50 --loudness -11 --preview /tmp/join.wav
 ```
 
 then a `define-asset` for it in music.lisp and its name in `*music-moods*`. `--preview` writes the
@@ -2292,9 +2292,18 @@ explore-2 and -3, kept as `*-drone.wav`) were off-putting, and flute, lute and h
 notes on their own" fixed that. explore-3 is take 2 of `music-explore-3.txt` (dulcimer and
 marimba ostinato, horn and clarinet, frame drum; rather jolly, kept for its curious undertone).
 
-**Composed music.** Music can also be written out as notes: `tools/compose_explore.py` and
-`tools/compose_combat.py` are pieces, each a function returning its notes plus its General MIDI
-instruments, and `tools/midi_music.py` (the shared part) writes them as MIDI, renders that through
+Two later tries were turned down (`music-explore-waltz.txt`, `music-combat-macabre.txt`, takes
+in `audio/music/explore-waltz-*.wav` and `combat-macabre-*.wav`): a music-box waltz on celesta,
+violin and bassoon was too peaceful ("there should be some tension, we are in a dungeon"), and a
+danse macabre in 6/8 on xylophone and solo violin wasn't combat music at all. Combat should be in
+the trailer's vein (`music-trailer-plan.json`: driving drums, low brass stabs, a tense high string
+figure, a dark theme). Their replacements, `music-explore-tense-plan.json` and
+`music-combat-battle-plan.json` (`music_v2_5` plans, three and two 60 s sections of one texture),
+were never sent: the account's credits ran out (2026-11-16). Each line of a plan's text must be at
+most 200 characters. Composed, they became explore-5 and combat-7 (below).
+
+**Composed music.** Music can also be written out as notes: `tools/compose_*.py` are pieces,
+each a function returning its notes plus its General MIDI instruments, and `tools/midi_music.py` (the shared part) writes them as MIDI, renders that through
 GStreamer's FluidSynth element and the FluidR3_GM soundfont, `/usr/share/sounds/sf2/FluidR3_GM.sf2`
 (`apt install fluid-soundfont-gm`, MIT), and finishes the loop with
 make_loop.py's loudness and encoding. It renders the piece twice and keeps the second pass, which
@@ -2315,6 +2324,10 @@ version with them, and an octave higher, was right but too bright for a dungeon)
 tools/compose_explore.py audio/music/explore-2 data/music/explore-2.ogg --preview /tmp/join.wav
 tools/compose_combat.py audio/music/combat-5 data/music/combat-5.ogg --preview /tmp/join.wav
 tools/compose_title.py audio/music/title data/music/title.ogg --preview /tmp/join.wav
+tools/compose_explore_4.py audio/music/explore-4 data/music/explore-4.ogg --preview /tmp/join.wav
+tools/compose_explore_5.py audio/music/explore-5 data/music/explore-5.ogg --preview /tmp/join.wav
+tools/compose_combat_6.py audio/music/combat-6 data/music/combat-6.ogg --preview /tmp/join.wav
+tools/compose_combat_7.py audio/music/combat-7 data/music/combat-7.ogg --preview /tmp/join.wav
 ```
 
 `compose_combat.py` is combat-5, a battle piece after combat-3: E minor at 160 BPM, 64 bars, a
@@ -2323,6 +2336,26 @@ a tremolo string figure, a horn theme, choir and orchestra hits, the Phrygian F 
 its four sections come twice, scored anew the second time. At 120 BPM it lacked energy: combat-3,
 asked for 110, plays at about 160 (a tempo estimate from onset autocorrelation finds half of it,
 0.75 s), and once at 160, 32 bars (48 s) was too short.
+
+The four after it were made to sound unlike every track before them, in keys none of those use:
+
+- explore-4, `compose_explore_4.py`: a lament in 12/8 in F# minor, a dotted quarter at 0.9 s, 115 s;
+  a harpsichord breaking the chords in eighths over a plucked bass falling F#, E, D, C#, the theme
+  on English horn, a bassoon's answer, a solo viola over a celesta.
+- explore-5, `compose_explore_5.py`: tense, B minor at 83 BPM, 92 s; contrabasses pulsing in eighths
+  a half step off the root like footsteps, a heartbeat bass drum, a solo cello's theme full of half
+  steps, a low flute and a muted trumpet. Each section keeps to one colour beside the pulse: with
+  every layer playing from the second section on it was a din, and a pizzicato cluster struck every
+  eight bars stood out as a noise.
+- combat-6, `compose_combat_6.py`: a war dance in 7/8 (2 + 2 + 3) in C# Phrygian dominant, an eighth
+  at 0.18 s, 81 s; a modal riff on bassoon, basses and pizzicato on every eighth, tuba and trombones
+  on the accents, hand drums, the theme on oboe and shanai, a choir chanting. `run`'s `beats` is the
+  beats a bar (7 eighths here; the beat is whatever note the piece counts in).
+- combat-7, `compose_combat_7.py`: G minor at 150 BPM, 102 s, in the trailer's vein; a violin figure
+  in sixteenths circling each chord's fifth by half steps, cellos and basses hammering eighths, bass
+  drum, taiko and timpani on every beat, bare fifths stabbed by trombones and tuba, a creeping low
+  horn theme, a chanting choir. Only G minor, C minor, A flat and D: its first version, the theme on
+  trumpets climbing over full brass chords in B flat, E flat and F, was too triumphant.
 
 Harmony picks a decoder by the file's extension, and quickloads its system when it isn't loaded;
 the binary has no Quicklisp, so each format the game plays is a dependency in the .asd

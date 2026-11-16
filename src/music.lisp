@@ -22,9 +22,10 @@
 ;;; stopped, and its next start left it silent for good. Each track is a seamless loop, cut
 ;;; from a longer generated piece (audio/music/, tools/gen_music.py and tools/make_loop.py)
 ;;; or composed as notes and rendered through a GM soundfont (tools/compose_explore.py,
-;;; explore-2; tools/compose_combat.py, combat-5; tools/compose_title.py, the main menu's),
-;;; encoded to Ogg Vorbis in data/music/. The Settings sliders set *MUSIC-VOLUME* and
-;;; *SOUND-VOLUME*, which the director applies to Harmony's mixers.
+;;; explore-2; tools/compose_explore_4.py and _5.py, explore-4 and -5; tools/compose_combat.py,
+;;; combat-5; tools/compose_combat_6.py and _7.py, combat-6 and -7; tools/compose_title.py, the
+;;; main menu's), encoded to Ogg Vorbis in data/music/. The Settings sliders set
+;;; *MUSIC-VOLUME* and *SOUND-VOLUME*, which the director applies to Harmony's mixers.
 
 (defvar *music-volume* 0.5 "Volume of the music mixer, 0 to 1 (Settings).")
 (defvar *sound-volume* 1.0 "Volume of the sound effect and speech mixers, 0 to 1 (Settings).")
@@ -37,17 +38,22 @@
 (define-asset (hexmaw music-explore-1) org.shirakumo.fraf.trial.harmony:sound #p"music/explore-1.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-explore-2) org.shirakumo.fraf.trial.harmony:sound #p"music/explore-2.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-explore-3) org.shirakumo.fraf.trial.harmony:sound #p"music/explore-3.ogg" :repeat T :mixer :music)
+(define-asset (hexmaw music-explore-4) org.shirakumo.fraf.trial.harmony:sound #p"music/explore-4.ogg" :repeat T :mixer :music)
+(define-asset (hexmaw music-explore-5) org.shirakumo.fraf.trial.harmony:sound #p"music/explore-5.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-combat-1) org.shirakumo.fraf.trial.harmony:sound #p"music/combat-1.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-combat-2) org.shirakumo.fraf.trial.harmony:sound #p"music/combat-2.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-combat-3) org.shirakumo.fraf.trial.harmony:sound #p"music/combat-3.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-combat-4) org.shirakumo.fraf.trial.harmony:sound #p"music/combat-4.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-combat-5) org.shirakumo.fraf.trial.harmony:sound #p"music/combat-5.ogg" :repeat T :mixer :music)
+(define-asset (hexmaw music-combat-6) org.shirakumo.fraf.trial.harmony:sound #p"music/combat-6.ogg" :repeat T :mixer :music)
+(define-asset (hexmaw music-combat-7) org.shirakumo.fraf.trial.harmony:sound #p"music/combat-7.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-title) org.shirakumo.fraf.trial.harmony:sound #p"music/title.ogg" :repeat T :mixer :music)
 (define-asset (hexmaw music-death) org.shirakumo.fraf.trial.harmony:sound #p"music/death.ogg" :repeat T :mixer :music)
 
 (defparameter *music-moods*
-  '(:explore (music-explore-1 music-explore-2 music-explore-3)
-    :combat (music-combat-1 music-combat-2 music-combat-3 music-combat-4 music-combat-5))
+  '(:explore (music-explore-1 music-explore-2 music-explore-3 music-explore-4 music-explore-5)
+    :combat (music-combat-1 music-combat-2 music-combat-3 music-combat-4 music-combat-5
+             music-combat-6 music-combat-7))
   "The tracks (asset names) play draws from at random, by mood.")
 
 (defun music-playlist ()

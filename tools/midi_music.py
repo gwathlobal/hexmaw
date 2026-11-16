@@ -1,8 +1,9 @@
-"""Shared machinery for music composed as notes (tools/compose_explore.py, compose_combat.py).
+"""Shared machinery for music composed as notes (tools/compose_*.py).
 
 A piece is a function from a random state to its notes, (part, beat from 0, beats long, MIDI
 note, velocity), its parts (General MIDI program and channel settings), its length in bars of
-4/4 and its beat in microseconds. RUN writes it as a format 1 MIDI file played twice in a row,
+BEATS beats (4 by default; a beat is whatever note the piece counts in, an eighth for a bar of
+7/8) and its beat in microseconds. RUN writes it as a format 1 MIDI file played twice in a row,
 renders that through GStreamer's FluidSynth element and a GM soundfont (FluidR3_GM, MIT, from
 Debian's fluid-soundfont-gm), and keeps the second pass as the loop: it opens with the
 first pass's reverb and release tails, just what the loop's own end leaves sounding, so it
@@ -69,11 +70,11 @@ def track(events):
     return b"MTrk" + struct.pack(">I", len(data)) + bytes(data)
 
 
-def write_midi(path, notes, parts, bars, beat_us, passes, tail_beats):
+def write_midi(path, notes, parts, bars, beat_us, passes, tail_beats, beats=4):
     """A format 1 file playing NOTES PASSES times in a row, then TAIL_BEATS of silence."""
-    loop = bars * 4 * PPQ
+    loop = bars * beats * PPQ
     tempo = [(0, b"\xFF\x51\x03" + beat_us.to_bytes(3, "big")),
-             (0, b"\xFF\x58\x04\x04\x02\x18\x08"),
+             (0, b"\xFF\x58\x04" + bytes([beats, 2, 0x18, 0x08])),
              (passes * loop + tail_beats * PPQ, b"\xFF\x01\x01 ")]  # holds the end open
     tracks = [track(tempo)]
     for name, part in parts.items():
@@ -116,7 +117,7 @@ def passes_match(audio, period):
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))
 
 
-def run(doc, compose, parts, bars, beat_us, loudness, gain=0.8):
+def run(doc, compose, parts, bars, beat_us, loudness, gain=0.8, beats=4):
     ap = argparse.ArgumentParser(description=doc, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("stem", type=Path, help="where the .mid, the render and the loop .wav go")
     ap.add_argument("out", type=Path, help="the game's loop, .ogg")
@@ -126,14 +127,14 @@ def run(doc, compose, parts, bars, beat_us, loudness, gain=0.8):
     ap.add_argument("--preview", type=Path, help="write the join, 8 s either side, here")
     args = ap.parse_args()
 
-    period, rest = divmod(bars * 4 * beat_us * RATE, 1_000_000)
+    period, rest = divmod(bars * beats * beat_us * RATE, 1_000_000)
     if rest or period % 64:
         sys.exit(f"{bars} bars at {beat_us} us a beat isn't a whole number of 64-sample blocks")
     notes = compose(random.Random(args.seed))
     stem = args.stem
     stem.parent.mkdir(parents=True, exist_ok=True)
     midi = stem.with_suffix(".mid")
-    write_midi(midi, notes, parts, bars, beat_us, passes=2, tail_beats=8)
+    write_midi(midi, notes, parts, bars, beat_us, passes=2, tail_beats=8, beats=beats)
     audio = render(midi, stem.with_name(f"{stem.name}-render.wav"), args.soundfont, gain)
     clipped = int((np.abs(audio) >= 32767 / 32768).sum())
     if clipped:
