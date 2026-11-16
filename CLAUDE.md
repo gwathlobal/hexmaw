@@ -2622,10 +2622,12 @@ The casting hands are made the spear's way (below): one generated picture per po
 (`art/prompts/hands-common.txt`, which says so for every pose, plus `hands-<pose>.txt`; the sword's
 idle frame and the spear's rest pose as references, the other poses adding `hands-follow.txt` and
 the chosen rest pose, `art/hands/idle-2.png`; the rest pose took the old bare-handed sheet,
-`art/hands/fire-hands.png`, as a third reference for how the hands are held). Both common files
-also say which edge the thumbs are on, the inner one: asked only for backs to the camera, the
-generator drew a pose's hands swapped now and then, thumbs on the outside (the release, the hands
-flung open and healing's rise were drawn again for it, their `-thumbs` takes). The idle flicker
+`art/hands/fire-hands.png`, as a third reference for how the hands are held). The common file
+also says the thumbs are on the inner edges, toward each other, as they must be with the backs to
+the camera: asked only for the backs, the generator drew a pose's hands swapped now and then,
+thumbs on the outside (the release and the hands flung open were drawn again for it, their
+`-thumbs` takes). A pose that turns the palms up to the camera, as healing's rise does, has them
+on the outside. The idle flicker
 is the rest pose's hands over two other takes' fire (`tools/swap_fire.py`, each frame the other
 take's fire alone), since a take asked for only other flames moved the hands too. The motifs
 (Absorb, healing, ward; `*hand-motifs*`) have no fire: `hands-common-magic.txt` in place of the common
