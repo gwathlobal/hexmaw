@@ -9,14 +9,17 @@ cut from a generated picture (magenta background), scaled to the game's art pixe
 and placed by where one of its source points falls on the screen. The frames file has
 one frame per line:
 
-  SOURCE SCALE SX SY X Y
+  SOURCE SCALE SX SY X Y [magic]
 
 SOURCE is the picture (relative to the frames file's folder, or the working folder),
 SCALE the art pixels per source pixel, and source pixel (SX, SY) lands on screen art
 pixel (X, Y), counted from the screen's bottom-left corner, Y up. What falls left of
 the screen's edge or below its bottom is kept for --margin art pixels (the game sinks
 the sprite that far past the corner, the same as *SWORD-DROP*, and the sway shifts it)
-and cut beyond. A ; starts a comment.
+and cut beyond. A trailing "magic" marks a picture whose light isn't fire (the casting hands'
+Absorb, healing and ward): only magenta is keyed out, so its blue stays, with --glow every
+bright colour stays light, not only fire's, and it keeps its own colours rather than sharing
+--colors with the rest. A ; starts a comment.
 
 Every frame shares one cell, sized to hold them all, its bottom-left corner --margin
 art pixels past the screen's. Keying is slice_frames.py's (blue well over green is
@@ -57,36 +60,45 @@ def read_frames(path):
         if not line:
             continue
         fields = line.split()
-        if len(fields) != 6:
-            raise SystemExit(f"{path}:{number}: want SOURCE SCALE SX SY X Y")
+        if len(fields) not in (6, 7) or (len(fields) == 7 and fields[6] != "magic"):
+            raise SystemExit(f"{path}:{number}: want SOURCE SCALE SX SY X Y [magic]")
         source = Path(fields[0])
         if not source.exists():
             source = base / fields[0]
-        frames.append((source, *map(float, fields[1:])))
+        frames.append((source, *map(float, fields[1:6]), len(fields) == 7))
     return frames
 
 
-def keyed(path):
+def keyed(path, magic=False):
+    """PATH's picture with its background keyed out: magenta, its blends with the dark outlines, and
+    cyan separator lines. With MAGIC (the frame's flag), only magenta and its blends: the picture's
+    own blue light (the Absorb void's rim) stays."""
     rgb = np.asarray(Image.open(path).convert("RGB")).astype(int)
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
-    background = (b > g + 40) | ((b > 150) & (g > 150) & (r < 120))
+    if magic:
+        background = (r > g + 40) & (b > g + 40) & (abs(r - b) < 90)
+    else:
+        background = (b > g + 40) | ((b > 150) & (g > 150) & (r < 120))
     alpha = np.where(background, 0, 255)
     return Image.fromarray(np.dstack([rgb, alpha]).astype(np.uint8), "RGBA")
 
 
-def glowing(rgb):
-    """Where RGB (0 to 1) is fire: bright, and orange to yellow or near white."""
+def glowing(rgb, magic=False):
+    """Where RGB (0 to 1) is fire: bright, and orange to yellow or near white. With MAGIC, any
+    bright light of any colour (healing's green ribbons, a void's blue rim)."""
     hi, lo = rgb.max(-1), rgb.min(-1)
     sat = (hi - lo) / np.maximum(hi, 1e-6)
     warm = (rgb[..., 0] >= rgb[..., 1]) & (rgb[..., 1] >= rgb[..., 2])
+    if magic:
+        return (hi > 0.85) & ((sat > 0.3) | (sat < 0.2))
     return (hi > 0.85) & ((warm & (sat > 0.45)) | (sat < 0.2))
 
 
-def grade(img, brightness, saturation, glow=False):
-    """Darken and desaturate IMG's opaque pixels; with GLOW, not its fire, which is light."""
+def grade(img, brightness, saturation, glow=False, magic=False):
+    """Darken and desaturate IMG's opaque pixels; with GLOW, not its fire (or, MAGIC, its light)."""
     a = np.asarray(img).astype(float) / 255
     rgb = a[..., :3]
-    keep = glowing(rgb) if glow else np.zeros(rgb.shape[:2], bool)
+    keep = glowing(rgb, magic) if glow else np.zeros(rgb.shape[:2], bool)
     grey = rgb @ np.array([0.299, 0.587, 0.114])
     graded = grey[..., None] + (rgb - grey[..., None]) * saturation
     graded = np.clip(graded * brightness, 0, 1)
@@ -116,34 +128,40 @@ def main():
     side = args.margin if args.side_margin is None else args.side_margin
 
     placed = []   # (image, left, top) in screen art pixels, Y down from the screen's bottom
-    for source, scale, sx, sy, x, y in read_frames(args.frames):
-        img = keyed(source)
+    for source, scale, sx, sy, x, y, magic in read_frames(args.frames):
+        img = keyed(source, magic)
         if mirror:
             img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
             sx = img.width - sx
         w, h = round(img.width * scale), round(img.height * scale)
-        small = grade(box_downscale(img, (w, h)), args.brightness, args.saturation, args.glow)
+        small = grade(box_downscale(img, (w, h)), args.brightness, args.saturation, args.glow, magic)
         left, top = round(x - sx * scale), round(-y - sy * scale)
         # Keep only what shows: past the margins nothing is drawn.
         small = small.crop((max(0, -side - left), 0, small.width, min(small.height, args.margin - top)))
         left = max(left, -side)
         bbox = small.getbbox()
-        placed.append((small.crop(bbox), left + bbox[0], top + bbox[1]))
+        placed.append((small.crop(bbox), left + bbox[0], top + bbox[1], magic))
 
-    right = max(left + img.width for img, left, _ in placed)
-    top = min(top for _, _, top in placed)
+    right = max(left + img.width for img, left, _, _ in placed)
+    top = min(top for _, _, top, _ in placed)
     cell_w, cell_h = right + side, args.margin - top
     cells = []
-    for img, left, top_y in placed:
+    for img, left, top_y, _ in placed:
         # The cell's top-left corner is at screen (-side, top); anything past it is cut.
         cell = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
         cell.paste(img, (left + side, top_y - top), img)
         cells.append(cell.transpose(Image.Transpose.FLIP_LEFT_RIGHT) if mirror else cell)
 
+    # The fire's frames share --colors colours; a magic frame keeps its own (the house palette maps
+    # them later): squeezed in with the fire, a void's few blues became greys and yellows.
     strip = Image.new("RGBA", (len(cells) * (cell_w + GAP) - GAP, cell_h), (0, 0, 0, 0))
-    for i, cell in enumerate(cells):
-        strip.paste(cell, (i * (cell_w + GAP), 0))
+    for i, (cell, (_, _, _, magic)) in enumerate(zip(cells, placed)):
+        if not magic:
+            strip.paste(cell, (i * (cell_w + GAP), 0))
     strip = reduce_colors(strip, args.colors)
+    for i, (cell, (_, _, _, magic)) in enumerate(zip(cells, placed)):
+        if magic:
+            strip.paste(cell, (i * (cell_w + GAP), 0))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     strip.save(out.with_suffix(".png"))

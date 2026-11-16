@@ -320,10 +320,10 @@ winding up an attack and not already poised from a bash."
 ;;; lands, for ENCHANT-COST mana out of the player's pool; with too little left, the blow
 ;;; lands plain. A miss costs nothing.
 
-(defparameter *enchant-cost-scale* 0.5 "Mana a blow costs, against its spell's cost to cast.")
+(defparameter *enchant-cost-scale* 0.5 "Mana a blow costs, against its spell's power (SPELL-POWER).")
 
 (defun enchant-cost (spell)
-  (max 1 (ceiling (* *enchant-cost-scale* (spell-cost spell)))))
+  (max 1 (ceiling (* *enchant-cost-scale* (spell-power spell)))))
 
 (defun held-weapon-stack (player)
   "The bag stack of the weapon PLAYER holds: the wanted hotbar slot's, while it is that weapon."
@@ -585,7 +585,7 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (defparameter *weapon-icons* '(:sword 0 :spear 2 :maul 11) "Frame of each weapon's icon in the strip.")
 (defparameter *spell-icons*
-  '(:fire 1 :storm 3 :frost 4 :shock 5 :drain 6 :heal 7 :ward 8 :slow 9 :knockback 10)
+  '(:fire 1 :storm 3 :frost 4 :shock 5 :drain 6 :heal 7 :ward 8 :slow 9 :knockback 10 :absorb 12)
   "Frame in the strip of the icon of a rune by its first effect (SPELL-ICON-KEY): damage by its
 element, any other by its kind, and a tornado's :STORM.")
 

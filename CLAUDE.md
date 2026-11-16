@@ -674,7 +674,9 @@ real time instead.
   slippery cell `*nav-ice-cost*` (1.5) times its length, so routes keep to the snow beside a
   frozen river and cross it the short way; a straight walk still goes straight over it, skidding.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
-  no fog. Projectiles are effect sprites.
+  no fog. Projectiles are effect sprites. `face-camera` turns a sprite parallel to the view
+  plane: about X by the pitch, then about +Y by the yaw (`nq*` turns by its first quaternion
+  first, so the pitch's goes first).
 - `src/gore.lisp`: blood. `hurt` takes `:from`, the point the blow came from (the sword
   passes the player's feet, a projectile its flight; NIL means the player), and `bleed`
   sprays drops from the wound away from it, `*blood-back-spray*` of them back toward the
@@ -739,7 +741,8 @@ real time instead.
   (512) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
   allocated a frame. They draw no art: each is a quad in the view plane on which the shader lays
   whole texels of the 64-a-metre grid, at least a pixel each (`view_rows`), in three colours of the
-  house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`), fullbright,
+  house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`, and the novas' `:frost`,
+  `:shock`, `:drain`), fullbright,
   unfogged and opaque. A **spark** is a streak, its tail as far behind its head as it moves across
   the view in `*spark-streak-time*`, 1 to `*spark-max-streak*` (9) texels, the first third its
   ramp's hotter colour; it falls under `*spark-gravity*`, bounces off solids (`bounce-spark`, on
@@ -767,19 +770,82 @@ real time instead.
   frozen, vsync off: GPU 2.32 ms a frame against 2.30 with none, writing the buffer 0.07 ms of CPU
   and a tick of `step-sparks` 0.08 ms; under llvmpipe ("Slow machines") 120.4 against 119.3–119.8
   ms at full scale and 41.4–41.6 against 40.9–41.3 at ½.
-- `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-cost`),
-  projectile delivery, the player's `bolt` and `heal`, the acolyte's `cinder` and the necromancer's
-  `grave-skull` and `grave-spikes`. An effect has a kind, a magnitude range, a duration, an area, a
-  target type (`:self`, the caster; `:target`, what the delivery hits) and, for damage, an
-  `element`. `*effect-kinds*` says what each kind the spellforge offers is (its base cost, how its
-  duration counts: `:instant`, `:over-time` (magnitude per second) or `:status`, who it may strike,
-  and the forge's caps); `effect-cost` is base (by element for damage, `*element-costs*`) times the
-  average magnitude, times the duration's factor, times 1 + area, times `*touch-cost-scale*` for a
-  touch spell. The bolt is 14 (fire 7-9 and knockback 3-4, "Fire Bolt" by its `:title`; `spell-title`),
-  heal 17 (14-20), and the creatures' spells cost what they did. The player's starting spells must be
-  ones the forge makes, ranges, cost, flight and all (`forgeable-p` and `check-starting-spells`,
-  forge.lisp, which warns as it loads: a forged range is `*magnitude-spread*` of its top up to it, and
-  damage always has an element). An effect with an area
+  **Lightning** lives here too (`bolt-lines`, `*bolt-lines*`, entered by `add-bolt-lines` in
+  `setup-scene`): `bolt-line` adds a jagged bolt between two points, midpoints moved across it
+  `depth` times (on a `:sphere` each is put back on it, so the bolt runs over its surface), with
+  forks (`:branch`) and segments left out (`:drop`, a bolt breaking up), every segment lasting
+  `:life` seconds, so whatever makes bolts draws them anew to make them crackle. They are plain
+  arrays (`*max-bolt-segments*`, 2048) written into one stream-draw buffer and drawn in one call:
+  each segment a quad facing the view, its ends snapped to the art's pixel grid on screen (a 240th
+  of the rows), a yellow edge `width` art pixels wide and a white core one wide (`*bolt-edge*`,
+  `*bolt-core*`), added over what is behind it. Only the shock nova uses it so far.
+- `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-power`, tiers,
+  `spell-cost`), the deliveries (projectile, seeker, beam, nova, circle), the player's `bolt`, `absorb`
+  and `heal`, the acolyte's `cinder` and the necromancer's `grave-skull` and `grave-spikes`. An effect
+  has a kind, a magnitude range, a duration, an area, a target type (`:self`, the caster; `:target`,
+  what the delivery hits) and, for damage, an `element`. `*effect-kinds*` says what each kind the
+  spellforge offers is (its base, how its duration counts: `:instant`, `:over-time` (magnitude per
+  second) or `:status`, who it may strike, and the forge's caps).
+  **Power** (`spell-power`) is a spell's strength as one number: for each effect, `effect-cost`, the
+  base (by element for damage, `*element-costs*`: fire 1.5, frost and shock 1.7; heal 1, knockback 0.5,
+  slow 0.12, drain 2, ward 0.4, absorb 0.2) times the average magnitude, times the duration's factor
+  (instant 1, over time duration × 0.6, status 1 + duration / 5), times 1 + area, times the delivery's
+  `*delivery-cost-scales*` (touch 0.75, seeker 1.3, beam 1.4, nova 1.5); summed, rounded up. Dust
+  (`spell-dust`), enchantments (`enchant-cost`, half the power a blow) and found runes are priced by it.
+  **Tiers** (`spell-tier`): a spell's tier follows from what it is, the first whose rules it meets
+  (`tier-fault`), and `tier-reason` says why it isn't the one below. **Free**: a projectile, touch or
+  seeker; one damage effect, plus knockback of at most `*free-max-knockback*` (4); nothing lasting, no
+  area; power at most `*free-max-power*` (14, the Fire Bolt's). An Absorb is always stamina (below). **Stamina**: any
+  delivery but self (`*stamina-deliveries*`); at most `*stamina-max-effects*` (2) of damage, knockback
+  and slow (`*stamina-kinds*`); `*stamina-max-duration*` (4 s) and `*stamina-max-area*` (1.5 m) at
+  most; power at most `*stamina-max-power*` (40), a beam `*stamina-max-beam-power*` (20). **Mana**:
+  anything else, every heal, ward and drain, and the spells the forge doesn't make (the tornado, the
+  creatures'). A cast takes `spell-price` (player.lisp): nothing, `spell-stamina` (its power) or
+  `spell-cost`, the mana: the power, its striking effects at `*cast-strike-scale*` (0.5, what the same
+  spell costs a blow as an enchantment), its self effects whole; one the forge doesn't make, its whole
+  power. So the Fire Bolt (14) is free, a fire projectile of 21-30 (power 39) costs 39 stamina, heal
+  (17) 17 mana, and a fire burst of power 50, 25 mana. The player's starting spells must be ones the
+  forge makes, ranges, power, flight and all (`forgeable-p` and `check-starting-spells`, forge.lisp,
+  which warns as it loads, and also if the bolt, `*free-starting-spells*`, isn't free: a
+  forged range is `*magnitude-spread*` of its top up to it, and damage always has an element).
+  **Overcharge**: a striking stamina or mana spell (`overchargeable-p`, player.lisp: projectile, touch,
+  seeker, nova) held is cast as `overcharged-spell`, a copy (`scaled-spell`) with magnitudes × (1 +
+  `*overcharge-strength*` (0.6) × its charge) and `spell-overcharge`; a full one (`full-overcharge-p`)
+  isn't turned back by a shield or ward (`deflects-p`) but knocks it aside (`overcharge-breaks-guard`,
+  `knock-guard-aside` in maul.lisp), and its damage always flinches (`:force-pain`; a boss rolls with
+  `*overcharge-pain-bonus*`). **Seeker**: a projectile that picks the live creature nearest the aim
+  (`seeker-mark`, within `*seeker-cone*` and `*seeker-range*`, in sight) and turns after it at
+  `*seeker-turn*`. **Beam**: no flight; it strikes the first body or wall along the aim within
+  `*beam-range*` (12 m) at once (`beam-end`, `beam-strike`; a covering shield stops it), its light a
+  `beam` (a shared ribbon, `*beam-vao*`, staged by `preload-spells`, texel-stepped, added light). The
+  player holds a beam (player.lisp): every `*beam-pulse*` a `pulse-spell` with
+  `beam-pulse-share` of its instant effects, for that share of its price. **Nova**: a sphere growing
+  from the caster's chest out to `*nova-radius*` (5 m) plus its effects' area over `*nova-grow-time*`
+  (0.4 s), from `*nova-start-radius*` and slowing as it goes (`spell-nova`, `place-nova`; its camera
+  kick `*nova-camera-shake*`). It spares its caster; the bodies it reaches (`burst-victims` at the
+  cast, nearest first, by `nova-distance` to their upright cylinder) are struck as the sphere reaches
+  each (`nova-strike-body`), every striking effect whose reach covers it, pushing away from the
+  centre. Its look is its element's (`nova-style`, `*nova-styles*`: the first damage effect's fire,
+  frost or shock, else `:drain` for a drain, else `:force`). All but shock grow a dome (`nova-dome`, a
+  shared sphere `*nova-dome-vao*`, added light like the aurora, its curtains sized in metres on its
+  surface so that from inside they recede as it grows): fire's streaks lick and climb with ragged
+  tops, frost's are hard pointed shards that barely move, drain's hang from the top, force's are the
+  aurora's; a slow in the spell halves their pace and adds a sinking haze. Shock's is a cage of
+  lightning instead (`nova-lightning`, `bolt-line` in sparks.lisp): `*nova-cage-bolts*` bolts over the
+  sphere, most on the side the player looks, drawn anew every `*nova-crackle*`, breaking up in the
+  second half of its growth, and at each body struck a bolt in from the cage, bolts crawling round it
+  for 0.15 s and a jump to the nearest other creature within 3.5 m. The newest nova keeps the
+  `*nova-sweep-...*` variables (greybox.lisp) that the lit shaders' `nova_sweep` reads: a bright band
+  `*nova-band-width*` wide where the sphere meets the level and the monsters, a dithered trail behind
+  it, and after fire a scorch, after frost a rime, in soft patches, fading over `*nova-trail-time*`
+  (1.2 s). Each look throws its particles while it grows (`*nova-particles*`, `emit-nova-particles`:
+  fire's embers, frost's glitter and chips, shock's sparks, force's grit; drain's motes stream from
+  each body struck back to the caster). A save keeps one in flight (`saved-slots`). Measured with one
+  frozen mid-growth in the test hall, vsync off: GPU 2.84 ms a frame with fire's dome, 2.37 with
+  shock's lightning, 2.12 with none. A projectile remembers who first fired it
+  (`launcher`); the player's free ones fly `*free-projectile-lifetime*` (1 s, 20 m;
+  `projectile-lifetime`). A projectile that reaches a body that `absorbs-p` it (the player's Absorb,
+  magic.lisp) is swallowed (`absorb-projectile`) before its effects. An effect with an area
   bursts where its spell strikes (`burst-spell`, over `burst-victims` in magic.lisp: every body
   the ball of that radius reaches, `burst-reaches-p`, sphere against the body's upright cylinder,
   with a clear line to it, `clear-line-p` in gore.lisp, up, down or across, so no burst reaches
@@ -792,8 +858,9 @@ real time instead.
   `*spells*`: `spell-spec` and `spec-spell` turn one into plain data and back (a save keeps it so),
   and its look is its element's or first effect's (`*spell-looks*`: the bolt's frames recoloured
   into `data/sprites/spells/` by `tools/recolor_hue.py ... --from 30 --reach 60 --hue H --spread
-  0.5`; frost 200, shock 58 with `--spread 0.25`, drain 345, heal 110, arcane 285), each preloaded
-  by `preload-spells`. A new effect kind is a method on `apply-effect`, for a
+  0.5`; frost 200, shock 58 with `--spread 0.25`, drain 345, heal 110, arcane 285; a ward's and an
+  Absorb's, `:ward` and `:absorb`, only colour the hands, borrowing heal's and arcane's frames), each
+  preloaded by `preload-spells`. A new effect kind is a method on `apply-effect`, for a
   `creature` target and (in player.lisp or magic.lisp, loaded later) a `player` one; where the effect came
   from and which way it pushes are `effect-origin` and `effect-direction` of its source (the
   projectile, or the circle), and `effect-unblockable-p` whether the player's shield counts
@@ -1014,12 +1081,26 @@ real time instead.
   A save leaves it out (`level-effects`), and it comes back from the status; `preload-status-auras`
   stages the strips. The frost chill keeps its tint only. To look at one:
   `(game (afflict (aref *creatures* 0) :damage 1 8.0 :element :fire :caster *player*))`.
+  **Absorb**: a spell holding `:absorb` alone, cast on yourself, is held (`hold-channel`, player.lisp)
+  on stamina (`spell-tier` makes it `:stamina` whatever its power): its power a second while held
+  (`update-channel`), no stamina coming back meanwhile, and `*absorb-take-stamina*` (1) a point of the
+  mana each projectile gives (`absorb-stamina`); out of stamina it drops, and a projectile it can't pay
+  for strikes. Free, a live acolyte was a mana spring. While it is held, a hostile projectile that carries damage and comes at the player from
+  within `*block-arc*` of their view (`absorbs-p`, `facing-point-p`) is swallowed before it strikes
+  (`absorb-projectile`): no damage, no burst, the view flashes `*absorb-flash-color*`, the hum it holds
+  (`absorb-channel`, a loop in `update-channel`) swoops up and down (`absorb-take`: that hum resampled
+  at a bent rate, the recipe in its take's `.prompt.json`), and the player
+  gains `absorb-mana`, the effect's top magnitude's percent (`absorb-share`) of the spell's power, or,
+  for the player's own spell sent back by a shield (its `launcher`, spells.lisp), of the mana it cost,
+  so a free one returned gives none. Rifts and gusts carry no damage and still strike; nothing that
+  isn't a projectile is taken. The starting Absorb Projectiles takes 35-50 (50%, power 9, so 9 stamina a
+  second): a cinder gives 5 mana for 5 stamina, a grave skull 6.
 - `src/forge.lisp`: the spellforge, used at an altar (`add-altar`, pickups.lisp; `near-altar-p`, within
   `*altar-reach*` across and `*altar-height*` of its top; the HUD's prompt line says "[E] Spellforge"
   there, the altar being one of E's targets, `interact-target`, townsfolk.lisp). E opens it (`open-forge`, `*game-state*`
   `:forge`, frozen; Esc or Leave closes it; `*forge-anywhere*` opens it anywhere in a debug version).
-  Making costs arcane dust (an item, `:dust`): a spell `*dust-per-mana*` (1) a point of its mana per
-  cast (`spell-dust`), an enchantment `*enchant-dust-scale*` (3) a point of its mana per blow
+  Making costs arcane dust (an item, `:dust`): a spell `*dust-per-mana*` (1) a point of its power
+  (`spell-dust`, `spell-power`), an enchantment `*enchant-dust-scale*` (3) a point of its mana per blow
   (`enchant-dust`); destroying one gives back `*dust-refund*` (0.5) of that (`refund-dust`). Two tabs
   (`*forge-tab*`, `forge-tab`): **Spells** lists "New spell" and every rune in the bag (`player-runes`,
   `*forge-list-rows*` a page, `forge-page`), **Enchant** the weapons carried (`carried-weapons`: every
@@ -1032,14 +1113,17 @@ real time instead.
   a rune or an enchanted weapon is only shown (`shown-spell-lines`) with Unweave or Disenchant
   (`forge-destroy`, two clicks: the first arms it, `*forge-armed*`). Nothing is changed in place: make
   another, or destroy it; spells are limited only by free bag cells. Effects and elements are those the
-  player knows (`known-effects`: `*starting-effects*`, damage, heal, knockback and fire, plus what glyphs
-  taught; `:area` unlocks area), and of those only the ones that land where the draft does (`draft-kinds`): a
-  spell cast on yourself takes heal and ward, a projectile, a touch or a weapon damage, knockback, slow
-  and drain. Changing the delivery turns the effects that no longer fit into the first kind that does
+  player knows (`known-effects`: `*starting-effects*`, damage, heal, knockback, fire and absorb, plus what
+  glyphs taught; `:area` unlocks area), and of those only the ones that land where the draft does
+  (`draft-kinds`): a spell cast on yourself takes heal, ward and absorb, a projectile, a seeker, a beam, a
+  nova, a touch or a weapon damage, knockback, slow and drain (`*forge-deliveries*`). There is no tier
+  to choose: the readout gives the one the draft comes to (`spell-tier`, spells.lisp), its cost
+  (`spell-cost-text`, inventory.lisp: "Free, every 0.5 s", "39 SP a cast", "36 SP a second", "17 MP a
+  cast") and why it isn't free (`tier-line`: "Stamina: power 39 is over 14"), as a dial moves. Changing the delivery turns the effects that no longer fit into the first kind that does
   (`fit-effects`). A run starts knowing only fire, so with one element (or one kind for the delivery)
   known, the Element or Effect button doesn't change it but says so in the note, naming the glyphs
   that teach the rest (`forge-cycle-element`, `forge-cycle-kind`). `draft-problem` says why a draft can't be made (self delivery with something to
-  strike, a delivery with nothing to, more than `*max-mana*`, a weapon's more than
+  strike, a delivery with nothing to, an Absorb beside another effect, a mana cast over the pool, a weapon's more than
   `*max-enchant-effects*` or `*max-enchant-cost*` a blow, too little dust, a full bag), and while it
   objects the screen shows it: the note says so in `*forge-warning-color*` (a `forge-status-note`),
   and the Make button (a `forge-make-button`) is greyed, with no orange on hover; a click on it
@@ -1132,20 +1216,22 @@ real time instead.
   **Altars**: `add-altar` notes a point in `*level-altars*` (blocks.lisp; a blueprint's `altar`) and
   hangs an `altar-sigil` over it with a lamp; `reset-run` keeps it. The test level has one on a dais
   in the hall's north-west corner.
-- `src/loot.lisp`: found weapons and runes. A run starts with the sword, the fire bolt and heal; the
-  rest is loot. Each level's `:loot` (`*run-levels*`, run.lisp; `loot-property`, which takes the
+- `src/loot.lisp`: found weapons and runes. A run starts with the sword, the fire bolt (with Absorb
+  Projectiles in its off hand) and heal; the rest is loot. Each level's `:loot` (`*run-levels*`, run.lisp; `loot-property`, which takes the
   settlement's own `(:weapons 0 :runes 1)` before the level it borrows the rest from) gives its
   `:weapons` (level 1 a plain spear, `:first-weapon`) and `:runes`. A weapon is a sword, spear or maul
   (`*loot-weapons*`, each as likely) with
   the usual stats; only its enchantment varies: `:enchant-chance` (0, 0.5, 0.8) of one costing
   `:enchant-cost` a blow (2-3 on level 2, 3-6 on level 3) with up to `:enchant-effects`
   (`loot-enchantment`). A rune (`make-loot-rune`) is a generated spell made as the forge makes one,
-  from a `forge-draft` (`loot-rune-draft`: a delivery from `*loot-deliveries*`, kinds from
-  `*loot-strike-kinds*` or `*loot-self-kinds*`, up to `:rune-effects`, elements, times
-  (`*loot-durations*`) and, with `:area-chance`, a burst), its magnitudes sized by bisection
-  (`size-draft`) to a cost in `:rune-mana` (10-18, 16-28, 24-40), drawn again while `draft-fault`
-  (forge.lisp, the forge's checks without the dust and bag) refuses it or it falls more than
-  `*rune-mana-slack*` short. Or it is one of `*loot-spells*` (the tornado, `tempest`), which the forge
+  from a `forge-draft` (`loot-rune-draft`: a delivery from `*loot-deliveries*`, projectile, seeker,
+  beam, nova, touch or self, kinds from `*loot-strike-kinds*` or `*loot-self-kinds*` (an Absorb drawn
+  with others is drawn again), up to `:rune-effects`, elements, times (`*loot-durations*`) and, with
+  `:area-chance`, a burst for a projectile or seeker), its magnitudes sized by bisection (`size-draft`)
+  to a power in `:rune-power` (10-18, 16-28, 24-40), drawn again while `draft-fault` (forge.lisp, the
+  forge's checks without the dust and bag) refuses it or it falls more than `*rune-power-slack*` short.
+  Its tier follows from what it is: over run seeds 1 to 30, level 1's runes were 11 free, 7 stamina and
+  12 mana, deeper ones about two thirds mana (`tools/levelcheck`'s "rune tiers"). Or it is one of `*loot-spells*` (the tornado, `tempest`), which the forge
   can't make: once a run at most, on the first level whose `:authored-chance` (0.35, 0.5) roll from the
   run seed comes up (`authored-loot`); 13 of run seeds 1 to 15 had it. `place-loot` (after the glyphs,
   before gold and dust; `scatter-pickups` reserves the spots, `loot-count`) stands each as a
@@ -1177,17 +1263,32 @@ real time instead.
   a bag weapon or rune onto a hotbar slot binds that key (`bind-stack`, off any other), a potion onto
   Q binds Q; two hotbar slots swap; a hotbar slot or Q dropped anywhere else is unbound. A stack that
   leaves the bag is unbound (`prune-bindings`, from `sync-wanted` every tick, and `destroy-stack`).
-  Bag cells mark the key bound to their stack. A run starts with `give-starting-kit` (player.lisp's
-  `initialize-instance`, `reset-player`): `*starting-hotbar*`'s items in the first cells, bound to
-  keys 1 to 3 (sword, fire bolt, heal), slot `*starting-slot*` (the sword) in hand; the rest is found
-  (`src/loot.lisp`). The debug level starts with `*debug-starting-hotbar*` instead, keys 1 to 6
-  (sword, bolt, spear, tempest, heal, maul), so the recipes below that use keys 3, 4 and 6 work there. The hotbar draws in
+  **Off hands**: each hotbar slot whose stack is a rune may also hold an off-hand rune (the player's
+  `offhands`, as long as `hotbar`; slots `:off-1` .. `:off-9`, `*offhand-slots*`, `offhand-index`),
+  which the right button casts while that slot's rune is in hand (`offhand-spell`; a weapon's slot has
+  none, and `prune-bindings` drops one under a slot that no longer holds a rune). A rune is in one
+  place at a time, a slot's or an off hand's: binding it moves it (`unbind-stack`, from `bind-stack`
+  and `bind-offhand`). It is set only by a drag in the panel: each rune slot shows its off-hand cell,
+  small in its top-right corner (`offhand-position`, `offhand-cell-shown-p`, an `offhand-frame`), over
+  which a rune binds it and from which a drag unbinds or moves it; in play the cell shows only while
+  it holds one. Bag cells mark the key bound to their stack, or with a ' the key whose off hand holds
+  it. A save and the stairs keep them as bag cells (`offhand-cells`, after `hotbar-cells`); an older
+  save has none. A rune's cell border is its tier's colour (`*tier-colors*`: green stamina, blue mana,
+  plain free). A run starts with `give-starting-kit` (player.lisp's `initialize-instance`,
+  `reset-player`): `*starting-hotbar*`'s items in the first cells, bound to keys 1 to 3 (sword, fire
+  bolt with Absorb Projectiles in its off hand, heal; an entry is a weapon, a spell or a list of a
+  slot's and its off hand's, a spell a name or a spec, `kit-entry`, `kit-spell`), slot
+  `*starting-slot*` (the sword) in hand; the rest is found (`src/loot.lisp`). The debug level starts
+  with `*debug-starting-hotbar*` instead, keys 1 to 9 (sword, bolt with Absorb, spear, tempest, heal,
+  maul, a stamina projectile "Flame Lance", a mana beam "Fire Ray", a stamina "Force Nova"), so the
+  recipes below that use keys 3, 4 and 6 work there. The hotbar draws in
   rows of `*hotbar-columns*` (5) over the bars (`hot-position`; in one row of nine the hands covered the
   last), each slot with its key, the one asked for framed in gold, the others' icons dimmed in play, an
   enchanted weapon's border in its spell's colour. A rune's icon is its spell's look's (`stack-icon`:
   weapons and runes from the weapon icons, sword.lisp, `swap-animation` when the strip changes). A save
   and the stairs keep the hotbar as bag cells (`hotbar-cells`, an accessor in `saved-slots` after
-  `inventory`), and `migrate-bindings` brings an older save's held stacks into the bag. `give-item
+  `inventory`), and `migrate-bindings` brings an older save's held stacks into the bag, and
+  `migrate-known-effects` teaches an older save what a run now starts knowing (Absorb). `give-item
   player kind count` puts items onto their stacks, then into empty cells (how many went in), and binds
   an unbound Q to the first potion; `take-item` takes from the smallest stacks. Q (`use-quickslot`)
   drinks one of its kind from the smallest stack, not at full; at none it stays bound, dimmed, and
@@ -1195,7 +1296,7 @@ real time instead.
   opens the panel (`*game-state*` `:inventory`, frozen as `:map` is), I or Esc closes it. Parts of the
   panel are `inventory-part`s (`hud-shown-p` only in `:inventory`) with a `late-rank`, so its
   see-through back never covers world drawn after it. The quickslot has a row of its own above the
-  hotbar (`quick-position`), the spell in hand right of it (`spell-label`), the panel right above it
+  hotbar (`quick-position`), the panel right above it
   (`panel-box`). The hint (`*inventory-hint*`) is wrapped to the panel's width (`hint-lines`, up to three
   `panel-hints`; `panel-box` grows to hold them) and goes blank while the pointer is on a stack, and a
   tooltip beside it (`update-tooltip`, up and right of the pointer, kept on screen; not while dragging)
@@ -1203,7 +1304,8 @@ real time instead.
   hud.lisp) up to `*tooltip-lines*`: a rune's delivery, cost and every effect (`spell-lines`,
   `effect-lines`: magnitude, time, area, an element's chill or stagger); a weapon's damage, reach,
   swing time and its enchantment (`enchantment-lines`; the sword's shield too); a potion's restore,
-  this stack and the bag's total; dust's and gold's use (`:about`). Its parts are `tooltip-part`s with
+  this stack and the bag's total; dust's and gold's use (`:about`). A rune's says what it costs and,
+  unless it is free, why (`tier-line`), and whether it overcharges. Its parts are `tooltip-part`s with
   the highest `late-rank`s, at depths in front of the hotbar's and quickslot's labels (which sit at
   -0.08 for it). A new item is an `*item-kinds*` entry and a frame in `tools/draw_item_icons.py`
   (potions, dust, gold, the reliquary). To try it: `(game (give-item *player* :health-potion 3))` and `(game
@@ -1231,8 +1333,17 @@ real time instead.
   `hud-shown-p` decides whether an element draws (by default, not on the main menu). The
   frame counter (`fps-display`) sits in the upper-left corner while `*show-fps*` is on,
   on every screen, counting frames in its render and updating every `*fps-interval*`.
-  Right of the quickslot: the spell in hand (`spell-label`, inventory.lisp). The hands, like the
-  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`). Gold has
+  The hands, like the
+  sword, draw at `*weapon-depth*` (hands.lisp), behind every HUD element. The player's statuses are icons (`src/status-icons.lisp`),
+  and a ward, the priest's blessing and healing over time also show as **veils** at the screen's
+  edges (`status-veil`, one each, `update-veils`): a ward's honeycomb along the left and right
+  edges, the blessing's rays in the corners (blinking over its last `*veil-warn-time*`), healing's
+  motes rising along the bottom, each `*veil-band*` deep and fading inward in four steps, faint at
+  rest and flaring for `*veil-flare-time*` when the effect acts (`flare-veil`: from `absorb-ward`,
+  `hurt-player`'s blessing and the heal tick). They are tiles of `data/sprites/veils/veils.png`,
+  drawn by `tools/draw_status_veils.py data/sprites/veils`, repeated by the fragment shader at the
+  HUD's art pixel size. To see them: `(game (afflict *player* :ward 20 30.0) (afflict *player* :heal 2
+  20.0) (setf (blessed *player*) 100.0))`. Gold has
   no label of its own: it is stacks in the bag.
   `show-message` puts a line across the view for `*message-time*` (a glyph's, kill gold the bag
   had no room for, the watch's warnings; `hud-say` formats one), and `*interact-prompt*` under it says what E does with
@@ -1429,11 +1540,27 @@ real time instead.
   frame is both hands, drawn at `sword-scale` like the weapons and placed by its aim (`*hands-aim*`,
   the pictures' middle) on the screen's middle; each hand is its own entity drawing its half
   (`hands-split`), `*hands-spread*` (28) art pixels out from the middle, closing up for the frames
-  where the fire joins between them (`*hands-together*`: the gather, the fireball held, the release). The cast's release frame is timed
-  to `*cast-release*`. Their fire takes the look of the spell in them (`*hand-looks*`, by
-  `spell-look`: a tornado's `:storm`, else its effects'), one strip per look, each the fire strip
-  recoloured, `tools/recolor_strip.py data/sprites/hands/hands data/sprites/hands/<look> --hue H`
-  (storm 268, frost 205, shock 58 `--saturation 0.65`, drain 345, heal 115, arcane 295), then
+  where the fire joins between them (`*hands-together*`: the gather, the fireball held, the release,
+  the Absorb void, the ward's honeycomb). The cast's release frame is timed to `*cast-release*`.
+  **Motifs** (`*hand-motifs*`, `hand-motif`): a spell cast on yourself shows its own magic, never fire,
+  by its first effect. **Absorb**: at rest a small black void in each palm ringed in pale blue; held,
+  a void as big as a head between the hands, streaks of light spiralling into it (its `:stance`).
+  **Healing**: at rest a band of pale green light running up ribbons round the forearms; cast, the
+  ribbons unwind and rise, wrap the forearms tight as it lands, then come apart into motes. **Ward**:
+  at rest three gold hexagons over each palm, one above two, each bold in turn; cast, the hands push
+  forward, gold lines join the fingertips into a honeycomb pane as it lands, which breaks up. Everything else is **fire**: its idle flicker and the attack's cast. Each
+  motif has an idle loop (`:idle`, 4 frames, the ward's 3, `*hands-idle-time*` a frame), a cast (`:cast`, `:cast-frames`,
+  `:release`) and Absorb its stance. Each hand shows its own rune's idle (`hand-idle-spell`: the left
+  the slot's, cast with the left button, the right its off hand's, cast with the right), so a hand of
+  fire and a hand of void sit side by side; a cast or a held spell takes both (`last-cast`,
+  `cast-position`, `hands-frame`). A held beam lowers them (`channel-ease`, `*channel-hands-drop*`)
+  round the cupped frames, and an overcharge holds the cupped fireball (`*overcharge-hands-frames*`),
+  trembling at full (`*overcharge-tremble-rate*`). Each hand's fire takes the look of its spell
+  (`hand-look-spell`). A look's strip is `*hand-looks*`, by `spell-look`: a tornado's `:storm`, else
+  its effects', one strip per look, each the fire strip recoloured, `tools/recolor_strip.py
+  data/sprites/hands/hands data/sprites/hands/<look> --hue H` (storm 268, frost 205, shock 58
+  `--saturation 0.65`, drain 345, arcane 295); healing, ward and Absorb, which show no fire, take the
+  strip as drawn. Then
   `tools/restyle.py --palette art/style/palette.txt data/sprites/hands/<look>.png`; `add-hands`
   preloads them all, since `swap-animation` changes the strip mid-game. The recipes (the hotbar's
   defaults) work as before: `(select-weapon *player* :1)` is hotbar key 1, the sword at the start.
@@ -1443,7 +1570,7 @@ real time instead.
   `src/loot.lisp`; `migrate-enchantments` moves an older save's `:sword`/`:spear` entries onto the
   bag's first such weapon, after a load and the stairs) goes with every blow of it that lands
   (`enchant-strike`, from `swing-hit` and the bash), for `enchant-cost` mana (`*enchant-cost-scale*`
-  of the spell's cost) out of the pool; with too little left the blow is plain, and a miss costs
+  of the spell's power, `spell-power`) out of the pool; with too little left the blow is plain, and a miss costs
   nothing. Its self effects land on the player. The weapon's border on the hotbar and in the bag takes
   the spell's colour, dimmed while mana can't pay (`weapon-enchantment`, `spell-tint`), and so does its
   sprite on screen: `sword` (and so the spear and the shield) is a `rim-glow` (boss.lisp), whose rim
@@ -1471,7 +1598,8 @@ real time instead.
   (`*weapon-icons*`; a rune's by its spell's first effect, `spell-icon-key` into `*spell-icons*`:
   damage by element, a flame, a snowflake, a lightning bolt; drain a drop of blood, heal a cross, ward a
   shield, slow an hourglass, knockback a shockwave; a vortex the tornado), drawn by
-  `tools/draw_weapon_icons.py data/sprites/icons/weapons`; a new weapon or effect kind needs a frame
+  `tools/draw_weapon_icons.py data/sprites/icons/weapons`, then `tools/restyle.py --house
+  data/sprites/icons/weapons.png` (the palette; Absorb's whirlpool is frame 12); a new weapon or effect kind needs a frame
   there.
   The left hand holds a shield, a sprite of its own (`shield`, a subclass of `sword`) against
   the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
@@ -1583,7 +1711,28 @@ real time instead.
   the floor. Below `*kill-height*` the player goes back to the start (`respawn`), and the log gets
   the last 2 s of movement, each tick that jumped or ended inside a solid (`report-fall`,
   `*fall-trace*`): send it with a fall. Mana doesn't regenerate:
-  only a pickup, a new run or a load refills it. `stamina` (`*max-stamina*`) comes back at
+  only a pickup, a new run or a load refills it, or an Absorb (magic.lisp).
+  **Casting** (`player-cast`): what a spell takes is its tier's (`spell-price`: nothing, stamina or
+  mana, spells.lisp; `can-pay-p`, `pay`), and with too little it fizzles. A free spell's next cast is
+  `*free-cast-cooldown*` (0.5 s) off, the rest `*cast-cooldown*` (0.35). Each hand casts (`cast-hand`,
+  `:main` on the left button, `:off`, the off hand's rune, on the right; `hand-spell`, `hand-held-p`),
+  but one cast at a time (`busy-casting-p`): the hands share the cooldown, and a held spell or an
+  overcharge occupies both. A beam or an Absorb is held (`held-spell-p`, `hold-channel`,
+  `update-channel`): a beam strikes every `*beam-pulse*` from the release, paying `beam-pulse-share` of
+  its price a strike (`update-beam`), only every `*beam-pain-every*`th strike rolling for a flinch, its
+  light from low between the hands (`channel-light-start`); an Absorb strikes nothing. Either ends when
+  its button is let go, what it draws on runs out, or the slot changes; the player walks at
+  `*channel-speed-scale*` with no run, and a stamina beam or an Absorb stops stamina coming back. A button held
+  down with a held spell in its hand starts it as soon as the hands are free (`start-held-casts`,
+  every tick): a press during a cast's cooldown or a weapon switch isn't lost, and Absorb held
+  through a Fire Bolt's 0.5 s comes up after it; silent while it can't be paid for. **Overcharge**: a
+  striking stamina or mana spell (`overchargeable-p`) still held when the hands reach the release stays
+  in them (`overcharging-p`, `overcharge-step`), its `overcharge` growing from `*overcharge-delay*`
+  (0.25 s) after the press to 1 at `*overcharge-full*` (1.35 s), paying its price again over that
+  (stopping when it can't), and goes on release, as `overcharged-spell` (`release-spell`); meanwhile the
+  player walks at `*overcharge-speed*` with no run or jump and no stamina back, as with the maul's
+  charge. A full one strikes past a shield or ward (`knock-guard-aside`) and makes its target flinch.
+  A nova bursts from `*nova-height*` over the feet. `stamina` (`*max-stamina*`) comes back at
   `*stamina-regen*` except while running, which costs `*run-stamina*` a second, on foot or
   swimming with Shift (`update-stamina`); running it empty leaves the player `winded`, walking,
   until it is back to `*winded-recover*`. A jump costs `*jump-stamina*` and needs it, and a blow
@@ -2475,8 +2624,31 @@ idle frame and the spear's rest pose as references, the other poses adding `hand
 the chosen rest pose, `art/hands/idle-2.png`; the rest pose took the old bare-handed sheet,
 `art/hands/fire-hands.png`, as a third reference for how the hands are held). The idle flicker
 is the rest pose's hands over two other takes' fire (`tools/swap_fire.py`, each frame the other
-take's fire alone), since a take asked for only other flames moved the hands too.
-`art/hands/hands-frames.txt` places them, 3 idle frames and the 8 of the cast, at 0.2 art pixels a source pixel (the spear's 0.254 drew them so big
+take's fire alone), since a take asked for only other flames moved the hands too. The motifs
+(Absorb, healing, ward; `*hand-motifs*`) have no fire: `hands-common-magic.txt` in place of the common
+file (no fire, the magic as the pose says) and `hands-follow-magic.txt`, plus `hands-absorb-idle`,
+`-absorb-void`, `-heal-idle`, `-heal-rise`, `-heal-wrap`, `-heal-fade`, `-ward-idle`, `-ward-push`,
+`-ward-pane` and `-ward-fade` (`art/hands/gen-motifs.sh` makes them all). Each idle's frames are made
+from one picture by `tools/animate_idle.py` (its docstring has the command lines), changing only the
+magic's pixels so the hands stay still: the void's specks orbit and its ring pulses, the specks that
+would sit still taken out (`spin`), and both voids' rims are redrawn over the spun and turned frames
+(`rim`: a navy outer ring, a deep blue one and an ice inner edge lit from the upper left with a glint,
+pale dashes round it turning half their spacing a frame, and on the held void the streaks shaded navy
+to ice as they reach it); those spun and turned frames are made afresh by the commands in the frames
+file, not kept; only a band of light running up the healing ribbons is drawn, over
+the ward's rest pose's gauntlets with its hexagon taken out (`flow --hands`: the generator drew no steel
+under the ribbons, and the rest poses' gauntlets lie within a few pixels of each other); the ward's hexagon and rune give way to three
+hexagons drawn in code, one above two, each frame one of them bold (`hexes`). The Absorb void's loop is one
+picture turned a quarter at a time by `tools/turn_spiral.py --all`, the void drawn clear of the hands:
+asked for it turned, the generator moved the hands too. Their lines in the frames file end in
+`magic`, so `make_shield.py` keys only magenta (the void's blue would go with the old keying) and,
+with `--glow`, keeps every bright colour light, not only fire's, and keeps its own colours instead of
+sharing the strip's `--colors` (squeezed in with the fire, the void's few blues went grey and yellow).
+What `animate_idle.py` draws in art pixels it lays on exactly the boxes `make_shield.py` averages, the
+picture mirrored for `--corner right` (`ArtGrid`): drawn on a plain 5-pixel grid, a one-pixel ring
+straddled two boxes and blended into mud.
+`art/hands/hands-frames.txt` places them, 3 idle frames and the 8 of the cast, then each motif's (4
+idle (the ward's 3), Absorb's 4 of its stance, healing's and ward's 6 of their cast), at 0.2 art pixels a source pixel (the spear's 0.254 drew them so big
 they hid the middle of the view), and `--glow` keeps the fire out of the darkening
 (darkened, white fire went grey and the palette made it pale blue):
 
@@ -2484,6 +2656,7 @@ they hid the middle of the view), and `--glow` keeps the fire out of the darkeni
 tools/gen_image.py art/hands/gather.png --prompt "$(cat art/prompts/hands-{common,gather,follow}.txt)" --ref art/sword-shield/ref-sword-idle.png --ref art/spear/idle-2.png --ref art/hands/idle-2.png --size 1536x1024 -n 2
 tools/swap_fire.py art/hands/idle-2.png art/hands/flicker-1.png art/hands/flicker-1-fire.png
 tools/swap_fire.py art/hands/idle-2.png art/hands/flicker-2.png art/hands/flicker-2-fire.png
+tools/turn_spiral.py art/hands/absorb-void-1.png art/hands/absorb-void-turn --centre 767,593 --radius 182 --all
 tools/make_shield.py --corner right --glow art/hands/hands-frames.txt data/sprites/hands/hands
 tools/restyle.py --house data/sprites/hands/hands.png
 ```
@@ -3497,12 +3670,14 @@ resume. WASD, Shift to run,
 Space to jump, C or Ctrl to crouch (in water: W swims where you look, Space up, C or Ctrl
 down; swim into a ledge at the surface to climb out), 1 to 9 for what the hotbar holds (at the
 start 1 the sword, 2 the fire bolt, 3 heal; whatever is found goes on the next free key), the mouse wheel to change the
-quickslot's potion, left click to attack (swing, thrust, or cast the spell in hand), right button
+quickslot's potion, left click to attack (swing, thrust, or cast the spell in hand; a stamina or mana
+spell held overcharges, a beam held keeps on), right button with the casting hands to cast the slot's
+off-hand rune (held for Absorb Projectiles), right button
 held to raise the shield (a left click while it's up bashes) or, with the spear, pressed to sweep
 with the haft (the spear's thrust counters a leap or dive it meets) or, with the maul, pressed to
 shake the floor (its left button held charges the blow, let go strikes), Q to drink from the
-quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, or a
-potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
+quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, a rune onto
+a rune slot's corner for its off hand, or a potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
 quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E to talk to the
 townsperson looked at (see "The settlement") or, at an altar, to open the spellforge (see
 `src/forge.lisp`).

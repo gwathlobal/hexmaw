@@ -61,7 +61,7 @@ their values."
     charge-time blow-charge
     block-raise bash-time bash-pending spear-jolt guard-broken run-time damage-taken level-records
     reputation max-health max-mana max-stamina blessed
-    known-effects hotbar-cells wanted-slot enchantments))
+    known-effects hotbar-cells offhand-cells wanted-slot enchantments cast-hand cast-held overcharge))
 
 (defmethod saved-slots append ((actor afflicted))
   '(statuses))
@@ -112,6 +112,9 @@ their values."
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
+
+(defmethod saved-slots append ((nova spell-nova))
+  '(spell caster centre floor-y reach victims))
 
 ;; CAUGHT isn't a slot: what it holds is noted on them, and it links them up again.
 (defmethod saved-slots append ((vortex spell-vortex))
@@ -435,6 +438,7 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
     (restore-state *player* (getf save :player))
     (migrate-bindings *player*)
     (migrate-enchantments *player*)
+    (migrate-known-effects *player*)
     (settle-held *player*)
     (place-camera *player*)
     (loop for record in records

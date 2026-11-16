@@ -321,6 +321,8 @@ void main(){
 (defparameter *gold-flash-color* (vec4 0.9 0.65 0.1 0.18) "RGB and peak opacity of gold's flash.")
 
 (defparameter *ward-flash-color* (vec4 0.7 0.5 1.0 0.25) "RGB and peak opacity of a ward's flash (magic.lisp).")
+(defparameter *absorb-flash-color* (vec4 0.3 0.55 1.0 0.35)
+  "RGB and peak opacity of the flash of a projectile an Absorb takes (magic.lisp).")
 (defparameter *glyph-flash-color* (vec4 1.0 0.8 0.3 0.3) "RGB and peak opacity of a glyph's flash (pickups.lisp).")
 (defparameter *dust-flash-color* (vec4 0.75 0.5 1.0 0.25) "RGB and peak opacity of picking up arcane dust.")
 
@@ -330,10 +332,106 @@ void main(){
     (:stolen *stolen-flash-color*)
     (:gold *gold-flash-color*)
     (:ward *ward-flash-color*)
+    (:absorb *absorb-flash-color*)
     (:glyph *glyph-flash-color*)
     (:dust *dust-flash-color*)
     (:rift *rift-flash-color*)
     (T *health-flash-color*)))
+
+;;; Veils: a lasting effect on the player shows at the screen's edges while it lasts, faint, and
+;;; flares as it acts: a ward's honeycomb along the left and right edges, flaring as it takes a
+;;; blow; the priest's blessing as rays of light in the corners, flaring as it lessens one and
+;;; blinking out over its last seconds; healing over time as motes rising along the bottom edge,
+;;; flaring at each heal. Each is a tile of tools/draw_status_veils.py's strip repeated over its
+;;; part of the edge, fading inward in steps, at the HUD's art pixel size; a whole-screen quad
+;;; whose fragment shader lays it out, so it never covers the middle of the view.
+
+(define-asset (hexmaw veils) image #p"sprites/veils/veils.png"
+  :min-filter :nearest :mag-filter :nearest)
+
+(defparameter *veil-kinds* '(:ward :bless :heal) "The veils, in the strip's order, two tiles each.")
+(defparameter *veil-tile* 32 "HUD art pixels across a veil's tile.")
+(defparameter *veil-gap* 2 "Pixels between the strip's tiles.")
+(defparameter *veil-band* '(:ward 48 :bless 80 :heal 40)
+  "HUD art pixels in from its edge or corner a veil reaches, fading in four steps.")
+(defparameter *veil-alpha* 0.45 "A resting veil's opacity at the edge.")
+(defparameter *veil-flare-alpha* 0.85 "A flared veil's opacity at the edge.")
+(defparameter *veil-flare-time* 0.3 "Seconds a veil shows flared after its effect acts.")
+(defparameter *veil-warn-time* 3.0 "Seconds of the blessing left from which its veil blinks.")
+(defparameter *veil-rise* 10.0 "HUD art pixels a second healing's motes rise.")
+
+(defvar *veil-flares* (list :ward 0.0 :bless 0.0 :heal 0.0) "Seconds each veil still shows flared.")
+
+(defun flare-veil (kind)
+  "KIND's effect just acted on the player: its veil flares."
+  (setf (getf *veil-flares* kind) *veil-flare-time*))
+
+(define-shader-entity status-veil (hud-element vertex-entity transformed-entity)
+  ((vertex-array :initform (// 'hexmaw 'hud-quad))
+   (kind :initarg :kind :reader veil-kind)
+   (strength :initform 0.0 :accessor strength :documentation "0 to 1: how much of it shows.")
+   (clock :initform 0.0 :accessor veil-clock)))
+
+(defmethod stage :after ((veil status-veil) (area staging-area))
+  (stage (// 'hexmaw 'veils) area))
+
+(defmethod bind-textures :after ((veil status-veil))
+  (bind (// 'hexmaw 'veils) :texture0))
+
+(defmethod hud-shown-p ((veil status-veil))
+  (and (call-next-method) (< 0 (strength veil)) (member *game-state* '(:playing :inventory :paused))))
+
+(defmethod render :around ((veil status-veil) (program shader-program))
+  (with-depth-mask NIL
+    (call-next-method)))
+
+(defmethod render :before ((veil status-veil) (program shader-program))
+  (let ((kind (veil-kind veil)))
+    (setf (uniform program "veils") 0
+          (uniform program "kind") (position kind *veil-kinds*)
+          (uniform program "band") (float (getf *veil-band* kind) 0f0)
+          (uniform program "scale") (float (hud-pixel-scale) 0f0)
+          (uniform program "screen") (vec2 (width *context*) (height *context*))
+          (uniform program "tile") *veil-tile*
+          (uniform program "gap") *veil-gap*
+          (uniform program "rise") (float (* *veil-rise* (veil-clock veil)) 0f0)
+          (uniform program "flared") (if (< 0 (getf *veil-flares* kind)) 1 0)
+          (uniform program "alpha") (float (* (strength veil)
+                                              (if (< 0 (getf *veil-flares* kind)) *veil-flare-alpha* *veil-alpha*))
+                                           0f0))))
+
+(define-class-shader (status-veil :fragment-shader)
+  "uniform sampler2D veils;
+uniform int kind;
+uniform float band;
+uniform float scale;
+uniform vec2 screen;
+uniform int tile;
+uniform int gap;
+uniform float rise;
+uniform int flared;
+uniform float alpha;
+out vec4 color;
+
+void main(){
+  // Whole HUD art pixels, counted from the bottom left.
+  vec2 size = floor(screen / scale);
+  vec2 a = floor(gl_FragCoord.xy / scale);
+  vec2 edge = min(a, size - 1.0 - a);
+  float d;
+  vec2 t = a;
+  if(kind == 0) d = edge.x;                       // the left and right edges
+  else if(kind == 1) d = length(edge);            // the corners
+  else { d = a.y; t.y = a.y - floor(rise); }      // the bottom edge, rising
+  if(band <= d) discard;
+  float fade = 1.0 - floor(4.0 * d / band) / 4.0;
+  // The texture's rows run up from the image's bottom, as the screen's do.
+  ivec2 texel = ivec2(int(mod(t.x, float(tile))), int(mod(t.y, float(tile))));
+  texel.x += (kind * 2 + flared) * (tile + gap);
+  vec4 c = texelFetch(veils, texel, 0);
+  if(c.a < 0.5) discard;
+  color = vec4(c.rgb, alpha * fade);
+}")
 
 ;;; Under water: the whole view, the hands with it, turned blue. The colour multiplies what
 ;;; is drawn, so the darks stay dark. Drawn after the water's see-through surface (LATE-RANK),
@@ -564,6 +662,7 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
    (pain-flash :initform (make-instance 'pain-flash) :reader pain-flash)
    (restore-flash :initform (make-instance 'restore-flash) :reader restore-flash)
    (underwater-tint :initform (make-instance 'underwater-tint) :reader underwater-tint)
+   (veils :initform (mapcar (lambda (kind) (make-instance 'status-veil :kind kind)) *veil-kinds*) :reader veils)
    (whirl-streaks :initform (make-instance 'whirl-streaks) :reader whirl-streaks)
    (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
    (boss-name :initform (make-hud-text "" 'boss-text) :reader boss-name)
@@ -578,14 +677,15 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
 
 (defun hud-elements (hud)
   ;; The flash first, so the bars draw over it.
-  (list (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)
+  (list* (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)
+         (append (veils hud) (list
         (health-label hud) (health-bar hud) (health-text hud)
         (mana-label hud) (mana-bar hud) (mana-text hud)
         (stamina-label hud) (stamina-bar hud) (stamina-text hud)
         (breath-label hud) (breath-bar hud)
         (level-banner hud) (message-banner hud) (pickup-banner hud) (prompt-line hud)
         (boss-bar hud) (boss-half hud) (boss-name hud) (boss-powers-line hud)
-        (fps-display hud)))
+        (fps-display hud)))))
 
 (defun add-hud (container)
   (let ((hud (make-instance 'hud)))
@@ -653,10 +753,27 @@ numbers; breath has none."
           (vy (scaling (boss-half hud))) (float bar-h 0f0)))
   ;; Behind every HUD element, in front of the world: anything nearer than -0.5 would
   ;; be within the near plane's 5 cm.
-  (dolist (cover (list (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud)))
+  (dolist (cover (list* (pain-flash hud) (restore-flash hud) (underwater-tint hud) (whirl-streaks hud) (veils hud)))
     (place cover 0 0 -0.5)
     (setf (vx (scaling cover)) (float (width *context*) 0f0)
           (vy (scaling cover)) (float (height *context*) 0f0))))
+
+(defun update-veils (hud dt)
+  "How much of each veil shows: a ward's while it has points, fading under 10 of them; the
+blessing's while it lasts, blinking over its last *VEIL-WARN-TIME*; healing over time's while it
+heals."
+  (dolist (veil (veils hud))
+    (when (eq *game-state* :playing)
+      (incf (veil-clock veil) dt))
+    (setf (strength veil)
+          (ecase (veil-kind veil)
+            (:ward (let ((ward (status-of *player* :ward)))
+                     (if ward (min 1.0 (/ (status-magnitude ward) 10.0)) 0.0)))
+            (:bless (let ((left (blessed *player*)))
+                      (cond ((<= left 0.0) 0.0)
+                            ((< left *veil-warn-time*) (if (evenp (floor left 0.25)) 1.0 0.3))
+                            (T 1.0))))
+            (:heal (if (status-of *player* :heal) 1.0 0.0))))))
 
 (define-handler (hud tick) (dt)
   (when (eq *game-state* :playing)
@@ -681,7 +798,11 @@ numbers; breath has none."
           (setf (shown-boss-text hud) powers
                 (text (boss-name hud)) (boss-title boss)
                 (text (boss-powers-line hud)) (boss-powers-text boss))))))
+  (when (eq *game-state* :playing)
+    (loop for (kind left) on *veil-flares* by #'cddr
+          do (setf (getf *veil-flares* kind) (max 0.0 (- left dt)))))
   (when *player*
+    (update-veils hud dt)
     (let ((hp (max 0 (health *player*)))
           (mp (floor (mana *player*)))
           (sp (floor (stamina *player*))))

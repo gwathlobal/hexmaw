@@ -94,6 +94,8 @@ HUD's time bar (status-icons.lisp); NIL until set, when LEFT stands in.")
   (let ((ward (status-of actor :ward)))
     (if (and ward (< 0 amount))
         (let ((taken (min amount (status-magnitude ward))))
+          (when (typep actor 'player)
+            (flare-veil :ward))
           (decf (status-magnitude ward) taken)
           (when (<= (status-magnitude ward) 0)
             (setf (status-left ward) 0.0))
@@ -127,6 +129,7 @@ Damage over time shows as its aura (STATUS-AURA) instead: a tint drowned a burni
   (hurt-player player amount (feet player) :shove NIL :by (status-caster status)))
 
 (defmethod status-blow ((player player) (kind (eql :heal)) amount status)
+  (flare-veil :heal)
   (setf (health player) (min (max-health player) (+ (health player) amount))))
 
 ;;; Bursts (BURST-SPELL, spells.lisp).
@@ -171,10 +174,14 @@ CASTER and those CASTER spares."
     (if (< 0 (effect-duration effect))
         (afflict target :damage amount (effect-duration effect) :element element :caster (caster source))
         ;; Blood sprays away from where it struck from.
-        (hurt target (resisted target element amount)
-              :from (effect-origin source)
-              :pain-bonus (+ (spell-pain-bonus (spell source)) (if (eq element :shock) *shock-pain-bonus* 0))
-              :by (caster source)))
+        (let ((full (full-overcharge-p (spell source)))
+              (boss (typep target 'boss)))
+          (hurt target (resisted target element amount)
+                :from (effect-origin source)
+                :pain-bonus (+ (spell-pain-bonus (spell source)) (if (eq element :shock) *shock-pain-bonus* 0)
+                               (if (and full boss) *overcharge-pain-bonus* 0))
+                :force-pain (and full (not boss))
+                :by (caster source))))
     (element-rider target element)))
 
 ;; A creature's spell, hitting the player: the shove goes the way its source pushes.
@@ -203,6 +210,10 @@ CASTER and those CASTER spares."
     (afflict target :slow (roll (effect-magnitude effect)) (max 1 (effect-duration effect))
              :caster (caster source))))
 
+(defmethod apply-effect ((kind (eql :absorb)) effect target source)
+  ;; Nothing lands: holding the spell is what swallows projectiles (ABSORBS-P).
+  NIL)
+
 (defmethod apply-effect ((kind (eql :ward)) effect (target player) source)
   (afflict target :ward (roll (effect-magnitude effect)) (max 1 (effect-duration effect)))
   (flash-resource target :ward))
@@ -217,6 +228,46 @@ CASTER and those CASTER spares."
             (caster (caster source)))
         (when (and (typep caster 'player) (< 0 gain))
           (restore-resource caster :health gain))))))
+
+;;; Absorb: held on themself (HOLD-CHANNEL, player.lisp), it swallows the hostile projectiles that
+;;; carry damage and reach the player from within *BLOCK-ARC* of their view, as a raised shield
+;;; would take them, for its magnitude's percent of their power in mana: the creatures' cinders and
+;;; skulls, a boss's volley, and the player's own spells a shield sent back, which give back that
+;;; share of the mana they cost, so a free spell returned gives none. A rift or a gust, which carry
+;;; no damage, still strike.
+
+(defun absorb-share (spell)
+  "The share of a projectile's power the Absorb SPELL turns to mana: its top magnitude's percent."
+  (let ((effect (find :absorb (spell-effects spell) :key #'effect-kind)))
+    (if effect (/ (second (effect-magnitude effect)) 100.0) 0.0)))
+
+(defmethod absorbs-p ((player player) (projectile spell-projectile))
+  (let ((absorb (channel player))
+        (spell (spell projectile)))
+    (and absorb (absorb-spell-p absorb)
+         (find :damage (spell-effects spell) :key #'effect-kind)
+         (facing-point-p player (v- (location projectile) (projectile-velocity projectile)) *block-arc*)
+         ;; With too little stamina to pay for the mana, it strikes.
+         (<= (absorb-stamina player projectile) (stamina player)))))
+
+(defun absorb-stamina (player projectile)
+  "The stamina taking PROJECTILE costs PLAYER's Absorb: *ABSORB-TAKE-STAMINA* a point of its mana."
+  (* *absorb-take-stamina* (absorb-mana player projectile)))
+
+(defun absorb-mana (player projectile)
+  "The mana PLAYER's Absorb turns PROJECTILE into."
+  (let ((spell (spell projectile)))
+    (* (absorb-share (channel player))
+       (if (eq (launcher projectile) player) (spell-cost spell) (spell-power spell)))))
+
+(defmethod absorb-projectile ((player player) (projectile spell-projectile))
+  (let ((mana (absorb-mana player projectile)))
+    (pay player :stamina (absorb-stamina player projectile))
+    (when (< 0 mana)
+      (setf (mana player) (min (max-mana player) (+ (mana player) mana))))
+    (flash-resource player :absorb)
+    (play-sound :absorb-take)
+    (despawn projectile)))
 
 ;;; Auras: damage over time shows on a creature as its element on it (a STATUS-AURA, one per
 ;;; creature, in its STATUS-AURA slot): wisps of flame, snowflakes or crackling arcs, looping over

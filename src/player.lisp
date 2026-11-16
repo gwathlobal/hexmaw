@@ -33,6 +33,7 @@
 (defparameter *stamina-guard-break* 1.0
   "Seconds a blow the shield hasn't the stamina for knocks it aside (BREAK-GUARD).")
 (defparameter *cast-cooldown* 0.35 "Seconds between casts.")
+(defparameter *free-cast-cooldown* 0.5 "Seconds between casts of a free spell (SPELL-TIER).")
 (defparameter *cast-release* 0.2
   "Seconds from the click until the spell leaves the hands: the cast animation's release frame.")
 (defparameter *player-knockback* 3.0 "Speed in m/s a blow shoves the player away from it.")
@@ -69,16 +70,23 @@ sill, 0.15 m under, or a waterfall's lip. Deeper, the player swims over it.")
 (defparameter *death-roll-time* 0.7 "Seconds the view takes to roll over.")
 (defparameter *death-panel-delay* 1.2 "Seconds from death to the death screen (menu.lisp).")
 (defparameter *inventory-size* 20 "Cells in the player's inventory (inventory.lisp).")
-(defparameter *starting-effects* '(:damage :heal :knockback :fire)
+(defparameter *starting-effects* '(:damage :heal :knockback :fire :absorb)
   "What the player can forge with at the start of a run; glyphs (pickups.lisp) teach the rest.")
 (defparameter *hotbar-size* 9 "Slots on the hotbar (inventory.lisp), keys 1 to 9.")
-(defparameter *starting-hotbar* '(:sword bolt heal)
+(defparameter *starting-hotbar* '(:sword (bolt absorb) heal)
   "What a run starts with in the bag, from its first cell, each bound to the hotbar key of its
-place, from 1: a weapon's item kind, or a spell's name, which the player carries as a rune. The
-rest is found in the dungeon (loot.lisp). Every spell here must be one the spellforge makes
+place, from 1: a weapon's item kind, a spell's name, which the player carries as a rune, or a list
+of two spells, the slot's rune and its off hand's (inventory.lisp). A spell may also be a spec
+(SPEC-SPELL, spells.lisp), a list whose first element is its name, a string. The rest is found in
+the dungeon (loot.lisp). Every spell here must be one the spellforge makes
 (CHECK-STARTING-SPELLS, forge.lisp).")
-(defparameter *debug-starting-hotbar* '(:sword bolt :spear tempest heal :maul)
-  "What the debug level starts with instead: the spear, the tornado and the maul too, to try them.")
+(defparameter *debug-starting-hotbar*
+  '(:sword (bolt absorb) :spear tempest heal :maul
+    ("Flame Lance" :projectile (:kind :damage :element :fire :magnitude (21 30) :target-type :target))
+    ("Fire Ray" :beam (:kind :damage :element :fire :magnitude (11 15) :target-type :target))
+    ("Force Nova" :nova (:kind :knockback :magnitude (9 12) :area 1.0 :target-type :target)))
+  "What the debug level starts with instead: the spear, the tornado and the maul too, and a stamina
+projectile, a mana beam and a stamina nova, to try them.")
 (defparameter *starting-slot* 0 "The hotbar slot, from 0, a run starts with in hand: the sword.")
 (defparameter *footstep-stride* 2.0 "Metres walked on foot from one footstep to the next.")
 (defparameter *footstep-volume* 0.5)
@@ -129,7 +137,28 @@ rest is found in the dungeon (loot.lisp). Every spell here must be one the spell
    (cast-time :initform NIL :accessor cast-time
               :documentation "Seconds since the last cast began, or NIL before the first.")
    (pending-spell :initform NIL :accessor pending-spell
-                  :documentation "Spell being cast, launched at *CAST-RELEASE*.")
+                  :documentation "Spell being cast, launched at *CAST-RELEASE*, or once let go if overcharged.")
+   (last-cast :initform NIL :accessor last-cast
+               :documentation "The spell last cast or held, whose look both hands take while it plays (hands.lisp).")
+   (cast-hand :initform :main :accessor cast-hand
+              :documentation "The hand the spell being cast or held is in: :MAIN (the left button) or :OFF (the right).")
+   (cast-held :initform 0.0 :accessor cast-held
+              :documentation "Seconds a spell has been held past its release, overcharging.")
+   (overcharge :initform 0.0 :accessor overcharge
+               :documentation "How far the pending spell is overcharged and paid for, 0 to 1.")
+   (offhands :initform (make-list *hotbar-size*) :accessor offhands
+             :documentation "Each hotbar slot's off-hand rune, a stack in the INVENTORY (EQ), or NIL:
+cast with the right button while that slot's rune is in hand. Saved as OFFHAND-CELLS.")
+   (channel :initform NIL :accessor channel
+            :documentation "The spell being held (HOLD-CHANNEL): a beam or an Absorb; NIL. Not saved: a load lets go.")
+   (channel-pulses :initform NIL :accessor channel-pulses
+                   :documentation "A beam's strikes, (CALM . STAGGER): PULSE-SPELLs without and with its flinch roll.")
+   (channel-time :initform 0.0 :accessor channel-time :documentation "Seconds it has been held.")
+   (channel-timer :initform 0.0 :accessor channel-timer :documentation "Seconds to its next strike.")
+   (channel-count :initform 0 :accessor channel-count :documentation "Strikes it has made.")
+   (channel-beam :initform NIL :accessor channel-beam :documentation "Its light, a BEAM, or NIL before the first strike.")
+   (channel-aim :initform 0.0 :accessor channel-aim :documentation "Seconds to its light's next aim.")
+   (channel-sound :initform NIL :accessor channel-sound :documentation "Its loop while it strikes, or NIL.")
    (known-effects :initform (copy-list *starting-effects*) :accessor known-effects
                   :documentation "Effect kinds and elements, and :AREA, the player can forge with.")
    (hotbar :initform (make-list *hotbar-size*) :accessor hotbar
@@ -155,7 +184,8 @@ differs from WEAPON while switching.")
    (swing-pending :initform NIL :accessor swing-pending
                   :documentation "True until the swing's blow has landed.")
    (attack-held :initform NIL :accessor attack-held
-                :documentation "True while the attack button (the left one) is down: the maul charges.")
+                :documentation "True while the attack button (the left one) is down: the maul charges,
+a beam stays on, a spell overcharges.")
    (charge-time :initform NIL :accessor charge-time
                 :documentation "Seconds the maul's blow has been charging (maul.lisp), or NIL.")
    (charge-voice :initform NIL :accessor charge-voice :documentation "The maul's cry while it charges, or NIL (maul.lisp).")
@@ -244,33 +274,253 @@ blow knocked it aside (BREAK-GUARD).")
         (yaw (vy (rotation player))))
     (vec (* (sin yaw) (cos pitch)) (- (sin pitch)) (- (* (cos yaw) (cos pitch))))))
 
-(defun player-cast (player spell)
-  "Start casting SPELL, a spell or the name of one, if mana and the cooldown allow. The
-hands wind up and the spell leaves *CAST-RELEASE* seconds later (RELEASE-SPELL). Returns
-true if it was cast."
+(defun spell-price (spell)
+  "What a cast of SPELL takes, by its tier (SPELL-TIER): :STAMINA or :MANA and how much, or NIL
+for a free spell."
+  (ecase (spell-tier spell)
+    (:free (values NIL 0))
+    (:stamina (values :stamina (spell-stamina spell)))
+    (:mana (values :mana (spell-cost spell)))))
+
+(defun can-pay-p (player resource amount)
+  (case resource
+    (:stamina (<= amount (stamina player)))
+    (:mana (<= amount (mana player)))
+    (T T)))
+
+(defun pay (player resource amount)
+  (case resource
+    (:stamina (decf (stamina player) amount))
+    (:mana (decf (mana player) amount))))
+
+(defun held-spell-p (spell)
+  "True if SPELL is held rather than cast: a beam, or an Absorb (magic.lisp)."
+  (or (eq (spell-delivery spell) :beam) (absorb-spell-p spell)))
+
+(defun overchargeable-p (spell)
+  "True if SPELL may be overcharged: a striking stamina or mana spell that isn't held."
+  (and (not (eq (spell-tier spell) :free))
+       (member (spell-delivery spell) '(:projectile :touch :seeker :nova))
+       (not (held-spell-p spell))))
+
+(defun hand-held-p (player hand)
+  "True while the button of HAND, :MAIN or :OFF, is down."
+  (if (eq hand :off) (block-held player) (attack-held player)))
+
+(defun hand-spell (player hand)
+  "The spell in HAND, :MAIN or :OFF (OFFHAND-SPELL, inventory.lisp), while the hands are up."
+  (if (eq hand :off) (offhand-spell player) (held-spell player)))
+
+(defun busy-casting-p (player)
+  "True while a cast is under way: wound up, overcharging or held."
+  (or (pending-spell player) (channel player)))
+
+(defun player-cast (player spell &key (hand :main))
+  "Start casting SPELL, a spell or the name of one, from HAND, if what it takes (SPELL-PRICE) and
+the cooldown allow. The hands wind up and the spell leaves *CAST-RELEASE* seconds later
+(RELEASE-SPELL), or, held past then, once let go, overcharged; a beam or an Absorb is held from
+then instead (HOLD-CHANNEL). Returns true if it was cast."
   (let* ((spell (if (symbolp spell) (find-spell spell) spell))
-         (cost (spell-cost spell)))
-    (when (and (<= (cast-timer player) 0) (< (mana player) cost))
-      (play-sound :cast-fizzle))
-    (when (and (<= (cast-timer player) 0) (<= cost (mana player)))
-      (decf (mana player) cost)
-      (setf (cast-timer player) *cast-cooldown*
-            (cast-time player) 0.0
-            (pending-spell player) spell)
-      ;; The Ashen Temple's rule: no spell within the town's walls (settlement.lisp).
-      (when (and *settlement* (eq (faction-property :rule) :no-casting) (in-settlement-p (feet player)))
-        (report-crime :rule))
-      T)))
+         (held (held-spell-p spell)))
+    (multiple-value-bind (resource cost) (spell-price spell)
+      ;; A beam is held, and pays as it strikes: it needs only its first strike's.
+      (let ((cost (if held (* cost (beam-pulse-share)) cost)))
+        (when (and (<= (cast-timer player) 0) (not (busy-casting-p player)))
+          (cond ((not (can-pay-p player resource cost))
+                 (play-sound :cast-fizzle)
+                 NIL)
+                (T
+                 (setf (cast-timer player) (if (eq (spell-tier spell) :free) *free-cast-cooldown* *cast-cooldown*)
+                       (last-cast player) spell
+                       (cast-hand player) hand
+                       (overcharge player) 0.0)
+                 ;; A held spell's hands play no cast (hands.lisp).
+                 (if held
+                     ;; The last cast's clock stops: its spell is no longer the one in hand.
+                     (progn (setf (cast-time player) NIL)
+                            (hold-channel player spell))
+                     (progn (pay player resource cost)
+                            (setf (pending-spell player) spell
+                                  (cast-time player) 0.0
+                                  (cast-held player) 0.0)))
+                 ;; The Ashen Temple's rule: no spell within the town's walls (settlement.lisp).
+                 (when (and *settlement* (eq (faction-property :rule) :no-casting) (in-settlement-p (feet player)))
+                   (report-crime :rule))
+                 T)))))))
+
+;;; Overcharge: a striking stamina or mana spell still held when the hands reach its release
+;;; stays in them, and grows stronger and dearer from *OVERCHARGE-DELAY* after the press to
+;;; *OVERCHARGE-FULL* (OVERCHARGED-SPELL, spells.lisp), paying as it grows; it stops growing when
+;;; what it draws on runs dry. Let go, it leaves. Meanwhile the player walks at
+;;; *OVERCHARGE-SPEED*, with no run or jump, and no stamina comes back, as with the maul's charge.
+
+(defparameter *overcharge-delay* 0.25 "Seconds from the press before a held spell starts to overcharge.")
+(defparameter *overcharge-full* 1.35 "Seconds from the press to a full overcharge.")
+(defparameter *overcharge-speed* 0.6 "Fraction of a walk the player keeps while overcharging.")
+
+(defun overcharging-p (player)
+  "True while PLAYER holds a spell past its release to overcharge it."
+  (let ((spell (pending-spell player)))
+    (and spell (cast-time player) (<= *cast-release* (cast-time player))
+         (overchargeable-p spell) (hand-held-p player (cast-hand player)))))
+
+(defun overcharge-step (player dt)
+  "Hold the pending spell DT seconds more, overcharging it as far as PLAYER can pay."
+  (let* ((spell (pending-spell player))
+         ;; The cast's clock stops at its release; the hold counts on from there.
+         (held (+ (cast-time player) (incf (cast-held player) dt)))
+         (want (max 0.0 (min 1.0 (/ (- held *overcharge-delay*) (- *overcharge-full* *overcharge-delay*))))))
+    (multiple-value-bind (resource cost) (spell-price spell)
+      (let ((more (* cost (- want (overcharge player)))))
+        (when (and (< 0 more) (can-pay-p player resource more))
+          (pay player resource more)
+          (setf (overcharge player) want))))))
+
+;;; Channelling: a beam rune or an Absorb is held, not cast. While its button is held a beam stays
+;;; on from the hands' release, striking every *BEAM-PULSE* with a share of its effects for the
+;;; same share of its price (PULSE-SPELL, spells.lisp), so a second of it does and costs what two
+;;; casts would. Only every *BEAM-PAIN-EVERY*th strike rolls for a flinch, so it can't hold a
+;;; creature in one. An Absorb strikes nothing: while it is held the hostile projectiles reaching
+;;; the player from in front are swallowed (ABSORBS-P, magic.lisp). Let go, out of what it draws
+;;; on, or with the hands switched, it ends. The player walks at *CHANNEL-SPEED-SCALE*, and the
+;;; hands sink with their small flames for a beam (CHANNEL-EASE, hands.lisp) so the ray stays in sight.
+
+(defparameter *beam-pain-every* 4 "A held beam's strikes between the ones that may make a creature flinch.")
+(defparameter *channel-speed-scale* 0.5 "The player's walk while holding a beam or an Absorb, against a walk.")
+(defparameter *channel-aim-time* 0.05 "Seconds between aims of a held beam's light at where it would strike.")
+
+(defun hold-channel (player spell)
+  "Begin holding SPELL, a beam or an Absorb: its effects on the caster land now, and a beam strikes
+from the hands' release."
+  (apply-self-effects spell player player)
+  (setf (channel player) spell
+        (channel-pulses player) (unless (absorb-spell-p spell)
+                                  (cons (pulse-spell spell :pain-bonus -100) (pulse-spell spell)))
+        (channel-time player) 0.0
+        (channel-timer player) *cast-release*
+        (channel-count player) 0
+        (channel-aim player) 0.0))
+
+(defun end-channel (player)
+  "Let go of the beam or the Absorb: a beam's light fades."
+  (when (channel player)
+    (let ((beam (channel-beam player)))
+      (when beam (setf (beam-held beam) NIL)))
+    (setf (channel player) NIL
+          (channel-pulses player) NIL
+          (channel-beam player) NIL
+          (channel-sound player) (stop-loop (channel-sound player))
+          (cast-timer player) *cast-cooldown*)))
+
+(defun start-held-casts (player)
+  "A hand's button held down with a held spell (an Absorb, a beam) in it starts it as soon as the
+hands are free: the press may have come during a cast's cooldown or a weapon switch, or the spell
+may have ended under a button still held. Silent while it can't be paid for, so a beam run dry
+doesn't fizzle again and again."
+  (when (and (eq (weapon player) :hands) (eq *game-state* :playing) (<= (cast-timer player) 0)
+             (not (busy-casting-p player)) (weapon-ready-p player))
+    (dolist (hand '(:main :off))
+      (let ((spell (hand-spell player hand)))
+        (when (and spell (held-spell-p spell) (hand-held-p player hand)
+                   (multiple-value-bind (resource cost) (spell-price spell)
+                     (can-pay-p player resource (* cost (beam-pulse-share)))))
+          (player-cast player spell :hand hand)
+          (return))))))
+
+(defun channelling-beam-p (player)
+  (let ((spell (channel player)))
+    (and spell (eq (spell-delivery spell) :beam))))
+
+(defun channel-origin (player direction)
+  "Where a held beam strikes from: just below the eye, as a cast, so it goes where the player aims."
+  (v+ (location player) (v* direction 0.5) (vec 0 -0.2 0)))
+
+(defparameter *channel-light-low* 0.3
+  "Metres below the line of sight, half a metre out, a held beam's light starts: between the
+lowered hands, so it rises to what it strikes through open view.")
+
+(defun channel-light-start (player direction)
+  "Where a held beam's light starts: half a metre out along DIRECTION, *CHANNEL-LIGHT-LOW* down the
+view, below the middle of the screen whichever way the player looks."
+  (let* ((yaw (vy (rotation player)))
+         ;; The view's up: its right, (cos yaw, 0, sin yaw), crossed with DIRECTION.
+         (rx (cos yaw)) (rz (sin yaw))
+         (ux (* rz (vy direction)))
+         (uy (- (* rz (vx direction)) (* rx (vz direction))))
+         (uz (- (* rx (vy direction)))))
+    (vec (- (+ (vx (location player)) (* 0.5 (vx direction))) (* *channel-light-low* ux))
+         (- (+ (vy (location player)) (* 0.5 (vy direction))) (* *channel-light-low* uy))
+         (- (+ (vz (location player)) (* 0.5 (vz direction))) (* *channel-light-low* uz)))))
+
+(defun update-channel (player dt)
+  "Hold the beam or the Absorb: a beam strikes when due, paying for it, and keeps its light on the
+aim; or let it go."
+  (let ((spell (channel player))
+        (hand (cast-hand player)))
+    (when spell
+      (incf (channel-time player) dt)
+      (cond ((or (not (hand-held-p player hand)) (not (eq (hand-spell player hand) spell))
+                 (not (weapon-in-hand-p player)))
+             (end-channel player))
+            ((absorb-spell-p spell)
+             ;; Held on stamina, its power a second: out of it, the Absorb drops.
+             (let ((cost (* (spell-stamina spell) dt)))
+               (if (can-pay-p player :stamina cost)
+                   (progn (pay player :stamina cost)
+                          (setf (channel-sound player) (hold-loop (channel-sound player) :absorb-channel (location player))))
+                   (progn (play-sound :cast-fizzle) (end-channel player)))))
+            (T (update-beam player spell dt))))))
+
+(defun update-beam (player spell dt)
+  (let ((released (<= *cast-release* (channel-time player))))
+    (when released
+      (setf (channel-sound player) (hold-loop (channel-sound player) :beam-channel (location player))))
+    (decf (channel-timer player) dt)
+    (decf (channel-aim player) dt)
+    (when (<= (channel-timer player) 0.0)
+      (multiple-value-bind (resource price) (spell-price spell)
+        (let ((cost (* price (beam-pulse-share))))
+          (if (not (can-pay-p player resource cost))
+              (progn (play-sound :cast-fizzle) (end-channel player))
+              (let* ((dir (look-direction player))
+                     (origin (channel-origin player dir))
+                     (pulses (channel-pulses player))
+                     (pulse (if (= 0 (mod (channel-count player) *beam-pain-every*)) (cdr pulses) (car pulses)))
+                     (first (= 0 (channel-count player)))
+                     (end (beam-strike pulse origin dir (container player) player :quiet (not first))))
+                (when first
+                  (play-sound :beam-cast))
+                (pay player resource cost)
+                (incf (channel-timer player) *beam-pulse*)
+                (incf (channel-count player))
+                (setf (channel-aim player) *channel-aim-time*)
+                (if (channel-beam player)
+                    (v<- (beam-end-point (channel-beam player)) end)
+                    (let ((beam (make-instance 'beam :start (channel-light-start player dir) :end end :held T
+                                                     :color (light-color spell))))
+                      (enter beam (container player))
+                      (setf (channel-beam player) beam))))))))
+    ;; Between strikes the light follows the aim.
+    (let ((beam (channel-beam player)))
+      (when (and beam (channel player))
+        (let ((dir (look-direction player)))
+          (v<- (beam-start beam) (channel-light-start player dir))
+          (when (<= (channel-aim player) 0.0)
+            (setf (channel-aim player) *channel-aim-time*)
+            (v<- (beam-end-point beam) (beam-end (channel-origin player dir) dir player))))))))
 
 (defparameter *touch-reach* 1.6 "Metres a touch spell reaches, like a short blade.")
 (defparameter *touch-arc* 0.6 "Radians either side of the view a touch spell reaches.")
+(defparameter *nova-height* 1.0 "Metres above the feet a nova bursts from.")
 
 (defun release-spell (player)
-  "Let the pending spell go: its effects on the caster land on PLAYER, then a projectile
-leaves from just below the eye toward where the player looks now, or a touch strikes the
-creature in reach (glancing off a shield that covers it, as a bash does)."
-  (let ((spell (pending-spell player)))
-    (setf (pending-spell player) NIL)
+  "Let the pending spell go, as far as it was overcharged: its effects on the caster land on
+PLAYER, then a projectile leaves from just below the eye toward where the player looks now, a touch
+strikes the creature in reach (glancing off a shield that covers it, as a bash does, unless fully
+overcharged), or a nova bursts round the player."
+  (let ((spell (overcharged-spell (pending-spell player) (overcharge player))))
+    (setf (pending-spell player) NIL
+          (overcharge player) 0.0)
     (play-sound (if (eq (spell-name spell) 'tempest) :tempest-cast :bolt-cast))
     (apply-self-effects spell player player)
     (case (spell-delivery spell)
@@ -280,10 +530,17 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
          (when target
            (let ((at (vec (vx (location target)) (+ (vy (location target)) (* 0.5 (sprite-height target)))
                           (vz (location target)))))
-             (if (shielded-p target (feet player))
-                 (block-hit target)
-                 (strike-with-spell spell target (feet player) player at))
+             (cond ((not (shielded-p target (feet player)))
+                    (strike-with-spell spell target (feet player) player at))
+                   ((full-overcharge-p spell)
+                    (knock-guard-aside target)
+                    (strike-with-spell spell target (feet player) player at))
+                   (T
+                    (block-hit target)))
              (play-impact spell at (container player))))))
+      (:nova
+       (cast-spell spell (v+ (feet player) (vec 0 *nova-height* 0)) (look-direction player)
+                   (container player) :caster player))
       (T
        (let* ((dir (look-direction player))
               (origin (v+ (location player) (v* dir 0.5) (vec 0 -0.2 0))))
@@ -300,12 +557,15 @@ creature in reach (glancing off a shield that covers it, as a bash does)."
           (case action
             (:attack (setf (attack-held player) T)
              (player-attack player))
-            ;; Held, the shield rises; with the spear, a press sweeps with the haft, and with the
-            ;; maul it shakes the floor.
+            ;; Held, the shield rises; with the spear, a press sweeps with the haft, with the
+            ;; maul it shakes the floor, and with the hands it casts the off-hand rune.
             (:block (setf (block-held player) T)
              (case (weapon player)
                (:spear (player-sweep player))
-               (:maul (player-earthshake player))))
+               (:maul (player-earthshake player))
+               (:hands (let ((spell (offhand-spell player)))
+                         (when (and spell (weapon-ready-p player))
+                           (player-cast player spell :hand :off))))))
             ;; Talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
             (:interact (player-interact player))
             (T (let ((slot (position action *hotbar-slots*)))
@@ -377,7 +637,9 @@ wedge whose diagonal stopped it, if one did, and how far short of DELTA it stopp
     (flet ((ref (v) (ecase axis (0 (vx v)) (1 (vy v)) (2 (vz v))))
            (put (v x) (ecase axis (0 (setf (vx v) x)) (1 (setf (vy v) x)) (2 (setf (vz v) x)))))
       (let* ((start (ref feet))
-             (target (+ start delta)))
+             (target (+ start delta))
+             ;; Already inside a solid (a bug): pushed out wherever its edge is, not held there.
+             (inside (and (/= axis 1) (overlapping-solid feet))))
         (put feet target)
         (loop repeat 8
               for s = (overlapping-solid feet)
@@ -385,10 +647,13 @@ wedge whose diagonal stopped it, if one did, and how far short of DELTA it stopp
               ;; Up or down, a solid stops the move short of it, never past where it started:
               ;; one the body already overlapped (beside it, not over or under) put the feet
               ;; under its bottom, and so under the floor, or on its top, up through a ceiling.
+              ;; Across too: pressed against a body beside a wedge's diagonal, rounding left the
+              ;; feet a hair behind the start, in the diagonal, and the wedge's flush for a body
+              ;; moving toward its cut corner is its far face, so out through the rock.
               do (cond ((/= axis 1)
                         (multiple-value-bind (at diagonal)
                             (solid-flush s axis delta (vx feet) (vz feet) (float *player-radius* 0f0))
-                          (put feet at)
+                          (put feet (cond (inside at) ((< 0 delta) (max start at)) (T (min start at))))
                           (setf wedge (and diagonal s))))
                        ((< 0 delta)
                         (put feet (max start (- (aref s 1) (float *player-height* 0f0)))))
@@ -684,8 +949,10 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
           (play-sound :winded))
         (setf (stamina player) 0.0
               (winded player) T))
-      ;; Nor does it come back while the maul is charged or shakes the floor (maul.lisp).
-      (unless (maul-heaving-p player)
+      ;; Nor does it come back while the maul is charged or shakes the floor (maul.lisp), nor while
+      ;; a spell overcharges or a stamina beam or an Absorb is held.
+      (unless (or (maul-heaving-p player) (overcharging-p player)
+                  (and (channel player) (eq (spell-tier (channel player)) :stamina)))
         (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt))))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
     (setf (winded player) NIL)))
@@ -726,9 +993,14 @@ and not the last step of the stair.")
   (when (statuses player)
     (update-statuses player dt))
   (when (cast-time player)
-    (incf (cast-time player) dt)
-    (when (and (pending-spell player) (<= *cast-release* (cast-time player)))
-      (release-spell player)))
+    (if (overcharging-p player)
+        (overcharge-step player dt)
+        (progn
+          (incf (cast-time player) dt)
+          (when (and (pending-spell player) (<= *cast-release* (cast-time player)) (not (overcharging-p player)))
+            (release-spell player)))))
+  (update-channel player dt)
+  (start-held-casts player)
   (update-weapons player dt)
   (let* ((dt (min dt 0.05))
          (yaw (vy (rotation player)))
@@ -747,8 +1019,8 @@ and not the last step of the stair.")
                      (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
-         (heaving (maul-heaving-p player))
-         (running (and (held-p :run) (< 0.0 wlen) (not crouching) (= 0.0 raise) (not heaving)
+         (heaving (or (maul-heaving-p player) (overcharging-p player)))
+         (running (and (held-p :run) (< 0.0 wlen) (not crouching) (= 0.0 raise) (not heaving) (not (channel player))
                        (not (winded player)) (not (whirl player))))
          ;; The raised shield slows the player to a walk and below, and so does the maul's charge
          ;; and its earthshake (maul.lisp).
@@ -757,6 +1029,9 @@ and not the last step of the stair.")
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
                    (maul-speed-scale player)
+                   (cond ((channel player) *channel-speed-scale*)
+                         ((overcharging-p player) *overcharge-speed*)
+                         (T 1.0))
                    (if (< iz 0.0) *backpedal-scale* 1.0)
                    (if kind (liquid-property kind :speed) 1.0)
                    (slow-factor player))))
@@ -892,7 +1167,7 @@ at SPEED, out of liquid KIND if any."
                (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
              (incf (vx vel) dvx)
              (incf (vz vel) dvz))))
-    (when (and (grounded player) (held-p :jump) (not crouching) (not (maul-heaving-p player))
+    (when (and (grounded player) (held-p :jump) (not crouching) (not (maul-heaving-p player)) (not (overcharging-p player))
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
       (play-sound :jump)
@@ -929,19 +1204,22 @@ right under them (a grave circle on someone who stood still), back from where th
     (when lift
       (setf (vy vel) (max (vy vel) (float lift 0f0))))))
 
+(defun facing-point-p (player from arc)
+  "True if point FROM lies within ARC radians across of where PLAYER faces."
+  (let* ((feet (feet player))
+         (dx (- (vx from) (vx feet)))
+         (dz (- (vz from) (vz feet)))
+         (len (sqrt (+ (* dx dx) (* dz dz))))
+         (yaw (vy (rotation player))))
+    (and (< 1f-4 len)
+         (< (acos (max -1.0 (min 1.0 (/ (- (* dx (sin yaw)) (* dz (cos yaw))) len)))) arc))))
+
 (defun shield-facing-p (player from &optional (margin 0.0))
   "True if PLAYER's shield is raised at all (sword.lisp) and point FROM lies within
 *BLOCK-ARC*, plus MARGIN radians, of where the player faces."
   (and (eq (weapon player) :sword)
        (< 0.0 (block-raise player))
-       (let* ((feet (feet player))
-              (dx (- (vx from) (vx feet)))
-              (dz (- (vz from) (vz feet)))
-              (len (sqrt (+ (* dx dx) (* dz dz))))
-              (yaw (vy (rotation player))))
-         (and (< 1f-4 len)
-              (< (acos (max -1.0 (min 1.0 (/ (- (* dx (sin yaw)) (* dz (cos yaw))) len))))
-                 (+ *block-arc* margin))))))
+       (facing-point-p player from (+ *block-arc* margin))))
 
 (defun shield-blocks-p (player from)
   "True if PLAYER's shield is fully raised and a blow from point FROM comes from within
@@ -1006,6 +1284,8 @@ Returns true if the shield took the blow."
                  (play-sound :shield-guard-break)
                  (break-guard player (max *stamina-guard-break* (or guard-break 0)))))))
       ;; The priest's blessing (dialogue.lisp).
+      (when (< (blessing-scale player) 1.0)
+        (flare-veil :bless))
       (setf amount (max 1 (round (* amount (blessing-scale player)))))
       ;; A ward (magic.lisp) takes what it can of what gets past the shield.
       (setf amount (absorb-ward player amount))

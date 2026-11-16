@@ -207,6 +207,13 @@ def summary(levels, out):
                            ('seeds tried', lambda r: r['attempts']),
                            ('seconds', lambda r: r['seconds'])]:
             print('  %-12s %s' % (label, spread([key(r) for r in rs])), file=out)
+        tiers = defaultdict(int)
+        for r in rs:
+            for tier, k in r.get('rune_tiers', {}).items():
+                tiers[tier] += k
+        if tiers:
+            print('  %-12s %s' % ('rune tiers', ', '.join('%s %d' % (t, tiers[t]) for t in ('free', 'stamina', 'mana')
+                                                           if t in tiers)), file=out)
         families = defaultdict(list)
         for r in rs:
             for f in {net['family'] for net in r['networks']}:

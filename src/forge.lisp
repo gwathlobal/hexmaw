@@ -22,9 +22,9 @@
 (defparameter *max-spell-effects* 3)
 (defparameter *max-enchant-effects* 2)
 (defparameter *max-enchant-cost* 6 "Most mana a blow of an enchanted weapon may cost.")
-(defparameter *forge-deliveries* '(:projectile :touch :self) "How a forged spell can strike.")
+(defparameter *forge-deliveries* '(:projectile :seeker :beam :nova :touch :self) "How a forged spell can strike.")
 (defparameter *forge-elements* '(:fire :frost :shock))
-(defparameter *dust-per-mana* 1 "Arcane dust a spell costs to make for each mana a cast of it costs.")
+(defparameter *dust-per-mana* 1 "Arcane dust a spell costs to make for each point of its power (SPELL-POWER).")
 (defparameter *enchant-dust-scale* 3 "Arcane dust an enchantment costs for each mana a blow of it costs.")
 (defparameter *dust-refund* 0.5 "Fraction of its dust unweaving a spell or disenchanting a weapon gives back.")
 ;; The character counts here and in dialogue.lisp are guessed for the menu font, Jersey 15
@@ -51,7 +51,7 @@
 
 (defparameter *magnitude-spread* 0.7 "A forged effect's least roll, against its most.")
 (defparameter *new-effects*
-  '((:damage 8 0) (:heal 15 0) (:knockback 8 0) (:slow 30 4) (:drain 6 0) (:ward 10 10))
+  '((:damage 8 0) (:heal 15 0) (:knockback 8 0) (:slow 30 4) (:drain 6 0) (:ward 10 10) (:absorb 50 0))
   "(KIND MAGNITUDE DURATION) an effect starts at when added or turned to that kind.")
 
 (defvar *forge-tab* :spells "The forge's tab: :SPELLS, making and unweaving runes, or :ENCHANT.")
@@ -110,7 +110,7 @@ hover gives it), or that was last added or changed.")
   (let ((key (stack-key player stack)))
     (if key (format NIL "key ~d" (1+ key)) "bag")))
 
-(defun spell-dust (spell) (max 1 (ceiling (* *dust-per-mana* (spell-cost spell)))))
+(defun spell-dust (spell) (max 1 (ceiling (* *dust-per-mana* (spell-power spell)))))
 (defun enchant-dust (spell) (max 1 (ceiling (* *enchant-dust-scale* (enchant-cost spell)))))
 (defun sink-dust (sink spell)
   "The dust SPELL costs to make for SINK: an enchantment's, or a rune's."
@@ -206,7 +206,7 @@ never offers damage cast on yourself or a heal thrown at a monster."
 (defparameter *element-words* '(:fire ("Fire" "Flame") :frost ("Frost" "Frost") :shock ("Shock" "Lightning")))
 (defparameter *kind-words*
   '(:heal ("Healing" "Mending") :knockback ("Force" "Force") :slow ("Binding" "Binding")
-    :drain ("Draining" "Thirst") :ward ("Warding" "Warding"))
+    :drain ("Draining" "Thirst") :ward ("Warding" "Warding") :absorb ("Absorbing" "Absorption"))
   "(ADJECTIVE NOUN) each effect kind names a spell by.")
 
 (defun effect-words (effect)
@@ -224,14 +224,19 @@ never offers damage cast on yourself or a heal thrown at a monster."
                      ((eq weapon :maul) "Maul")
                      ((eq weapon :shield) "Bulwark")
                      ((eq (draft-delivery draft) :touch) "Touch")
+                     ((eq (draft-delivery draft) :seeker) "Seeker")
+                     ((eq (draft-delivery draft) :beam) "Ray")
+                     ((eq (draft-delivery draft) :nova) "Nova")
                      ((eq (draft-delivery draft) :self) (if (eq :ward (and first (draft-kind first))) "Aegis" "Blessing"))
                      ((some (lambda (e) (< 0 (draft-area e))) effects) "Burst")
                      (T "Bolt"))))
-    (if first
+    (cond
+      ((and first (eq :absorb (draft-kind first))) "Absorption")
+      (first
         (let ((other (find (effect-words first) (rest effects) :key #'effect-words :test-not #'equal)))
           (format NIL "~a ~a~@[ of ~a~]" (first (effect-words first)) noun
-                  (and other (second (effect-words other)))))
-        noun)))
+                  (and other (second (effect-words other))))))
+      (T noun))))
 
 (defun draft-spec (draft)
   "DRAFT as a spell spec (SPEC-SPELL, spells.lisp)."
@@ -272,9 +277,9 @@ second value says what differs."
                                        (and (effect-element e) (not (member (effect-element e) known)))
                                        (and (< 0 (effect-area e)) (not (member :area known)))))
                      "it uses an effect the player doesn't know")
-                    ((/= (spell-cost spell) (spell-cost made))
-                     (format NIL "it costs ~d, the forge's ~d" (spell-cost spell) (spell-cost made)))
-                    ((and (eq (spell-delivery spell) :projectile)
+                    ((/= (spell-power spell) (spell-power made))
+                     (format NIL "its power is ~d, the forge's ~d" (spell-power spell) (spell-power made)))
+                    ((and (projectile-delivery-p (spell-delivery spell))
                           (not (and (= (projectile-speed spell) (projectile-speed made))
                                     (= (spell-pain-bonus spell) (spell-pain-bonus made))
                                     (eq (projectile-animation spell) (projectile-animation made))
@@ -284,16 +289,27 @@ second value says what differs."
                      "it flies unlike a forged projectile"))))
         (values (null problem) problem)))))
 
+(defparameter *free-starting-spells* '(bolt)
+  "Starting spells that must stay free (SPELL-TIER): the Fire Bolt, the free spell a run starts
+with, sets *FREE-MAX-POWER*.")
+
 (defun check-starting-spells ()
-  "Warn of each spell in *STARTING-HOTBAR* the forge doesn't make (FORGEABLE-P). True if none."
-  (loop with all = T
-        for entry in *starting-hotbar*
-        unless (keywordp entry)
-          do (multiple-value-bind (ok problem) (forgeable-p (find-spell entry))
-               (unless ok
-                 (setf all NIL)
-                 (v:warn :hexmaw "The starting spell ~(~a~) isn't one the forge makes: ~a." entry problem)))
-        finally (return all)))
+  "Warn of each spell in *STARTING-HOTBAR* the forge doesn't make (FORGEABLE-P), and of each of
+*FREE-STARTING-SPELLS* that isn't free. True if none."
+  (let ((all T))
+    (dolist (entry *starting-hotbar*)
+      (multiple-value-bind (main off) (kit-entry entry)
+        (dolist (name (list main off))
+          (when (and name (not (keywordp name)))
+            (let ((spell (kit-spell name)))
+              (multiple-value-bind (ok problem) (forgeable-p spell)
+                (unless ok
+                  (setf all NIL)
+                  (v:warn :hexmaw "The starting spell ~(~a~) isn't one the forge makes: ~a." name problem)))
+              (when (and (member name *free-starting-spells*) (not (eq :free (spell-tier spell))))
+                (setf all NIL)
+                (v:warn :hexmaw "The starting spell ~(~a~) isn't free: ~a." name (tier-reason spell))))))))
+    all))
 
 (check-starting-spells)
 
@@ -305,6 +321,8 @@ what it holds, not what making it takes (DRAFT-PROBLEM). Generated loot asks it 
          (weapon (weapon-sink-p (draft-sink draft)))
          (spell (and effects (draft-spell draft))))
     (cond ((null effects) "Add an effect.")
+          ((and (find :absorb effects :key #'draft-kind) (rest effects))
+           "Absorb stands alone in its spell.")
           ((and weapon (< *max-enchant-effects* (length effects)))
            (format NIL "A weapon holds at most ~d effects." *max-enchant-effects*))
           ((and weapon (< *max-enchant-cost* (enchant-cost spell)))
@@ -334,7 +352,7 @@ what it holds, not what making it takes (DRAFT-PROBLEM). Generated loot asks it 
       (let ((spell (draft-spell draft)))
         (if (weapon-sink-p (draft-sink draft))
             (format NIL "~d MP a blow, ~d dust to enchant" (enchant-cost spell) (enchant-dust spell))
-            (format NIL "~d MP a cast, ~d dust to make" (spell-cost spell) (spell-dust spell))))))
+            (format NIL "~a, ~d dust to make.~@[ ~a~]" (spell-cost-text spell) (spell-dust spell) (tier-line spell))))))
 
 ;;; Commands: each changes the draft or what the player holds, and says the screen is stale.
 
@@ -868,6 +886,7 @@ and who resists it, and what its time and area change."
                             (round (* 100 *slowest*))))
              (:drain "Takes health from what it strikes and gives you half of what it took. It has no element, so nothing resists it.")
              (:ward "Takes blows for you: absorbs that much damage before your health does, until it is spent or its time runs out.")
+             (:absorb "Held on yourself, on stamina, its power a second, and no stamina comes back while you hold it: the foes' projectiles reaching you from in front are swallowed, that share of their power becoming your mana, each point of it a stamina more. Your own spells a shield sends back give back that share of the mana they cost. Rifts and gusts still strike.")
              (T ""))))
     (if area
         (concatenate 'string text " It bursts over its area: everything there in a clear line, but you.")
@@ -929,7 +948,7 @@ on, since a dial changes the text but doesn't remake the panel."
         (forge-text (if (self-kind-p kind) "On you" "On what it strikes") row 1))
     (forge-button "Remove" (lambda () (forge-remove-effect index)) row 2 focus :effect control)
     (let ((dials (forge-row column '(220 220 T))))
-      (forge-dial panel (if (member kind '(:slow)) "Slow" "Power")
+      (forge-dial panel (if (member kind '(:slow)) "Slow" "Amount")
                   (lambda () (draft-magnitude effect))
                   (lambda (v) (setf (draft-magnitude effect) (max 1 (round v))))
                   (cons 1 (kind-property kind :magnitude)) 1

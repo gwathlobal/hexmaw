@@ -54,7 +54,10 @@
     (:ward "efc9fc" "c58bfd" "6f23b4")    ; A boss's or elite's ward.
     (:fire "fcb918" "fb6403" "ac0f07")    ; A torch's embers.
     (:lava "fcb918" "fe901f" "f11402")    ; Lava's.
-    (:dust "c3b698" "a08a71" "77613d"))   ; Grit, as pale as the ogre's dust.
+    (:dust "c3b698" "a08a71" "77613d")    ; Grit, as pale as the ogre's dust.
+    (:frost "deebfd" "a9d4fa" "45b1f5")   ; A frost nova's glitter and chips.
+    (:shock "f9f9f3" "f8ec3b" "d8aa38")   ; A shock nova's sparks.
+    (:drain "f98497" "f52a5a" "7e2225"))  ; A drain nova's motes.
   "Per ramp: its name and three hex colours from the house palette.")
 
 (defun spark-ramp-colors ()
@@ -609,3 +612,178 @@ void main(){
   }
   color = vec4(c, 1.0);
 }")
+
+;;; Lightning: jagged bolts, each a line of segments that lasts a moment (BOLT-LIFE), so whatever
+;;; makes them draws them anew to make them crackle. Every segment is a quad facing the view, its
+;;; ends snapped to the art's pixel grid on screen (an art pixel is a 240th of the rows, as the
+;;; weapons' are), drawn twice: a yellow edge BOLT-WIDTH art pixels wide, then a white core one
+;;; wide, added over what is behind it. Plain arrays and one stream-draw buffer, like the sparks.
+
+(defparameter *max-bolt-segments* 2048 "Segments the lightning holds at once; past that a new one is left out.")
+(defparameter *bolt-edge* '(0.97 0.82 0.22) "Lightning's edge colour, the shock ramp's middle.")
+(defparameter *bolt-core* '(0.98 0.98 0.95) "Lightning's core colour.")
+(defparameter *bolt-vertex-floats* 10)
+(defparameter *bolt-segment-floats* 9 "Per segment: start (3), end (3), width in art pixels, whiteness, life.")
+
+(defvar *bolt-lines* NIL "The lightning in the current scene.")
+
+(define-shader-entity bolt-lines (renderable listener)
+  ((segments :reader bolt-segments)
+   (count :initform 0 :accessor bolt-count)
+   (data :reader bolt-data)
+   (vbo :reader bolt-vbo)
+   (vao :reader bolt-vao)))
+
+(defmethod initialize-instance :after ((bolts bolt-lines) &key)
+  (let* ((n *max-bolt-segments*)
+         (data (make-array (* n 2 6 *bolt-vertex-floats*) :element-type 'single-float :initial-element 0f0))
+         (vbo (make-instance 'vertex-buffer :buffer-data data :data-usage :stream-draw))
+         (stride (* 4 *bolt-vertex-floats*)))
+    (setf (slot-value bolts 'segments) (make-array (* n *bolt-segment-floats*) :element-type 'single-float :initial-element 0f0)
+          (slot-value bolts 'data) data
+          (slot-value bolts 'vbo) vbo
+          (slot-value bolts 'vao) (make-instance 'vertex-array
+                                                 :vertex-form :triangles
+                                                 :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
+                                                             (,vbo :size 3 :offset 12 :stride ,stride :index 1)
+                                                             (,vbo :size 4 :offset 24 :stride ,stride :index 2))))))
+
+(defmethod stage :after ((bolts bolt-lines) (area staging-area))
+  (stage (bolt-vao bolts) area))
+
+(defun add-bolt-lines (scene)
+  (setf *bolt-lines* (make-instance 'bolt-lines))
+  (enter *bolt-lines* scene))
+
+(defun clear-bolts ()
+  (when *bolt-lines* (setf (bolt-count *bolt-lines*) 0)))
+
+(defun add-bolt-segment (x0 y0 z0 x1 y1 z1 width white life)
+  (let ((bolts *bolt-lines*))
+    (when (and bolts (< (bolt-count bolts) *max-bolt-segments*))
+      (let ((s (bolt-segments bolts))
+            (o (* *bolt-segment-floats* (bolt-count bolts))))
+        (setf (aref s o) (float x0 0f0) (aref s (+ o 1)) (float y0 0f0) (aref s (+ o 2)) (float z0 0f0)
+              (aref s (+ o 3)) (float x1 0f0) (aref s (+ o 4)) (float y1 0f0) (aref s (+ o 5)) (float z1 0f0)
+              (aref s (+ o 6)) (float width 0f0) (aref s (+ o 7)) (float white 0f0) (aref s (+ o 8)) (float life 0f0))
+        (incf (bolt-count bolts))))))
+
+(defun bolt-line (x0 y0 z0 x1 y1 z1 depth &key (roughness 0.2) sphere (width 2.0) (branch 0.0) (white 0.0)
+                                                (drop 0.0) (life 0.05))
+  "Add a jagged bolt from X0 Y0 Z0 to X1 Y1 Z1: midpoints moved across the line by ROUGHNESS of its
+length, DEPTH times (2^DEPTH segments); on SPHERE, (centre radius), each midpoint is put back on it
+first, so the bolt runs over its surface. BRANCH is the chance at each midpoint of a fork; DROP the
+chance a finished segment is left out, a bolt breaking up. It lasts LIFE seconds."
+  (let ((cx 0f0) (cy 0f0) (cz 0f0) (cr 0f0))
+    (when sphere
+      (destructuring-bind (centre radius) sphere
+        (setf cx (vx centre) cy (vy centre) cz (vz centre) cr (float radius 0f0))))
+    (labels ((onto (x y z)
+               (if (< 0 cr)
+                   (let* ((dx (- x cx)) (dy (- y cy)) (dz (- z cz))
+                          (k (/ cr (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))))
+                     (values (+ cx (* dx k)) (+ cy (* dy k)) (+ cz (* dz k))))
+                   (values x y z)))
+             (jit (len) (* len roughness (- (random 2f0) 1f0)))
+             (walk (ax ay az bx by bz d w)
+               (if (<= d 0)
+                   (unless (< (random 1f0) drop)
+                     (add-bolt-segment ax ay az bx by bz w white life))
+                   (let ((len (sqrt (+ (expt (- bx ax) 2) (expt (- by ay) 2) (expt (- bz az) 2)))))
+                     (multiple-value-bind (mx my mz)
+                         (onto (+ (* 0.5 (+ ax bx)) (jit len)) (+ (* 0.5 (+ ay by)) (jit len)) (+ (* 0.5 (+ az bz)) (jit len)))
+                       (when (and (< 0 branch) (< 1 d) (< (random 1f0) branch))
+                         (let ((k (+ 0.3 (random 0.4))))
+                           (multiple-value-bind (tx ty tz)
+                               (onto (+ mx (* k (- bx ax)) (jit (* 1.5 len))) (+ my (* k (- by ay)) (jit (* 1.5 len)))
+                                     (+ mz (* k (- bz az)) (jit (* 1.5 len))))
+                             (walk mx my mz tx ty tz (- d 2) (max 1.0 (- w 1.0))))))
+                       (walk ax ay az mx my mz (1- d) w)
+                       (walk mx my mz bx by bz (1- d) w))))))
+      (walk (float x0 0f0) (float y0 0f0) (float z0 0f0) (float x1 0f0) (float y1 0f0) (float z1 0f0) depth (float width 0f0)))))
+
+(define-handler (bolt-lines tick) (dt)
+  (unless (frozen-p)
+    ;; Segments run out and the live ones close up.
+    (let ((s (bolt-segments bolt-lines)) (n (bolt-count bolt-lines)) (k 0) (stride *bolt-segment-floats*))
+      (dotimes (i n)
+        (let ((o (* i stride)))
+          (when (< 0 (decf (aref s (+ o 8)) (float dt 0f0)))
+            (unless (= i k) (replace s s :start1 (* k stride) :start2 o :end2 (+ o stride)))
+            (incf k))))
+      (setf (bolt-count bolt-lines) k))))
+
+(defmethod render ((bolts bolt-lines) (program shader-program))
+  (let ((n (bolt-count bolts)))
+    (when (< 0 n)
+      (let ((s (bolt-segments bolts)) (data (bolt-data bolts)) (k 0))
+        (destructuring-bind (er eg eb) *bolt-edge*
+          (destructuring-bind (cr cg cb) *bolt-core*
+            ;; Each segment twice: its edge, wide, then its core, an art pixel.
+            (dotimes (pass 2)
+              (dotimes (i n)
+                (let* ((o (* i *bolt-segment-floats*))
+                       (white (* 0.5 (aref s (+ o 7))))
+                       (width (if (= pass 0) (aref s (+ o 6)) 1f0))
+                       (r (if (= pass 0) (+ er (* white (- cr er))) cr))
+                       (g (if (= pass 0) (+ eg (* white (- cg eg))) cg))
+                       (b (if (= pass 0) (+ eb (* white (- cb eb))) cb)))
+                  (loop for c from 0 below 12 by 2
+                        for v = (* k *bolt-vertex-floats*)
+                        do (replace data s :start1 v :start2 o :end2 (+ o 6))
+                           (setf (aref data (+ v 6)) r (aref data (+ v 7)) g (aref data (+ v 8)) b
+                                 (aref data (+ v 9)) (+ (* 4f0 (aref *spark-corners* c)) (* 2f0 (aref *spark-corners* (1+ c))) (* 0.125f0 width)))
+                           (incf k)))))))
+        (update-buffer-data (bolt-vbo bolts) data :count (* k *bolt-vertex-floats* 4))
+        (setf (uniform program "view_matrix") (view-matrix)
+              (uniform program "projection_matrix") (projection-matrix)
+              (uniform program "view_rows") (float (render-size (height *context*)) 0f0)
+              (uniform program "view_cols") (float (render-size (width *context*)) 0f0))
+        (gl:depth-mask NIL)
+        (gl:blend-func :one :one)
+        (render-array (bolt-vao bolts) :vertex-count k)
+        (gl:blend-func :src-alpha :one-minus-src-alpha)
+        (gl:depth-mask T)))))
+
+(define-class-shader (bolt-lines :vertex-shader)
+  "layout (location = 0) in vec3 a;
+layout (location = 1) in vec3 b;
+layout (location = 2) in vec4 in_color;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+uniform float view_rows;
+uniform float view_cols;
+out vec3 v_color;
+
+vec2 to_px(vec4 c, vec2 size){ return (c.xy / c.w * 0.5 + 0.5) * size; }
+
+void main(){
+  vec2 size = vec2(view_cols, view_rows);
+  float art = max(1.0, floor(view_rows / 240.0));
+  // The corner packed in the colour's fourth: 4 for the far end, 2 for the left side, plus
+  // an eighth of the width.
+  float corner = in_color.w;
+  float end = step(3.9, corner);
+  float side = step(1.9, corner - 4.0 * end) * 2.0 - 1.0;
+  float width = 8.0 * (corner - 4.0 * end - (side + 1.0));
+  vec4 ca = projection_matrix * (view_matrix * vec4(a, 1.0));
+  vec4 cb = projection_matrix * (view_matrix * vec4(b, 1.0));
+  v_color = in_color.rgb;
+  if(ca.w < 0.05 || cb.w < 0.05){ gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  // Both ends on the art's pixel grid, so a bolt steps as pixel art does.
+  vec2 pa = (floor(to_px(ca, size) / art) + 0.5) * art;
+  vec2 pb = (floor(to_px(cb, size) / art) + 0.5) * art;
+  vec2 dir = pb - pa;
+  dir = dir / max(length(dir), 0.001);
+  vec2 n = vec2(-dir.y, dir.x);
+  float half_w = 0.5 * width * art;
+  vec4 c = mix(ca, cb, end);
+  vec2 e = mix(pa, pb, end);
+  vec2 p = e + n * side * half_w + dir * (end * 2.0 - 1.0) * half_w;
+  gl_Position = vec4(((p / size) * 2.0 - 1.0) * c.w, c.z, c.w);
+}")
+
+(define-class-shader (bolt-lines :fragment-shader)
+  "in vec3 v_color;
+out vec4 color;
+void main(){ color = vec4(v_color, 1.0); }")

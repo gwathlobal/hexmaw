@@ -50,6 +50,8 @@ otherwise a burst where the spell strikes.")
 
    (strike-animation :initarg :strike-animation :initform NIL :reader strike-animation
                      :documentation "What bursts up out of a :CIRCLE's floor when it strikes, played many times over it.")
+   (overcharge :initarg :overcharge :initform 0.0 :accessor spell-overcharge
+               :documentation "How far the cast that made this copy was overcharged, 0 to 1 (OVERCHARGED-SPELL).")
    (effects :initarg :effects :reader spell-effects)))
 
 (defvar *spells* (make-hash-table :test 'eq))
@@ -75,9 +77,14 @@ otherwise a burst where the spell strikes.")
                                :effects (list ,@(loop for (kind . args) in effects
                                                       collect `(make-instance 'effect :kind ,kind ,@args))))))
 
-;;; Cost: each effect's base cost times its average magnitude, scaled by how long it
-;;; lasts and by its area; a touch spell is cheaper, since it costs the caster a step
-;;; into reach. A spell costs the sum, rounded up.
+;;; Power: each effect's base times its average magnitude, scaled by how long it lasts, by its
+;;; area and by its delivery (a touch costs the caster a step into reach; a seeker and a beam
+;;; hardly miss; a nova strikes all round). A spell's power is the sum, rounded up: what dust and
+;;; enchantments are priced by (forge.lisp, sword.lisp) and found runes sized to (loot.lisp).
+;;;
+;;; Its tier follows from it (SPELL-TIER): a weak, simple spell is free, a stronger one costs
+;;; stamina, and the strongest, and every heal, ward and drain, cost mana. A mana cast takes
+;;; its power with striking effects at *CAST-STRIKE-SCALE* (SPELL-COST).
 
 (defparameter *effect-kinds*
   '((:damage :base 1.5 :timing :over-time :targets (:target) :magnitude 30 :duration 8 :area 3.0)
@@ -85,23 +92,26 @@ otherwise a burst where the spell strikes.")
     (:knockback :base 0.5 :timing :instant :targets (:target) :magnitude 12 :duration 0 :area 3.0)
     (:slow :base 0.12 :timing :status :targets (:target) :magnitude 60 :duration 10 :area 3.0)
     (:drain :base 2.0 :timing :instant :targets (:target) :magnitude 20 :duration 0 :area 0)
-    (:ward :base 0.4 :timing :status :targets (:self) :magnitude 40 :duration 20 :area 0))
-  "What each effect kind the spellforge offers is: mana per point of average magnitude
+    (:ward :base 0.4 :timing :status :targets (:self) :magnitude 40 :duration 20 :area 0)
+    (:absorb :base 0.2 :timing :instant :targets (:self) :magnitude 100 :duration 0 :area 0))
+  "What each effect kind the spellforge offers is: power per point of average magnitude
 (:BASE), how its duration counts (:TIMING: :INSTANT ignores it, :OVER-TIME makes the
 magnitude per second, :STATUS holds the magnitude that long), who it may strike
 (:TARGETS), and the most magnitude, duration and area the forge allows. Kinds not
 listed (creatures' :WHIRL, :GUST) cost 1 a point, their duration counting as a status's.")
 
 (defparameter *element-costs* '(:fire 1.5 :frost 1.7 :shock 1.7)
-  "Mana per point of damage, by element: frost and shock do more than fire.")
+  "Power per point of damage, by element: frost and shock do more than fire.")
 (defparameter *over-time-discount* 0.6
   "An over-time effect costs its magnitude a second times its duration times this.")
-(defparameter *touch-cost-scale* 0.75 "A :TOUCH spell's cost, against the same at range.")
+(defparameter *delivery-cost-scales* '(:touch 0.75 :seeker 1.3 :beam 1.4 :nova 1.5)
+  "A spell's power by its delivery, against the same as a plain projectile.")
 
 (defun kind-property (kind property &optional default)
   (getf (rest (assoc kind *effect-kinds*)) property default))
 
 (defun effect-cost (effect &optional delivery)
+  "EFFECT's share of a spell's power, delivered by DELIVERY."
   (destructuring-bind (lo hi) (effect-magnitude effect)
     (let* ((kind (effect-kind effect))
            (duration (effect-duration effect))
@@ -113,11 +123,111 @@ listed (creatures' :WHIRL, :GUST) cost 1 a point, their duration counting as a s
                    (:status (+ 1 (/ duration 5))))))
       (* base (/ (+ lo hi) 2) time
          (+ 1 (effect-area effect))
-         (if (eq delivery :touch) *touch-cost-scale* 1)))))
+         (getf *delivery-cost-scales* delivery 1)))))
 
-(defun spell-cost (spell)
+(defun spell-power (spell)
+  "SPELL's strength as one number: its effects' costs, summed and rounded up."
   (ceiling (reduce #'+ (spell-effects spell)
                    :key (lambda (effect) (effect-cost effect (spell-delivery spell))))))
+
+;;; Tiers. Each tier's rules are checked in turn, free first; the first whose every rule the
+;;; spell meets is its tier.
+
+(defparameter *free-max-power* 14 "Most power a free spell may have: the starting Fire Bolt's.")
+(defparameter *free-max-knockback* 4 "Most knockback a free spell may carry beside its damage.")
+(defparameter *free-deliveries* '(:projectile :touch :seeker))
+(defparameter *stamina-max-power* 40)
+(defparameter *stamina-max-beam-power* 20 "Most power a stamina beam may have: it strikes four times a second.")
+(defparameter *stamina-max-effects* 2)
+(defparameter *stamina-max-duration* 4 "Most seconds a stamina spell's damage over time or slow may last.")
+(defparameter *stamina-max-area* 1.5)
+(defparameter *stamina-kinds* '(:damage :knockback :slow))
+(defparameter *stamina-deliveries* '(:projectile :touch :seeker :beam :nova))
+(defparameter *cast-strike-scale* 0.5
+  "Mana a mana spell's striking effects take a cast, against their power: what the same spell
+costs a blow as an enchantment (*ENCHANT-COST-SCALE*, sword.lisp).")
+
+(defun absorb-spell-p (spell)
+  (find :absorb (spell-effects spell) :key #'effect-kind))
+
+(defun tier-fault (spell tier)
+  "Why SPELL isn't of TIER (:FREE or :STAMINA), a short phrase, or NIL if it meets its rules."
+  (let* ((effects (spell-effects spell))
+         (delivery (spell-delivery spell))
+         (power (spell-power spell)))
+    (flet ((kinds () (mapcar #'effect-kind effects)))
+      (ecase tier
+        (:free
+         (cond ((absorb-spell-p spell) "it turns projectiles into mana")
+               ((not (member delivery *free-deliveries*))
+                (format NIL "a ~(~a~) is never free" delivery))
+               ((not (eq :damage (effect-kind (first effects)))) "a free spell is damage")
+               ((or (< 2 (length effects))
+                    (and (rest effects) (not (eq :knockback (effect-kind (second effects))))))
+                "a free spell is damage, with knockback at most")
+               ((find-if (lambda (e) (< 0 (effect-duration e))) effects) "it lasts")
+               ((find-if (lambda (e) (< 0 (effect-area e))) effects) "it bursts")
+               ((find-if (lambda (e) (and (eq :knockback (effect-kind e))
+                                          (< *free-max-knockback* (second (effect-magnitude e)))))
+                         effects)
+                (format NIL "its knockback is over ~d" *free-max-knockback*))
+               ((< *free-max-power* power)
+                (format NIL "power ~d is over ~d" power *free-max-power*))))
+        (:stamina
+         (let ((top (if (eq delivery :beam) *stamina-max-beam-power* *stamina-max-power*)))
+           (cond ((find :heal (kinds)) "it heals")
+                 ((find :ward (kinds)) "it wards")
+                 ((find :drain (kinds)) "it drains")
+                 ((eq delivery :self) "it is cast on yourself")
+                 ((not (member delivery *stamina-deliveries*))
+                  (format NIL "a ~(~a~) costs mana" delivery))
+                 ((< *stamina-max-effects* (length effects))
+                  (format NIL "it has over ~d effects" *stamina-max-effects*))
+                 ((set-difference (kinds) *stamina-kinds*) "its effects cost mana")
+                 ((find-if (lambda (e) (< *stamina-max-duration* (effect-duration e))) effects)
+                  (format NIL "it lasts over ~d s" *stamina-max-duration*))
+                 ((find-if (lambda (e) (< *stamina-max-area* (effect-area e))) effects)
+                  (format NIL "its area is over ~,1f m" *stamina-max-area*))
+                 ((< top power) (format NIL "power ~d is over ~d" power top)))))))))
+
+(defun forged-kinds-p (spell)
+  "True if every effect of SPELL is of a kind the forge makes (*EFFECT-KINDS*)."
+  (every (lambda (e) (assoc (effect-kind e) *effect-kinds*)) (spell-effects spell)))
+
+(defun spell-tier (spell)
+  "SPELL's tier: :FREE, :STAMINA or :MANA. The creatures' spells and the tornado, which the forge
+doesn't make, are :MANA."
+  (cond ((not (forged-kinds-p spell)) :mana)
+        ;; An Absorb turns projectiles into mana, so it is held on stamina (ABSORBS-P, magic.lisp).
+        ((absorb-spell-p spell) :stamina)
+        ((null (tier-fault spell :free)) :free)
+        ((null (tier-fault spell :stamina)) :stamina)
+        (T :mana)))
+
+(defun tier-reason (spell)
+  "Why SPELL is of its tier and not the one below, a short phrase, or NIL for a free spell."
+  (ecase (spell-tier spell)
+    (:free NIL)
+    (:stamina (tier-fault spell :free))
+    (:mana (or (tier-fault spell :stamina) "the forge can't make it"))))
+
+(defun spell-cost (spell)
+  "The mana a cast of SPELL takes: none for a free or stamina spell; for a mana spell its power,
+striking effects at *CAST-STRIKE-SCALE* (one the forge can't make, the tornado, its whole power)."
+  (cond ((not (eq (spell-tier spell) :mana)) 0)
+        ((not (forged-kinds-p spell)) (spell-power spell))
+        (T (max 1 (ceiling (reduce #'+ (spell-effects spell)
+                                   :key (lambda (effect)
+                                          (* (if (eq (effect-target-type effect) :self) 1 *cast-strike-scale*)
+                                             (effect-cost effect (spell-delivery spell))))))))))
+
+(defun spell-stamina (spell)
+  "The stamina a cast of SPELL takes: its power for a stamina spell, else none; for an Absorb, which
+is held, its power a second."
+  (if (eq (spell-tier spell) :stamina) (spell-power spell) 0))
+
+(defparameter *absorb-take-stamina* 1.0
+  "Stamina a point of mana an Absorb gains from a projectile costs, beside its hold's.")
 
 (defun roll (magnitude)
   (destructuring-bind (lo hi) magnitude
@@ -208,7 +318,17 @@ burst over every body within it of point AT."
 
 ;;; Projectile delivery.
 
+(defun projectile-delivery-p (delivery)
+  "True if DELIVERY flies as a projectile: a plain one or a seeker (SEEKER-MARK)."
+  (member delivery '(:projectile :seeker)))
+
+(defparameter *seeker-cone* 0.35 "Radians either side of the aim a seeker looks for its mark in.")
+(defparameter *seeker-range* 30.0 "Metres out a seeker looks for its mark.")
+(defparameter *seeker-turn* 2.5 "Radians a second a seeker turns after its mark.")
+
 (defparameter *projectile-lifetime* 3.0 "Seconds before a projectile that hit nothing vanishes.")
+(defparameter *free-projectile-lifetime* 1.0
+  "Seconds the player's free spells fly before they vanish: 20 m at the bolt's speed.")
 (defparameter *projectile-size* 0.18 "Collision diameter in metres; the sprite can be bigger.")
 (defparameter *impact-pullback* 0.25
   "Metres back along the flight path where the impact plays, so it isn't buried in the wall.")
@@ -217,6 +337,8 @@ burst over every body within it of point AT."
   ((spell :initarg :spell :initform NIL :reader spell)
    (caster :initarg :caster :initform NIL :accessor caster
            :documentation "Who fired it (the player or a creature), whom it never hits.")
+   (launcher :initarg :launcher :initform NIL :accessor launcher
+             :documentation "Who first fired it: its CASTER until a shield turned it back.")
    (homing :initarg :homing :initform NIL :accessor homing
            :documentation "Radians a second it turns after HOMING-TARGET, or NIL; a shield that
 turns it aside ends it.")
@@ -265,10 +387,14 @@ its strike. The player's own casts sound from the hands (player.lisp).")
 (defun launch-projectile (spell origin direction container caster)
   "Fire SPELL from ORIGIN along unit vector DIRECTION, on behalf of CASTER."
   (let ((projectile (make-instance 'spell-projectile
-                                  :spell spell :caster caster :location (vcopy origin)
-                                  :homing (spell-homing spell)
-                                  :homing-target (and (spell-homing spell) (typep caster 'creature)
-                                                      (hunt-target caster))
+                                  :spell spell :caster caster :launcher caster :location (vcopy origin)
+                                  :homing (if (eq (spell-delivery spell) :seeker)
+                                              *seeker-turn*
+                                              (spell-homing spell))
+                                  :homing-target (cond ((eq (spell-delivery spell) :seeker)
+                                                        (seeker-mark origin direction caster))
+                                                       ((and (spell-homing spell) (typep caster 'creature))
+                                                        (hunt-target caster)))
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
     (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T))
@@ -299,12 +425,13 @@ around it (a 2 m burst was drawn at 12 px a metre, against the monsters' 64).")
           for r = (* radius (/ shell shells))
           collect (max 4 (round (* 4 pi r r) (* step step))))))
 
-(defun burst-shells (name at radius container)
+(defun burst-shells (name at radius container &key (inner 0))
   "Fill the ball RADIUS metres round AT with bursts of NAME at their own size: shells
 *BURST-SHELL-STEP* apart out to RADIUS, the bursts on each as far apart (a Fibonacci sphere,
 turned from shell to shell so they don't line up), spaced wider when there would be more than
 *BURST-MAX-COPIES*. None goes inside a solid or behind one from AT, so on a floor it is a dome
-and on a wall half a ball. They start a frame or two apart, so they don't pulse as one."
+and on a wall half a ball. They start a frame or two apart, so they don't pulse as one. Shells
+nearer AT than INNER are left out (a nova's, round its caster's eye)."
   (let* ((total (reduce #'+ (shell-counts radius *burst-shell-step*)))
          (step (* *burst-shell-step* (max 1.0 (sqrt (/ total *burst-max-copies*)))))
          (counts (shell-counts radius step))
@@ -320,13 +447,14 @@ and on a wall half a ball. They start a frame or two apart, so they don't pulse 
                       (point (vec (+ (vx at) (* across (cos angle)))
                                   (+ (vy at) (* r y))
                                   (+ (vz at) (* across (sin angle))))))
-                 (unless (or (solid-at (vx point) (vy point) (vz point))
+                 (unless (or (< r inner)
+                             (solid-at (vx point) (vy point) (vz point))
                              (not (clear-line-p at point)))
                    (setf (age (spawn-fx name point container)) (* 0.04 (mod (+ i shell) 3)))))))))
 
-(defun play-impact (spell at container &key water)
+(defun play-impact (spell at container &key water quiet)
   "Play SPELL's impact animation at AT, its burst over its area, with its glow and its sound. Into
-WATER it hisses out."
+WATER it hisses out; QUIET, it makes no sound (a held beam's, which has its own)."
   (let ((name (impact-animation spell)))
     (when (and name container)
       (let* ((radius (spell-burst-radius spell))
@@ -336,7 +464,8 @@ WATER it hisses out."
         (when (< *burst-scale-limit* k)
           (burst-shells name at radius container))
         (attach-glow sprite (light-color spell) (* (light-radius spell) (sqrt k)))
-        (play-sound (if water :bolt-hiss-water (spell-sound spell :impact)) at)))))
+        (unless quiet
+          (play-sound (if water :bolt-hiss-water (spell-sound spell :impact)) at))))))
 
 (defun impact (projectile &key water (at (impact-point projectile)))
   "Play the spell's impact where PROJECTILE hit, and remove it. Into WATER it hisses out."
@@ -361,7 +490,47 @@ WATER it hisses out."
   (:method (target projectile) NIL))
 
 (defmethod deflects-p ((target creature) (projectile spell-projectile))
-  (shielded-p target (v- (location target) (projectile-velocity projectile))))
+  (and (not (full-overcharge-p (spell projectile)))
+       (shielded-p target (v- (location target) (projectile-velocity projectile)))))
+
+;;; Overcharge: a striking stamina or mana spell held before it goes (player.lisp) is cast as a
+;;; copy of itself, stronger by its overcharge. Full, it strikes past a shield or ward: the guard
+;;; is knocked aside (KNOCK-GUARD-ASIDE, maul.lisp, the maul's full blow's) and the blow always
+;;; makes its target flinch.
+
+(defparameter *overcharge-strength* 0.6 "How much stronger a full overcharge makes a spell's magnitudes.")
+(defparameter *overcharge-pain-bonus* 60 "Percent a full overcharge adds to a boss's pain roll; the rest always flinch.")
+
+(defun full-overcharge-p (spell) (and spell (<= 1.0 (spell-overcharge spell))))
+
+(defun scaled-spell (spell k &key (pain-bonus (spell-pain-bonus spell)))
+  "A copy of SPELL, its look and flight kept, its magnitudes times K."
+  (let ((copy (spec-spell
+               (destructuring-bind (name delivery &rest effects) (spell-spec spell)
+                 (list* name delivery
+                        (loop for e in effects
+                              collect (let ((m (getf e :magnitude)))
+                                        (list* :magnitude (list (max 1 (round (* k (first m))))
+                                                                (max 1 (round (* k (second m)))))
+                                               e))))))))
+    (dolist (slot '(title projectile-speed projectile-animation impact-animation light-color light-radius
+                    homing lifetime))
+      (setf (slot-value copy slot) (slot-value spell slot)))
+    (setf (slot-value copy 'pain-bonus) pain-bonus)
+    copy))
+
+(defun overcharged-spell (spell charge)
+  "SPELL as an overcharge of CHARGE (0 to 1) casts it: itself at none."
+  (if (<= charge 0.0)
+      spell
+      (let ((copy (scaled-spell spell (+ 1 (* *overcharge-strength* charge)))))
+        (setf (spell-overcharge copy) (min 1.0 charge))
+        copy)))
+
+(defun overcharge-breaks-guard (spell target from)
+  "A full overcharge of SPELL strikes TARGET from FROM: knock its shield or ward aside if it covers."
+  (when (and (full-overcharge-p spell) (typep target 'creature) (shielded-p target from))
+    (knock-guard-aside target)))
 
 (defun deflect (target projectile)
   "TARGET's shield takes PROJECTILE: reflect it, or stop it if the shield doesn't reflect."
@@ -435,6 +604,21 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
         (setf (evade-asked projectile) c)
         (evade-projectile c projectile)))))
 
+(defun projectile-lifetime (projectile)
+  "Seconds PROJECTILE flies before it vanishes: its spell's own, short for the player's free ones."
+  (let ((spell (spell projectile)))
+    (cond ((spell-lifetime spell))
+          ((and *player* (eq (caster projectile) *player*) (eq (spell-tier spell) :free))
+           *free-projectile-lifetime*)
+          (T *projectile-lifetime*))))
+
+(defgeneric absorbs-p (target projectile)
+  (:documentation "True if TARGET swallows PROJECTILE instead of being struck (the player's Absorb, magic.lisp).")
+  (:method (target projectile) NIL))
+
+(defgeneric absorb-projectile (target projectile)
+  (:documentation "TARGET swallows PROJECTILE."))
+
 ;; After FX-SPRITE's tick, which animates and ages it.
 (define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
@@ -458,7 +642,11 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
         (setf (submerged spell-projectile) (and (liquid-at (vx loc) (vy loc) (vz loc)) T))
         (cond ((and victim (deflects-p victim spell-projectile))
                (deflect victim spell-projectile))
+              ((absorbs-p victim spell-projectile)
+               (absorb-projectile victim spell-projectile))
               (victim
+               (overcharge-breaks-guard (spell spell-projectile) victim
+                                        (v- (location victim) (projectile-velocity spell-projectile)))
                ;; Its own effects strike from along its flight; a burst from where it hit.
                (dolist (effect (spell-effects (spell spell-projectile)))
                  (when (and (target-effect-p effect) (= 0 (effect-area effect)))
@@ -471,7 +659,7 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
                  (impact spell-projectile :at at
                                           :water (and entered (liquid-property (liquid-kind entered) :swim)))))
-              ((< (or (spell-lifetime (spell spell-projectile)) *projectile-lifetime*) (age spell-projectile))
+              ((< (projectile-lifetime spell-projectile) (age spell-projectile))
                (despawn spell-projectile)))))))
 
 ;;; Circle delivery: a sign glows on the floor around a point for the spell's WINDUP,
@@ -681,6 +869,445 @@ void main(){
   color = vec4(c * light * 1.3, 1.0);
 }")
 
+;;; The nova: a sphere growing from the caster's chest to its reach over *NOVA-GROW-TIME*, striking
+;;; each body as it reaches it (SPELL-NOVA). Its look is its element's (*NOVA-STYLES*, NOVA-STYLE):
+;;; a dome of aurora curtains (NOVA-DOME, drawn like the grave circle's aurora, its streaks sized in
+;;; metres on its surface so that from inside they recede as it grows), shaped by element: fire's
+;;; licking flames, frost's hard shards, drain's curtains hanging from the top, force's plain
+;;; streaks; shock's is a cage of lightning instead (BOLT-LINE, sparks.lisp). Where the sphere meets
+;;; the level and the monsters a bright band runs (NOVA_SWEEP in the lit shaders, greybox.lisp),
+;;; and behind it fire leaves a scorch and frost a rime for *NOVA-TRAIL-TIME*. Each element throws
+;;; its own particles (sparks.lisp).
+
+(defparameter *nova-radius* 5.0"Metres a nova reaches round its caster, besides its effects' area.")
+(defparameter *nova-grow-time* 0.4 "Seconds a nova takes to grow to its reach.")
+(defparameter *nova-start-radius* 0.7 "Metres a nova's sphere starts at.")
+(defparameter *nova-trail-time* 1.2 "Seconds a nova's scorch or rime lies after it has grown.")
+(defparameter *nova-band-width* 0.12 "Metres of the band where a nova's sphere meets the level.")
+(defparameter *nova-crackle* 0.035 "Seconds between a shock nova's lightning drawn anew.")
+(defparameter *nova-cage-bolts* 40 "Bolts in a shock nova's cage.")
+(defparameter *nova-camera-shake* 0.3 "How hard a nova the player casts kicks the view.")
+
+(defun nova-hex (hex)
+  (vec (/ (parse-integer hex :start 0 :end 2 :radix 16) 255.0)
+       (/ (parse-integer hex :start 2 :end 4 :radix 16) 255.0)
+       (/ (parse-integer hex :start 4 :end 6 :radix 16) 255.0)))
+
+(defparameter *nova-styles*
+  (loop for (name code colors band ramp)
+          in '((:force 0 ("94bdfe" "c58bfd" "73daea" "4663c4" "efc9fc") "b48cff" :ward)
+               (:fire 1 ("fb6403" "fcb918" "fe901f" "ac0f07" "fceab6") "ff8020" :fire)
+               (:frost 2 ("a9d4fa" "94bdfe" "73daea" "254670" "deebfd") "8ccdff" :frost)
+               (:shock 3 ("f8ec3b" "f8e87c" "fceab6" "8d6b24" "f9f9f3") "fff259" :shock)
+               (:drain 4 ("f52a5a" "f98497" "ce326c" "490404" "feccd4") "f52a5a" :drain))
+        collect (list name code (mapcar #'nova-hex colors) (nova-hex band) ramp))
+  "Per look: its name, the dome shader's style, the dome's colours (three for its foot, its top,
+its band, as an aurora's), the band's colour and the spark ramp of its particles.")
+
+(defun nova-style (spell)
+  "SPELL's nova look: its first damage effect's element, else :DRAIN for a drain, else :FORCE."
+  (let ((damage (find :damage (spell-effects spell) :key #'effect-kind)))
+    (cond ((and damage (member (effect-element damage) '(:fire :frost :shock))) (effect-element damage))
+          ((find :drain (spell-effects spell) :key #'effect-kind) :drain)
+          (T :force))))
+
+(defun nova-slowed-p (spell)
+  (and (find :slow (spell-effects spell) :key #'effect-kind) T))
+
+;; The newest nova draws the band and its trail; the lit shaders read these (greybox.lisp).
+(defvar *newest-nova* NIL)
+
+(define-shader-entity nova-dome (renderable listener)
+  ((centre :initarg :centre :initform (vec 0 0 0) :reader centre)
+   (floor-y :initform 0.0 :accessor dome-floor)
+   (radius :initform 0.0 :accessor dome-radius)
+   (strength :initform 0.0 :accessor dome-strength)
+   (colors :initform (third (first *nova-styles*)) :accessor dome-colors)
+   (style :initform 0 :accessor dome-style)
+   (clock :initform 0.0 :accessor dome-clock)))
+
+(defvar *nova-dome-vao* NIL
+  "The sphere every nova's dome draws, shared, as the aurora's ring is; PRELOAD-SPELLS stages it.")
+
+(defun nova-dome-vao ()
+  (or *nova-dome-vao*
+      (let* ((slices 96) (stacks 48)
+             (data (make-array (* slices stacks 12) :element-type 'single-float))
+             (k 0))
+        ;; Two triangles a cell, each vertex (fraction round, fraction up).
+        (dotimes (i slices)
+          (dotimes (j stacks)
+            (let ((u0 (float (/ i slices) 0f0)) (u1 (float (/ (1+ i) slices) 0f0))
+                  (v0 (float (/ j stacks) 0f0)) (v1 (float (/ (1+ j) stacks) 0f0)))
+              (loop for v in (list u0 v0 u1 v0 u1 v1 u0 v0 u1 v1 u0 v1)
+                    do (setf (aref data k) v) (incf k)))))
+        (setf *nova-dome-vao*
+              (make-instance 'vertex-array
+                             :vertex-form :triangles
+                             :bindings `((,(make-instance 'vertex-buffer :buffer-data data) :size 2 :offset 0 :stride 8 :index 0))
+                             :size (* slices stacks 6))))))
+
+(defmethod stage :after ((dome nova-dome) (area staging-area))
+  (stage (nova-dome-vao) area))
+
+(defmethod render ((dome nova-dome) (program shader-program))
+  (when (and (< 0 (dome-strength dome)) (< 0 (dome-radius dome)))
+    (setf (uniform program "view_matrix") (view-matrix)
+          (uniform program "projection_matrix") (projection-matrix)
+          (uniform program "centre") (centre dome)
+          (uniform program "radius") (float (dome-radius dome) 0f0)
+          (uniform program "floor_y") (float (dome-floor dome) 0f0)
+          (uniform program "strength") (float (dome-strength dome) 0f0)
+          (uniform program "texels_per_metre") *texels-per-metre*
+          (uniform program "light_steps") *aurora-light-steps*
+          (uniform program "time") (float (dome-clock dome) 0f0)
+          (uniform program "style") (dome-style dome))
+    (destructuring-bind (foot-1 foot-2 foot-3 top band) (dome-colors dome)
+      (setf (uniform program "foot_1") foot-1
+            (uniform program "foot_2") foot-2
+            (uniform program "foot_3") foot-3
+            (uniform program "top_color") top
+            (uniform program "band_color") band))
+    ;; Light added over what is behind it, seen from inside and out, as the aurora's.
+    (gl:disable :cull-face)
+    (gl:depth-mask NIL)
+    (gl:blend-func :one :one)
+    (render-array (nova-dome-vao))
+    (gl:blend-func :src-alpha :one-minus-src-alpha)
+    (gl:depth-mask T)
+    (gl:enable :cull-face)))
+
+(define-class-shader (nova-dome :vertex-shader)
+  "layout (location = 0) in vec2 in_uv;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+uniform vec3 centre;
+uniform float radius;
+out vec3 v_world;
+
+void main(){
+  float a = in_uv.x * 6.2831853;
+  float b = (in_uv.y - 0.5) * 3.1415927;
+  vec3 p = centre + radius * vec3(cos(b) * cos(a), sin(b), cos(b) * sin(a));
+  v_world = p;
+  gl_Position = projection_matrix * (view_matrix * vec4(p, 1.0));
+}")
+
+(define-class-shader (nova-dome :fragment-shader)
+  "in vec3 v_world;
+uniform vec3 centre;
+uniform float radius;
+uniform float floor_y;
+uniform float strength;
+uniform float time;
+uniform int style;
+uniform float texels_per_metre;
+uniform float light_steps;
+uniform vec3 foot_1;
+uniform vec3 foot_2;
+uniform vec3 foot_3;
+uniform vec3 top_color;
+uniform vec3 band_color;
+out vec4 color;
+
+float hash(float n){ return fract(sin(n * 127.1) * 43758.5453); }
+float hash2(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+// Smooth noise along the ring, repeating every PERIOD cells, so it meets itself.
+float ring_noise(float x, float period){
+  float i = floor(x);
+  float f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(hash(mod(i, period)), hash(mod(i + 1.0, period)), f);
+}
+
+void main(){
+  vec3 d = v_world - centre;
+  // Round the dome and up it from the floor, in whole texels of the world's grid.
+  float circ = 6.2831853 * radius;
+  float cols = max(16.0, floor(circ * texels_per_metre));
+  float u = (floor((atan(d.z, d.x) / 6.2831853 + 0.5) * cols) + 0.5) / cols;
+  float tall = centre.y + radius - floor_y;
+  float ym = (floor((v_world.y - floor_y) * texels_per_metre) + 0.5) / texels_per_metre;
+  float y = clamp(ym / tall, 0.0, 1.0);
+  // Fire's streaks sway across as they climb, the sway rising up them.
+  if(style == 1) u += 0.18 * sin(ym * 7.0 - time * 14.0 + floor(u * circ * 1.5) * 2.1) / circ;
+  // Streaks a set width in metres: more of them round a bigger dome, so they recede as it grows.
+  float pb = max(8.0, floor(circ * 4.5));
+  float pf = max(8.0, floor(circ * 12.0));
+  float pt = max(8.0, floor(circ * 2.5));
+  float speed = 1.0;
+  if(style == 2) speed = 0.1;
+  if(style == 1) speed = 1.8;
+  float broad = ring_noise(u * pb + time * 0.8 * speed, pb);
+  float fine = ring_noise(u * pf - time * 1.9 * speed, pf);
+  float streak = 0.75 * pow(broad, 2.5) + 0.6 * pow(fine, 4.0);
+  float top = 0.3 + 0.7 * ring_noise(u * pt + 7.0 + time * 0.35 * speed, pt);
+  // Drain's curtains hang from the top instead of rising from the floor.
+  float yr = y;
+  if(style == 4) yr = 1.0 - y;
+  float rise;
+  if(style == 2){
+    // Frost: hard shards, each a tooth narrowing to a point, flat-coloured, not streaked.
+    float cell = u * pb * 0.5;
+    float k = hash(mod(floor(cell), pb));
+    float x = fract(cell);
+    float tip = (0.25 + 0.75 * k) * (1.0 - 2.0 * abs(x - 0.5));
+    streak = step(0.35, k) * (0.55 + 0.45 * step(0.5, x));
+    rise = smoothstep(0.0, 0.03, y) * step(y, tip);
+  } else {
+    rise = smoothstep(0.0, 0.03, yr) * (1.0 - smoothstep(top * 0.3, top, yr));
+  }
+  if(style == 1){
+    // Flame: pulses climb each streak, and its top tears into ragged tongues.
+    streak *= 0.55 + 0.45 * ring_noise(ym * 6.0 - time * 9.0 + u * pb, 1000.0);
+    float tear = hash2(vec2(u * cols, ym * texels_per_metre + floor(time * 12.0)));
+    rise *= 1.0 - step(top * 0.5, y) * step(tear, (y - top * 0.5) / (top * 0.5));
+  }
+  float band = exp(-y * 10.0) * (0.45 + 0.55 * broad);
+  float light = (streak * rise + 0.7 * band) * strength;
+  // Stepped into a few levels, and its colour into a few hues, as the aurora's.
+  light = floor(light * light_steps + 0.35) / light_steps;
+  float hue = floor(ring_noise(u * 5.0 + time * 0.12, 5.0) * 4.0 + 0.5) / 2.0;
+  vec3 low = hue < 1.0 ? mix(foot_1, foot_2, hue) : mix(foot_2, foot_3, hue - 1.0);
+  vec3 c = mix(low, top_color, floor(4.0 * smoothstep(0.25, 0.95, yr / max(top, 0.3)) + 0.5) / 4.0);
+  c = mix(c, band_color, band * 0.6);
+  color = vec4(c * light * 1.3, 1.0);
+}")
+
+(define-shader-entity spell-nova (fx-sprite)
+  ((spell :initarg :spell :reader spell)
+   (caster :initarg :caster :initform NIL :reader caster)
+   (centre :initarg :centre :reader centre :documentation "Where it bursts from: the caster's chest.")
+   (floor-y :initarg :floor-y :initform 0.0 :accessor nova-floor)
+   (reach :initarg :reach :initform 2.0 :accessor nova-reach)
+   (victims :initarg :victims :initform () :accessor nova-victims
+            :documentation "(body distance) for each body it is yet to reach, nearest first.")
+   (struck :initform () :accessor nova-struck
+           :documentation "(body . age) for each body it has struck, for shock's arcs.")
+   (dome :initform NIL :accessor nova-dome)
+   (started :initform NIL :accessor nova-started)
+   (crackle :initform 0.0 :accessor nova-crackle)
+   (emit :initform 0.0 :accessor nova-emit :documentation "Particles owed, a fraction carried over.")))
+
+;; All that shows of it is its dome, its band, its lightning and its particles.
+(defmethod render :around ((nova spell-nova) (program shader-program)))
+
+(defun nova-distance (centre body)
+  "Metres from CENTRE to the nearest point of BODY's upright cylinder."
+  (let* ((f (body-feet body))
+         (dx (- (vx f) (vx centre))) (dz (- (vz f) (vz centre)))
+         (across (max 0.0 (- (sqrt (+ (* dx dx) (* dz dz))) (body-radius body))))
+         (y (vy centre)) (top (+ (vy f) (body-height body)))
+         (up (cond ((< y (vy f)) (- (vy f) y)) ((< top y) (- y top)) (T 0.0))))
+    (sqrt (+ (* across across) (* up up)))))
+
+(defun place-nova (spell origin container caster)
+  "Burst SPELL round ORIGIN for CASTER: its sphere grows from there and strikes what it reaches."
+  (let* ((reach (+ *nova-radius* (spell-burst-radius spell)))
+         (victims (sort (mapcar (lambda (body) (list body (nova-distance origin body)))
+                                (burst-victims origin reach caster))
+                        #'< :key #'second))
+         (floor (and *nav-grid* (nav-floor-at (vx origin) (vy origin) (vz origin))))
+         (nova (make-instance 'spell-nova :spell spell :caster caster :centre (vcopy origin)
+                                          :location (vcopy origin) :reach reach :victims victims
+                                          :floor-y (or floor (- (vy origin) 1.0))
+                                          :animation (find-fx-animation 'ogre-dust))))
+    (enter nova container)
+    (play-sound (spell-sound spell :impact) origin)
+    (when (eq caster *player*)
+      (kick-camera *nova-camera-shake*))
+    nova))
+
+(defun nova-radius-at (nova age)
+  "How far NOVA's sphere has grown AGE seconds after it burst."
+  (let* ((reach (nova-reach nova))
+         (r0 (min *nova-start-radius* (* 0.5 reach)))
+         (tt (min 1.0 (/ age *nova-grow-time*))))
+    (+ r0 (* (- reach r0) (- 1.0 (expt (- 1.0 tt) 2))))))
+
+(defun start-nova (nova)
+  "Give NOVA its dome, unless it is shock's, which is lightning."
+  (setf *newest-nova* nova)
+  (destructuring-bind (code colors band ramp) (rest (assoc (nova-style (spell nova)) *nova-styles*))
+    (declare (ignore band ramp))
+    (unless (= code 3)
+      (let ((dome (make-instance 'nova-dome :centre (vcopy (centre nova)))))
+        (setf (dome-colors dome) colors
+              (dome-style dome) code
+              (dome-floor dome) (nova-floor nova))
+        (enter dome (container nova))
+        (setf (nova-dome nova) dome)))))
+
+(defun nova-strike-body (nova body distance)
+  (let* ((spell (spell nova))
+         (origin (centre nova))
+         (source (make-instance 'strike :spell spell :caster (caster nova) :origin origin)))
+    (overcharge-breaks-guard spell body origin)
+    (dolist (effect (spell-effects spell))
+      (when (and (target-effect-p effect) (<= distance (+ *nova-radius* (effect-area effect) 0.05)))
+        (apply-effect (effect-kind effect) effect body source)))
+    (push (cons body (age nova)) (nova-struck nova))
+    (let ((chest (vec (vx (body-feet body)) (+ (vy (body-feet body)) (* 0.55 (body-height body))) (vz (body-feet body)))))
+      (case (nova-style spell)
+        (:shock (spray-sparks chest (v- origin chest) 8 :ramp :shock))
+        (:drain
+         ;; Motes stream back from the wound toward the caster.
+         (when (caster nova)
+           (spray-sparks chest (v- (body-feet (caster nova)) (body-feet body)) 10 :kind :ember :ramp :drain
+                         :speed '(2.5 4.5) :spread 0.35)))))))
+
+(defun random-on-sphere (c r floor-y &optional toward)
+  "A point on the sphere round C of radius R above FLOOR-Y and not in rock; with TOWARD, a unit
+vec, most of them on its side (the view's: the rest is unseen). NIL if none is found soon."
+  (loop repeat 6
+        do (let* ((yaw (if (and toward (< (random 1.0) 0.7))
+                           (+ (atan (vz toward) (vx toward)) (- (random 2.2) 1.1))
+                           (random #.(float (* 2 pi) 0f0))))
+                  (z (- (random 1.8) 0.8)) (s (sqrt (- 1 (* z z))))
+                  (x (+ (vx c) (* r s (cos yaw)))) (y (+ (vy c) (* r z))) (zz (+ (vz c) (* r s (sin yaw)))))
+             (when (and (< (+ floor-y 0.05) y) (not (solid-at x y zz)))
+               (return (vec x y zz))))))
+
+(defun random-on-floor-ring (c r floor-y)
+  "A point on the floor where the sphere round C of radius R meets it, not in rock, or NIL."
+  (let ((h (- (vy c) floor-y)))
+    (when (< h r)
+      (let ((across (sqrt (- (* r r) (* h h)))))
+        (loop repeat 6
+              do (let* ((a (random #.(float (* 2 pi) 0f0)))
+                        (x (+ (vx c) (* across (cos a)))) (z (+ (vz c) (* across (sin a)))))
+                   (unless (solid-at x (+ floor-y 0.1) z)
+                     (return (vec x (+ floor-y 0.05) z)))))))))
+
+(defparameter *nova-particles*
+  '((:force (:ring :grit :dust 60))
+    (:fire (:ring :ember :fire 40) (:dome :ember :fire 60))
+    (:frost (:dome :flake :frost 90) (:ring :grit :frost 25))
+    (:shock (:ring :spark :shock 40))
+    (:drain (:dome :flake :drain 30)))
+  "Per look, what its sphere throws while it grows, a second: from where it meets the floor (:RING)
+or its surface (:DOME), of what kind (:FLAKE an ember that sinks) and ramp, how many.")
+
+(defun emit-nova-particles (nova r dt)
+  (let* ((spell (spell nova)) (c (centre nova)) (floor-y (nova-floor nova))
+         (look (and *player* (look-direction *player*)))
+         (sets (rest (assoc (nova-style spell) *nova-particles*))))
+    (when (nova-slowed-p spell)
+      (push '(:dome :flake :dust 30) sets))
+    (dolist (set sets)
+      (destructuring-bind (where kind ramp rate) set
+        (multiple-value-bind (count rest) (floor (+ (nova-emit nova) (* rate dt)))
+          (setf (nova-emit nova) rest)
+          (dotimes (i count)
+            (let ((p (if (eq where :ring) (random-on-floor-ring c r floor-y) (random-on-sphere c r floor-y look))))
+              ;; Not at the eye, where one is a great square.
+              (when (and p (or (null *player*) (< 1.8 (vdistance p (location *player*)))))
+                (ecase kind
+                  (:grit (spray-sparks p NIL 2 :kind :grit :ramp ramp))
+                  (:ember (spray-sparks p NIL 1 :kind :ember :ramp ramp :speed '(0.6 1.4)))
+                  (:flake (spray-sparks p (vec 0 -1 0) 1 :kind :ember :ramp ramp :speed '(0.25 0.6) :spread 0.3))
+                  (:spark (spray-sparks p (vec (- (vx p) (vx c)) 1.0 (- (vz p) (vz c))) 3 :ramp ramp
+                                                                                     :speed '(3.0 6.0))))))))))))
+
+(defun nova-lightning (nova r breakup cage)
+  "Draw NOVA's lightning anew: with CAGE its cage, BREAKUP (0 to 1) of it broken off; and the arcs
+at what it struck."
+  (let* ((c (centre nova)) (floor-y (nova-floor nova)) (sphere (list c r))
+         (look (and *player* (look-direction *player*)))
+         (life (* 1.4 *nova-crackle*)))
+    (dotimes (i (if cage *nova-cage-bolts* 0))
+      (let ((p (random-on-sphere c r floor-y look))
+            (q (random-on-sphere c r floor-y look)))
+        ;; A bolt runs at most a third of the way round.
+        (when (and p q (< (vdistance p q) (* 1.2 r)))
+          (bolt-line (vx p) (vy p) (vz p) (vx q) (vy q) (vz q) 5 :sphere sphere :branch 0.5 :drop breakup :life life))))
+    (loop for (body . at) in (nova-struck nova)
+          for since = (- (age nova) at)
+          when (< since 0.15)
+            do (let* ((f (body-feet body)) (h (body-height body)) (rr (* 0.8 (body-radius body)))
+                      (cx (vx f)) (cy (+ (vy f) (* 0.55 h))) (cz (vz f)))
+                 ;; A bolt in from the cage at first, then bolts crawling round its body.
+                 (when (< since *nova-crackle*)
+                   (let* ((dx (- cx (vx c))) (dy (- cy (vy c))) (dz (- cz (vz c)))
+                          (len (max 0.01 (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+                          (k (/ (max 0.6 (- len 1.4)) len)))
+                     (bolt-line (+ (vx c) (* k dx)) (+ (vy c) (* k dy)) (+ (vz c) (* k dz)) cx cy cz 4
+                                :roughness 0.22 :branch 0.3 :white 0.4 :life life)))
+                 (dotimes (j 5)
+                   (let ((a (random #.(float (* 2 pi) 0f0))) (b (+ (random #.(float (* 2 pi) 0f0)))))
+                     (bolt-line (+ cx (* rr (cos a))) (+ (vy f) (* h (+ 0.15 (random 0.7)))) (+ cz (* rr (sin a)))
+                                (+ cx (* rr (cos b))) (+ (vy f) (* h (+ 0.15 (random 0.7)))) (+ cz (* rr (sin b)))
+                                4 :roughness 0.25 :white 0.3 :life life)))
+                 ;; And on to the nearest other creature within 3.5 m, chaining.
+                 (when (< since 0.07)
+                   (let ((next (loop for o across *creatures*
+                                     when (and (not (eq o body)) (not (dead o))
+                                               (< 0.5 (vdistance (location o) f) 3.5))
+                                       return o)))
+                     (when next
+                       (let ((nl (location next)))
+                         (bolt-line cx cy cz (vx nl) (+ (vy nl) (* 0.55 (sprite-height next))) (vz nl) 4
+                                    :branch 0.25 :life life)))))))))
+
+(defun nova-trail (nova)
+  "How strong NOVA's scorch or rime is: rising as it grows, fading over *NOVA-TRAIL-TIME* after."
+  (let ((age (age nova)))
+    (if (< age *nova-grow-time*)
+        (min 1.0 (* 3 (/ age *nova-grow-time*)))
+        (max 0.0 (- 1.0 (/ (- age *nova-grow-time*) *nova-trail-time*))))))
+
+(defun show-nova-sweep (nova r live)
+  "Set the band and trail the lit shaders draw to NOVA's."
+  (destructuring-bind (code colors band ramp) (rest (assoc (nova-style (spell nova)) *nova-styles*))
+    (declare (ignore colors ramp))
+    (v<- *nova-sweep-centre* (centre nova))
+    (v<- *nova-sweep-color* band)
+    (setf *nova-sweep-style* code
+          *nova-sweep-radius* (float r 0f0)
+          *nova-sweep-width* (if live *nova-band-width* 0.0)
+          *nova-sweep-trail* (if (member code '(1 2)) (nova-trail nova) 0.0))))
+
+(define-handler (spell-nova tick) (dt)
+  (when (and (container spell-nova) (not (nova-started spell-nova)))
+    (setf (nova-started spell-nova) T)
+    (start-nova spell-nova))
+  (unless (frozen-p)
+    (let* ((age (incf (age spell-nova) dt))
+           (live (< age *nova-grow-time*))
+           (r (nova-radius-at spell-nova age))
+           (spell (spell spell-nova))
+           (dome (nova-dome spell-nova)))
+      ;; What it reaches, it strikes.
+      (loop while (and (nova-victims spell-nova) (<= (second (first (nova-victims spell-nova))) r))
+            do (destructuring-bind (body distance) (pop (nova-victims spell-nova))
+                 (when (or (eq body *player*) (not (dead body)))
+                   (nova-strike-body spell-nova body distance))))
+      (when dome
+        (v<- (centre dome) (centre spell-nova))
+        (setf (dome-radius dome) r
+              (dome-strength dome) (if live (expt (- 1.0 (/ age *nova-grow-time*)) 1.3) 0.0)
+              (dome-clock dome) (* age (if (nova-slowed-p spell) 0.5 1.0))))
+      (when live
+        (emit-nova-particles spell-nova r dt))
+      (when (and (eq (nova-style spell) :shock)
+                 (or live (some (lambda (s) (< (- age (cdr s)) 0.15)) (nova-struck spell-nova)))
+                 (<= (decf (nova-crackle spell-nova) dt) 0))
+        (setf (nova-crackle spell-nova) *nova-crackle*)
+        (nova-lightning spell-nova r (max 0.0 (/ (- (/ age *nova-grow-time*) 0.45) 0.55)) live))
+      (when (eq *newest-nova* spell-nova)
+        (show-nova-sweep spell-nova (nova-reach spell-nova) live)
+        (when live (setf *nova-sweep-radius* (float r 0f0))))
+      (when (< (+ *nova-grow-time* *nova-trail-time*) age)
+        (despawn spell-nova)))))
+
+(defmethod leave :after ((nova spell-nova) container)
+  (when (nova-dome nova)
+    (despawn (nova-dome nova))
+    (setf (nova-dome nova) NIL))
+  (when (eq *newest-nova* nova)
+    (setf *newest-nova* NIL *nova-sweep-radius* 0.0 *nova-sweep-trail* 0.0)))
+
 (define-shader-entity spell-circle (fx-sprite)
   ((spell :initarg :spell :reader spell)
    (caster :initarg :caster :initform NIL :reader caster)
@@ -850,12 +1477,237 @@ show AGE seconds into a wind-up of WINDUP."
     (enter circle container)
     circle))
 
+;;; Seeker delivery: a projectile that, as it leaves, picks the creature nearest the
+;;; crosshair and turns after it (STEER), so a strafing target is still hit. With no creature
+;;; in its cone it flies straight. A shield that turns it aside ends the homing, as a skull's.
+
+(defun seeker-mark (origin direction caster)
+  "The live creature nearest to unit vector DIRECTION from ORIGIN, within *SEEKER-CONE* and
+*SEEKER-RANGE* and in sight, that CASTER may strike; NIL if none."
+  (let ((best NIL) (best-angle 0.0))
+    (loop for c across *creatures*
+          unless (or (dead c) (eq c caster) (and caster (spares-p caster c)) (calm-p c))
+            do (let* ((feet (body-feet c))
+                      (dx (- (vx feet) (vx origin)))
+                      (dy (- (+ (vy feet) (aim-height c)) (vy origin)))
+                      (dz (- (vz feet) (vz origin)))
+                      (d (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+                 (when (< 0.1 d *seeker-range*)
+                   (let ((angle (acos (max -1.0 (min 1.0 (/ (+ (* dx (vx direction)) (* dy (vy direction))
+                                                               (* dz (vz direction)))
+                                                            d))))))
+                     (when (and (< angle *seeker-cone*) (or (null best) (< angle best-angle))
+                                (clear-path-p origin feet (- (+ (vy feet) (aim-height c)) (vy origin))))
+                       (setf best c best-angle angle))))))
+    best))
+
+;;; Beam delivery: no flight at all. The spell strikes the first body or wall along the aim
+;;; within *BEAM-RANGE*, at once, and a ribbon of its light shows from the hands to there
+;;; (BEAM). A shield that covers it stops it, turning nothing back. The player holds a beam
+;;; rather than casting it (HOLD-BEAM, player.lisp): it strikes every *BEAM-PULSE* with a
+;;; share of its effects (PULSE-SPELL) for the same share of its mana, *BEAM-CAST-TIME* of it
+;;; doing and costing what one cast would.
+
+(defparameter *beam-range* 12.0 "Metres a beam reaches.")
+(defparameter *beam-step* 0.1 "Metres between the points a beam is tested at.")
+(defparameter *beam-reach* 0.2 "Metres from the beam within which it strikes a creature's body.")
+(defparameter *beam-time* 0.18 "Seconds a beam's light lingers.")
+(defparameter *beam-width* 0.07 "Metres from a beam's middle to the edge of its ribbon.")
+(defparameter *beam-cast-time* 0.5
+  "Seconds of holding a beam that do and cost what one cast of its spell would.")
+(defparameter *beam-pulse* 0.25 "Seconds between a held beam's strikes.")
+
+(defun beam-pulse-share () (/ *beam-pulse* *beam-cast-time*))
+
+(defun beam-mana-rate (spell)
+  "Mana a second a held beam of SPELL takes, rounded for showing."
+  (round (spell-cost spell) *beam-cast-time*))
+
+(defun beam-stamina-rate (spell)
+  "Stamina a second a held beam of SPELL takes, rounded for showing."
+  (round (spell-stamina spell) *beam-cast-time*))
+
+(defun pulse-spell (spell &key (pain-bonus (spell-pain-bonus spell)))
+  "A copy of SPELL whose instant effects hold BEAM-PULSE-SHARE of its magnitudes, for one strike of
+a held beam: its effects over time and statuses are whole, since a strike only renews them."
+  (let* ((k (beam-pulse-share))
+         (pulse (spec-spell
+                 (destructuring-bind (name delivery &rest effects) (spell-spec spell)
+                   (list* name delivery
+                          (loop for e in effects
+                                for timing = (kind-property (getf e :kind) :timing :status)
+                                collect (if (or (eq timing :instant)
+                                                (and (eq timing :over-time) (= 0 (getf e :duration))))
+                                            (let ((m (getf e :magnitude)))
+                                              (list* :magnitude (list (max 1 (round (* k (first m))))
+                                                                      (max 1 (round (* k (second m)))))
+                                                     e))
+                                            e)))))))
+    (setf (slot-value pulse 'pain-bonus) pain-bonus)
+    pulse))
+
+(defun beam-end (origin direction caster)
+  "Where a beam from ORIGIN along unit vector DIRECTION stops, and the creature it reached
+there or NIL."
+  (let ((point (vcopy origin))
+        (r 0.04)
+        (wet (liquid-at (vx origin) (vy origin) (vz origin))))
+    (loop repeat (ceiling *beam-range* *beam-step*)
+          do (nv+* point direction *beam-step*)
+             (let ((victim (creature-at point *beam-reach* caster)))
+               (when victim
+                 (return-from beam-end (values point victim))))
+             (when (or (solid-overlapping (vx point) (- (vy point) r) (vz point) r (* 2 r))
+                       (and (not wet) (liquid-at (vx point) (vy point) (vz point))))
+               (nv+* point direction (- *beam-step*))
+               (return)))
+    (values point NIL)))
+
+(defun beam-strike (spell origin direction container caster &key quiet)
+  "Strike with SPELL along unit vector DIRECTION from ORIGIN for CASTER, at once. Returns where it
+stopped. QUIET, it makes no sound."
+  (multiple-value-bind (end victim) (beam-end origin direction caster)
+    (cond ((and victim (shielded-p victim origin))
+           (block-hit victim)
+           (unless quiet (play-sound :shield-deflect end)))
+          (T
+           (strike-with-spell spell victim origin caster end)))
+    (play-impact spell end container :quiet quiet)
+    end))
+
+(defun fire-beam (spell origin direction container caster)
+  "Strike once with SPELL along unit vector DIRECTION from ORIGIN for CASTER, its light flashing."
+  (let ((end (beam-strike spell origin direction container caster)))
+    (enter (make-instance 'beam :start (vcopy origin) :end end :color (light-color spell)) container)))
+
+(define-shader-entity beam (renderable listener)
+  ((start :initarg :start :initform (vec 0 0 0) :reader beam-start)
+   (end :initarg :end :initform (vec 0 0 1) :reader beam-end-point)
+   (color :initarg :color :initform (vec 1 1 1) :reader beam-color)
+   (held :initarg :held :initform NIL :accessor beam-held
+         :documentation "True while the player holds it: it stays lit, and fades once let go.")
+   (age :initform 0.0 :accessor age)))
+
+(defparameter *beam-segments* 48 "Quads along a beam's ribbon. Read when it is made (a restart).")
+
+(defvar *beam-vao* NIL
+  "The ribbon every beam draws, shared, as the aurora's ring is; PRELOAD-SPELLS stages it.")
+
+(defun beam-vao ()
+  (or *beam-vao*
+      (let* ((n *beam-segments*)
+             (data (make-array (* n 12) :element-type 'single-float))
+             (k 0))
+        ;; Two triangles a segment, each vertex (fraction of the way along, side -1 or 1).
+        (dotimes (i n)
+          (let ((a0 (float (/ i n) 0f0)) (a1 (float (/ (1+ i) n) 0f0)))
+            (loop for v in (list a0 -1f0 a1 -1f0 a1 1f0 a0 -1f0 a1 1f0 a0 1f0)
+                  do (setf (aref data k) v) (incf k))))
+        (setf *beam-vao*
+              (make-instance 'vertex-array
+                             :vertex-form :triangles
+                             :bindings `((,(make-instance 'vertex-buffer :buffer-data data) :size 2 :offset 0 :stride 8 :index 0))
+                             :size (* n 6))))))
+
+(defmethod stage :after ((beam beam) (area staging-area))
+  (stage (beam-vao) area))
+
+(define-handler (beam tick) (dt)
+  (unless (or (frozen-p) (beam-held beam))
+    (when (< *beam-time* (incf (age beam) dt))
+      (despawn beam))))
+
+(defmethod render ((beam beam) (program shader-program))
+  (let ((camera (camera (scene +main+))))
+    (setf (uniform program "view_matrix") (view-matrix)
+          (uniform program "projection_matrix") (projection-matrix)
+          (uniform program "start") (beam-start beam)
+          (uniform program "end_point") (beam-end-point beam)
+          (uniform program "eye") (location camera)
+          (uniform program "width") (float *beam-width* 0f0)
+          (uniform program "fade") (float (- 1.0 (/ (age beam) *beam-time*)) 0f0)
+          (uniform program "beam_color") (beam-color beam)
+          (uniform program "texels_per_metre") *texels-per-metre*
+          (uniform program "light_steps") *aurora-light-steps*
+          (uniform program "seed") (float (mod (+ (vx (beam-end-point beam)) (vz (beam-end-point beam))) 100.0) 0f0))
+    ;; Light added over what is behind it, as the aurora's.
+    (gl:disable :cull-face)
+    (gl:depth-mask NIL)
+    (gl:blend-func :one :one)
+    (render-array (beam-vao))
+    (gl:blend-func :src-alpha :one-minus-src-alpha)
+    (gl:depth-mask T)
+    (gl:enable :cull-face)))
+
+(define-class-shader (beam :vertex-shader)
+  "layout (location = 0) in vec2 in_ts;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+uniform vec3 start;
+uniform vec3 end_point;
+uniform vec3 eye;
+uniform float width;
+out vec2 v_ts;
+out float v_length;
+
+void main(){
+  vec3 along = end_point - start;
+  vec3 p = start + along * in_ts.x;
+  // Turned about its own line to face the eye, as a billboard is about +Y.
+  vec3 side = cross(along, eye - p);
+  float sl = length(side);
+  side = sl > 0.00001 ? side / sl : vec3(0.0, 1.0, 0.0);
+  gl_Position = projection_matrix * (view_matrix * vec4(p + side * width * in_ts.y, 1.0));
+  v_ts = in_ts;
+  v_length = length(along);
+}")
+
+(define-class-shader (beam :fragment-shader)
+  "in vec2 v_ts;
+in float v_length;
+uniform float width;
+uniform float fade;
+uniform float seed;
+uniform float texels_per_metre;
+uniform float light_steps;
+uniform vec3 beam_color;
+out vec4 color;
+
+float hash(float n){ return fract(sin(n * 127.1 + seed) * 43758.5453); }
+
+void main(){
+  // Whole texels of the world's grid along it and across it, as the art's pixels are.
+  float cols = max(4.0, floor(v_length * texels_per_metre));
+  float rows = max(3.0, floor(2.0 * width * texels_per_metre));
+  float t = (floor(v_ts.x * cols) + 0.5) / cols;
+  float s = (floor((v_ts.y * 0.5 + 0.5) * rows) + 0.5) / rows * 2.0 - 1.0;
+  // A core that wavers a texel's worth along it, thinning as it fades.
+  float wobble = (hash(floor(t * cols / 3.0)) - 0.5) * 0.5;
+  float d = abs(s - wobble);
+  float core = 1.0 - smoothstep(0.15, 0.35 + 0.4 * fade, d);
+  float halo = 0.45 * (1.0 - smoothstep(0.3, 1.0, d));
+  // Brightest at the hands' end and where it strikes.
+  float ends = 0.8 + 0.2 * max(smoothstep(0.85, 1.0, t), 1.0 - smoothstep(0.0, 0.08, t));
+  float light = (core + halo) * fade * ends;
+  light = floor(light * light_steps + 0.35) / light_steps;
+  vec3 c = mix(beam_color, vec3(1.0), 0.5 * core);
+  color = vec4(c * light, 1.0);
+}")
+
+;;; Nova delivery: a burst centred on the caster, sparing them, out to *NOVA-RADIUS* plus its
+;;; effects' area. Every effect it strikes with, area or not, lands on every body in reach, and
+;;; pushes away from the caster's chest. Its impact plays on the ring's outer shell only, so it
+;;; doesn't fill the caster's own view.
+
+
 (defun cast-spell (spell origin direction container &key caster)
   "Deliver SPELL from ORIGIN along unit vector DIRECTION for CASTER, the player or a
 creature; a :CIRCLE is drawn round ORIGIN, on the floor, and DIRECTION doesn't count.
 Mana is the caster's business."
   (ecase (spell-delivery spell)
-    (:projectile (launch-projectile spell origin direction container caster))
+    ((:projectile :seeker) (launch-projectile spell origin direction container caster))
+    (:beam (fire-beam spell origin direction container caster))
+    (:nova (place-nova spell origin container caster))
     (:circle (place-circle spell origin container caster))
     (:vortex (place-vortex spell origin direction container caster))))
 
@@ -865,7 +1717,10 @@ Mana is the caster's business."
     (:shock shock-flight shock-burst (1.6 1.5 0.5))
     (:drain drain-flight drain-burst (1.6 0.3 0.5))
     (:heal heal-flight heal-burst (0.5 1.6 0.4))
-    (:arcane arcane-flight arcane-burst (1.1 0.4 1.7)))
+    (:arcane arcane-flight arcane-burst (1.1 0.4 1.7))
+    ;; Cast on yourself only, so their flight and burst are never seen.
+    (:ward heal-flight heal-burst (1.6 1.3 0.5))
+    (:absorb arcane-flight arcane-burst (0.4 0.7 1.8)))
   "(LOOK FLIGHT BURST LIGHT-COLOR) for each look a forged spell can have.")
 
 ;;; The spells.
@@ -892,15 +1747,21 @@ spell may have, which no spell in *SPELLS* need use."
              (preload (make-instance 'spell-circle :spell spell :centre (vec 0 0 0)
                                                    :animation (find-fx-animation (circle-animation spell)))
                       scene)
-             (preload (make-instance 'aurora :centre (vec 0 0 0) :radius 1.0) scene))))
+             (preload (make-instance 'aurora :centre (vec 0 0 0) :radius 1.0) scene)))
+  (preload (make-instance 'beam) scene)
+  (preload (make-instance 'nova-dome) scene)
+  (preload (make-instance 'spell-nova :spell (find-spell 'bolt) :centre (vec 0 0 0)
+                                      :animation (find-fx-animation 'ogre-dust))
+           scene))
 
 (define-fx-animation bolt-flight "sprites/bolt/flight" :fps 12 :loop T :size 0.4)
 (define-fx-animation bolt-burst "sprites/bolt/burst" :fps 14 :size 0.9)
 
 ;; The player's starting spells. Each is one the spellforge makes (FORGEABLE-P, forge.lisp): its
 ;; ranges are a forged effect's (*MAGNITUDE-SPREAD* of the top up to it), the bolt's speed, pain
-;; bonus and frames are a forged projectile's (SPEC-SPELL), so it costs what the forge would ask:
-;; the bolt fire damage at 9 and knockback at 4, 14 mana; the heal 20, 17.
+;; bonus and frames are a forged projectile's (SPEC-SPELL), so its power is what the forge's would be:
+;; the bolt fire damage at 9 and knockback at 4, power 14, free (*FREE-MAX-POWER*); the heal 20,
+;; power 17, 17 mana a cast.
 (define-spell bolt (:delivery :projectile :projectile-speed 20.0 :pain-bonus 10 :title "Fire Bolt"
                     :projectile-animation 'bolt-flight :impact-animation 'bolt-burst)
   (:damage :element :fire :magnitude '(7 9))
@@ -909,6 +1770,11 @@ spell may have, which no spell in *SPELLS* need use."
 ;; Cast on themself, it needs no projectile.
 (define-spell heal (:delivery :self)
   (:heal :magnitude '(14 20) :target-type :self))
+
+;; Held on themself: while held, the hostile projectiles reaching the player from in front are
+;; swallowed into mana (ABSORBS-P, magic.lisp), up to 50% of their power. Free, as Absorb always is.
+(define-spell absorb (:delivery :self :title "Absorb Projectiles")
+  (:absorb :magnitude '(35 50) :target-type :self))
 
 ;;; Looks: a forged spell (forge.lisp) flies and bursts as its element, or, with no
 ;;; damage, as its first effect: the bolt's frames, recoloured (tools/recolor_hue.py,
@@ -937,7 +1803,9 @@ first effect's kind."
           (damage :fire)
           (T (case (and effects (effect-kind (first effects)))
                (:drain :drain)
-               ((:heal :ward) :heal)
+               (:heal :heal)
+               (:ward :ward)
+               (:absorb :absorb)
                (:slow :frost)
                (T :arcane))))))
 
