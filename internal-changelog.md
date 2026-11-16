@@ -7,6 +7,15 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The casting hands' thumbs point inward in the fire cast's release and the hands flung open
+  after it** (every striking spell, the nova's too). Both pictures show the backs of the gauntlets,
+  so the thumbs can only be on the inner edges, but they had the hands swapped, a right hand on the
+  left and a left on the right, thumbs toward the screen's sides. They are drawn again
+  (`release-thumbs-1`, `open-thumbs-3` in `art/hands/`), `hands-common.txt` now saying which edge
+  the thumbs are on, and the hands strip and its five recoloured looks rebuilt. Healing's rise
+  turns the palms up to the camera, so its thumbs rightly stay outside. The code was right:
+  `hands-split` cuts each picture in two and mirrors nothing. The old takes are in the art attic.
+
 ## November 16, 2026 v0.1.1
 
 - **Windows lets the game hold 2048 files open.** Every sound voice keeps its Vorbis file open,
