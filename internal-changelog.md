@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Fixed falling out of the world beside a 45° wall.** Walking into a monster with a 45° rock
+  wall at the player's back (a cave passage, run seed 3269847334651320094) could put the player
+  through the rock and out of the level: the push back off the monster left the feet a hair behind
+  where the move started, inside the wedge's diagonal, and a wedge pushes a body that moves toward
+  its cut corner out of its far face. A sideways move is now never pushed back past where it started
+  (`move-axis`, player.lisp), as a vertical one already wasn't, unless the body began it inside a
+  solid. Holding Absorb Projectiles no longer logs "No :ABSORB effect" each time.
+
 - **Spell tiers: free, stamina and mana, decided by the spell.** A mage was an enchantment with no
   sword under it: every cast paid all of its price in mana that doesn't regenerate (the Fire Bolt 14 mana
   for 7-9, a full pool three bolts). Now a spell's tier follows from what it is (`spell-tier`,

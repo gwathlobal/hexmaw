@@ -632,7 +632,9 @@ wedge whose diagonal stopped it, if one did, and how far short of DELTA it stopp
     (flet ((ref (v) (ecase axis (0 (vx v)) (1 (vy v)) (2 (vz v))))
            (put (v x) (ecase axis (0 (setf (vx v) x)) (1 (setf (vy v) x)) (2 (setf (vz v) x)))))
       (let* ((start (ref feet))
-             (target (+ start delta)))
+             (target (+ start delta))
+             ;; Already inside a solid (a bug): pushed out wherever its edge is, not held there.
+             (inside (and (/= axis 1) (overlapping-solid feet))))
         (put feet target)
         (loop repeat 8
               for s = (overlapping-solid feet)
@@ -640,10 +642,13 @@ wedge whose diagonal stopped it, if one did, and how far short of DELTA it stopp
               ;; Up or down, a solid stops the move short of it, never past where it started:
               ;; one the body already overlapped (beside it, not over or under) put the feet
               ;; under its bottom, and so under the floor, or on its top, up through a ceiling.
+              ;; Across too: pressed against a body beside a wedge's diagonal, rounding left the
+              ;; feet a hair behind the start, in the diagonal, and the wedge's flush for a body
+              ;; moving toward its cut corner is its far face, so out through the rock.
               do (cond ((/= axis 1)
                         (multiple-value-bind (at diagonal)
                             (solid-flush s axis delta (vx feet) (vz feet) (float *player-radius* 0f0))
-                          (put feet at)
+                          (put feet (cond (inside at) ((< 0 delta) (max start at)) (T (min start at))))
                           (setf wedge (and diagonal s))))
                        ((< 0 delta)
                         (put feet (max start (- (aref s 1) (float *player-height* 0f0)))))

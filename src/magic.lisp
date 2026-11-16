@@ -210,6 +210,10 @@ CASTER and those CASTER spares."
     (afflict target :slow (roll (effect-magnitude effect)) (max 1 (effect-duration effect))
              :caster (caster source))))
 
+(defmethod apply-effect ((kind (eql :absorb)) effect target source)
+  ;; Nothing lands: holding the spell is what swallows projectiles (ABSORBS-P).
+  NIL)
+
 (defmethod apply-effect ((kind (eql :ward)) effect (target player) source)
   (afflict target :ward (roll (effect-magnitude effect)) (max 1 (effect-duration effect)))
   (flash-resource target :ward))
