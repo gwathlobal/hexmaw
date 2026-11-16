@@ -793,7 +793,7 @@ real time instead.
   **Tiers** (`spell-tier`): a spell's tier follows from what it is, the first whose rules it meets
   (`tier-fault`), and `tier-reason` says why it isn't the one below. **Free**: a projectile, touch or
   seeker; one damage effect, plus knockback of at most `*free-max-knockback*` (4); nothing lasting, no
-  area; power at most `*free-max-power*` (14, the Fire Bolt's); or an Absorb alone. **Stamina**: any
+  area; power at most `*free-max-power*` (14, the Fire Bolt's). An Absorb is always stamina (below). **Stamina**: any
   delivery but self (`*stamina-deliveries*`); at most `*stamina-max-effects*` (2) of damage, knockback
   and slow (`*stamina-kinds*`); `*stamina-max-duration*` (4 s) and `*stamina-max-area*` (1.5 m) at
   most; power at most `*stamina-max-power*` (40), a beam `*stamina-max-beam-power*` (20). **Mana**:
@@ -804,7 +804,7 @@ real time instead.
   power. So the Fire Bolt (14) is free, a fire projectile of 21-30 (power 39) costs 39 stamina, heal
   (17) 17 mana, and a fire burst of power 50, 25 mana. The player's starting spells must be ones the
   forge makes, ranges, power, flight and all (`forgeable-p` and `check-starting-spells`, forge.lisp,
-  which warns as it loads, and also if the bolt or Absorb, `*free-starting-spells*`, isn't free: a
+  which warns as it loads, and also if the bolt, `*free-starting-spells*`, isn't free: a
   forged range is `*magnitude-spread*` of its top up to it, and damage always has an element).
   **Overcharge**: a striking stamina or mana spell (`overchargeable-p`, player.lisp: projectile, touch,
   seeker, nova) held is cast as `overcharged-spell`, a copy (`scaled-spell`) with magnitudes × (1 +
@@ -1080,7 +1080,10 @@ real time instead.
   stages the strips. The frost chill keeps its tint only. To look at one:
   `(game (afflict (aref *creatures* 0) :damage 1 8.0 :element :fire :caster *player*))`.
   **Absorb**: a spell holding `:absorb` alone, cast on yourself, is held (`hold-channel`, player.lisp)
-  and free. While it is held, a hostile projectile that carries damage and comes at the player from
+  on stamina (`spell-tier` makes it `:stamina` whatever its power): its power a second while held
+  (`update-channel`), no stamina coming back meanwhile, and `*absorb-take-stamina*` (1) a point of the
+  mana each projectile gives (`absorb-stamina`); out of stamina it drops, and a projectile it can't pay
+  for strikes. Free, a live acolyte was a mana spring. While it is held, a hostile projectile that carries damage and comes at the player from
   within `*block-arc*` of their view (`absorbs-p`, `facing-point-p`) is swallowed before it strikes
   (`absorb-projectile`): no damage, no burst, the view flashes `*absorb-flash-color*`, the hum it holds
   (`absorb-channel`, a loop in `update-channel`) swoops up and down (`absorb-take`: that hum resampled
@@ -1088,8 +1091,8 @@ real time instead.
   gains `absorb-mana`, the effect's top magnitude's percent (`absorb-share`) of the spell's power, or,
   for the player's own spell sent back by a shield (its `launcher`, spells.lisp), of the mana it cost,
   so a free one returned gives none. Rifts and gusts carry no damage and still strike; nothing that
-  isn't a projectile is taken. The starting Absorb Projectiles takes 35-50 (50%): a cinder gives 5, a
-  grave skull 6.
+  isn't a projectile is taken. The starting Absorb Projectiles takes 35-50 (50%, power 9, so 9 stamina a
+  second): a cinder gives 5 mana for 5 stamina, a grave skull 6.
 - `src/forge.lisp`: the spellforge, used at an altar (`add-altar`, pickups.lisp; `near-altar-p`, within
   `*altar-reach*` across and `*altar-height*` of its top; the HUD's prompt line says "[E] Spellforge"
   there, the altar being one of E's targets, `interact-target`, townsfolk.lisp). E opens it (`open-forge`, `*game-state*`
@@ -1717,7 +1720,7 @@ real time instead.
   its price a strike (`update-beam`), only every `*beam-pain-every*`th strike rolling for a flinch, its
   light from low between the hands (`channel-light-start`); an Absorb strikes nothing. Either ends when
   its button is let go, what it draws on runs out, or the slot changes; the player walks at
-  `*channel-speed-scale*` with no run, and a stamina beam stops stamina coming back. A button held
+  `*channel-speed-scale*` with no run, and a stamina beam or an Absorb stops stamina coming back. A button held
   down with a held spell in its hand starts it as soon as the hands are free (`start-held-casts`,
   every tick): a press during a cast's cooldown or a weapon switch isn't lost, and Absorb held
   through a Fire Bolt's 0.5 s comes up after it; silent while it can't be paid for. **Overcharge**: a

@@ -463,7 +463,12 @@ aim; or let it go."
                  (not (weapon-in-hand-p player)))
              (end-channel player))
             ((absorb-spell-p spell)
-             (setf (channel-sound player) (hold-loop (channel-sound player) :absorb-channel (location player))))
+             ;; Held on stamina, its power a second: out of it, the Absorb drops.
+             (let ((cost (* (spell-stamina spell) dt)))
+               (if (can-pay-p player :stamina cost)
+                   (progn (pay player :stamina cost)
+                          (setf (channel-sound player) (hold-loop (channel-sound player) :absorb-channel (location player))))
+                   (progn (play-sound :cast-fizzle) (end-channel player)))))
             (T (update-beam player spell dt))))))
 
 (defun update-beam (player spell dt)
@@ -945,9 +950,9 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
         (setf (stamina player) 0.0
               (winded player) T))
       ;; Nor does it come back while the maul is charged or shakes the floor (maul.lisp), nor while
-      ;; a spell overcharges or a stamina beam is held.
+      ;; a spell overcharges or a stamina beam or an Absorb is held.
       (unless (or (maul-heaving-p player) (overcharging-p player)
-                  (and (channelling-beam-p player) (eq (spell-tier (channel player)) :stamina)))
+                  (and (channel player) (eq (spell-tier (channel player)) :stamina)))
         (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt))))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
     (setf (winded player) NIL)))

@@ -289,7 +289,7 @@ second value says what differs."
                      "it flies unlike a forged projectile"))))
         (values (null problem) problem)))))
 
-(defparameter *free-starting-spells* '(bolt absorb)
+(defparameter *free-starting-spells* '(bolt)
   "Starting spells that must stay free (SPELL-TIER): the Fire Bolt, the free spell a run starts
 with, sets *FREE-MAX-POWER*.")
 
@@ -886,7 +886,7 @@ and who resists it, and what its time and area change."
                             (round (* 100 *slowest*))))
              (:drain "Takes health from what it strikes and gives you half of what it took. It has no element, so nothing resists it.")
              (:ward "Takes blows for you: absorbs that much damage before your health does, until it is spent or its time runs out.")
-             (:absorb "Held on yourself, for nothing: the foes' projectiles reaching you from in front are swallowed, that share of their power becoming your mana. Your own spells a shield sends back give back that share of the mana they cost. Rifts and gusts still strike.")
+             (:absorb "Held on yourself, on stamina, its power a second, and no stamina comes back while you hold it: the foes' projectiles reaching you from in front are swallowed, that share of their power becoming your mana, each point of it a stamina more. Your own spells a shield sends back give back that share of the mana they cost. Rifts and gusts still strike.")
              (T ""))))
     (if area
         (concatenate 'string text " It bursts over its area: everything there in a clear line, but you.")

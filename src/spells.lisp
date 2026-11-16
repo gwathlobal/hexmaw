@@ -158,7 +158,7 @@ costs a blow as an enchantment (*ENCHANT-COST-SCALE*, sword.lisp).")
     (flet ((kinds () (mapcar #'effect-kind effects)))
       (ecase tier
         (:free
-         (cond ((absorb-spell-p spell) NIL)
+         (cond ((absorb-spell-p spell) "it turns projectiles into mana")
                ((not (member delivery *free-deliveries*))
                 (format NIL "a ~(~a~) is never free" delivery))
                ((not (eq :damage (effect-kind (first effects)))) "a free spell is damage")
@@ -198,6 +198,8 @@ costs a blow as an enchantment (*ENCHANT-COST-SCALE*, sword.lisp).")
   "SPELL's tier: :FREE, :STAMINA or :MANA. The creatures' spells and the tornado, which the forge
 doesn't make, are :MANA."
   (cond ((not (forged-kinds-p spell)) :mana)
+        ;; An Absorb turns projectiles into mana, so it is held on stamina (ABSORBS-P, magic.lisp).
+        ((absorb-spell-p spell) :stamina)
         ((null (tier-fault spell :free)) :free)
         ((null (tier-fault spell :stamina)) :stamina)
         (T :mana)))
@@ -220,8 +222,12 @@ striking effects at *CAST-STRIKE-SCALE* (one the forge can't make, the tornado, 
                                              (effect-cost effect (spell-delivery spell))))))))))
 
 (defun spell-stamina (spell)
-  "The stamina a cast of SPELL takes: its power for a stamina spell, else none."
+  "The stamina a cast of SPELL takes: its power for a stamina spell, else none; for an Absorb, which
+is held, its power a second."
   (if (eq (spell-tier spell) :stamina) (spell-power spell) 0))
+
+(defparameter *absorb-take-stamina* 1.0
+  "Stamina a point of mana an Absorb gains from a projectile costs, beside its hold's.")
 
 (defun roll (magnitude)
   (destructuring-bind (lo hi) magnitude

@@ -541,7 +541,7 @@ slot's key."))
                  (:slow (format NIL "Slows ~a% for ~d s~a" range duration burst))
                  (:drain (format NIL "Drains ~a health, you gain half" range))
                  (:ward (format NIL "Wards off ~a damage for ~d s" range duration))
-                 (:absorb (format NIL "Takes projectiles from in front, ~d% of their power as mana"
+                 (:absorb (format NIL "Takes projectiles from in front, ~d% of their power as mana, a stamina a point"
                                   (second (effect-magnitude effect))))
                  (:whirl (format NIL "Whirls up all it catches, ~a a second" range))
                  (T (format NIL "~:(~a~) ~a" kind range)))))
@@ -555,9 +555,11 @@ slot's key."))
   (multiple-value-bind (resource amount) (spell-price spell)
     (let ((beam (eq (spell-delivery spell) :beam)))
       (case resource
-        (:stamina (if beam (format NIL "~d SP a second" (beam-stamina-rate spell)) (format NIL "~d SP a cast" amount)))
+        (:stamina (cond (beam (format NIL "~d SP a second" (beam-stamina-rate spell)))
+                        ((absorb-spell-p spell) (format NIL "~d SP a second" amount))
+                        (T (format NIL "~d SP a cast" amount))))
         (:mana (if beam (format NIL "~d MP a second" (beam-mana-rate spell)) (format NIL "~d MP a cast" amount)))
-        (T (if (absorb-spell-p spell) "Free, held" (format NIL "Free, every ~,1f s" *free-cast-cooldown*)))))))
+        (T (format NIL "Free, every ~,1f s" *free-cast-cooldown*))))))
 
 (defun tier-line (spell)
   "Why SPELL isn't free, a line: Stamina: power 28 is over 14. NIL for a free one, whose cost says so."

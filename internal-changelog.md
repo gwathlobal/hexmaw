@@ -28,7 +28,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   Dust, enchantments and found runes are priced by power as before. **Overcharge**: a striking stamina or
   mana spell held grows to × 1.6 for twice its price by 1.35 s, slowing the player as the maul's charge
   does; full, it knocks a shield or ward aside and always flinches (the knight took 37 through its shield).
-  **Absorb Projectiles** (`:absorb`, magic.lisp): a new self effect, held and free, that swallows hostile
+  **Absorb Projectiles** (`:absorb`, magic.lisp): a new self effect, held on stamina (its power a second, no
+  stamina back meanwhile, and a stamina a point of the mana it gains: free, a live acolyte was a mana
+  spring), that swallows hostile
   projectiles carrying damage from in front for its percent of their power in mana, or of the mana an own
   spell sent back cost (a free one gives none); rifts and gusts still strike. Held, it hums low
   (`absorb-channel`), and a projectile swallowed swoops up and down in pitch (`absorb-take`, the hum

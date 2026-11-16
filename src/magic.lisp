@@ -246,7 +246,13 @@ CASTER and those CASTER spares."
         (spell (spell projectile)))
     (and absorb (absorb-spell-p absorb)
          (find :damage (spell-effects spell) :key #'effect-kind)
-         (facing-point-p player (v- (location projectile) (projectile-velocity projectile)) *block-arc*))))
+         (facing-point-p player (v- (location projectile) (projectile-velocity projectile)) *block-arc*)
+         ;; With too little stamina to pay for the mana, it strikes.
+         (<= (absorb-stamina player projectile) (stamina player)))))
+
+(defun absorb-stamina (player projectile)
+  "The stamina taking PROJECTILE costs PLAYER's Absorb: *ABSORB-TAKE-STAMINA* a point of its mana."
+  (* *absorb-take-stamina* (absorb-mana player projectile)))
 
 (defun absorb-mana (player projectile)
   "The mana PLAYER's Absorb turns PROJECTILE into."
@@ -256,6 +262,7 @@ CASTER and those CASTER spares."
 
 (defmethod absorb-projectile ((player player) (projectile spell-projectile))
   (let ((mana (absorb-mana player projectile)))
+    (pay player :stamina (absorb-stamina player projectile))
     (when (< 0 mana)
       (setf (mana player) (min (max-mana player) (+ (mana player) mana))))
     (flash-resource player :absorb)
