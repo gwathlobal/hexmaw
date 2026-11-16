@@ -226,8 +226,11 @@ closed."
                   (screenshot (merge-pathnames "selftest.png" (uiop:ensure-directory-pathname directory))))
             (wait-frames 2)
             (when (< 0 *runtime-error-count*)
-              (error "~d runtime error~:p, the first: ~a" *runtime-error-count*
-                     (getf (aref *runtime-errors* 0) :message)))
+              ;; Its backtrace too: a build's log has only the message, and on CI the report
+              ;; is all there is to go on.
+              (let ((first (aref *runtime-errors* 0)))
+                (error "~d runtime error~:p, the first: ~a~%~a" *runtime-error-count*
+                       (getf first :message) (getf first :backtrace))))
             (note "self-test passed")
             (setf *exit-code* 0))
         (error (e)
