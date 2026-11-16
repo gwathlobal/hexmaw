@@ -2036,7 +2036,13 @@ afterburn status (`*firestorm-afterburn*`, 2 a second for 2 s) that shows the bu
 about 9 a second standing in it. Its centre drifts after the target at `*firestorm-drift*` (2.5 m/s,
 `drift-storm`) along the floor, never up or down more than 0.5 m, onto deep water or into a solid:
 a walk (4 m/s) outruns it, a walk holding Absorb (2 m/s) doesn't. No shield stops it and Absorb
-can't take it. Inside, the storm turns (`*firestorm-whirl*`, 1.4 rad/s): two more fire auroras
+can't take it. In its middle a column of fire whirls like a tornado (`fire-column`, on the tornado's
+`funnel-vao` with shaders of its own: bands of flame spiralling up it over a glowing body, ragged
+at the top, hot at the foot, stepped and added light like the aurora's, `late-rank` 0.5), from
+`*fire-column-foot*` (0.35 m) to `*fire-column-mouth*` (1.1 m), `*fire-column-height*` (4.5 m) or
+under the ceiling, growing up out of the floor over `*fire-column-grow*` as the storm comes down
+and sinking as it dies; from inside it shows `*fire-column-inside-fade*` less. Round it the storm
+turns (`*firestorm-whirl*`, 1.4 rad/s): two more fire auroras
 spin round within the rim, opposite ways (`*firestorm-swirls*`, `storm-swirls`, rising in its flash
 and sinking as it dies); flame wisps flare up all over its floor and go round the centre
 (`storm-flame`, an `upright-fx` on the burn aura's strip, `*firestorm-flames*` 14 a second, each
@@ -2048,8 +2054,9 @@ round its rim. A save leaves the flames and cinders out, as it does auras. Its s
 `firestorm-sign`, `-ignite` and `-roar` (`*spell-sounds*`). A save keeps the storm (`target`,
 `burning`, `fading`, `pulse-timer`) and the acolyte's `swallowed`; the storm relinks to its caster on
 its first tick. The High Acolyte (boss.lisp) storms too, its pain chance 21 while it holds one.
-Measured frozen in the shrine's corridor, vsync off: GPU 2.29 ms a frame looking at a storm from
-6 m, 2.75 standing in it (the curtains fill the view), against 1.73 and 1.45 without.
+Measured frozen in the shrine's corridor, vsync off: GPU 2.31 ms a frame looking at a storm from
+6 m against 1.82 without, and about 3.2 standing in it against 1.45 (the curtains and the column fill
+the view).
 
 To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'acolyte))`,
 Debug level, then with the player 4 to 10 m from it

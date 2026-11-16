@@ -56,6 +56,11 @@ far they lean. Read when a storm is lit.")
 (defparameter *firestorm-whirl* 1.4 "Radians a second the flames and the falling cinders go round its centre.")
 (defparameter *firestorm-whirl-sparks* 36.0 "Embers and sparks a second whirling round inside it.")
 (defparameter *firestorm-whirl-speed* '(1.5 3.0) "Least and most m/s they leave at, round the centre.")
+(defparameter *fire-column-height* 4.5 "Metres the column of fire in its middle rises, or to under the ceiling.")
+(defparameter *fire-column-foot* 0.35 "Radius in metres of the column's foot.")
+(defparameter *fire-column-mouth* 1.1 "Radius in metres of the column's top.")
+(defparameter *fire-column-grow* 0.5 "Seconds the column takes to rise from the floor as the storm comes down.")
+(defparameter *fire-column-inside-fade* 0.5 "Share of its light a camera inside the column doesn't see, so it can see out.")
 
 ;; Sliced at 115 px tall, so its art pixels are the imp's size (96 px for 1.5 m).
 (define-asset (hexmaw acolyte-turnaround) image
@@ -233,6 +238,7 @@ may and wants to, else throw a cinder; or close in."
    (flame-timer :initform 0.0 :accessor flame-timer)
    (whirl-timer :initform 0.0 :accessor whirl-timer)
    (swirls :initform () :accessor storm-swirls :documentation "The auroras turning inside it.")
+   (column :initform NIL :accessor storm-column :documentation "The column of fire whirling in its middle.")
    (room-timer :initform 0.0 :accessor room-timer :documentation "Seconds to the next look at the ceiling.")
    (ceiling :initform NIL :accessor storm-ceiling :documentation "The lowest ceiling over it, or NIL.")
    (scratch :initform (vec 0 0 0) :reader storm-scratch :documentation "A point for the sparks, reused.")
@@ -241,6 +247,9 @@ may and wants to, else throw a cinder; or close in."
 (defmethod leave :after ((storm firestorm) container)
   (mapc #'despawn (storm-swirls storm))
   (setf (storm-swirls storm) ())
+  (when (storm-column storm)
+    (despawn (storm-column storm))
+    (setf (storm-column storm) NIL))
   (let ((caster (caster storm)))
     (when (and caster (eq storm (acolyte-storm caster)))
       (setf (acolyte-storm caster) NIL))))
@@ -259,8 +268,10 @@ may and wants to, else throw a cinder; or close in."
                                      collect (make-instance 'aurora :centre c
                                                                     :radius (* fraction (circle-radius (spell storm)))
                                                                     :colors *firestorm-aurora-colors*
-                                                                    :spin spin :twist twist)))
+                                                                    :spin spin :twist twist))
+          (storm-column storm) (make-instance 'fire-column :centre c))
     (enter (circle-aurora storm) (container storm))
+    (enter (storm-column storm) (container storm))
     (dolist (swirl (storm-swirls storm))
       (enter swirl (container storm)))))
 
@@ -430,6 +441,18 @@ deep water or into a solid."
         (dolist (swirl (storm-swirls storm))
           (setf (aurora-height swirl) (* inner (aurora-height aurora))
                 (aurora-strength swirl) (* inner *firestorm-swirl-strength*)))))
+    ;; The column grows up out of the floor as the storm comes down, and sinks as it dies.
+    (let ((column (storm-column storm)))
+      (when column
+        (let* ((grow (cond ((fading storm) k)
+                           ((burning storm) (min 1.0 (/ (burning storm) *fire-column-grow*)))
+                           (T 0.0)))
+               (ceiling (storm-ceiling storm))
+               (full (if ceiling
+                         (max 1.0 (min *fire-column-height* (- ceiling (vy c) 0.2)))
+                         *fire-column-height*)))
+          (setf (column-height column) (* (sqrt grow) full)
+                (column-strength column) grow))))
     (when lamp
       (let ((at (location lamp))
             (color (color lamp)))
@@ -486,6 +509,138 @@ deep water or into a solid."
           (play-sound :cinder-impact loc 0.7))
         (despawn falling-cinder)))))
 
+;;; The column of fire whirling in its middle: a fire tornado on the tornado's funnel mesh
+;;; (FUNNEL-VAO, vortex.lisp), its own shaders: bands of flame spiralling up it and round it,
+;;; ragged at the top, in the fire nova's colours, hot at the foot and in the bright bands, its light
+;;; stepped like the aurora's and added over what is behind it (no depth written), so it glows
+;;; through itself and needs no sorting against other glows. It is drawn after everything opaque
+;;; (LATE-RANK), or a wall behind it drawn later would cover its light.
+
+(define-shader-entity fire-column (renderable listener)
+  ((centre :initarg :centre :reader centre :documentation "The storm's centre, shared.")
+   (height :initform 0.0 :accessor column-height)
+   (strength :initform 0.0 :accessor column-strength :documentation "0 (none) to 1 (full).")
+   (clock :initform (random 100.0) :accessor column-clock)))
+
+(defmethod late-rank ((column fire-column)) 0.5)
+
+(defmethod stage :after ((column fire-column) (area staging-area))
+  (stage (funnel-vao) area))
+
+(define-handler (fire-column tick) (dt)
+  (unless (frozen-p)
+    (incf (column-clock fire-column) dt)))
+
+(defun camera-inside-column-p (column)
+  (and *player*
+       (let ((c (centre column))
+             (eye (location *player*)))
+         (< (+ (expt (- (vx eye) (vx c)) 2) (expt (- (vz eye) (vz c)) 2)) (expt *fire-column-mouth* 2)))))
+
+(defmethod render ((column fire-column) (program shader-program))
+  (when (and (< 0 (column-strength column)) (< 0.1 (column-height column)))
+    (setf (uniform program "view_matrix") (view-matrix)
+          (uniform program "projection_matrix") (projection-matrix)
+          (uniform program "centre") (centre column)
+          (uniform program "height") (float (column-height column) 0f0)
+          (uniform program "foot") (float *fire-column-foot* 0f0)
+          (uniform program "mouth") (float *fire-column-mouth* 0f0)
+          (uniform program "strength") (float (* (column-strength column)
+                                                 (if (camera-inside-column-p column) (- 1.0 *fire-column-inside-fade*) 1.0))
+                                              0f0)
+          (uniform program "texels_per_metre") *texels-per-metre*
+          (uniform program "light_steps") *aurora-light-steps*
+          (uniform program "time") (float (column-clock column) 0f0))
+    (destructuring-bind (orange yellow amber red pale) *firestorm-aurora-colors*
+      (setf (uniform program "red") red
+            (uniform program "orange") orange
+            (uniform program "amber") amber
+            (uniform program "yellow") yellow
+            (uniform program "pale") pale))
+    (gl:disable :cull-face)
+    (gl:depth-mask NIL)
+    (gl:blend-func :one :one)
+    (render-array (funnel-vao))
+    (gl:blend-func :src-alpha :one-minus-src-alpha)
+    (gl:depth-mask T)
+    (gl:enable :cull-face)))
+
+(define-class-shader (fire-column :vertex-shader)
+  "layout (location = 0) in vec2 in_ah;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+uniform vec3 centre;
+uniform float height;
+uniform float foot;
+uniform float mouth;
+uniform float time;
+out vec2 v_ah;
+
+void main(){
+  float a = in_ah.x * 6.2831853;
+  float y = in_ah.y;
+  float r = mix(foot, mouth, pow(y, 1.3));
+  // Bulges that climb it fast, and a sway that grows toward the top: the foot stays put.
+  r *= 1.0 + 0.14 * sin(3.0 * a + 9.0 * y - time * 7.0) + 0.06 * sin(5.0 * a - 13.0 * y + time * 5.0);
+  vec3 sway = vec3(sin(time * 1.9 + y * 3.0), 0.0, cos(time * 1.6 + y * 2.5)) * 0.25 * y * y;
+  vec3 p = centre + sway + vec3(cos(a) * r, y * height, sin(a) * r);
+  gl_Position = projection_matrix * (view_matrix * vec4(p, 1.0));
+  v_ah = in_ah;
+}")
+
+(define-class-shader (fire-column :fragment-shader)
+  "in vec2 v_ah;
+uniform float strength;
+uniform float height;
+uniform float mouth;
+uniform float time;
+uniform float texels_per_metre;
+uniform float light_steps;
+uniform vec3 red;
+uniform vec3 orange;
+uniform vec3 amber;
+uniform vec3 yellow;
+uniform vec3 pale;
+out vec4 color;
+
+float hash(float n){ return fract(sin(n * 127.1) * 43758.5453); }
+
+// Smooth noise along the ring, repeating every PERIOD cells, so it meets itself.
+float ring_noise(float x, float period){
+  float i = floor(x);
+  float f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(hash(mod(i, period)), hash(mod(i + 1.0, period)), f);
+}
+
+void main(){
+  // Whole texels of the world's grid round it (at its widest) and up it.
+  float cols = max(32.0, floor(6.2831853 * mouth * texels_per_metre * 0.5));
+  float rows = max(8.0, floor(height * texels_per_metre * 0.5));
+  float u = (floor(v_ah.x * cols) + 0.5) / cols;
+  float y = (floor(v_ah.y * rows) + 0.5) / rows;
+  // Bands of flame spiralling up it and round it, a broad set and a fine one, racing upward.
+  float broad = ring_noise(u * 6.0 - y * 5.0 + time * 2.4, 6.0);
+  float fine = ring_noise(u * 16.0 - y * 12.0 + time * 4.8, 16.0);
+  float lick = ring_noise(u * 40.0 - y * 4.0 + time * 7.0, 40.0);
+  float heat = 0.6 * broad + 0.4 * fine + 0.2 * lick;
+  // Ragged tops: each streak burns out at its own height, and they rise and fall.
+  float top = 0.75 + 0.25 * ring_noise(u * 20.0 + time * 1.7, 20.0);
+  float body = smoothstep(0.0, 0.04, y) * (1.0 - smoothstep(top * 0.7, top, y));
+  // A glowing body all round, and the spiral bands bright over it, so it reads as one column.
+  float bands = smoothstep(0.4, 0.75, heat);
+  float light = (0.3 + 0.9 * bands) * body * strength;
+  light = floor(light * light_steps + 0.35) / light_steps;
+  // Hot at the foot and in the brightest bands, redder as it climbs.
+  float t = clamp(bands * 0.9 + 0.35 - y * 0.5, 0.0, 1.0);
+  t = floor(t * 4.0 + 0.5) / 4.0;
+  vec3 c = t < 0.25 ? mix(red, orange, t * 4.0)
+         : t < 0.5 ? mix(orange, amber, (t - 0.25) * 4.0)
+         : t < 0.75 ? mix(amber, yellow, (t - 0.5) * 4.0)
+         : mix(yellow, pale, (t - 0.75) * 4.0);
+  color = vec4(c * light * 1.4, 1.0);
+}")
+
 ;;; The flames flaring up inside it: a wisp of fire standing upright on the floor, going round the
 ;;; storm's centre for its short life. Only a look, as the cinders are.
 
@@ -512,6 +667,7 @@ deep water or into a solid."
                                      :animation (find-fx-animation 'firestorm-sign))
            scene)
   (preload (make-instance 'falling-cinder :animation (find-fx-animation 'cinder-flight)) scene)
+  (preload (make-instance 'fire-column :centre (vec 0 0 0)) scene)
   (preload (make-instance 'storm-flame :animation (find-fx-animation 'storm-flame) :storm-centre (vec 0 0 0)
                                        :angle 0.0 :radius 0.0 :life 1.0)
            scene))
