@@ -1715,8 +1715,6 @@ stopped. QUIET, it makes no sound."
    (color :initarg :color :initform (vec 1 1 1) :reader beam-color)
    (held :initarg :held :initform NIL :accessor beam-held
          :documentation "True while its caster holds it: it stays lit, and fades once let go.")
-   (strength :initarg :strength :initform 1.0 :accessor beam-strength
-             :documentation "How bright it is, 1 for a strike: a creature's ranging line is faint.")
    (age :initform 0.0 :accessor age)))
 
 (defparameter *beam-segments* 48 "Quads along a beam's ribbon. Read when it is made (a restart).")
@@ -1756,7 +1754,7 @@ stopped. QUIET, it makes no sound."
           (uniform program "end_point") (beam-end-point beam)
           (uniform program "eye") (location camera)
           (uniform program "width") (float *beam-width* 0f0)
-          (uniform program "fade") (float (* (beam-strength beam) (- 1.0 (/ (age beam) *beam-time*))) 0f0)
+          (uniform program "fade") (float (- 1.0 (/ (age beam) *beam-time*)) 0f0)
           (uniform program "beam_color") (beam-color beam)
           (uniform program "texels_per_metre") *texels-per-metre*
           (uniform program "light_steps") *aurora-light-steps*

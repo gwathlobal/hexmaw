@@ -836,7 +836,7 @@ real time instead.
   `beam-pulse-share` of its instant effects, for that share of its price; a creature holds one too
   (the arc votary, votary.lisp), each strike a `beam-pulse` source: on the player, no shove or hit-stop
   (`effect-shove`), the shield meeting it anyway (`hurt-player`'s `:blockable`) for its own stamina
-  (`effect-block-cost`, `:block-cost`). A beam's `strength` dims its light (a ranging line). **Nova**: a sphere growing
+  (`effect-block-cost`, `:block-cost`). **Nova**: a sphere growing
   from the caster's chest out to its `spell-nova-radius` (`:nova-radius`, by default `*nova-radius*`,
   5 m; the rime hag's 5, the Winter Crone's 7) plus its effects' area over `*nova-grow-time*`
   (0.4 s), from `*nova-start-radius*` and slowing as it goes (`spell-nova`, `place-nova`; its camera
@@ -2178,9 +2178,10 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
 - **The charge** (`*votary-charge*`, 0.9 s; `charging-arc-p`, so a bash or the earthshake breaks it):
   an arc crackling between its hands (`crackle`, through `hand-arc` every `*votary-crackle-time*`,
   closer together and fiercer as it grows), a lamp swelling at them
-  (`votary-glow`, `*votary-light-color*`), the `votary-charge` crackle, and a ranging line: its
-  `beam` held faint (`beam-strength`, `*votary-ranging-strength*` with a flicker), aimed every
-  `*votary-aim-time*` at where the beam would stop. It turns at its `turn-speed`, `*votary-turn*`
+  (`votary-glow`, `*votary-light-color*`), the `votary-charge` crackle, and a ranging line: faint lightning
+  (`ranging-bolt`, every `*votary-aim-time*`), one thread an art pixel wide from the knot between its
+  hands to where the beam would stop, broken up and only drawn now and then, firming as the charge
+  grows. It turns at its `turn-speed`, `*votary-turn*`
   (2.5 rad/s).
 - **The hold** (`holding-beam-p`, up to `*votary-hold*`, 3 s, the release frame held): every
   `*beam-pulse*` (0.25 s) `votary-pulse` strikes what `beam-end` reaches along `votary-aim` (from
@@ -2222,10 +2223,10 @@ nova's, from its palms where its hold pose draws them (`palm-point`, `*votary-pa
 arcs' spots) to where the beam stops (`bolt-end`), straying `*votary-bolt-roughness*` of its length. A
 bolt ending at the player's eye stops `*votary-bolt-clearance*` (1.5 m) short of it and has no forks:
 near the camera perspective blew its jitter and forks up across the whole view. The charge's ranging
-line is still a faint `beam` (`votary-light`), let go to fade when the hold begins or it rests
-(`rest-votary`); the beam's burst plays where it stops, but not within `*votary-burst-clearance*`
+line is lightning too, but faint (`ranging-bolt`); both stop short of the eye (`bolt-span`). The beam's
+burst plays where it stops, but not within `*votary-burst-clearance*`
 (2.5 m) of the player's eye (on them, or on the water they swim in), where sparks stand in for it.
-A hold costs about 0.4 ms of GPU a frame (the ribbon and its lamp, seen from 7 m). Over run seeds 1 to
+A hold cost about 0.4 ms of GPU a frame with its first, straight ribbon (seen from 7 m); its lightning, about 150 bolt segments alive at once, isn't measured. Over run seeds 1 to
 60 there were 3.3 votaries and 0.6 elite votaries a level from depth 2 on, none on level 1, and the
 Hierophant was 4 of the 60 bosses. A save keeps `pulse-timer` and `lost-timer`; the light, lamp and loop come back in its tick.
 It resists shock 0.75 and teaches it (`taught-effect`): killed by a player who doesn't

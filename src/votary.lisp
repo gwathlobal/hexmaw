@@ -37,7 +37,6 @@ gives out before the beam does.")
 (defparameter *votary-hand-arc-chance* 0.75 "Chance each redrawing puts an arc between its hands at rest.")
 (defparameter *votary-crown-arc-chance* 0.45 "Chance each redrawing puts an arc between two of its crown's rods.")
 (defparameter *votary-arc-reach* 25.0 "Metres from the player within which it draws its idle lightning.")
-(defparameter *votary-ranging-strength* 0.25 "How bright the ranging line is against the beam.")
 (defparameter *votary-crackle-time* 0.06 "Seconds between redrawings of the crackle between its hands.")
 (defparameter *votary-burst-clearance* 2.5
   "Metres from the player's eye within which the beam's burst isn't drawn where it stops: sparks instead.")
@@ -109,7 +108,6 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
    (crackle-timer :initform 0.0 :accessor crackle-timer)
    (arc-timer :initform 0.0 :accessor arc-timer :documentation "Seconds to its idle lightning's next redrawing.")
    (aim-timer :initform 0.0 :accessor aim-timer)
-   (beam-light :initform NIL :accessor beam-light :documentation "Its BEAM while it charges or holds.")
    (lamp :initform NIL :accessor votary-lamp)
    (beam-sound :initform NIL :accessor beam-sound :documentation "The held beam's loop.")
    (wet-spell :initform NIL :documentation "Its beam's spell, stronger, for what stands in water: made once.")
@@ -326,17 +324,6 @@ water. Returns where the beam stops."
             (play-impact (find-spell (votary-beam-spell votary)) end (container votary) :quiet T))
         end))))
 
-(defun votary-light (votary strength)
-  "VOTARY's beam light, made if it has none, held, at STRENGTH."
-  (let ((beam (beam-light votary)))
-    (unless (and beam (container beam))
-      (setf beam (make-instance 'beam :start (vcopy (aim-origin votary)) :end (vcopy (aim-origin votary))
-                                      :held T :color (light-color (find-spell (votary-beam-spell votary))))
-            (beam-light votary) beam)
-      (enter beam (container votary)))
-    (setf (beam-strength beam) (float strength 0f0))
-    beam))
-
 (defun votary-glow (votary k)
   "VOTARY's lamp at its hands, K of its full strength."
   (let ((lamp (votary-lamp votary)))
@@ -357,7 +344,7 @@ water. Returns where the beam stops."
   #((-0.01 0.24 0.61) (-0.14 0.13 0.62) (-0.19 0.06 0.63) (-0.2 0.07 0.63) NIL))
 
 ;; Where the hold pose (the cast strip's third frame) draws its palms in each view: (ACROSS HIGH), as
-;; *VOTARY-HAND-SPOTS*. From behind they are hidden; the beam starts from its middle.
+;; *VOTARY-HAND-SPOTS*. From behind they are hidden: the beam starts from its middle (SPRITE-POINT).
 (defparameter *votary-palm-spots*
   #((0.0 0.61) (-0.36 0.64) (-0.37 0.64) (-0.37 0.65) (0.0 0.62)))
 
@@ -372,11 +359,19 @@ way from the eye to it (FX FZ, unit), and the view (0 front .. 4 back) and wheth
     (multiple-value-bind (view mirrored) (billboard-view votary eye)
       (values (/ (- fz) fl) (/ fx fl) (/ fx fl) (/ fz fl) view mirrored))))
 
-(defun palm-point (votary)
-  "Where VOTARY's held beam leaves its palms as its sprite draws them from the camera, in the
-sprite's plane, a few centimetres toward the camera: X Y Z."
+(defun spot-place (spot spots)
+  "ACROSS and HIGH of SPOT, an entry of SPOTS: *VOTARY-HAND-SPOTS*' are (ACROSS SPREAD HIGH),
+*VOTARY-PALM-SPOTS*' (ACROSS HIGH). A hidden one (NIL) is its middle at its hands' height."
+  (cond ((null spot) (values 0.0 0.61))
+        ((eq spots *votary-hand-spots*) (values (first spot) (third spot)))
+        (T (values (first spot) (second spot)))))
+
+(defun sprite-point (votary spots)
+  "Where its sprite, as the camera sees it, draws what SPOTS (*VOTARY-HAND-SPOTS* or
+*VOTARY-PALM-SPOTS*, by view) places: in the sprite's plane, a few centimetres toward the camera:
+X Y Z."
   (multiple-value-bind (rx rz fx fz view mirrored) (sprite-frame votary)
-    (destructuring-bind (across high) (aref *votary-palm-spots* view)
+    (multiple-value-bind (across high) (spot-place (aref spots view) spots)
       (let* ((loc (location votary))
              (h (sprite-height votary))
              (c (* (/ h *votary-height*) (if mirrored (- across) across))))
@@ -384,29 +379,44 @@ sprite's plane, a few centimetres toward the camera: X Y Z."
                 (+ (vy loc) (* h high))
                 (- (+ (vz loc) (* rz c)) (* 0.05 fz)))))))
 
-(defun beam-bolts (votary)
-  "Redraw VOTARY's held beam as lightning from its palms to where it ends: a broad bolt with a white
-core and a thinner one forking about it, as the shock nova's are, each lasting two redrawings."
-  (multiple-value-bind (x0 y0 z0) (palm-point votary)
+(defun bolt-span (votary spots)
+  "Where a bolt of VOTARY's from what SPOTS places (SPRITE-POINT) to BOLT-END is drawn: X0 Y0 Z0 X1
+Y1 Z1, and whether it comes at the camera. One ending at the player's eye stops
+*VOTARY-BOLT-CLEARANCE* short of it, back along its line."
+  (multiple-value-bind (x0 y0 z0) (sprite-point votary spots)
     (let* ((e (bolt-end votary))
            (x1 (vx e)) (y1 (vy e)) (z1 (vz e))
            (eye (location (camera (scene +main+))))
            (near (sqrt (+ (expt (- x1 (vx eye)) 2) (expt (- y1 (vy eye)) 2) (expt (- z1 (vz eye)) 2))))
-           (life (* 2.2 *votary-bolt-time*))
-           (r *votary-bolt-roughness*))
-      ;; Ending at the eye, it stops short of it, back along its line.
-      (when (< near *votary-bolt-clearance*)
+           (close (< near *votary-bolt-clearance*)))
+      (when close
         (let* ((dx (- x0 x1)) (dy (- y0 y1)) (dz (- z0 z1))
                (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
                (back (min (* 0.9 len) (- *votary-bolt-clearance* near))))
           (setf x1 (+ x1 (* back (/ dx len)))
                 y1 (+ y1 (* back (/ dy len)))
                 z1 (+ z1 (* back (/ dz len))))))
-      ;; Its forks fly wide near the camera: none on a bolt coming at it.
-      (let ((fork (if (< near *votary-bolt-clearance*) 0.0 1.0)))
-        (bolt-line x0 y0 z0 x1 y1 z1 6 :roughness r :width 3.0 :white 0.6 :branch (* fork 0.15) :life life)
-        (bolt-line x0 y0 z0 x1 y1 z1 5 :roughness (* 1.8 r) :width 1.5 :white 0.2 :branch (* fork 0.35)
-                                       :drop 0.15 :life life)))))
+      (values x0 y0 z0 x1 y1 z1 close))))
+
+(defun beam-bolts (votary)
+  "Redraw VOTARY's held beam as lightning from its palms to where it ends: a broad bolt with a white
+core and a thinner one forking about it, as the shock nova's are, each lasting two redrawings."
+  (multiple-value-bind (x0 y0 z0 x1 y1 z1 close) (bolt-span votary *votary-palm-spots*)
+    (let ((life (* 2.2 *votary-bolt-time*))
+          (r *votary-bolt-roughness*)
+          ;; Its forks fly wide near the camera: none on a bolt coming at it.
+          (fork (if close 0.0 1.0)))
+      (bolt-line x0 y0 z0 x1 y1 z1 6 :roughness r :width 3.0 :white 0.6 :branch (* fork 0.15) :life life)
+      (bolt-line x0 y0 z0 x1 y1 z1 5 :roughness (* 1.8 r) :width 1.5 :white 0.2 :branch (* fork 0.35)
+                                     :drop 0.15 :life life))))
+
+(defun ranging-bolt (votary k)
+  "Redraw the charge's ranging line as faint lightning from the knot between its hands to where the
+beam would strike: one thread an art pixel wide, broken up, that firms as K, the charge, grows."
+  (when (< (random 1.0) (+ 0.5 (* 0.4 k)))
+    (multiple-value-bind (x0 y0 z0 x1 y1 z1) (bolt-span votary *votary-hand-spots*)
+      (bolt-line x0 y0 z0 x1 y1 z1 5 :roughness (* 0.8 *votary-bolt-roughness*) :width 1.0
+                                     :drop (- 0.6 (* 0.4 k)) :life (* 1.2 *votary-aim-time*)))))
 
 (defun hand-arc (votary spread-scale &rest bolt-args)
   "Draw an arc between VOTARY's hands as its sprite shows them from the camera: in the plane the sprite
@@ -439,11 +449,7 @@ behind, where its body hides them. BOLT-ARGS go to BOLT-LINE."
   (setf (attack-time votary) (+ (attack-hit-time votary) (third (attack-frame-times votary)))))
 
 (defun release-beam (votary)
-  "Let go of the beam's light, which fades, and its loop."
-  (let ((beam (beam-light votary)))
-    (when beam
-      (setf (beam-held beam) NIL
-            (beam-light votary) NIL)))
+  "Stop the held beam's loop."
   (setf (beam-sound votary) (stop-loop (beam-sound votary))))
 
 (defun douse-votary (votary)
@@ -454,8 +460,7 @@ behind, where its body hides them. BOLT-ARGS go to BOLT-LINE."
     (setf (votary-lamp votary) NIL)))
 
 (defun rest-votary (votary)
-  "Neither charging nor holding: the beam's light fades and its loop stops; its idle lightning keeps
-the lamp lit low."
+  "Neither charging nor holding: the beam's loop stops; its idle lightning keeps the lamp lit low."
   (release-beam votary)
   (votary-aim votary)
   (votary-glow votary *votary-idle-glow*))
@@ -514,9 +519,8 @@ side."
       (crackle votary k))
     (when (<= (decf (aim-timer votary) dt) 0.0)
       (setf (aim-timer votary) *votary-aim-time*)
-      (let ((beam (votary-light votary (* *votary-ranging-strength* (+ 0.4 (random 0.6))))))
-        (v<- (beam-start beam) (aim-origin votary))
-        (v<- (beam-end-point beam) (beam-end (aim-origin votary) (aim-direction votary) votary))))))
+      (v<- (bolt-end votary) (beam-end (aim-origin votary) (aim-direction votary) votary))
+      (ranging-bolt votary k))))
 
 (defun hold-votary-beam (votary dt)
   (let ((target (hunt-target votary)))
@@ -527,11 +531,6 @@ side."
           (votary-aim votary)
           (votary-glow votary 1.0)
           (setf (beam-sound votary) (hold-loop (beam-sound votary) :votary-beam (aim-origin votary)))
-          ;; The charge's ranging line gives way to the beam's lightning.
-          (let ((light (beam-light votary)))
-            (when light
-              (setf (beam-held light) NIL
-                    (beam-light votary) NIL)))
           (when (<= (decf (pulse-timer votary) dt) 0.0)
             (incf (pulse-timer votary) *beam-pulse*)
             (setf (aim-timer votary) *votary-aim-time*)
