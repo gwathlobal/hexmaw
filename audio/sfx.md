@@ -158,7 +158,14 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | rift-impact | 1 | P | 0.8 | 3 | `impact` spells.lisp, a rift |
 | rift-blink | 1 | P | 0.8 | 3 | `rift-move` riftwalker.lisp, the teleport, at both ends: a blink, a pull, a push, a swap, a called ally |
 | rift-call | 2 | P | 1.2 | 2 | `begin-call` riftwalker.lisp, where the ally will step out (it steps out 1 s later) |
-| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker |
+| votary-alert | 1 | P | 1.2 | 3 | alert: arc votary |
+| votary-pain | 1 | P | 0.5 | 3 | pain: arc votary |
+| votary-death | 1 | P | 1.8 | 3 | death: arc votary |
+| votary-charge | 1 | P | 1.0 | 3 | wind-up: the votary's beam, its 0.9 s charge (`start-attack`) |
+| votary-beam-start | 1 | P | 0.6 | 3 | `release-attack` votary.lisp, the beam leaves |
+| votary-beam | 1 | P L | 2 | 2 | `hold-votary-beam` votary.lisp, while the beam is held |
+| arc-zap | 2 | P | 0.5 | 3 | `votary-pulse`, `water-strike` votary.lisp: the beam jumps from an ally, or runs through water |
+| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker, arc votary |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |
 | step-heavy | 2 | P | 0.6 | 3 | step: ogre |
 | step-bone | 2 | P | 0.5 | 3 | step: skeleton |
