@@ -110,3 +110,12 @@ beam-channel 4
 absorb-channel 1
 absorb-take 5          # absorb-channel-1 bent up and down (its .prompt.json has the script)
 freeze 3
+hag-alert 1
+hag-pain 2
+hag-death 2
+hag-cast 3
+hag-gather 3
+frost-nova 1
+rime-form 1
+shard-flight 1
+shard-impact 1
