@@ -30,6 +30,8 @@ gives out before the beam does.")
 (defparameter *votary-light-radius* 5.0)
 (defparameter *votary-ranging-strength* 0.25 "How bright the ranging line is against the beam.")
 (defparameter *votary-crackle-time* 0.06 "Seconds between redrawings of the crackle between its hands.")
+(defparameter *votary-burst-clearance* 2.5
+  "Metres from the player's eye within which the beam's burst isn't drawn where it stops: sparks instead.")
 (defparameter *votary-aim-time* 0.05 "Seconds between aims of its ranging line and beam at what they reach.")
 
 ;; Sliced at 115 px tall for its 1.8 m, at the imp's art pixel size.
@@ -100,6 +102,9 @@ gives out before the beam does.")
 
 (define-creature-sounds arc-votary
   :alert :votary-alert :pain :votary-pain :death :votary-death :windup :votary-charge :step :step-light)
+
+;; Killed by a player who doesn't know shock, it drops the shock glyph (pickups.lisp).
+(defmethod taught-effect ((votary arc-votary)) :shock)
 
 (defgeneric votary-beam-spell (votary)
   (:documentation "The name of the spell VOTARY's beam strikes with.")
@@ -294,8 +299,11 @@ water. Returns where the beam stops."
         (when (and wet-at (water-strike votary wet-at wet-body))
           (setf hit T))
         (setf (lost-timer votary) (if hit 0.0 (+ (lost-timer votary) *beam-pulse*)))
-        ;; Its burst, but not on the player, where it would fill the view from a hand away.
-        (if (typep victim 'player)
+        (strike-skins :shock end *impact-skin-reach* votary)
+        ;; Its burst, but not on or right by the player (on the water they swim in), where it would
+        ;; fill the view.
+        (if (or (typep victim 'player)
+                (and *player* (< (vdistance end (location *player*)) *votary-burst-clearance*)))
             (spray-sparks end NIL 2 :ramp :shock :speed '(0.5 2.0))
             (play-impact (find-spell (votary-beam-spell votary)) end (container votary) :quiet T))
         end))))
