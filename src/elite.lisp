@@ -11,6 +11,11 @@
 ;;; - :TOUGH, flinches half as often and takes half the knockback.
 ;;;
 ;;; Its trait comes back with the level when a save is loaded, since the seed draws it again.
+;;;
+;;; What the glow means is told by the boss bar's place at the top of the screen: while the player
+;;; aims at an elite (AIMED-ELITE) its name (ELITE-TITLE) stands over a bar half the boss's showing
+;;; its health, its trait's name under it in the glow's colour (hud.lisp). A warded elite also shows the boss's violet arc on the floor
+;;; round its front (UPDATE-WARD, boss.lisp).
 
 (defparameter *elite-kinds*
   '(("imp" elite-imp) ("acolyte" elite-acolyte) ("knight" elite-knight) ("harpy" elite-harpy)
@@ -44,6 +49,16 @@ kind already taller (the ogre), so it goes everywhere its kind goes. Its body is
 (defparameter *elite-light-radius* 3.5)
 (defparameter *elite-light-scale* 0.5 "Its lamp's brightness against the rim's.")
 
+(defparameter *elite-trait-labels* '(:haste "Haste" :warded "Warded" :tough "Tough")
+  "What the HUD's bar calls each trait: the boss bar's own words for its Haste and Warded.")
+(defparameter *elite-aim-range* 15.0 "Metres out an elite may be aimed at.")
+(defparameter *elite-aim-margin* 0.1
+  "Metres the aim may pass outside a body's radius and still be on it: the sprite is a little
+wider than the body.")
+(defparameter *elite-ward-hum-range* 12.0
+  "Metres from the player within which a warded elite's ward hums: past *SOUND-MAX-DISTANCE* a
+sound gets no quieter, and a level's warded elites would hum all over it.")
+
 (defun elite-trait-allowed-p (trait kind)
   (not (member kind (rest (assoc trait *elite-trait-denied*)) :test #'string-equal)))
 
@@ -62,7 +77,7 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
         (when traits
           (list (second entry) (nth (min (1- (length traits)) (floor (* pick (length traits)))) traits)))))))
 
-(define-shader-entity elite (rim-glow)
+(define-shader-entity elite (rim-glow ward-arc-mixin)
   ((trait :initarg :trait :initform :tough :reader elite-trait))
   (:documentation "A monster more than its kind, with one trait. List it first in the superclasses."))
 
@@ -98,8 +113,79 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
 (defmethod shield-views ((elite elite))
   (if (eq (elite-trait elite) :warded) (max 1 (or (call-next-method) 0)) (call-next-method)))
 
+(defmethod ward-up-p ((elite elite)) (eq (elite-trait elite) :warded))
+
+(defmethod ward-hum-p ((elite elite))
+  (and *player* (< (vdistance (location elite) (location *player*)) *elite-ward-hum-range*)))
+
+(defun elite-p (thing) (typep thing 'elite))
+
+(defun ray-body-hit (ox oy oz dx dy dz creature range)
+  "How far along the ray from OX OY OZ along unit vector DX DY DZ it first meets CREATURE's body
+(an upright cylinder of its BODY-RADIUS plus *ELITE-AIM-MARGIN*, from its feet to the top of its
+sprite), or NIL if not within RANGE."
+  (let* ((feet (body-feet creature))
+         (r (+ (body-radius creature) *elite-aim-margin*))
+         (px (- ox (vx feet)))
+         (pz (- oz (vz feet)))
+         (y0 (vy feet))
+         (y1 (+ y0 (sprite-height creature)))
+         (lo 0.0)
+         (hi range))
+    ;; Across: where the ray is within the circle.
+    (let ((a (+ (* dx dx) (* dz dz)))
+          (c (- (+ (* px px) (* pz pz)) (* r r))))
+      (if (< a 1e-6)
+          (when (< 0.0 c) (return-from ray-body-hit NIL))
+          (let* ((b (* 2.0 (+ (* px dx) (* pz dz))))
+                 (disc (- (* b b) (* 4.0 a c))))
+            (when (< disc 0.0) (return-from ray-body-hit NIL))
+            (let ((root (sqrt disc)))
+              (setf lo (max lo (/ (- (- b) root) (* 2.0 a)))
+                    hi (min hi (/ (+ (- b) root) (* 2.0 a))))))))
+    ;; Up: where the ray is between its feet and the top of its sprite.
+    (if (< (abs dy) 1e-6)
+        (unless (<= y0 oy y1) (return-from ray-body-hit NIL))
+        (let ((t0 (/ (- y0 oy) dy))
+              (t1 (/ (- y1 oy) dy)))
+          (setf lo (max lo (min t0 t1))
+                hi (min hi (max t0 t1)))))
+    (and (<= lo hi) lo)))
+
+(defun aimed-creature (player range)
+  "The live creature under PLAYER's crosshair: the nearest whose body the line of sight from the
+eye meets within RANGE, with no wall before it; NIL if none."
+  (let* ((eye (location player))
+         (dir (look-direction player))
+         (best NIL)
+         (best-t 0.0))
+    (loop for c across *creatures*
+          for hit = (and (not (dead c))
+                         (ray-body-hit (vx eye) (vy eye) (vz eye) (vx dir) (vy dir) (vz dir) c range))
+          when (and hit (or (null best) (< hit best-t)))
+            do (setf best c best-t hit))
+    ;; Short of the body's surface, so the floor under its feet doesn't count as a wall.
+    (and best
+         (clear-line-p eye (v+ eye (v* dir (max 0.0 (- best-t 0.05)))))
+         best)))
+
+(defun aimed-elite (player)
+  "The elite under PLAYER's crosshair within *ELITE-AIM-RANGE* (AIMED-CREATURE), or NIL: a
+creature in front of one hides it."
+  (let ((c (aimed-creature player *elite-aim-range*)))
+    (and c (elite-p c) c)))
+
+(defun elite-title (elite)
+  "What the HUD's bar calls ELITE, as the boss's title calls the boss: \"Elite Gale Wraith\"."
+  (let ((entry (find (type-of elite) *elite-kinds* :key #'second)))
+    (format NIL "Elite ~a" (string-capitalize (substitute #\Space #\- (if entry (first entry) "monster"))))))
+
+(defun elite-trait-label (elite)
+  (getf *elite-trait-labels* (elite-trait elite)))
+
 (defun update-elite-glow (elite)
-  "The rim and its lamp: pulsing while it lives, going out as it dies, gone with its gibs."
+  "The rim, its lamp and a warded one's arc: pulsing while it lives, going out as it dies, gone
+with its gibs."
   (let* ((d (dead elite))
          (k (cond ((gibbed elite) 0.0)
                   (d (max 0.0 (- 1.0 (/ d (max 0.1 (death-duration elite))))))
@@ -108,7 +194,8 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
     (light-rim elite (getf *elite-glow-colors* (elite-trait elite)) strength *elite-light-radius*)
     (let ((lamp (glow-lamp elite)))
       (when lamp
-        (nv* (color lamp) *elite-light-scale*)))))
+        (nv* (color lamp) *elite-light-scale*)))
+    (update-ward elite k)))
 
 (define-handler (elite tick :after) ()
   (update-elite-glow elite))

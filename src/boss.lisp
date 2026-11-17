@@ -658,7 +658,23 @@ void main(){
 
 ;;; The boss.
 
-(define-shader-entity boss (rim-glow)
+;;; Warded's arc: a violet curtain of light on the floor round the front that turns spells back,
+;;; over exactly the sector its reflection covers, turning with its facing. The boss's Warded and
+;;; a warded elite's (elite.lisp) show it.
+
+(defclass ward-arc-mixin ()
+  ((ward :initform NIL :accessor ward :documentation "The AURORA arc that shows its ward, once it has one.")
+   (ward-sound :initform NIL :accessor ward-sound :documentation "The ward's hum while it is up, or NIL."))
+  (:documentation "A creature whose front may turn spells back, shown by UPDATE-WARD."))
+
+(defgeneric ward-up-p (entity)
+  (:documentation "True while ENTITY's front turns spells back, so its arc shows."))
+
+(defgeneric ward-hum-p (entity)
+  (:documentation "True while ENTITY's ward should hum, besides being up.")
+  (:method ((entity ward-arc-mixin)) T))
+
+(define-shader-entity boss (rim-glow ward-arc-mixin)
   ((kind :initarg :kind :reader boss-kind :documentation "Its kind, as in *BOSS-KINDS*.")
    (powers :initarg :powers :initform () :accessor boss-powers
            :documentation "Its three powers' names; the third comes in when it enrages.")
@@ -668,9 +684,7 @@ void main(){
    (power-cooldowns :initform () :accessor power-cooldowns :documentation "Seconds left on each power, by name.")
    (power-gap :initform 0.0 :accessor power-gap :documentation "Seconds before it may start another power.")
    (power-point :initform (vec 0 0 0) :reader power-point :documentation "Where its tornado will form.")
-   (roar :initform 0.0 :accessor roar :documentation "Seconds left of its enraged roar.")
-   (ward :initform NIL :accessor ward :documentation "The AURORA arc that shows Warded, once it has it.")
-   (ward-sound :initform NIL :accessor ward-sound :documentation "The ward's hum while it is up, or NIL."))
+   (roar :initform 0.0 :accessor roar :documentation "Seconds left of its enraged roar."))
   (:documentation "The run's boss: an empowered monster. List it first in the superclasses."))
 
 (defmethod initialize-instance :after ((boss boss) &key)
@@ -830,42 +844,46 @@ void main(){
     (light-rim boss *boss-glow-color* strength *boss-light-radius*)
     (update-ward boss k)))
 
-(defun ward-arc (boss)
-  "Radians either side of BOSS's facing that its Warded front turns spells back from: the
+(defun ward-arc (entity)
+  "Radians either side of ENTITY's facing that its warded front turns spells back from: the
 billboard views its SHIELD-VIEWS covers (SHIELDED-P), each a quarter of pi wide."
-  (* (+ (shield-views boss) 0.5) (/ pi 4)))
+  (* (+ (shield-views entity) 0.5) (/ pi 4)))
 
-(defun update-ward (boss k)
-  "Show Warded as a violet curtain of light on the floor round BOSS's front, over the sector
+(defun update-ward (entity k)
+  "Show ENTITY's ward as a violet curtain of light on the floor round its front, over the sector
 its reflection covers, turning with it; K dims it as the rim is dimmed."
-  (let ((ward (ward boss)))
-    (when (and (null ward) (container boss) (has-power-p boss :warded) (not (dead boss)))
-      (setf ward (make-instance 'aurora :centre (vcopy (location boss)) :radius (+ (body-radius boss) *ward-reach*)
-                                        :colors *ward-colors* :spin 0.15 :twist 0.05 :arc (ward-arc boss))
-            (ward boss) ward)
-      (enter ward (container boss)))
-    ;; Not while it sleeps: past *SOUND-MAX-DISTANCE* a sound gets no quieter, so a sleeping
-    ;; boss's hum was heard all over its level.
-    (setf (ward-sound boss)
-          (hold-loop (ward-sound boss)
-                     (and ward (container boss) (has-power-p boss :warded) (not (dead boss))
-                          (not (dormant-p boss)) :ward-hum)
-                     (location boss) k))
+  (let ((ward (ward entity))
+        (up (ward-up-p entity)))
+    (when (and (null ward) (container entity) up (not (dead entity)))
+      (setf ward (make-instance 'aurora :centre (vcopy (location entity)) :radius (+ (body-radius entity) *ward-reach*)
+                                        :colors *ward-colors* :spin 0.15 :twist 0.05 :arc (ward-arc entity))
+            (ward entity) ward)
+      (enter ward (container entity)))
+    (setf (ward-sound entity)
+          (hold-loop (ward-sound entity)
+                     (and ward (container entity) up (not (dead entity)) (ward-hum-p entity) :ward-hum)
+                     (location entity) k))
     (when ward
-      (let* ((loc (location boss))
+      (let* ((loc (location entity))
              (floor (and *nav-grid* (nav-floor-at (vx loc) (vy loc) (vz loc))))
              (centre (centre ward)))
         (setf (vx centre) (vx loc) (vy centre) (float (or floor (vy loc)) 0f0) (vz centre) (vz loc)
               ;; Round the ring from +X toward +Z: the facing's (sin, -cos) is a quarter turn back.
-              (aurora-arc-middle ward) (float (- (facing boss) (/ pi 2)) 0f0)
+              (aurora-arc-middle ward) (float (- (facing entity) (/ pi 2)) 0f0)
               (aurora-height ward) *ward-height*
-              (aurora-strength ward) (if (has-power-p boss :warded) (* *ward-strength* k) 0.0))))))
+              (aurora-strength ward) (if up (* *ward-strength* k) 0.0))))))
 
-(defmethod leave :after ((boss boss) container)
-  (setf (ward-sound boss) (stop-loop (ward-sound boss)))
-  (when (ward boss)
-    (despawn (ward boss))
-    (setf (ward boss) NIL)))
+(defmethod leave :after ((entity ward-arc-mixin) container)
+  (setf (ward-sound entity) (stop-loop (ward-sound entity)))
+  (when (ward entity)
+    (despawn (ward entity))
+    (setf (ward entity) NIL)))
+
+(defmethod ward-up-p ((boss boss)) (and (has-power-p boss :warded) T))
+
+;; Not while it sleeps: past *SOUND-MAX-DISTANCE* a sound gets no quieter, so a sleeping
+;; boss's hum was heard all over its level.
+(defmethod ward-hum-p ((boss boss)) (not (dormant-p boss)))
 
 (define-handler (boss tick :after) (dt)
   (let ((arena *arena*))
