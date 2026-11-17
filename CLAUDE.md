@@ -1008,7 +1008,7 @@ real time instead.
   riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
 - `src/hag.lisp` (after riftwalker.lisp): the `rime-hag`, the frost caster, with her elite and
   boss (`elite-hag`, `hag-boss`, the Winter Crone). See "The rime hag" under "Creature movement".
-- `src/votary.lisp` (after hag.lisp): the `arc-votary`, a blind monk that holds a shock beam,
+- `src/votary.lisp` (after hag.lisp): the `arc-votary`, a blind storm-priest that holds a shock beam,
   its elite (`elite-votary`) and its boss (`votary-boss`, the Arc Hierophant). See "The arc votary"
   under "Creature movement" below.
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
@@ -2170,7 +2170,7 @@ breaks it. With slot 2 in hand, `(setf (block-held *player*) t)` holds Absorb.
 ### The arc votary
 
 The `arc-votary` (votary.lisp) is a caster, an `ability-user` with one ability, `:arc-beam`, whose
-attack is held rather than thrown: the first monster that makes cover, circling and the shield's
+attack is held rather than thrown (a blind storm-priest in storm teal under a crown of lightning rods): the first monster that makes cover, circling and the shield's
 stamina matter more than a sidestep. It backs off within `keep-away` (4 m) and starts a beam with its
 target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0 0.4)` on
 `votary-cast`, hit frame 2:
@@ -3387,24 +3387,32 @@ python3 tools/slice_frames.py art/hag/death.png data/sprites/hag --pixel 4.32 --
 for s in turnaround walk cast nova hurt death; do tools/restyle.py --house data/sprites/hag/$s.png; done
 ```
 
-The arc votary (a blind monk, its eyes sewn shut, a grimy linen habit stitched through with copper
-wire in spirals, a black lodestone on two chains at its chest, copper wrist bands, bare feet, its
-hands held apart with pale yellow-white sparks between them) is `art/votary/turnaround-1.png`
-(`art/prompts/votary-turnaround.txt`, with `style-common.txt` folded in: `art/style/anchor.png`
-and the imp's, acolyte's, necromancer's and riftwalker's sheets as references), sliced at
-`--height 115` for its 1.8 m; no view needed mirroring. Its walk (slow and measured, the hands held
-apart), cast (four frames: the hands wide with an arc between them; brought together on a blazing
-knot, the charge's held frame; thrust forward, the hold's frame, only a stub of the beam drawn, since
-the game draws the beam; recover) and flinch are made with `tools/gen_monster_views.sh votary <anim>
-...` after `tools/cut_stands.py art/votary/turnaround-1.png art/votary`, and its front-only death
-(`votary-death.txt`) burns along the wire, splits the lodestone and lays it face down. Its strips take
-`--violet`, which keeps the sparks' blends.
+The arc votary (a gaunt storm-priest in a ragged robe of deep storm teal over black, copper wire
+stitched down it in zig-zags, a riveted brass collar plate with a lightning sigil, eyes sewn shut and
+blazing yellow-white, a crown of five iron lightning rods with arcs between their tips, a knot of
+lightning between its clawed hands) is `art/votary/turnaround-teal-1.png`
+(`art/prompts/votary-turnaround-teal.txt`: `art/style/anchor.png` and the acolyte's, riftwalker's,
+necromancer's and imp's sheets as references, the acolyte's rendering asked for most closely), sliced
+at `--height 128` for its 2 m, crown included; no view needed mirroring. Its first design, a beige
+linen habit (`../hexmaw-art-attic/art/votary/linen/`), was the dungeon walls' own colour with no hard
+outline, and read as a pilgrim: the prompts now say no brown cloth, a near-black outline round the
+whole figure as the acolyte has, one saturated colour no other monster uses, and light only from the
+lightning. Its walk (slow and measured), cast (four frames: the hands wide with an arc between them;
+brought together on a blazing knot, the charge's held frame; thrust forward, the hold's frame, only a
+stub of the beam drawn, since the game draws the beam; recover) and flinch are made with
+`tools/gen_monster_views.sh votary <anim> ...` after `tools/cut_stands.py
+art/votary/turnaround-teal-1.png art/votary`, and its front-only death (`votary-death.txt`) burns along
+the wire, knocks off the crown and lays it face down beside it. Yellow lightning on magenta comes out
+of the slicers salmon and the palette snaps that to pink, so every strip goes through
+`tools/yellow_sparks.py` (bright, red-led pixels with too much blue for yellow made yellow; white
+cores kept) before `restyle.py`:
 
 ```bash
-python3 tools/slice_turnaround.py art/votary/turnaround-1.png data/sprites/votary/turnaround --height 115 --filter box
+python3 tools/slice_turnaround.py art/votary/turnaround-teal-1.png data/sprites/votary/turnaround --height 128 --filter box
 V="front front-quarter side back-quarter back"
-for a in walk:20 cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/votary $a $(for v in $V; do echo art/votary/${a%:*}-$v.png; done) --height 920 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
+for a in walk:20 cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/votary $a $(for v in $V; do echo art/votary/${a%:*}-$v.png; done) --height 1024 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
 python3 tools/slice_frames.py art/votary/death.png data/sprites/votary --pixel 4.1 --anchor bottom --filter box --violet death:8
+for s in turnaround walk cast hurt death; do tools/yellow_sparks.py data/sprites/votary/$s.png; tools/restyle.py --house data/sprites/votary/$s.png; done
 ```
 
 The status auras (magic.lisp) are 8-frame loops in `data/sprites/status/`, each a generated 2 × 4

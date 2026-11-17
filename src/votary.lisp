@@ -1,6 +1,6 @@
 (in-package #:hexmaw)
 
-;;; The arc votary: a blind monk that holds a beam of lightning on its target, the first monster
+;;; The arc votary: a blind storm-priest that holds a beam of lightning on its target, the first monster
 ;;; whose attack is held rather than thrown. A crackle builds between its hands for *VOTARY-CHARGE*
 ;;; seconds while a faint ranging line shows where it aims; then it holds the beam for up to
 ;;; *VOTARY-HOLD* seconds, striking every *BEAM-PULSE* (spells.lisp) and turning after its target at
@@ -11,7 +11,9 @@
 ;;; nearest hostile body within CHAIN-REACH; one that strikes a body in water, or the water itself,
 ;;; strikes harder and runs through it to every body in the water within *ARC-WATER-REACH*.
 
-(defparameter *votary-height* 1.8 "Votary height in metres, head to feet.")
+(defparameter *votary-height* 2.0 "Votary height in metres, its crown of rods to its feet.")
+(defparameter *votary-hand-height* 0.58
+  "Share of its height its hands are held at, where the beam and the crackle start.")
 (defparameter *votary-range* 11.0 "Metres from its target it starts a beam from (*BEAM-RANGE* is 12).")
 (defparameter *votary-charge* 0.9 "Seconds of the charge's tell before the beam.")
 (defparameter *votary-hold* 3.0 "Seconds it holds the beam at most.")
@@ -34,22 +36,22 @@ gives out before the beam does.")
   "Metres from the player's eye within which the beam's burst isn't drawn where it stops: sparks instead.")
 (defparameter *votary-aim-time* 0.05 "Seconds between aims of its ranging line and beam at what they reach.")
 
-;; Sliced at 115 px tall for its 1.8 m, at the imp's art pixel size.
+;; Sliced at 128 px tall for its 2 m, crown included, at the monsters' 64 px a metre.
 (define-asset (hexmaw votary-turnaround) image
     #p"sprites/votary/turnaround.png"
   :min-filter :nearest :mag-filter :nearest)
 
 ;; A slow, measured step, the hands held apart; four frames per view, the frame following the
 ;; distance walked (STRIDE).
-(define-fx-animation votary-walk "sprites/votary/walk" :loop T :size (* *votary-height* 116/115))
+(define-fx-animation votary-walk "sprites/votary/walk" :loop T :size (* *votary-height* 129/128))
 ;; The beam: the hands wide apart with an arc between them, brought together on a knot of
 ;; lightning (the charge's held frame), thrust forward (the frame the hold holds), recover. Four
 ;; frames per view, on ATTACK-FRAME-TIMES.
-(define-fx-animation votary-cast "sprites/votary/cast" :size (* *votary-height* 116/115))
+(define-fx-animation votary-cast "sprites/votary/cast" :size (* *votary-height* 130/128))
 ;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*.
 (define-fx-animation votary-hurt "sprites/votary/hurt" :size *votary-height*)
 ;; Lightning crawls over it along the wire, and it falls face down. Front view only.
-(define-fx-animation votary-death "sprites/votary/death" :fps 9 :size *votary-height*)
+(define-fx-animation votary-death "sprites/votary/death" :fps 9 :size (* *votary-height* 129/128))
 
 ;; What each pulse strikes with, whole: the beam is the votary's own (VOTARY-PULSE), the spell its
 ;; damage, look and light.
@@ -178,7 +180,7 @@ is what aims it), tipped up or down to its target's chest. Both are VOTARY's own
          (across 1.0)
          (dy 0.0))
     (setf (vx o) (+ (vx loc) (* out fx))
-          (vy o) (+ (vy loc) (cast-height votary))
+          (vy o) (+ (vy loc) (* *votary-hand-height* (sprite-height votary)))
           (vz o) (+ (vz loc) (* out fz)))
     (when target
       (let ((feet (body-feet target)))

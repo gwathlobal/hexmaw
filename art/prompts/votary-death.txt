@@ -1,18 +1,20 @@
-Pixel-art sprite sheet: the 8-frame death animation of the ARC VOTARY, a blind monk who holds a beam of lightning between its hands, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The death is seen from the front only. The last frame is the corpse, which stays on the floor.
+Pixel-art sprite sheet: the 8-frame death animation of the ARC VOTARY, a blind storm-priest who holds lightning between its hands, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The death is seen from the front only. The last frame is the corpse, which stays on the floor.
 
 REFERENCE IMAGES, in the order attached:
-1. The votary's turnaround sheet. It is the character design: a tall, gaunt humanoid of a man's height, as tall as the acolyte, standing upright and still, slightly stooped from the shoulders; a shaven head, bare and pale, its EYES SEWN SHUT, a row of dark stitches across each closed lid; a long ankle-length monk's HABIT of undyed pale linen gone grey-brown with grime, with COPPER WIRE stitched through it in bright lines and spirals down the chest, sleeves and hem; a heavy dark LODESTONE, a rough lump of black-grey iron stone, hanging on two iron chains at the middle of its chest; copper bands round both wrists; bare feet under the hem; its two HANDS held apart in front of the chest, palms facing each other a forearm's length apart, with a few pale yellow-white SPARKS jumping between them. Also the shading style.
-2. The votary standing, seen from the front. Match its pixel size, outline weight and scale exactly: frame 1 is exactly as tall as reference 2.
+1. The votary's turnaround sheet. It is the character design: a tall, gaunt storm-priest of a man's height, upright and slightly stooped, in a long ragged hooded robe of deep saturated STORM TEAL (the hood thrown back) over a black under-robe and a black sash, with orange copper wire stitched in zig-zags down the robe; a riveted BRASS collar plate on the chest with a jagged lightning sigil, brass bands on the forearms; a grey, sunken face with an open snarling mouth, its eyes sewn shut, bright yellow-white light blazing out of them; on its head a CROWN OF IRON LIGHTNING RODS, five tall black spikes with brass tips and yellow-white arcs crackling between their tips; bare grey feet; its two clawed hands held apart in front of the chest with a crackling knot of yellow-white lightning between them. Also the shading style.
+2. The votary standing, seen from the front. Match its pixel size, outline weight and scale exactly: frame 1 is exactly as tall as reference 2, crown included.
+
+STYLE: as the reference: a hard near-black outline round the whole figure and its main shapes, saturated colours, strong light-and-dark shading lit from the upper left, crisp pixel art. The robe stays deep storm teal and black, the fittings brass and copper, never brown, beige or tan cloth. The only light is the yellow-white lightning (eyes, crown, hands).
 
 THE DEATH: the lightning it held turns on it, and it falls.
-- Frame 1, HIT: standing as in reference 2 but jolted back, the head snapped up, the sparks between its hands bursting outward.
-- Frame 2, BURN-OUT: pale yellow-white lightning crawling over its whole body along the copper wire, the arms flung wide and rigid, the lodestone split by a bright crack.
-- Frame 3, BUCKLING: the lightning gone, smoke-dark scorch along the wire, it drops to its knees, the arms falling.
-- Frame 4, TOPPLING: kneeling, it pitches forward, the head bowed, the lodestone swinging on its chains.
-- Frame 5, FALLING: its body falling forward toward the floor.
-- Frame 6, DOWN: lying face down on the floor, the habit spread, the arms out to the sides.
-- Frame 7, STILL: lying face down, the split lodestone beside it on its chains, a last tiny spark on one copper band.
-- Frame 8, CORPSE: the same, lying still, every spark gone, the copper dulled. This frame stays on screen.
+- Frame 1, HIT: standing as in reference 2 but jolted back, the head snapped up, the lightning between its hands bursting outward.
+- Frame 2, BURN-OUT: yellow-white lightning crawling over its whole body along the copper wire, the arms flung wide and rigid, the crown's rods all arcing at once, the eyes blazing.
+- Frame 3, BUCKLING: the lightning gone, black scorch along the wire, the light gone out of its eyes, it drops to its knees, the arms falling, the crown slipping.
+- Frame 4, TOPPLING: kneeling, it pitches forward, the head bowed, the crown falling off.
+- Frame 5, FALLING: its body falling forward toward the floor, the crown on the floor beside it.
+- Frame 6, DOWN: lying face down on the floor, the teal robe spread, the arms out to the sides.
+- Frame 7, STILL: lying face down, the fallen crown of rods beside its head, a last tiny spark on one rod.
+- Frame 8, CORPSE: the same, lying still, every spark gone, the brass dulled. This frame stays on screen.
 
 LAYOUT
 - A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.

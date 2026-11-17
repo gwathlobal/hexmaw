@@ -7,7 +7,7 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
-- **The arc votary, a shock monster from level 2 on** (src/votary.lisp). A blind monk that charges
+- **The arc votary, a shock monster from level 2 on** (src/votary.lisp). A blind storm-priest that charges
   for 0.9 s (a crackle between its hands, a swelling lamp, a faint ranging line) and then holds a
   shock beam up to 3 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 1.2 rad/s: run
   round it or step behind cover and it lets go after 0.75 s. Each pulse on the player is a blow the
@@ -21,7 +21,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   `effect-shove` and `effect-block-cost`, and `hurt-player`'s `:blockable` and `:block-cost`; a beam's
   `strength`. New boss and pool kinds change which monsters and boss some seeds place, so a save
   made before starts its level fresh. Sounds: votary-alert, -pain, -death, -charge, -beam-start,
-  -beam (loop), arc-zap. The debug hall has one behind its north-west pillar (index 9).
+  -beam (loop), arc-zap. The debug hall has one behind its north-west pillar (index 10, after the hag).
+  Its first design, a beige linen habit, was the walls' own colour with no hard outline; it is now a
+  storm-teal robe over black with brass fittings, blazing sewn-shut eyes and a crown of lightning rods,
+  2 m with the crown, its beam from its hands (`*votary-hand-height*`). `tools/yellow_sparks.py` turns
+  the salmon-pink fringe the slicers leave on yellow lightning back to yellow.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
   a body question 76 against 120 on seed 11, a 10 m `clear-path-p` 23 µs against 30. Same levels and

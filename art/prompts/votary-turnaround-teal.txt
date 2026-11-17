@@ -1,0 +1,27 @@
+Pixel-art character turnaround sheet for a monster in a Doom/Hexen-style first-person dark-fantasy dungeon game, where monsters are drawn as sprites seen from several camera angles: the ARC VOTARY, a blind, fanatical storm-priest who calls lightning down between its hands and holds it on its enemies as a beam. It must read at a glance as an evil caster, as menacing as the hooded fire acolyte.
+
+REFERENCE IMAGES, in the order attached: the game's style anchor (an imp, a knight, a stone wall and floor), then turnaround sheets of other monsters from the same game (a hooded red fire acolyte, a masked assassin, a gaunt necromancer, a red imp). Match the ACOLYTE's rendering most closely: its bold dark outline round the whole silhouette, its saturated main colour, its strong light-and-dark shading, and its glowing eyes as the focal point. Use the references only for style and sheet layout; do not copy their designs: no fire, no red or oxblood (the acolyte's), no indigo hood or mask (the assassin's), no green or staff (the necromancer's).
+
+READABILITY, the most important requirement:
+- The game's walls and floors are warm grey-brown stone. The votary must stand out against them: NO brown, beige, tan or grey-brown cloth anywhere.
+- A hard, dark outline (near-black) around the whole figure and its main shapes, as on the acolyte, never a soft or light edge.
+- One strong saturated main colour over most of the figure, deep shadows, and a few bright highlights.
+- Bright yellow-white lightning is the only light: it glows from the sewn-shut eyes and between the hands.
+
+THE ARC VOTARY (design A, storm-teal):
+- A tall, gaunt figure of a man's height, upright, slightly stooped, in a long hooded robe of deep STORM TEAL (dark blue-green, saturated), the hood thrown back.
+- A shaven grey-white head, its eyes sewn shut with black stitches, and bright yellow-white light leaking out between the stitches: the glowing focal point.
+- On its head a CROWN OF IRON LIGHTNING RODS: five tall thin spikes of black iron tipped with brass, crackling with small yellow-white arcs between their tips. It gives the figure a jagged, unmistakable silhouette.
+- Brass and copper fittings: a broad brass collar plate on the chest engraved with a jagged lightning sigil, brass bands on the forearms, copper wire stitched in zig-zags down the robe's hem.
+- Its two hands held apart in front of the chest, palms facing, fingers clawed, a crackling knot of yellow-white lightning jumping between them.
+- Black under-robe and sash; bare grey feet.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).
+- In the front three-quarter, side and rear three-quarter views the votary faces IMAGE-LEFT.
+- The same figure at the same scale in every cell, its feet on the same ground line, in the same pose; only the camera angle changes.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers or frame borders. Lightning stays on and right next to the figure, drawn as solid hard-edged pixels, never a soft halo on the magenta.
+- Crisp pixel art at about 64 pixels per metre, square hard-edged pixels, lit from the upper left, no anti-aliasing against the magenta, no semi-transparent pixels, no pink, purple or cyan glow bleeding into the background.
