@@ -1,0 +1,12 @@
+REFERENCE IMAGES, in the order attached:
+1. The bloodroot, seen from the front. It is the design: a monstrous plant, a HEART-BULB rooted in the stone floor, a swollen pod of knotted dark red-brown root and wet crimson flesh, split down its front by a vertical maw ringed with curved bone-coloured thorns, glowing ember-red veins branching over it, thorned tendrils curling from its top, thick roots splaying from its foot into the floor. Match its pixel size, outline weight, shading and scale exactly.
+2. The house style anchor (art/style/anchor.png): the pixel size, lighting and palette every sprite keeps.
+
+The bloodroot never moves from its spot: in every frame its roots stay planted on the same ground line, at the same place in its cell, and only the pod above them moves. It has no eyes, arms or legs in any frame.
+
+LAYOUT RULES
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and horizontal lines between the rows, each running the full width.
+- The same scale in every frame. Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur or other objects.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.

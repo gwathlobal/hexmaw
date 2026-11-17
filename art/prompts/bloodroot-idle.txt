@@ -1,0 +1,9 @@
+Pixel-art sprite sheet: the BLOODROOT's idle pulse and its flinch, for a Doom/Hexen-style first-person dungeon game where monsters are drawn as sprites. Seen from the front only.
+
+THE FRAMES:
+- Cell 1, AT REST: a plain copy of reference 1, exactly as tall, exactly the same. It sets the scale for the other frames.
+- Cells 2 to 5, THE PULSE, a loop like a beating heart: cell 2 the pod at rest; cell 3 the pod swollen a little wider, the veins glowing brighter, the maw opening a crack; cell 4 the pod at its fullest, the veins brightest, the thorns of the maw parted; cell 5 the pod squeezed a little narrower than at rest, the veins dim, the maw shut tight. The roots never move.
+- Cell 6, FLINCH (struck): the pod jolts and recoils, leaning back and to one side, the maw gaping, the tendrils at its top whipping back, the veins flaring bright.
+- Cell 7, CLENCH: it clenches after the blow, the pod squeezed in and hunched low over its roots, the maw shut tight, the tendrils curled in.
+- Cell 8: empty, plain magenta.
+- A grid of 2 rows of 4 equal cells: cells 1 to 4 in the top row, 5 to 8 in the bottom row, read left to right.

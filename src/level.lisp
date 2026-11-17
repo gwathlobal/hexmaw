@@ -269,6 +269,9 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (debug-spawn (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
     ;; The hall imp's packmate, beside it (imp.lisp): together they hold their nerve.
     (debug-spawn (make-instance 'imp :location (vec 1.5 0 -3.5) :facing pi) container)
+    ;; A bloodroot west of the middle, its roots to spread to the lava pit, the pillars and the
+    ;; west wall (bloodroot.lisp).
+    (debug-spawn (make-instance 'bloodroot :location (vec -3 0 2) :facing pi) container)
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2

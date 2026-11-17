@@ -61,7 +61,8 @@ their values."
     charge-time blow-charge
     block-raise bash-time bash-pending spear-jolt guard-broken run-time damage-taken level-records
     reputation max-health max-mana max-stamina blessed
-    known-effects hotbar-cells offhand-cells wanted-slot enchantments cast-hand cast-held overcharge))
+    known-effects hotbar-cells offhand-cells wanted-slot enchantments cast-hand cast-held overcharge
+    snare snare-guard))
 
 (defmethod saved-slots append ((actor afflicted))
   '(statuses))
@@ -241,7 +242,7 @@ status auras, which come back from their statuses."
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
         (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura carried-loot
-                                                                       storm-flame falling-cinder)))
+                                                                       storm-flame falling-cinder snare-sprite)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))

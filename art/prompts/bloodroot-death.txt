@@ -1,0 +1,13 @@
+Pixel-art sprite sheet: the 8-frame death animation of the BLOODROOT, for a Doom/Hexen-style first-person dungeon game where monsters are drawn as sprites. Seen from the front only. The last frame is the corpse, which stays on the floor.
+
+THE DEATH: the red glow goes out of it, and it withers and collapses where it is rooted.
+- Frame 1, HIT: exactly as tall as reference 1, the same shape, jolted, the maw gaping, the veins flaring.
+- Frame 2, SPLITTING: the pod splits open down its maw, the two halves pulling apart, dark blood running out, the veins flickering.
+- Frame 3, SAGGING: the pod sags lower and leans to one side, the halves drooping, the veins dimming to dull red.
+- Frame 4, WITHERING: the flesh shrivels and darkens to brown, the pod half its height, the tendrils drooping limp.
+- Frame 5, COLLAPSING: the pod caves in on itself, a wrinkled dark husk, the thorns of the maw hanging loose.
+- Frame 6, FALLEN: the husk slumped low over its roots, a third of the standing height.
+- Frame 7, STILL: a low dark heap of shrivelled brown husk and dead thorns over the roots, no glow.
+- Frame 8, CORPSE: the same heap, still. No glow anywhere. This frame stays on screen.
+- The roots stay planted in the same place on the same ground line in every frame.
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, read left to right.
