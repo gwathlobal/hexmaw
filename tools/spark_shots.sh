@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Staged screenshots of the spark pool (src/sparks.lisp): sparks off a shield, the spear's counter,
-# the maul's blow, the earthshake's grit, an ogre's landing, embers off a torch and lava. Runs on
-# the debug level with its hall monsters.
+# the maul's blow, the earthshake's grit, an ogre's landing, embers off a torch and lava, and each
+# blow that finds no one striking the hall's west wall, the floor and the planks (WALL-STRIKE,
+# sword.lisp). Runs on the debug level with its hall monsters.
 #
 #   tools/spark_shots.sh /some/dir             every shot
 #   SHOTS="shield maul" tools/spark_shots.sh /some/dir
@@ -79,3 +80,13 @@ shot torch     "$(player 7.2 0.3 -0.15 1.5708)" "$(hold 1)" "$(run 3.0)"
 shot lava      "$(player -4.0 5.0 0.35 4.7124)" "$(hold 1)" "$(run 3.0)"
 
 "$hd" "(game (setf *hit-stop* 0.0 *game-state* :paused) T)" >/dev/null
+
+# A blow that finds no one, striking the hall's west wall (x -10), the floor and the planks.
+west=4.7124
+shot wall-sword "$(player -8.4 0.0 0.05 $west)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :sword *sword-reach*)" "$(run 0.05)"
+shot wall-spear "$(player -7.2 0.0 0.05 $west)" "$(hold 3)" "(place-camera *player*)" "(wall-strike *player* :spear *spear-reach*)" "$(run 0.05)"
+shot wall-maul  "$(player -8.4 0.0 0.1 $west)" "$(hold 6)" "(place-camera *player*)" "(wall-strike *player* :maul *maul-reach* :charge 1.0)" "$(run 0.06)"
+shot wall-bash  "$(player -8.9 0.0 0.05 $west)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :shield *bash-reach*)" "$(run 0.06)"
+shot wall-sweep "$(player -8.7 0.0 0.05 $west)" "$(hold 3)" "(place-camera *player*)" "(wall-strike *player* :haft *sweep-reach*)" "$(run 0.08)"
+shot wall-floor "$(player 0.0 2.0 1.1 0.0)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :sword *sword-reach*)" "$(run 0.05)"
+shot wall-wood  "$(player 9.0 -3.3 0.3 0.0)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :sword *sword-reach*)" "$(run 0.08)"

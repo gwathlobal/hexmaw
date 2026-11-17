@@ -288,6 +288,67 @@ across (CLEAR-PATH-P, sword.lisp, looks across at one height only)."
           for k = (float (/ i steps) 0f0)
           never (solid-at (+ (vx from) (* k dx)) (+ (vy from) (* k dy)) (+ (vz from) (* k dz))))))
 
+(defparameter *strike-ray-step* 0.05 "Metres between the points WALL-STRIKE-POINT tries along its ray.")
+
+(defun wall-strike-point (ox oy oz dx dy dz range)
+  "Where the ray from OX OY OZ along unit vector DX DY DZ first meets a solid within RANGE metres:
+the solid, the point just outside its face, and the face's outward normal, as seven values; NIL
+if it meets nothing, or a liquid first. A wedge's diagonal has its own normal. Conses nothing."
+  (let* ((ox (float ox 0f0)) (oy (float oy 0f0)) (oz (float oz 0f0))
+         (dx (float dx 0f0)) (dy (float dy 0f0)) (dz (float dz 0f0))
+         (range (float range 0f0))
+         (step (float *strike-ray-step* 0f0))
+         (steps (min 1000 (max 1 (ceiling (min range 50f0) step))))
+         (free 0f0))
+    (declare (type single-float ox oy oz dx dy dz range step free)
+             (type (integer 1 1000) steps))
+    (loop for k of-type fixnum from 1 to steps
+          for tt of-type single-float = (min range (* k step))
+          for x of-type single-float = (+ ox (* tt dx))
+          for y of-type single-float = (+ oy (* tt dy))
+          for z of-type single-float = (+ oz (* tt dz))
+          do (when (liquid-at x y z) (return-from wall-strike-point NIL))
+             (when (solid-at x y z)
+               ;; Bisect between the last free point and this one; the hit is the free end.
+               (let ((lo free) (hi tt))
+                 (declare (type single-float lo hi))
+                 (dotimes (i 8)
+                   (let ((mid (* 0.5 (+ lo hi))))
+                     (if (solid-at (+ ox (* mid dx)) (+ oy (* mid dy)) (+ oz (* mid dz)))
+                         (setf hi mid)
+                         (setf lo mid))))
+                 (let* ((hx (+ ox (* lo dx))) (hy (+ oy (* lo dy))) (hz (+ oz (* lo dz)))
+                        (s (solid-at (+ ox (* hi dx)) (+ oy (* hi dy)) (+ oz (* hi dz)))))
+                   (declare (type single-float hx hy hz))
+                   (multiple-value-bind (nx ny nz) (strike-normal s hx hy hz)
+                     (return-from wall-strike-point (values s hx hy hz nx ny nz))))))
+             (setf free tt))
+    NIL))
+
+(defun strike-normal (s x y z)
+  "The outward normal of the face of solid S nearest the point X Y Z, just outside it: a wedge's
+diagonal when the point lies in its cut-away half, else the box face it is nearest."
+  (declare (type (simple-array single-float (*)) s) (type single-float x y z))
+  (let ((cut (solid-cut s)))
+    (if (and (/= 0 cut)
+             (<= (aref s 0) x (aref s 3)) (<= (aref s 2) z (aref s 5))
+             (< (%wedge-depth s x z x z) 1f-3)
+             ;; Not over or under it: those are its top and bottom.
+             (< (aref s 1) y (aref s 4)))
+        (multiple-value-bind (cu cv) (cut-sides cut)
+          (let ((r (sqrt 0.5f0)))
+            (values (if (= cu 1) r (- r)) 0f0 (if (= cv 1) r (- r)))))
+        (let ((best 0) (best-d most-positive-single-float) (high NIL))
+          (declare (type fixnum best) (type single-float best-d))
+          (dotimes (axis 3)
+            (let ((c (ecase axis (0 x) (1 y) (2 z))))
+              (let ((lo (abs (- c (aref s axis))))
+                    (hi (abs (- c (aref s (+ axis 3))))))
+                (when (< lo best-d) (setf best axis best-d lo high NIL))
+                (when (< hi best-d) (setf best axis best-d hi high T)))))
+          (let ((sign (if high 1f0 -1f0)))
+            (values (if (= best 0) sign 0f0) (if (= best 1) sign 0f0) (if (= best 2) sign 0f0)))))))
+
 (defun crossed-face (p b s nx ny nz)
   "The face of solid S that the particle at P, from index B, crossed on its way to NX NY
 NZ: its axis (0 to 2, or -1 if the particle was already inside), true if it is the

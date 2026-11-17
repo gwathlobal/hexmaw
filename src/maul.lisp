@@ -185,13 +185,16 @@ button has been held *MAUL-CRY-DELAY*, and the blow cuts it off."
                    :heft (not boss))
     (enchant-strike player :maul target)))
 
-;; A blow that finds no one living comes down on a corpse in its reach, if one could be raised.
+;; A blow that finds no one living comes down on a corpse in its reach, if one could be raised,
+;; and else on the wall or floor the crosshair meets (WALL-STRIKE, sword.lisp).
 (defmethod swing-miss (player (weapon (eql :maul)))
   (let ((corpse (looked-at-creature player *maul-reach* *maul-arc*
                                     :dead T :test (lambda (c) (and (dead c) (raisable-p c))))))
-    (when corpse
-      (play-sound :maul-crush (location corpse))
-      (tear-apart corpse :from (feet player)))))
+    (if corpse
+        (progn
+          (play-sound :maul-crush (location corpse))
+          (tear-apart corpse :from (feet player)))
+        (wall-strike player :maul *maul-reach* :charge (blow-charge player)))))
 
 ;;; The earthshake.
 

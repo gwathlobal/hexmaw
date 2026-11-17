@@ -7,6 +7,18 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **A blow that misses strikes the wall.** A sword slash, spear thrust, maul blow, shield bash or haft
+  sweep that finds no one strikes what the crosshair meets within its reach, floors too
+  (`wall-strike`, sword.lisp; `wall-strike-point` in gore.lisp, a ray to the face and its normal,
+  wedges' diagonals included): steel sparks and dust off stone and rock, fewer sparks and frost chips
+  off ice-rock, chips off slick ice, a puff off snow, pale splinters off beams and planks
+  (`wall-sparks`, sparks.lisp, with new `:wood` and `:snow` ramps), each solid knowing what it is by a
+  9th value (`surface-strike`, `*surface-strikes*`, greybox.lisp). New sounds `blade-hit-stone`,
+  `maul-hit-stone` and `blade-hit-wood`; a little of a hit's feel, always less (`*wall-strikes*`: the
+  spear's jolt frame, the maul's camera kick and a short hit-stop by charge, the bash's small recoil).
+  `tools/spark_shots.sh` stages each (`wall-*`). `solid-tread` no longer reads a strike-only solid's
+  footing of 0 as a tread.
+
 - **An elite says what its glow means.** While the crosshair is on one (`aimed-elite`, elite.lisp: the
   nearest body the line of sight meets, `ray-body-hit`, within 15 m and no wall before it), a bar half the
   boss's takes the boss bar's place at the top of the screen: its name over it, as the boss's title

@@ -278,8 +278,71 @@ be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
         (swing-miss player weapon))))
 
 (defgeneric swing-miss (player weapon)
-  (:documentation "WEAPON's swing found no one living to land on: the maul pulps a corpse (maul.lisp).")
-  (:method (player weapon) (declare (ignore player weapon)) NIL))
+  (:documentation "WEAPON's swing found no one living to land on: it strikes the wall in its reach
+(WALL-STRIKE); the maul first pulps a corpse (maul.lisp).")
+  (:method (player weapon) (wall-strike player weapon (swing-reach weapon))))
+
+;;; A blow that finds no one strikes what the crosshair meets within its reach: sparks and grit
+;;; off stone (SOLID-STRIKE, greybox.lisp; WALL-SPARKS, sparks.lisp), chips off ice, splinters off
+;;; wood, a puff off snow, with a sound and a little of the feel of a hit, always less than one.
+
+(defparameter *wall-strikes*
+  '(:sword (:sparks 8 :grit 4 :speed (3.0 7.0) :spread 0.8
+            :sound :blade-hit-stone :wood-sound :blade-hit-wood)
+    :spear (:sparks 8 :grit 3 :speed (3.0 7.5) :spread 0.5
+            :sound :blade-hit-stone :wood-sound :blade-hit-wood :jolt 0.12)
+    ;; (:CHARGE least full): the least charge's, then the full one's.
+    :maul (:sparks (:charge 8 20) :grit (:charge 8 16) :speed (:charge (3.0 6.0) (3.0 9.0)) :spread 1.0
+           :sound :maul-hit-stone :wood-sound :blade-hit-wood
+           :camera (:charge 0.2 0.4) :hit-stop (:charge 0.02 0.04))
+    :shield (:sparks 3 :grit 5 :speed (2.0 5.0) :spread 0.9
+             :sound :shield-block :wood-sound :shield-block :recoil 1.5)
+    :haft (:sparks 0 :grit 5 :speed (1.5 4.0) :spread 1.0
+           :sound :bone-hit :wood-sound :bone-hit))
+  "Per blow (a weapon's keyword, :SHIELD for the bash, :HAFT for the spear's sweep), what striking a
+wall throws (WALL-SPARKS' counts, speed and spread, before the surface's share), the sound on
+stone or ice and on wood (snow is always a footstep's crunch), and the feel: :JOLT seconds of the
+spear's jolt frame, a :CAMERA kick and :HIT-STOP (by the maul's charge), a :RECOIL in m/s.")
+
+(defun wall-strike-value (value charge)
+  "VALUE as *WALL-STRIKES* gives it, at CHARGE (0 to 1) if it is (:CHARGE least full)."
+  (if (and (consp value) (eq :charge (first value)))
+      (destructuring-bind (least full) (rest value)
+        (if (consp least)
+            (mapcar (lambda (l f) (maul-lerp charge l f)) least full)
+            (maul-lerp charge least full)))
+      value))
+
+(defun wall-strike (player blow reach &key (charge 0.0))
+  "BLOW (a key of *WALL-STRIKES*) found no one: if the crosshair meets a solid within REACH metres
+of PLAYER's eye, strike it. True if it did."
+  (let ((props (getf *wall-strikes* blow))
+        (eye (location player))
+        (dir (look-direction player)))
+    (when props
+      (multiple-value-bind (s x y z nx ny nz)
+          (wall-strike-point (vx eye) (vy eye) (vz eye) (vx dir) (vy dir) (vz dir) reach)
+        (when s
+          (flet ((by-charge (key) (wall-strike-value (getf props key) charge)))
+            (let ((strike (solid-strike s))
+                  (at (vec x y z)))
+              (wall-sparks x y z nx ny nz (vx dir) (vy dir) (vz dir) strike
+                           :sparks (round (by-charge :sparks)) :grit (round (by-charge :grit))
+                           :speed (by-charge :speed) :spread (getf props :spread))
+              (play-sound (case strike
+                            (:snow :footstep-snow)
+                            (:wood (getf props :wood-sound))
+                            (T (getf props :sound)))
+                          at)
+              (let ((jolt (getf props :jolt))
+                    (camera (getf props :camera))
+                    (stop (getf props :hit-stop))
+                    (recoil (getf props :recoil)))
+                (when jolt (setf (spear-jolt player) (max (spear-jolt player) jolt)))
+                (when camera (kick-camera (by-charge :camera) player))
+                (when stop (hit-stop (by-charge :hit-stop)))
+                (when recoil (shove-player player at recoil)))
+              T)))))))
 
 (defgeneric swing-strike (player weapon target)
   (:documentation "WEAPON's swing lands on TARGET: hurt, shoved, and the weapon's enchantment.
@@ -298,9 +361,9 @@ The spear's thrust counters a charge instead (spear.lisp).")
 (defun bash-hit (player)
   "Bash the creature in front of PLAYER. Against a shield that covers it, the bash glances
 off and the player reels back; otherwise it hurts and shoves, staggering only a creature
-winding up an attack and not already poised from a bash."
+winding up an attack and not already poised from a bash. With no one there, it strikes the wall."
   (let ((target (swing-target player *bash-reach* *bash-arc*)))
-    (cond ((null target))
+    (cond ((null target) (wall-strike player :shield *bash-reach*))
           ((shielded-p target (feet player))
            (play-sound :bash-glance (location target))
            (block-hit target)
