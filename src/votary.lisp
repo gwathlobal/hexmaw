@@ -22,7 +22,10 @@
 (defparameter *votary-pain-bonus* 20 "Percent added to its pain chance while it holds the beam.")
 (defparameter *votary-lost-time* 0.75
   "Seconds of pulses striking nothing hostile after which it lets go of the beam and recovers.")
-(defparameter *arc-chain-reach* 3.5 "Metres between bodies a beam jumps from one of the votary's allies.")
+(defparameter *arc-floor-reach* 3.5
+  "Metres round a body its beam strikes that the floor is electrified: whoever else stands there is struck.")
+(defparameter *arc-floor-scale* 0.5 "How hard the electrified floor strikes, against the beam.")
+(defparameter *votary-floor-bolts* 4 "Bolts drawn over the electrified floor at each redrawing of the beam.")
 (defparameter *arc-water-reach* 6.0 "Metres across water a beam runs from what it strikes in it.")
 (defparameter *arc-water-scale* 1.5 "How much harder a beam strikes what stands in water.")
 (defparameter *arc-block-stamina* 12.0
@@ -115,9 +118,12 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
    (aim-direction :initform (vec 0 0 -1) :reader aim-direction)
    (bolt-end :initform (vec 0 0 0) :reader bolt-end :documentation "Where the held beam's lightning ends.")
    (bolt-timer :initform 0.0 :accessor bolt-timer :documentation "Seconds to the held beam's next redrawing.")
-   (chain-from :initform NIL :accessor chain-from
-               :documentation "The ally the beam jumps from at its last pulse, or NIL: its jump is drawn with the beam.")
-   (chain-to :initform NIL :accessor chain-to :documentation "What that jump strikes.")))
+   (floor-point :initform (vec 0 0 0) :reader floor-point
+                :documentation "Where the floor under what the beam struck is, while FLOOR-LIVE.")
+   (floor-live :initform NIL :accessor floor-live
+               :documentation "True while the beam strikes a body: the floor round it is electrified.")
+   (floor-spell :initform NIL :documentation "Its beam's spell, weaker, for the floor: made once.")
+   (spark-at :initform (vec 0 0 0) :reader spark-at :documentation "A point for the floor's sparks, reused.")))
 
 (define-creature-sounds arc-votary
   :alert :votary-alert :pain :votary-pain :death :votary-death :windup :votary-charge :step :step-light)
@@ -129,9 +135,14 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
   (:documentation "The name of the spell VOTARY's beam strikes with.")
   (:method ((votary arc-votary)) 'arc-beam))
 
-(defgeneric chain-reach (votary)
-  (:documentation "Metres between bodies VOTARY's beam jumps from one of its allies.")
-  (:method ((votary arc-votary)) *arc-chain-reach*))
+(defgeneric floor-reach (votary)
+  (:documentation "Metres round what VOTARY's beam strikes that the floor is electrified.")
+  (:method ((votary arc-votary)) *arc-floor-reach*))
+
+(defun floor-spell (votary)
+  (or (slot-value votary 'floor-spell)
+      (setf (slot-value votary 'floor-spell)
+            (scaled-spell (find-spell (votary-beam-spell votary)) *arc-floor-scale*))))
 
 (defun wet-spell (votary)
   (or (slot-value votary 'wet-spell)
@@ -241,20 +252,40 @@ shield on a creature stops it; WET, it strikes harder."
                (when (target-effect-p effect)
                  (apply-effect (effect-kind effect) effect body source))))))))
 
-(defun chain-target (votary ally)
-  "The nearest body hostile to VOTARY within its CHAIN-REACH of ALLY, edge to edge, in a clear line."
-  (let ((at (body-feet ally))
-        (from (body-chest ally))
-        (best NIL)
-        (best-gap (chain-reach votary)))
-    (dolist (body (live-bodies) best)
-      (unless (or (eq body ally) (eq body votary) (not (hostile-p votary body)))
-        (let* ((feet (body-feet body))
-               (gap (- (sqrt (+ (expt (- (vx feet) (vx at)) 2) (expt (- (vz feet) (vz at)) 2)))
-                       (body-radius body) (body-radius ally))))
-          (when (and (< gap best-gap) (< (abs (- (vy feet) (vy at))) 2.0)
-                     (clear-line-p from (body-chest body)))
-            (setf best body best-gap gap)))))))
+(defclass floor-pulse (beam-pulse) ()
+  (:documentation "A strike of the floor a votary's beam electrifies: it comes up from below, so no
+shield meets it."))
+
+(defmethod effect-unblockable-p ((source floor-pulse)) T)
+
+(defun floor-strike (votary victim)
+  "VOTARY's beam struck VICTIM: electrify the floor under it out to FLOOR-REACH, striking with
+FLOOR-SPELL every other live body standing on that floor there (feet within 0.4 m of it, so a jump
+clears it; not in water, which WATER-STRIKE has; not VOTARY), in a clear line from the floor under
+VICTIM. True if it struck anything hostile."
+  (let* ((f (body-feet victim))
+         (fy (or (and *nav-grid* (nav-floor-at (vx f) (+ (vy f) 0.3) (vz f))) (vy f)))
+         (c (floor-point votary))
+         (reach (floor-reach votary))
+         (spell (floor-spell votary))
+         (hostile NIL))
+    (setf (vx c) (vx f) (vy c) fy (vz c) (vz f)
+          (floor-live votary) T)
+    (let ((from (vec (vx c) (+ fy 0.3) (vz c))))
+      (dolist (body (live-bodies))
+        (unless (or (eq body victim) (eq body votary) (in-water-p body))
+          (let ((feet (body-feet body)))
+            (when (and (< (abs (- (vy feet) fy)) 0.4)
+                       (< (+ (expt (- (vx feet) (vx c)) 2) (expt (- (vz feet) (vz c)) 2))
+                          (expt (+ reach (body-radius body)) 2))
+                       (clear-line-p from (vec (vx feet) (+ fy 0.3) (vz feet))))
+              (let ((source (make-instance 'floor-pulse :spell spell :caster votary
+                                                        :origin (vec (vx feet) fy (vz feet)))))
+                (dolist (effect (spell-effects spell))
+                  (when (target-effect-p effect)
+                    (apply-effect (effect-kind effect) effect body source))))
+              (when (hostile-p votary body) (setf hostile T)))))))
+    hostile))
 
 (defun arc-bolt (from to &key (life 0.12))
   "Draw a jagged arc of lightning between points FROM and TO."
@@ -290,34 +321,22 @@ already struck there, or NIL. True if it struck anything hostile."
     (and liquid (member (liquid-kind liquid) '(:water :shallows)) T)))
 
 (defun votary-pulse (votary)
-  "One strike of VOTARY's held beam: what it reaches along its aim, a jump from an ally, and the
-water. Returns where the beam stops and the body it reached there, or NIL."
+  "One strike of VOTARY's held beam: what it reaches along its aim, its own allies too, the floor
+round that, and the water. Returns where the beam stops and the body it reached there, or NIL."
   (multiple-value-bind (origin dir) (votary-aim votary)
     (multiple-value-bind (end victim) (beam-end origin dir votary)
       (let ((hit NIL) (wet-at NIL) (wet-body NIL))
-        (setf (chain-from votary) NIL
-              (chain-to votary) NIL)
-        (cond ((null victim))
-              ((hostile-p votary victim)
-               (setf hit T)
-               (let ((wet (in-water-p victim)))
-                 (arc-strike votary victim origin end :wet wet)
-                 (when wet (setf wet-at (body-feet victim) wet-body victim))))
-              (T
-               ;; An ally: the beam jumps from it to the nearest of its foes, sparing it.
-               (let ((next (chain-target votary victim)))
-                 (when next
-                   (let ((from (body-chest victim))
-                         (to (body-chest next))
-                         (wet (in-water-p next)))
-                     (setf hit T
-                           (chain-from votary) victim
-                           (chain-to votary) next)
-                     ;; Its jump is redrawn with the beam (BEAM-BOLTS); a burst of sparks off the ally.
-                     (spray-sparks from NIL 5 :ramp :shock :speed '(1.0 3.0))
-                     (play-sound :arc-zap from)
-                     (arc-strike votary next from to :wet wet)
-                     (when wet (setf wet-at (body-feet next) wet-body next)))))))
+        (setf (floor-live votary) NIL)
+        ;; Whatever it reaches takes it, an ally too: a body in the way blocks it. The floor round
+        ;; that body is electrified.
+        (when victim
+          (let ((wet (in-water-p victim)))
+            (arc-strike votary victim origin end :wet wet)
+            (when (hostile-p votary victim) (setf hit T))
+            (when wet (setf wet-at (body-feet victim) wet-body victim))
+            (when (floor-strike votary victim) (setf hit T))
+            (when (< (random 1.0) 0.5)
+              (play-sound :arc-zap (floor-point votary)))))
         (when (and (null wet-at) (null victim) (water-beyond-p end dir))
           (setf wet-at end))
         (when (and wet-at (water-strike votary wet-at wet-body))
@@ -421,79 +440,17 @@ Y1 Z1, and whether it comes at the camera. One ending at the player's eye stops
 (OUT DOWN), metres out along the way to the bolt and down from the eye, below the view's middle, where
 their chest is.")
 
-(defun last-stretch (x1 y1 z1 &rest bolt-args &key (side 0.0) (lower 0.0) &allow-other-keys)
+(defun last-stretch (x1 y1 z1 &rest bolt-args)
   "Carry a bolt that stopped short of the player's eye, at X1 Y1 Z1, the rest of the way into their
 view: a short stretch, nearly straight (its jitter scales with its length, and so close to the camera
-any more crosses the view), to the bottom of the view where their chest is; SIDE metres to the view's
-right and LOWER further down, for a jump's scattered landings."
+any more crosses the view), to the bottom of the view where their chest is."
   (let* ((eye (location (camera (scene +main+))))
          (dx (- x1 (vx eye))) (dy (- y1 (vy eye))) (dz (- z1 (vz eye)))
-         (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
-         (hl (max 1f-4 (sqrt (+ (* dx dx) (* dz dz)))))
-         ;; The view's right, across the way to the bolt.
-         (rx (/ (- dz) hl))
-         (rz (/ dx hl)))
-    (let ((args (copy-list bolt-args)))
-      (remf args :side)
-      (remf args :lower)
-      (destructuring-bind (out down) *votary-bolt-chest*
-        (apply #'bolt-line x1 y1 z1
-               (+ (vx eye) (* out (/ dx len)) (* side rx))
-               (- (+ (vy eye) (* out (/ dy len))) down lower)
-               (+ (vz eye) (* out (/ dz len)) (* side rz))
-               2 args)))))
-
-(defun eye-bolt (x0 y0 z0 x1 y1 z1 depth &key (roughness 0.2) (width 2.0) (white 0.0) (branch 0.0)
-                                               (drop 0.0) (life 0.05) (side 0.0) (lower 0.0))
-  "A bolt from X0 Y0 Z0 to X1 Y1 Z1 that keeps out of the player's eye: ending within
-*VOTARY-BOLT-CLEARANCE* of it, its jagged part stops that far off, with no forks, and LAST-STRETCH
-carries it on into the bottom of the view."
-  (let* ((eye (location (camera (scene +main+))))
-         (near (sqrt (+ (expt (- x1 (vx eye)) 2) (expt (- y1 (vy eye)) 2) (expt (- z1 (vz eye)) 2))))
-         (close (< near *votary-bolt-clearance*)))
-    (when close
-      (let* ((dx (- x0 x1)) (dy (- y0 y1)) (dz (- z0 z1))
-             (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
-             (back (min (* 0.9 len) (- *votary-bolt-clearance* near))))
-        (setf x1 (+ x1 (* back (/ dx len)))
-              y1 (+ y1 (* back (/ dy len)))
-              z1 (+ z1 (* back (/ dz len))))))
-    (bolt-line x0 y0 z0 x1 y1 z1 depth :roughness roughness :width width :white white
-                                       :branch (if close 0.0 branch) :drop drop :life life)
-    (when close
-      (last-stretch x1 y1 z1 :roughness 0.04 :width width :white white :drop drop :life life
-                             :side side :lower lower))))
-
-(defparameter *votary-jump-bolts* '(2 3) "Least and most bolts a jump is drawn as at each redrawing.")
-
-(defun body-spot (body)
-  "A random spot on BODY as the camera sees it: across its sprite within its body's radius, from a
-third to nine tenths of its height up: X Y Z."
-  (let* ((feet (body-feet body))
-         (eye (location (camera (scene +main+))))
-         (fx (- (vx feet) (vx eye)))
-         (fz (- (vz feet) (vz eye)))
-         (fl (max 1f-4 (sqrt (+ (* fx fx) (* fz fz)))))
-         (across (* (body-radius body) (- (random 2.0) 1.0))))
-    (values (+ (vx feet) (* across (/ (- fz) fl)))
-            (+ (vy feet) (* (body-height body) (+ 0.33 (random 0.57))))
-            (+ (vz feet) (* across (/ fx fl))))))
-
-(defun chain-bolt (votary life)
-  "Redraw the jump of VOTARY's beam from the ally it reached to what it strikes, while both live: not
-one bolt, which read as the beam going on through the ally, but two or three, each from a random spot
-on the ally to a random spot on what it strikes, more jagged and forked than the beam and redrawn every
-time, so it crackles. On the player they land scattered over the bottom of the view."
-  (let ((from (chain-from votary))
-        (to (chain-to votary)))
-    (when (and from to (not (dead from)) (target-live-p to))
-      (destructuring-bind (least most) *votary-jump-bolts*
-        (dotimes (i (+ least (random (1+ (- most least)))))
-          (multiple-value-bind (x0 y0 z0) (body-spot from)
-            (multiple-value-bind (x1 y1 z1) (body-spot to)
-              (eye-bolt x0 y0 z0 x1 y1 z1 4 :roughness 0.25 :width 2.0 :white 0.4 :branch 0.3
-                                            :life (* 0.6 life)
-                                            :side (- (random 0.7) 0.35) :lower (random 0.15)))))))))
+         (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz))))))
+    (destructuring-bind (out down) *votary-bolt-chest*
+      (apply #'bolt-line x1 y1 z1
+             (+ (vx eye) (* out (/ dx len))) (- (+ (vy eye) (* out (/ dy len))) down) (+ (vz eye) (* out (/ dz len)))
+             2 bolt-args))))
 
 (defun beam-bolts (votary)
   "Redraw VOTARY's held beam as lightning from its palms to where it ends: a broad bolt with a white
@@ -508,7 +465,40 @@ core and a thinner one forking about it, as the shock nova's are, each lasting t
                                      :drop 0.15 :life life)
       (when close
         (last-stretch x1 y1 z1 :roughness 0.04 :width 3.0 :white 0.6 :life life))
-      (chain-bolt votary life))))
+      (when (floor-live votary)
+        (floor-bolts votary life)))))
+
+(defun floor-bolts (votary life)
+  "Redraw the electrified floor round what VOTARY's beam strikes, as the shock nova's bolts are drawn:
+*VOTARY-FLOOR-BOLTS* bolts, most rising off the floor and the rest crawling over it, at random spots
+thinning out toward FLOOR-REACH so it has no drawn edge, none through a wall from the middle or right at
+the player's eye; now and then a spray of sparks."
+  (let* ((c (floor-point votary))
+         (cx (vx c)) (cy (+ (vy c) 0.03)) (cz (vz c))
+         (reach (floor-reach votary))
+         (eye (location (camera (scene +main+)))))
+    (dotimes (i *votary-floor-bolts*)
+      (let* ((a (random #.(float (* 2 pi) 0f0)))
+             (d (* reach (expt (random 1.0) 0.75)))
+             (x (+ cx (* d (cos a))))
+             (z (+ cz (* d (sin a)))))
+        (unless (or (< (+ (expt (- x (vx eye)) 2) (expt (- z (vz eye)) 2)) 0.81)
+                    (solid-at x (+ cy 0.2) z)
+                    (and (< 0.5 d)
+                         (not (clear-line-p (vec cx (+ cy 0.2) cz) (vec x (+ cy 0.2) z)))))
+          (if (< (random 1.0) 0.65)
+              (bolt-line x cy z (+ x (- (random 0.5) 0.25)) (+ cy 0.25 (random 0.75)) (+ z (- (random 0.5) 0.25)) 3
+                         :roughness 0.35 :width 1.5 :white 0.3 :branch 0.3 :life life)
+              (let ((b (+ a (- (random 1.6) 0.8)))
+                    (len (+ 0.4 (random 0.8))))
+                (bolt-line x cy z (+ x (* len (cos b))) cy (+ z (* len (sin b))) 3
+                           :roughness 0.3 :width 1.5 :white 0.2 :branch 0.2 :life life))))))
+    (when (< (random 1.0) 0.3)
+      (let* ((at (spark-at votary))
+             (a (random #.(float (* 2 pi) 0f0)))
+             (d (* reach (random 0.7))))
+        (setf (vx at) (+ cx (* d (cos a))) (vy at) (+ cy 0.05) (vz at) (+ cz (* d (sin a))))
+        (spray-sparks at NIL 3 :ramp :shock :speed '(1.0 2.5))))))
 
 (defun ranging-bolt (votary k)
   "Redraw the charge's ranging line as faint lightning from the knot between its hands to where the
@@ -669,4 +659,4 @@ side."
 (define-shader-entity elite-votary (elite arc-votary) ())
 
 (defmethod votary-beam-spell ((boss votary-boss)) 'hierophant-beam)
-(defmethod chain-reach ((boss votary-boss)) 5.0)
+(defmethod floor-reach ((boss votary-boss)) 5.0)

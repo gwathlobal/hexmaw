@@ -11,12 +11,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   for 0.9 s (a crackle between its hands, a swelling lamp, a faint ranging line) and then holds a
   shock beam up to 3 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 1.2 rad/s: run
   round it or step behind cover and it lets go after 0.75 s. Each pulse on the player is a blow the
-  shield meets at 12 stamina, with no shove or hit-stop; Absorb does nothing. The beam jumps from an
-  ally it reaches to the nearest hostile body within 3.5 m, and in water strikes 1.5 times as hard and
+  shield meets at 12 stamina, with no shove or hit-stop; Absorb does nothing. The beam strikes whatever it
+  reaches, its own allies too (a body in the way blocks it), and electrifies the floor round that body
+  out to 3.5 m: anyone else standing there takes half a pulse, past any shield, unless they jump. In
+  water it strikes 1.5 times as hard and
   runs to every body in the same water within 6 m. +20 pain chance while it holds; resists shock 0.75;
   teaches shock (the shared `taught-effect`); kill gold 10. In the pools of run levels 2 and 3 and
   `*spawn-pool*`, and the 30% spawn of the pool, cistern, canal end and creek blocks is
-  `arc-votary|acolyte`. Boss: the Arc Hierophant (4 to 6 a pulse, a 5 m jump); elite: `elite-votary`.
+  `arc-votary|acolyte`. Boss: the Arc Hierophant (4 to 6 a pulse, its floor 5 m round); elite: `elite-votary`.
   Engine: `beam-end` reaches the player's body for any other caster; a `beam-pulse` strike source,
   `effect-shove` and `effect-block-cost`, and `hurt-player`'s `:blockable` and `:block-cost`; a beam's
   `strength`. New boss and pool kinds change which monsters and boss some seeds place, so a save
@@ -34,11 +36,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   and has no forks. The charge's ranging line is lightning too, faint: one broken thread an art pixel
   wide that firms as the charge grows. The lightning ends in the middle of a creature it strikes, where its
   sprite is, not at the edge of the beam's reach (0.55 m short of an imp), and on the player runs on
-  from 1.5 m off in a short, nearly straight stretch into the bottom of the view. Its jump from an ally is
-  drawn with the beam as long as it lasts, as two or three crackling bolts from random spots on the ally
-  to random spots on what it strikes (one bolt read as the beam going on through the ally), with sparks
-  off the ally; onto the player they land scattered over the bottom of the view. An imp in the way used
-  to burst and the player take the pulse with no sign of why. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
+  from 1.5 m off in a short, nearly straight stretch into the bottom of the view. A first try, the beam jumping
+  off an ally onto the nearest foe and sparing the ally, read as the beam passing through it however it
+  was drawn, and is gone. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
   view, and none from behind.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and

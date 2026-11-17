@@ -2194,17 +2194,21 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
   leaves the beam behind, and its pain chance is `*votary-pain-bonus*` (20) higher. After
   `*votary-lost-time*` (0.75 s) of pulses striking nothing hostile (behind a pillar, circled), or
   with its target dead, it lets go (`end-hold`) and recovers.
-- **The jump**: a beam that reaches one of its allies (anything `hostile-p` says it doesn't fight)
-  spares it and jumps from its chest to the nearest hostile body within `chain-reach`
-  (`*arc-chain-reach*` 3.5 m, edge to edge, clear line; `chain-target`), with `arc-zap` and sparks off
-  the ally: monsters crowding the player let it reach round them. The jump (`chain-from`, `chain-to`,
-  set at each pulse) is redrawn with the beam (`chain-bolt`), and not as one bolt, which read as the
-  beam going on through the ally: as `*votary-jump-bolts*` (2 or 3), each from a random spot on the
-  ally to a random spot on what it strikes (`body-spot`: across its sprite within its radius, a third
-  to nine tenths of its height), more jagged and forked than the beam and shorter-lived, so it
-  crackles. Each goes through `eye-bolt`, which keeps a bolt out of the player's eye as the beam's is
-  kept, so on the player they land scattered over the bottom of the view (`last-stretch`'s SIDE and
-  LOWER).
+- **What it reaches takes it**, its own allies too, with their flinch and pain: a body in the way
+  blocks the beam (and three of its hits from another kind give an ally a grudge against it,
+  `note-grudge`). **The floor round what it strikes is electrified** (`floor-strike`, `floor-live`,
+  `floor-point`): every other live body standing on that floor (feet within 0.4 m of it, so a jump
+  clears it; not in water, which the water rule has; not the votary) within `floor-reach`
+  (`*arc-floor-reach*` 3.5 m, the Hierophant's 5) of it, in a clear line, is struck with
+  `floor-spell`, the beam at `*arc-floor-scale*` (half, 2 a pulse), through a `floor-pulse` source: it
+  comes up from below, so no shield meets it (`effect-unblockable-p`). The body the beam strikes isn't
+  struck again by its floor, so a shield that takes the beam still covers the player. Shown as the
+  shock nova's bolts with no circle (`floor-bolts`, redrawn with the beam): `*votary-floor-bolts*` a
+  redrawing at random spots thinning out toward its reach, so no edge is drawn, most rising off the
+  floor and the rest crawling over it, none through a wall from the middle or within 0.9 m of the
+  player's eye, and now and then sparks; half its pulses play `arc-zap` there. A first try, the beam
+  jumping from an ally to the nearest foe and sparing the ally, read as the beam passing through it,
+  however it was drawn.
 - **Water** (`in-water-p`: feet in `:water` or `:shallows`, or afloat): a body struck in water takes
   `*arc-water-scale*` (1.5) times as much (`wet-spell`, a `scaled-spell` made once), and so does
   every other body in water within `*arc-water-reach*` (6 m) of it, in a clear line, the votary's
@@ -2245,7 +2249,7 @@ know shock, it drops the shock glyph. Kill gold 10. It spawns from level 2 of a 
 both pools), and the 30% spawn of the `pool`, `cistern`, `canal-end`, `creek-cavern`,
 `creek-spring`, `creek-sink` and `creek-sink-sump` is `arc-votary|acolyte`, so it stands on their
 ledges and banks from level 2 on (an acolyte on level 1). As a boss it is the Arc Hierophant
-(`votary-boss`: `hierophant-beam`, 4 to 6 a pulse, its jump 5 m; a power in play stops its beam).
+(`votary-boss`: `hierophant-beam`, 4 to 6 a pulse, its floor electrified 5 m round; a power in play stops its beam).
 On the debug level it stands behind the hall's north-west pillar.
 
 To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list
