@@ -7,6 +7,29 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The rime hag, the first frost enemy** (`src/hag.lisp`). A stooped crone of the ice caves who
+  throws rime shards (frost, a chill), from level 2 a ball of rime at the floor ahead of her target
+  that ices the floor and walls round it for 10 s, and when her target comes within 3 m gathers the
+  cold for 1.0 s (a cold lamp, frost drawn in, a breath) and bursts a 5 m frost nova round her (8 to
+  12, a 35% slow, knockback), leaving rime round her feet. A run outruns the nova, a bash or the
+  earthshake breaks the gather, fire melts her rime; she walks her own ice, takes a quarter of frost
+  and half again of fire, and killed by a player who doesn't know frost drops its glyph. She is in
+  the pools of levels 1 and 2 and named by the ice caves (`frost-shrine`, `ice-cavern`,
+  `ice-grotto`) on any level; an elite, and a boss, the Winter Crone, whose nova reaches 7 m. Her
+  art is generated and sliced as the other monsters'; her sounds are nine new clips. Adding a pool
+  kind, spawns and a boss kind changes which monsters some seeds place and every seed's boss draw:
+  a save from before starts its level fresh. `*save-version*` is unchanged.
+- **Skins** (`src/skins.lisp`): something laid over the floor and wall cells for a while, of a kind
+  (texture, rim colours, footing or a look only), drawn per kind in one call. The frost patch and
+  ice floor are ported from the spell-secondary branch and made general, so the bloodroot's roots can
+  use them; they also climb the walls round them now (a look only), never lie on liquids, take a
+  radius and time per patch, and their freeze spares the caster's side. Ice underfoot through
+  `skin-footing` (`slips-on-rime-p` keeps a creature off it). Elements reach skins through
+  `strike-skins` (bursts, novas, projectile and beam impacts, the firestorm). Saved under `:skins`.
+- **Engine hooks for the new enemies**: `spell-impact` (a spell's landing hook), `:nova-radius` per
+  spell, negative resistances named by the forge ("take half again as much"), `taught-effect` (an
+  elemental foe drops its glyph), and `!kind` in a named spawn (placed whatever the level's pool).
+
 - **An elite says what its glow means.** While the crosshair is on one (`aimed-elite`, elite.lisp: the
   nearest body the line of sight meets, `ray-body-hit`, within 15 m and no wall before it), a bar half the
   boss's takes the boss bar's place at the top of the screen: its name over it, as the boss's title
