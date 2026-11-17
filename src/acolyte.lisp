@@ -300,6 +300,8 @@ may and wants to, else throw a cinder; or close in."
   "Burn everything with feet in STORM but its caster."
   (let* ((caster (caster storm))
          (damage (effect-magnitude (first (spell-effects (spell storm))))))
+    ;; Fire melts what rime lies in it (skins.lisp).
+    (strike-skins :fire (centre storm) (effect-area (first (spell-effects (spell storm)))) caster)
     (destructuring-bind (rate time) *firestorm-afterburn*
       (loop for c across *creatures*
             when (and (not (dead c)) (not (eq c caster)) (in-circle-p storm (location c) (body-radius c)))

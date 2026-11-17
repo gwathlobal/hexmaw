@@ -106,6 +106,8 @@ grudge. Returns them."
   (setf (fill-pointer *solids*) 0
         (fill-pointer *creatures*) 0
         (fill-pointer *lamps*) 0
+        (fill-pointer *skin-patches*) 0
+        *skins* ()
         (fill-pointer *torch-points*) 0
         (fill-pointer *ember-sources*) 0
         (fill-pointer *vortices*) 0

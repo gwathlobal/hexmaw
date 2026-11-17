@@ -69,7 +69,7 @@ their values."
 (defmethod saved-slots append ((creature creature))
   '(location facing home health brain alert look-timer replan-timer attack-time attack-pending
     idle-timer path stuck walk-distance momentum flight stagger flash brace burn-timer dead bleeding
-    drip-timer gibbed rising stirring reel bash-poise flanking flank-timer
+    drip-timer gibbed rising stirring thaw reel bash-poise flanking flank-timer
     sidestep sidestep-side sidestep-flipped slot-yaw slot-bans slot-ban-timer quarry sent summoner
     grudge grudge-from grudge-count grudge-time))
 
@@ -288,6 +288,8 @@ status auras, which come back from their statuses."
                                        :state (object-state creature)))
         :effects (mapcar #'effect-record (level-effects))
         :blood (when *blood-pool* (blood-record *blood-pool*))
+        ;; The skins over floors and walls (skins.lisp): a rime hag's ice.
+        :skins (mapcar #'skin-record (remove-if-not #'container *skins*))
         ;; The blocks the automap shows, by placement order (map-view.lisp).
         :map (revealed-block-indices)
         ;; The seed places the pickups again; a save older than them has none taken.
@@ -459,6 +461,8 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
     (restore-effect record scene))
   (when (and *blood-pool* (getf save :blood))
     (restore-blood *blood-pool* (getf save :blood)))
+  (dolist (record (getf save :skins))
+    (restore-skin (getf record :class) record scene))
   (reveal-block-indices (getf save :map))
   ;; Before the pickups: what the settlement holds decides which of them are there.
   (let ((settlement (getf (getf save :settlement) :state)))
