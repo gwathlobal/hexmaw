@@ -1,0 +1,29 @@
+{
+  "prompt": "Pixel-art sprite sheet: the BLOODROOT'S BLOOD SEED, a projectile for a Doom/Hexen-style first-person dungeon game: a seed the monstrous plant spits, which bursts on the floor into roots.\n\nREFERENCE IMAGES, in the order attached:\n1. The bloodroot, the plant that spits it: match its colours, knotted root bark, wet crimson flesh, bone thorns and glowing veins.\n2. The house style anchor: pixel size, lighting and palette.\n\nTHE FRAMES:\n- Top row, cells 1 to 4, FLIGHT, a looping tumble: a round seed pod the size of a fist, dark red with a crust of root bark, glowing red veins, two or three small thorns and a short root tail, turning a quarter turn each frame, a few drops of blood around it.\n- Bottom row, cells 5 to 9, BURST on hitting the floor: cell 5 the pod cracking open with a splash of dark blood; cell 6 a wet red burst, thin root tendrils shooting out sideways along the ground; cell 7 the tendrils spread wider and curling, the blood spattering; cell 8 the tendrils settling flat, the splash falling; cell 9 a few last drops and fading tendril tips.\n- The pod is about a sixth of the cell's height; the burst fills most of its cell, wider than tall, standing on the bottom of the cell.\n- LAYOUT: two rows of five equal cells: the flight in cells 1 to 4 of the top row, its fifth cell empty; the burst in all five cells of the bottom row. Background flat pure magenta (#FF00FF); cells separated by thin lines of pure cyan (#00FFFF). Nothing touches a cell edge or a cyan line.\n- No text, labels, frame borders, speed lines or motion blur. Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nHOUSE STYLE (Hexmaw; attach art/style/anchor.png as a style reference, and say which reference it is):\n- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.\n- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.\n- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.\n- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.",
+  "prompt_file": null,
+  "refs": [
+    "art/bloodroot/design-2.png",
+    "art/style/anchor.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1794889701,
+  "size_request": "1536x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art sprite sheet: the BLOODROOT'S BLOOD SEED, a projectile for a Doom/Hexen-style first-person dungeon game: a seed the monstrous plant spits, which bursts on the floor into roots.\n\nREFERENCE IMAGES, in the order attached:\n1. The bloodroot, the plant that spits it: match its colours, knotted root bark, wet crimson flesh, bone thorns and glowing veins.\n2. The house style anchor: pixel size, lighting and palette.\n\nTHE FRAMES:\n- Top row, cells 1 to 4, FLIGHT, a looping tumble: a round seed pod the size of a fist, dark red with a crust of root bark, glowing red veins, two or three small thorns and a short root tail, turning a quarter turn each frame, a few drops of blood around it.\n- Bottom row, cells 5 to 9, BURST on hitting the floor: cell 5 the pod cracking open with a splash of dark blood; cell 6 a wet red burst, thin root tendrils shooting out sideways along the ground; cell 7 the tendrils spread wider and curling, the blood spattering; cell 8 the tendrils settling flat, the splash falling; cell 9 a few last drops and fading tendril tips.\n- The pod is about a sixth of the cell's height; the burst fills most of its cell, wider than tall, standing on the bottom of the cell.\n- LAYOUT: two rows of five equal cells: the flight in cells 1 to 4 of the top row, its fifth cell empty; the burst in all five cells of the bottom row. Background flat pure magenta (#FF00FF); cells separated by thin lines of pure cyan (#00FFFF). Nothing touches a cell edge or a cyan line.\n- No text, labels, frame borders, speed lines or motion blur. Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nHOUSE STYLE (Hexmaw; attach art/style/anchor.png as a style reference, and say which reference it is):\n- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.\n- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.\n- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.\n- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.\nImage size: 1536x1024 pixels (landscape).",
+  "codex_threads": [
+    "01a1e7c1-87f0-7061-874e-eb86d28e14fd",
+    "01a1e7c2-70dc-7480-a5b8-c65ff6edd783"
+  ],
+  "sizes": [
+    [
+      1536,
+      1024
+    ],
+    [
+      1536,
+      1024
+    ]
+  ]
+}
