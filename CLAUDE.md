@@ -1170,10 +1170,10 @@ real time instead.
   **What the glow means** shows where the boss bar goes: while the player aims at an elite
   (`aimed-elite`: `seeker-mark` with `*elite-aim-cone*`, 0.12 rad, and `*elite-aim-range*`, 15 m,
   asked every `*elite-aim-step*` from the HUD's tick), a bar half the boss's (`*elite-bar-width*`)
-  shows its health, with no title and its trait's name under it in the glow's colour
-  (`*elite-trait-labels*`: Haste, Warded, Tough). It stays `*elite-bar-linger*` (1.5 s) after the aim
+  shows its health, its name over it as the boss's title is (`elite-title`: "Elite Gale Wraith")
+  and its trait's name under it in the glow's colour (`*elite-trait-labels*`: Haste, Warded, Tough). It stays `*elite-bar-linger*` (1.5 s) after the aim
   leaves, goes when the elite dies, and covers the boss's bar while shown (`shown-foe`, `shown-elite`,
-  hud.lisp; the title and half mark are `boss-only-element`s). A warded elite also shows the boss's
+  hud.lisp; the half mark is a `boss-only-element`). A warded elite also shows the boss's
   violet arc round its front (`ward-arc-mixin`, boss.lisp), humming only within
   `*elite-ward-hum-range*` (12 m) of the player, since a sound gets no quieter past 50 m.
   `*elite-override*` (`:all`, or a trait) makes every block spawn an elite, on any level (on the test

@@ -13,8 +13,8 @@
 ;;; Its trait comes back with the level when a save is loaded, since the seed draws it again.
 ;;;
 ;;; What the glow means is told by the boss bar's place at the top of the screen: while the player
-;;; aims at an elite (AIMED-ELITE) a bar half the boss's shows its health, its trait's name under it
-;;; in the glow's colour (hud.lisp). A warded elite also shows the boss's violet arc on the floor
+;;; aims at an elite (AIMED-ELITE) its name (ELITE-TITLE) stands over a bar half the boss's showing
+;;; its health, its trait's name under it in the glow's colour (hud.lisp). A warded elite also shows the boss's violet arc on the floor
 ;;; round its front (UPDATE-WARD, boss.lisp).
 
 (defparameter *elite-kinds*
@@ -123,6 +123,11 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
 sight, or NIL."
   (seeker-mark (location player) (look-direction player) NIL
                :cone *elite-aim-cone* :range *elite-aim-range* :test #'elite-p))
+
+(defun elite-title (elite)
+  "What the HUD's bar calls ELITE, as the boss's title calls the boss: \"Elite Gale Wraith\"."
+  (let ((entry (find (type-of elite) *elite-kinds* :key #'second)))
+    (format NIL "Elite ~a" (string-capitalize (substitute #\Space #\- (if entry (first entry) "monster"))))))
 
 (defun elite-trait-label (elite)
   (getf *elite-trait-labels* (elite-trait elite)))

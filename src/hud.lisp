@@ -616,8 +616,8 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
 
 ;;; The boss bar: the boss's title, its health and its powers, across the top of the screen
 ;;; from the moment the arena's gate drops until it dies (boss.lisp). An elite the player aims at
-;;; (AIMED-ELITE, elite.lisp) takes its place while aimed at and *ELITE-BAR-LINGER* after: a bar
-;;; half as wide, no title, and its trait's name under it in its glow's colour.
+;;; (AIMED-ELITE, elite.lisp) takes its place while aimed at and *ELITE-BAR-LINGER* after: its
+;;; name over a bar half as wide, and its trait's name under it in its glow's colour.
 
 (defparameter *boss-bar-width* 160 "Art pixels across the boss bar, its frame included.")
 (defparameter *boss-bar-height* 6 "Art pixels up it.")
@@ -663,14 +663,13 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
   (and (member *game-state* '(:playing :paused)) (shown-foe) T))
 
 (define-shader-entity boss-only-element (boss-element) ()
-  (:documentation "A part of the bar an elite's doesn't have: the title and the half mark."))
+  (:documentation "A part of the bar an elite's doesn't have: the half mark."))
 
 (defmethod hud-shown-p ((element boss-only-element))
   (and (call-next-method) (null (shown-elite))))
 
 (define-shader-entity boss-bar (boss-element hud-bar) ())
 (define-shader-entity boss-text (boss-element hud-text) ())
-(define-shader-entity boss-title-text (boss-only-element hud-text) ())
 (define-shader-entity boss-half-mark (boss-only-element hud-bar) ())
 
 (defun boss-powers-text (boss)
@@ -703,7 +702,7 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
    (veils :initform (mapcar (lambda (kind) (make-instance 'status-veil :kind kind)) *veil-kinds*) :reader veils)
    (whirl-streaks :initform (make-instance 'whirl-streaks) :reader whirl-streaks)
    (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
-   (boss-name :initform (make-hud-text "" 'boss-title-text) :reader boss-name)
+   (boss-name :initform (make-hud-text "" 'boss-text) :reader boss-name)
    (boss-bar :initform (make-instance 'boss-bar :fill-color *boss-bar-color*) :reader boss-bar)
    (boss-half :initform (make-instance 'boss-half-mark :fill-color (vec4 0 0 0 1)) :reader boss-half
               :documentation "A mark on the bar at half health, where the boss enrages.")
@@ -847,7 +846,8 @@ heals."
                        (foreground (boss-powers-line hud)) *hud-text-color*))
                 (T
                  (let ((c (getf *elite-glow-colors* (elite-trait foe))))
-                   (setf (text (boss-powers-line hud)) (elite-trait-label foe)
+                   (setf (text (boss-name hud)) (elite-title foe)
+                         (text (boss-powers-line hud)) (elite-trait-label foe)
                          (foreground (boss-powers-line hud)) (vec4 (vx c) (vy c) (vz c) 1)))))))))
   (when (eq *game-state* :playing)
     (loop for (kind left) on *veil-flares* by #'cddr

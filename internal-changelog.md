@@ -9,8 +9,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 - **An elite says what its glow means.** While the player aims at one (`aimed-elite`, elite.lisp:
   `seeker-mark`, now with `:cone`, `:range` and `:test`, at 0.12 rad and 15 m), a bar half the
-  boss's takes the boss bar's place at the top of the screen: its health, no title, and its trait's
-  name under it ("Haste", "Warded", "Tough", `*elite-trait-labels*`) in the glow's colour. It stays
+  boss's takes the boss bar's place at the top of the screen: its name over it, as the boss's title
+  is ("Elite Acolyte", `elite-title`), its health, and its trait's name under it ("Haste", "Warded", "Tough", `*elite-trait-labels*`) in the glow's colour. It stays
   1.5 s after the aim leaves (`*elite-bar-linger*`), goes at once when the elite dies, and in the
   arena covers the boss's bar while an elite that followed the player in is aimed at (`shown-foe`,
   hud.lisp). A warded elite now shows the boss's violet arc on the floor over the sector its front
