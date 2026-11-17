@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-152 clips; tier 1: 96 clips, 301 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 449 s, about 4,490 credits for everything.
+152 clips; tier 1: 96 clips, 317 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 465 s, about 4,650 credits for everything.
 
 ## Player: weapons and shield
 
@@ -109,7 +109,7 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | cinder-impact | 1 | P | 0.8 | 3 | `impact` spells.lisp:157, `cinder` |
 | firestorm-sign | 1 | P L | 4 | 2 | `light-firestorm` acolyte.lisp, the sign's draw-in until the storm comes down |
 | firestorm-ignite | 1 | P | 1.2 | 3 | `ignite-firestorm` acolyte.lisp, the storm coming down |
-| firestorm-roar | 1 | P L | 4 | 2 | `ignite-firestorm` acolyte.lisp, while it burns; its falling cinders play `cinder-impact` |
+| firestorm-roar | 1 | P L | 6 | 4 | `ignite-firestorm` acolyte.lisp, while it burns; its falling cinders play `cinder-impact` |
 | knight-alert | 1 | P | 1.2 | 3 | alert: knight |
 | knight-pain | 1 | P | 0.6 | 3 | pain: knight |
 | knight-death | 1 | P | 2 | 3 | death: knight (kneels, topples, crashes) |

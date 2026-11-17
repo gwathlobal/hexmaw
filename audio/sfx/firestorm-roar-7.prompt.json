@@ -1,0 +1,9 @@
+{
+  "source": "audio/sfx/firestorm-roar-5.wav",
+  "made_by": "its last 0.5 s crossfaded (equal power) into its first 0.5 s, 6.0 s to 5.5 s",
+  "note": "take 5 made a seamless loop: its first moments were 3 dB quieter than its last",
+  "created": 1794885593,
+  "seconds": [
+    5.5
+  ]
+}
