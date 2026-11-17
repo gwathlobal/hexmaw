@@ -26,6 +26,9 @@
   "Metres round a body its beam strikes that the floor is electrified: whoever else stands there is struck.")
 (defparameter *arc-floor-scale* 0.5 "How hard the electrified floor strikes, against the beam.")
 (defparameter *votary-floor-bolts* 4 "Bolts drawn over the electrified floor at each redrawing of the beam.")
+(defparameter *votary-floor-flash* (vec 1.6 1.45 0.75)
+  "The flash on the electrified floor at its brightest: a lamp that jumps to a bolt's foot each redrawing.")
+(defparameter *votary-floor-flash-radius* 2.2)
 (defparameter *arc-water-reach* 6.0 "Metres across water a beam runs from what it strikes in it.")
 (defparameter *arc-water-scale* 1.5 "How much harder a beam strikes what stands in water.")
 (defparameter *arc-block-stamina* 12.0
@@ -123,7 +126,9 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
    (floor-live :initform NIL :accessor floor-live
                :documentation "True while the beam strikes a body: the floor round it is electrified.")
    (floor-spell :initform NIL :documentation "Its beam's spell, weaker, for the floor: made once.")
-   (spark-at :initform (vec 0 0 0) :reader spark-at :documentation "A point for the floor's sparks, reused.")))
+   (spark-at :initform (vec 0 0 0) :reader spark-at :documentation "A point for the floor's sparks, reused.")
+   (floor-lamp :initform NIL :accessor floor-lamp
+               :documentation "The flash on its electrified floor, while its beam electrifies one.")))
 
 (define-creature-sounds arc-votary
   :alert :votary-alert :pain :votary-pain :death :votary-death :windup :votary-charge :step :step-light)
@@ -367,7 +372,10 @@ its reach, an imp's 0.55 m and an ogre's 1.2 m short of the sprite."
     (unless (and lamp (find lamp *lamps*))
       (setf lamp (add-lamp (aim-origin votary) *votary-light-color* *votary-light-radius* :flicker 0.3)
             (votary-lamp votary) lamp))
-    (v<- (location lamp) (aim-origin votary))
+    ;; Moved, it finds its room again (a lamp with no source is placed once, update-lamps).
+    (unless (v= (location lamp) (aim-origin votary))
+      (v<- (location lamp) (aim-origin votary))
+      (setf (located lamp) NIL))
     (let ((color (color lamp)))
       (setf (vx color) (* k (vx *votary-light-color*))
             (vy color) (* k (vy *votary-light-color*))
@@ -465,8 +473,9 @@ core and a thinner one forking about it, as the shock nova's are, each lasting t
                                      :drop 0.15 :life life)
       (when close
         (last-stretch x1 y1 z1 :roughness 0.04 :width 3.0 :white 0.6 :life life))
-      (when (floor-live votary)
-        (floor-bolts votary life)))))
+      (if (floor-live votary)
+          (floor-bolts votary life)
+          (douse-floor votary)))))
 
 (defun floor-bolts (votary life)
   "Redraw the electrified floor round what VOTARY's beam strikes, as the shock nova's bolts are drawn:
@@ -486,6 +495,13 @@ the player's eye; now and then a spray of sparks."
                     (solid-at x (+ cy 0.2) z)
                     (and (< 0.5 d)
                          (not (clear-line-p (vec cx (+ cy 0.2) cz) (vec x (+ cy 0.2) z)))))
+          ;; Its foot throws a spark or two, so it stands in the room and not on the screen, and the
+          ;; flash jumps there.
+          (let ((at (spark-at votary)))
+            (setf (vx at) x (vy at) (+ cy 0.02) (vz at) z)
+            (spray-sparks at NIL (+ 1 (random 2)) :ramp :shock :speed '(0.6 1.8)))
+          (when (= i 0)
+            (flash-floor votary x cy z))
           (if (< (random 1.0) 0.65)
               (bolt-line x cy z (+ x (- (random 0.5) 0.25)) (+ cy 0.25 (random 0.75)) (+ z (- (random 0.5) 0.25)) 3
                          :roughness 0.35 :width 1.5 :white 0.3 :branch 0.3 :life life)
@@ -543,8 +559,30 @@ behind, where its body hides them. BOLT-ARGS go to BOLT-LINE."
   (setf (attack-time votary) (+ (attack-hit-time votary) (third (attack-frame-times votary)))))
 
 (defun release-beam (votary)
-  "Stop the held beam's loop."
-  (setf (beam-sound votary) (stop-loop (beam-sound votary))))
+  "Stop the held beam's loop, and put out the flash on its floor."
+  (setf (beam-sound votary) (stop-loop (beam-sound votary)))
+  (douse-floor votary))
+
+(defun douse-floor (votary)
+  (setf (floor-live votary) NIL)
+  (when (floor-lamp votary)
+    (remove-lamp (floor-lamp votary))
+    (setf (floor-lamp votary) NIL)))
+
+(defun flash-floor (votary x y z)
+  "Light the flash on VOTARY's electrified floor at X Y Z, the foot of a bolt, at a flickering strength."
+  (let ((lamp (floor-lamp votary))
+        (k (+ 0.5 (random 0.7))))
+    (unless (and lamp (find lamp *lamps*))
+      (setf lamp (add-lamp (floor-point votary) *votary-floor-flash* *votary-floor-flash-radius*)
+            (floor-lamp votary) lamp))
+    (let ((at (location lamp))
+          (color (color lamp)))
+      (setf (vx at) x (vy at) (+ y 0.3) (vz at) z
+            (located lamp) NIL
+            (vx color) (* k (vx *votary-floor-flash*))
+            (vy color) (* k (vy *votary-floor-flash*))
+            (vz color) (* k (vz *votary-floor-flash*))))))
 
 (defun douse-votary (votary)
   "Put VOTARY's light out for good: dead, or gone from the scene."

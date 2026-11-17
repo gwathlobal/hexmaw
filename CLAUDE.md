@@ -2206,7 +2206,12 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
   shock nova's bolts with no circle (`floor-bolts`, redrawn with the beam): `*votary-floor-bolts*` a
   redrawing at random spots thinning out toward its reach, so no edge is drawn, most rising off the
   floor and the rest crawling over it, none through a wall from the middle or within 0.9 m of the
-  player's eye, and now and then sparks; half its pulses play `arc-zap` there. A first try, the beam
+  player's eye. Each bolt's foot throws a spark or two (`spray-sparks`, so it stands in the room and
+  not on the screen), and a flash lights the floor: one lamp a votary while its floor is live
+  (`flash-floor`, `floor-lamp`, `*votary-floor-flash*`), jumping to a bolt's foot at a flickering
+  strength each redrawing and put out with the floor (`douse-floor`). A lamp with no source is placed
+  in its room once (`update-lamps`), so a votary's lamps are marked to be placed again
+  (`located` NIL) whenever they move. Half its pulses play `arc-zap` there. A first try, the beam
   jumping from an ally to the nearest foe and sparing the ally, read as the beam passing through it,
   however it was drawn.
 - **Water** (`in-water-p`: feet in `:water` or `:shallows`, or afloat): a body struck in water takes

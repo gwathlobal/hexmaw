@@ -38,7 +38,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   sprite is, not at the edge of the beam's reach (0.55 m short of an imp), and on the player runs on
   from 1.5 m off in a short, nearly straight stretch into the bottom of the view. A first try, the beam jumping
   off an ally onto the nearest foe and sparing the ally, read as the beam passing through it however it
-  was drawn, and is gone. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
+  was drawn, and is gone. Each bolt off the electrified floor throws sparks from its foot, and a
+  flickering lamp jumps from foot to foot so the floor flashes under them. Its hands' lamp, moved as it
+  walked, kept the room it was first placed in; moved lamps are now placed again. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
   view, and none from behind.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
