@@ -2216,8 +2216,14 @@ view), and from straight behind, where its body hides them, there is none. Its l
 (`*votary-hand-height*` of its height, where the beam starts), is lit while it lives: at rest at
 `*votary-idle-glow*` of its strength in its lightning's yellow (`*votary-light-color*`), so its idle
 lightning lights it and what is round it, rising through the charge to full while it holds; dead, it
-goes out (`douse-votary`). Its beam's light is a held `beam` (`votary-light`), let go to fade when it
-neither charges nor holds (`rest-votary`); the beam's burst plays where it stops, but not within `*votary-burst-clearance*`
+goes out (`douse-votary`). The held beam is lightning, not the player's ribbon (`beam-bolts`, every
+`*votary-bolt-time*`): a broad bolt with a white core and a thinner one forking about it, as the shock
+nova's, from its palms where its hold pose draws them (`palm-point`, `*votary-palm-spots*`, as the hand
+arcs' spots) to where the beam stops (`bolt-end`), straying `*votary-bolt-roughness*` of its length. A
+bolt ending at the player's eye stops `*votary-bolt-clearance*` (1.5 m) short of it and has no forks:
+near the camera perspective blew its jitter and forks up across the whole view. The charge's ranging
+line is still a faint `beam` (`votary-light`), let go to fade when the hold begins or it rests
+(`rest-votary`); the beam's burst plays where it stops, but not within `*votary-burst-clearance*`
 (2.5 m) of the player's eye (on them, or on the water they swim in), where sparks stand in for it.
 A hold costs about 0.4 ms of GPU a frame (the ribbon and its lamp, seen from 7 m). Over run seeds 1 to
 60 there were 3.3 votaries and 0.6 elite votaries a level from depth 2 on, none on level 1, and the

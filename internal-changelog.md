@@ -29,6 +29,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   the shock nova does, arcs between its hands and between its crown's rods (`idle-arcs`), and its lamp
   stays lit low in the lightning's yellow while it lives, so the lightning lights it and the floor round
   it.
+  Its held beam is drawn as lightning from its palms to what it strikes, redrawn 25 times a second as
+  the shock nova's bolts, not a straight ribbon; struck head-on, the bolt stops 1.5 m short of the eye
+  and has no forks. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
+  view, and none from behind.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
   a body question 76 against 120 on seed 11, a 10 m `clear-path-p` 23 µs against 30. Same levels and
