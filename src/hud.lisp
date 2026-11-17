@@ -625,7 +625,9 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
 (defparameter *boss-bar-top* 28 "Pixels from the top of the screen to the top of the title.")
 (defparameter *elite-bar-width* 80 "Art pixels across an aimed elite's bar: half the boss's.")
 (defparameter *elite-aim-step* 0.1 "Seconds between looks for the elite under the aim.")
-(defparameter *elite-bar-linger* 1.5 "Seconds an elite's bar stays after the aim leaves it.")
+(defparameter *elite-bar-linger* 0.25
+  "Seconds an elite's bar stays after the crosshair leaves it, so a glance off its edge doesn't
+make it flicker.")
 
 (defvar *aimed-elite* NIL "The elite whose bar is up, or NIL.")
 (defvar *aimed-left* 0.0 "Seconds of play its bar stays up unless it is aimed at again.")

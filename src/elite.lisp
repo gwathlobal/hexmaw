@@ -51,8 +51,10 @@ kind already taller (the ogre), so it goes everywhere its kind goes. Its body is
 
 (defparameter *elite-trait-labels* '(:haste "Haste" :warded "Warded" :tough "Tough")
   "What the HUD's bar calls each trait: the boss bar's own words for its Haste and Warded.")
-(defparameter *elite-aim-cone* 0.12 "Radians either side of the aim within which an elite is aimed at.")
 (defparameter *elite-aim-range* 15.0 "Metres out an elite may be aimed at.")
+(defparameter *elite-aim-margin* 0.1
+  "Metres the aim may pass outside a body's radius and still be on it: the sprite is a little
+wider than the body.")
 (defparameter *elite-ward-hum-range* 12.0
   "Metres from the player within which a warded elite's ward hums: past *SOUND-MAX-DISTANCE* a
 sound gets no quieter, and a level's warded elites would hum all over it.")
@@ -118,11 +120,60 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
 
 (defun elite-p (thing) (typep thing 'elite))
 
+(defun ray-body-hit (ox oy oz dx dy dz creature range)
+  "How far along the ray from OX OY OZ along unit vector DX DY DZ it first meets CREATURE's body
+(an upright cylinder of its BODY-RADIUS plus *ELITE-AIM-MARGIN*, from its feet to the top of its
+sprite), or NIL if not within RANGE."
+  (let* ((feet (body-feet creature))
+         (r (+ (body-radius creature) *elite-aim-margin*))
+         (px (- ox (vx feet)))
+         (pz (- oz (vz feet)))
+         (y0 (vy feet))
+         (y1 (+ y0 (sprite-height creature)))
+         (lo 0.0)
+         (hi range))
+    ;; Across: where the ray is within the circle.
+    (let ((a (+ (* dx dx) (* dz dz)))
+          (c (- (+ (* px px) (* pz pz)) (* r r))))
+      (if (< a 1e-6)
+          (when (< 0.0 c) (return-from ray-body-hit NIL))
+          (let* ((b (* 2.0 (+ (* px dx) (* pz dz))))
+                 (disc (- (* b b) (* 4.0 a c))))
+            (when (< disc 0.0) (return-from ray-body-hit NIL))
+            (let ((root (sqrt disc)))
+              (setf lo (max lo (/ (- (- b) root) (* 2.0 a)))
+                    hi (min hi (/ (+ (- b) root) (* 2.0 a))))))))
+    ;; Up: where the ray is between its feet and the top of its sprite.
+    (if (< (abs dy) 1e-6)
+        (unless (<= y0 oy y1) (return-from ray-body-hit NIL))
+        (let ((t0 (/ (- y0 oy) dy))
+              (t1 (/ (- y1 oy) dy)))
+          (setf lo (max lo (min t0 t1))
+                hi (min hi (max t0 t1)))))
+    (and (<= lo hi) lo)))
+
+(defun aimed-creature (player range)
+  "The live creature under PLAYER's crosshair: the nearest whose body the line of sight from the
+eye meets within RANGE, with no wall before it; NIL if none."
+  (let* ((eye (location player))
+         (dir (look-direction player))
+         (best NIL)
+         (best-t 0.0))
+    (loop for c across *creatures*
+          for hit = (and (not (dead c))
+                         (ray-body-hit (vx eye) (vy eye) (vz eye) (vx dir) (vy dir) (vz dir) c range))
+          when (and hit (or (null best) (< hit best-t)))
+            do (setf best c best-t hit))
+    ;; Short of the body's surface, so the floor under its feet doesn't count as a wall.
+    (and best
+         (clear-line-p eye (v+ eye (v* dir (max 0.0 (- best-t 0.05)))))
+         best)))
+
 (defun aimed-elite (player)
-  "The live elite nearest PLAYER's aim, within *ELITE-AIM-CONE* and *ELITE-AIM-RANGE* and in
-sight, or NIL."
-  (seeker-mark (location player) (look-direction player) NIL
-               :cone *elite-aim-cone* :range *elite-aim-range* :test #'elite-p))
+  "The elite under PLAYER's crosshair within *ELITE-AIM-RANGE* (AIMED-CREATURE), or NIL: a
+creature in front of one hides it."
+  (let ((c (aimed-creature player *elite-aim-range*)))
+    (and c (elite-p c) c)))
 
 (defun elite-title (elite)
   "What the HUD's bar calls ELITE, as the boss's title calls the boss: \"Elite Gale Wraith\"."
