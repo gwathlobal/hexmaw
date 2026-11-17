@@ -1661,8 +1661,8 @@ real time instead.
   (`sweep-hit`) call `wall-strike` with their reach. It asks `wall-strike-point` (gore.lisp) where
   the line of sight from the eye first meets a solid within that reach, floors and ceilings too,
   and nothing past a liquid: 0.05 m steps of `solid-at`, bisected to the face, the face's normal
-  (`strike-normal`; a wedge's diagonal has its own). About 15 µs a blow, and it conses nothing
-  of its own. The solid's `solid-strike` (its surface's, `*surface-strikes*`) says what it throws
+  (`strike-normal`; a wedge's diagonal has its own). About 20 µs a blow, and it allocates nothing.
+  The solid's `solid-strike` (its surface's, `*surface-strikes*`) says what it throws
   (`wall-sparks`, sparks.lisp) and sounds like: `blade-hit-stone` or `maul-hit-stone`,
   `blade-hit-wood`, `footstep-snow`; the bash plays `shield-block`, the haft `bone-hit`. Each
   blow's counts, speed, sound and feel are `*wall-strikes*`, kept below a hit's: the spear shows
@@ -1841,8 +1841,12 @@ apply the diagonal (`%wedge-depth`). Moving into a diagonal stops flush against 
 the player's `move-flat`, `move-creature`), so walking straight at a 45° wall slides along
 it as in Doom. Once a level is built, `index-solids` files every solid under the 4 m
 columns it reaches into, and a question looks only in the columns it touches
-(`do-solids-near`): a body question takes about 0.2 µs and a 10 m `clear-path-p` 0.07 ms on
-seed 11, against 75 µs and 5 ms when they walked all 586 solids with untyped arithmetic.
+(`do-solids-near`): a body question takes about 0.08 µs, a point (`solid-at`) 0.06 µs and a
+10 m `clear-path-p` 0.025 ms on seed 11, against 75 µs and 5 ms when they walked all 586 solids
+with untyped arithmetic. The column arithmetic is typed (`column-index`, the specials read with
+`the single-float`): left generic it took twice as long (0.12 µs a point or body). None of them
+allocates. To measure allocation, run the loop inside `(game ...)`: `sb-ext:get-bytes-consed`
+counts every thread, so measured from the eval thread it adds the frames drawn meanwhile.
 When `*solids*` isn't the vector indexed (the nav grid binds it to the solids near a tile)
 or has grown since (a box added from the REPL), they walk it whole, typed.
 Actors (the player and live creatures, not corpses) are bodies: upright boxes that block

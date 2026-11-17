@@ -635,21 +635,35 @@ centre line on X and Z and HEIGHT tall. Touching faces don't count."
   "Run BODY with S bound to every solid that may reach into the XZ rectangle X0 Z0 X1 Z1
 (single-floats): those filed under the columns it touches, or every solid when *SOLIDS*
 isn't indexed. A solid in two of those columns comes up twice."
-  (let ((columns (gensym "COLUMNS")) (i (gensym "I")) (k (gensym "K")) (size (gensym "SIZE")))
+  (let ((columns (gensym "COLUMNS")) (i (gensym "I")) (k (gensym "K")) (size (gensym "SIZE"))
+        (ox (gensym "OX")) (oz (gensym "OZ")))
     `(flet ((visit (,s)
               (declare (type (simple-array single-float (*)) ,s))
               ,@body))
        (declare (inline visit))
        (if (solid-columns-current-p)
-           (let ((,columns *solid-columns*) (,size *solid-column*))
-             (declare (type (simple-array T (* *)) ,columns))
-             (loop for ,i from (max 0 (floor (- ,x0 *solid-columns-x0*) ,size))
-                     to (min (1- (array-dimension ,columns 0)) (floor (- ,x1 *solid-columns-x0*) ,size))
-                   do (loop for ,k from (max 0 (floor (- ,z0 *solid-columns-z0*) ,size))
-                              to (min (1- (array-dimension ,columns 1)) (floor (- ,z1 *solid-columns-z0*) ,size))
+           ;; Typed, so the column arithmetic is open-coded: with the specials untyped it went
+           ;; through generic - and FLOOR, which boxed floats on every question.
+           (let ((,columns *solid-columns*)
+                 (,size (the single-float *solid-column*))
+                 (,ox (the single-float *solid-columns-x0*))
+                 (,oz (the single-float *solid-columns-z0*)))
+             (declare (type (simple-array T (* *)) ,columns)
+                      (type single-float ,size ,ox ,oz))
+             (loop for ,i of-type fixnum from (max 0 (column-index ,x0 ,ox ,size))
+                     to (min (1- (array-dimension ,columns 0)) (column-index ,x1 ,ox ,size))
+                   do (loop for ,k of-type fixnum from (max 0 (column-index ,z0 ,oz ,size))
+                              to (min (1- (array-dimension ,columns 1)) (column-index ,z1 ,oz ,size))
                             do (loop for ,s across (the simple-vector (aref ,columns ,i ,k))
                                      do (visit ,s)))))
            (loop for ,s across *solids* do (visit ,s))))))
+
+(declaim (inline column-index))
+(defun column-index (x origin size)
+  "The column of *SOLID-COLUMNS* coordinate X falls in, from ORIGIN, columns SIZE metres across
+(INDEX-SOLIDS' FLOOR); kept within a fixnum's reach whatever X is."
+  (declare (type single-float x origin size) (optimize speed))
+  (the fixnum (floor (max -1f6 (min 1f6 (/ (- x origin) size))))))
 
 (defun solid-overlapping (x y z half-width height)
   "The first solid overlapped by an upright box standing at X Y Z, HALF-WIDTH out from

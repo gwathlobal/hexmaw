@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
+  untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
+  a body question 76 against 120 on seed 11, a 10 m `clear-path-p` 23 µs against 30. Same levels and
+  checks. None of them allocates: a global `get-bytes-consed` read from the eval thread had counted the
+  frames drawn meanwhile.
 - **A blow that misses strikes the wall.** A sword slash, spear thrust, maul blow, shield bash or haft
   sweep that finds no one strikes what the crosshair meets within its reach, floors too
   (`wall-strike`, sword.lisp; `wall-strike-point` in gore.lisp, a ray to the face and its normal,
