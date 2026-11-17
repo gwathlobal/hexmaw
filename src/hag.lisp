@@ -22,6 +22,13 @@
 (defparameter *rime-field-lead* 1.5 "Metres at most ahead of where her target moves that the rime field is aimed.")
 (defparameter *rime-field-lead-time* 0.5 "Seconds of the target's movement the rime field leads it by.")
 (defparameter *rime-field-range* 11.0 "Metres from her her target may be for a rime field.")
+(defparameter *hag-wary-time* 10.0
+  "Seconds after the player's Absorb swallows one of her shards, or she sees it held at her, that she
+throws none and comes in for the nova instead, icing the floor short of them where she may.")
+(defparameter *hag-wary-reach* 2.5 "Metres from a target she shuns that she comes in to and waits at.")
+(defparameter *rime-field-short* 1.3
+  "Metres short of a target holding Absorb that she drops the rime field, so it lands on the floor
+and not on them, where Absorb would swallow it.")
 (defparameter *hag-gather-pain-bonus* 20 "Percent added to her pain chance while she gathers the nova.")
 (defparameter *hag-gather-light* (vec 0.6 1.3 2.2) "Her lamp's colour at the gather's height.")
 (defparameter *hag-gather-light-radius* 6.0)
@@ -108,7 +115,9 @@
    (pain-chance :initform 30)
    (max-health :initform 30)
    (gather-lamp :initform NIL :accessor gather-lamp :documentation "Her lamp, lit through the nova's gather.")
-   (mote-timer :initform 0.0 :accessor mote-timer)))
+   (mote-timer :initform 0.0 :accessor mote-timer)
+   (wary :initform 0.0 :accessor wary
+         :documentation "Seconds left that she feeds the player's Absorb no shards (*HAG-WARY-TIME*).")))
 
 (define-creature-sounds rime-hag
   :alert :hag-alert :pain :hag-pain :death :hag-death :step :step-light)
@@ -118,6 +127,18 @@
   (if (eq :frost-nova (ability-name (current-ability hag))) :hag-gather :hag-cast))
 
 (defmethod slips-on-rime-p ((hag rime-hag)) NIL)
+
+;; Absorb turns her shards into the player's mana, as it did the acolyte's cinders: once it has
+;; swallowed one, or she sees it held at her, she throws no more for a while and comes for them.
+(defmethod note-absorbed ((hag rime-hag) projectile)
+  (declare (ignore projectile))
+  (setf (wary hag) *hag-wary-time*))
+
+(defun shuns-target-p (hag target)
+  "True if HAG feeds TARGET no shards now: it holds Absorb at her, or swallowed one lately."
+  (when (absorbing-at-p hag target)
+    (setf (wary hag) (max (wary hag) *hag-wary-time*)))
+  (< 0.0 (wary hag)))
 (defmethod taught-effect ((hag rime-hag)) :frost)
 
 (defun gathering-nova-p (hag)
@@ -150,14 +171,22 @@
        (on-a-floor-p target)))
 
 (defmethod hunt-from-range ((hag rime-hag))
-  "Burst a frost nova at a target come too close, if it is ready; else back off from it. With one
-in range and sight, throw a rime field ahead of it if she may, else a shard; or close in."
+  "Burst a frost nova at a target come too close, if it is ready. If it holds Absorb at her or
+swallowed a shard lately (SHUNS-TARGET-P), throw it no shard: a rime field short of it if she may,
+else close in to *HAG-WARY-REACH* for the nova. Else back off from one too close, and with one in
+range and sight throw a rime field ahead of it if she may, else a shard; or close in."
   (let* ((distance (target-distance hag))
          (target (hunt-target hag))
          (seen (and (< distance (attack-range hag))
                     (clear-path-p (location hag) (body-feet target) (cast-height hag)))))
     (cond ((and seen (hag-nova-ready-p hag target distance))
            (start-ability hag :frost-nova))
+          ((shuns-target-p hag target)
+           ;; Ice the floor short of them, then come in for the nova, and wait close for it.
+           (cond ((and seen (rime-field-ready-p hag target distance))
+                  (start-ability hag :rime-field))
+                 ((< *hag-wary-reach* distance) (chase hag))
+                 (T (face-target hag) (stop-walking hag 0.3))))
           ((and (< distance (keep-away hag)) (retreat hag)))
           ((and seen (rime-field-ready-p hag target distance))
            (start-ability hag :rime-field))
@@ -192,9 +221,25 @@ in range and sight, throw a rime field ahead of it if she may, else a shard; or 
         (floor-under point)
         (floor-under feet))))
 
+(defun rime-field-short-point (hag target)
+  "The floor *RIME-FIELD-SHORT* metres short of TARGET toward HAG, or NIL if there is none there."
+  (let* ((feet (body-feet target))
+         (loc (location hag))
+         (dx (- (vx loc) (vx feet)))
+         (dz (- (vz loc) (vz feet)))
+         (d (sqrt (+ (* dx dx) (* dz dz)))))
+    (when (and *nav-grid* (< *rime-field-short* d))
+      (let ((point (vec (+ (vx feet) (* *rime-field-short* (/ dx d))) (+ (vy feet) 0.3)
+                        (+ (vz feet) (* *rime-field-short* (/ dz d))))))
+        (when (and (nav-floor-at (vx point) (vy point) (vz point)) (clear-line-p feet point))
+          (floor-under point))))))
+
 (defun throw-rime-field (hag)
   (let* ((origin (cast-origin hag))
-         (aim (v- (rime-field-point (hunt-target hag)) origin)))
+         (target (hunt-target hag))
+         (aim (v- (or (and (< 0.0 (wary hag)) (rime-field-short-point hag target))
+                      (rime-field-point target))
+                  origin)))
     (when (< 1f-4 (vlength aim))
       (let ((spell (find-spell 'rime-field)))
         (play-sound (spell-sound spell :cast) origin)
@@ -212,7 +257,8 @@ in range and sight, throw a rime field ahead of it if she may, else a shard; or 
 (defmethod release-attack ((hag rime-hag))
   (let ((ability (current-ability hag)))
     (case (ability-name ability)
-      (:shard (release-attack-spell hag))
+      ;; Absorb raised at her in her wind-up: she keeps the shard.
+      (:shard (unless (shuns-target-p hag (hunt-target hag)) (release-attack-spell hag)))
       (:rime-field (throw-rime-field hag))
       (:frost-nova (burst-hag-nova hag)))
     (when (< 0 (ability-cooldown ability))
@@ -247,6 +293,7 @@ in range and sight, throw a rime field ahead of it if she may, else a shard; or 
 (define-handler (rime-hag tick :after) (dt)
   (unless (frozen-p)
     (run-cooldowns rime-hag dt)
+    (setf (wary rime-hag) (max 0.0 (- (wary rime-hag) dt)))
     (update-gather rime-hag dt)))
 
 (defmethod leave :after ((hag rime-hag) container)

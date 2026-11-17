@@ -2342,7 +2342,18 @@ the first caster that punishes a player who closes in. Her `hunt-from-range` tak
   freezing her foes on it for `*rime-freeze*` (1 s), and icing the walls round it. Absorb takes it
   only if the player walks into it.
 - **Rime shard** (`:shard`, `rime-shard`): a frost projectile, 10 m/s, 4 to 6 and frost's chill, on
-  the player's frost look. Absorb swallows it for mana.
+  the player's frost look. Absorb swallows it for mana, once: then she **shuns** the player
+  (`shuns-target-p`).
+
+**Shunning Absorb.** A lone caster throwing nothing but projectiles was a mana spring for Absorb, as
+the acolyte was. So for `*hag-wary-time*` (10 s, her `wary`, saved) after Absorb swallows one of her
+shards (`note-absorbed`), or while she sees it held at her (`absorbing-at-p`, acolyte.lisp, renewing
+it), she throws no shards: one in its wind-up when Absorb comes up is kept (`release-attack`). She
+throws the rime field where she may, dropped `*rime-field-short*` (1.3 m) short of the target toward
+her (`rime-field-short-point`), so it bursts on the floor and not on them, and otherwise comes in to
+`*hag-wary-reach*` (2.5 m), inside the nova's trigger, and waits there facing them for the nova. So a
+player holding Absorb at her gets one shard's mana (about 4.5) and her nova, and one timing Absorb to
+her shards' flight one shard every 10 s.
 
 Her rime is ice underfoot for the player and every creature but her (`slips-on-rime-p`), so imps
 skid on it and are knocked into walls; fire melts it (`strike-skins`: the Fire Bolt's impact, a

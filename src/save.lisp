@@ -82,6 +82,9 @@ their values."
 (defmethod saved-slots append ((necromancer necromancer))
   '(raise-target))
 
+(defmethod saved-slots append ((hag rime-hag))
+  '(wary))
+
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
 

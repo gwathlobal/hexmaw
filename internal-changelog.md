@@ -7,6 +7,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The rime hag shuns Absorb.** For 10 s after Absorb swallows one of her shards, or while she sees
+  it held at her, she throws no shards (one in its wind-up is kept): she drops her rime field on the
+  floor short of the player, where Absorb can't take it, and comes in to 2.5 m for her nova. Holding
+  Absorb at her had been an endless mana spring, as the acolyte's cinders were.
 - **The rime hag, the first frost enemy** (`src/hag.lisp`). A stooped crone of the ice caves who
   throws rime shards (frost, a chill), from level 2 a ball of rime at the floor ahead of her target
   that ices the floor and walls round it for 10 s, and when her target comes within 3 m gathers the
