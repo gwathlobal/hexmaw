@@ -2176,8 +2176,8 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
 `votary-cast`, hit frame 2:
 
 - **The charge** (`*votary-charge*`, 0.9 s; `charging-arc-p`, so a bash or the earthshake breaks it):
-  an arc crackling between its hands (`crackle`, `bolt-line` from hand to hand every
-  `*votary-crackle-time*`, closer together and fiercer as it grows), a lamp swelling at them
+  an arc crackling between its hands (`crackle`, through `hand-arc` every `*votary-crackle-time*`,
+  closer together and fiercer as it grows), a lamp swelling at them
   (`votary-glow`, `*votary-light-color*`), the `votary-charge` crackle, and a ranging line: its
   `beam` held faint (`beam-strength`, `*votary-ranging-strength*` with a flicker), aimed every
   `*votary-aim-time*` at where the beam would stop. It turns at its `turn-speed`, `*votary-turn*`
@@ -2205,10 +2205,14 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
 
 At rest it crackles, as the shock nova's bolts do (`votary-sparks`, `idle-arcs`, every
 `*votary-arc-time*` while the player is within `*votary-arc-reach*`): an arc between its hands
-(`*votary-hand-arc-chance*`, along its facing, not while it charges, whose crackle is there) and arcs
-between the tips of its crown's five rods (`*votary-crown-arc-chance*` each pair, in the plane its
-sprite is drawn in, the head 8 cm toward its face, so they sit on the rods from any side), sized by
-its `sprite-height` so the Hierophant's are bigger. Its lamp, at its hands
+(`*votary-hand-arc-chance*`; not while it charges, whose crackle is there) and arcs between the tips
+of its crown's five rods (`*votary-crown-arc-chance*` each pair, the head 8 cm toward its face), sized
+by its `sprite-height` so the Hierophant's are bigger. Both lie in the plane its sprite is drawn in.
+Creature sprites don't hide bolt lines behind them (the lines are added light and write no depth), so an
+arc placed round its body in the world showed through it from behind: the hands' arc, and the charge's
+crackle with it (`hand-arc`), go where the view its sprite shows draws its hands (`billboard-view`,
+`*votary-hand-spots*`, measured on its turnaround: across, either side, height; mirrored with the
+view), and from straight behind, where its body hides them, there is none. Its lamp, at its hands
 (`*votary-hand-height*` of its height, where the beam starts), is lit while it lives: at rest at
 `*votary-idle-glow*` of its strength in its lightning's yellow (`*votary-light-color*`), so its idle
 lightning lights it and what is round it, rising through the charge to full while it holds; dead, it

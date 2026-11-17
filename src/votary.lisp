@@ -341,15 +341,44 @@ water. Returns where the beam stops."
             (vy color) (* k (vy *votary-light-color*))
             (vz color) (* k (vz *votary-light-color*))))))
 
+;; Where its hands are drawn in each view of its sprite (BILLBOARD-VIEW, 0 front .. 4 back), measured
+;; on its 128 px turnaround: (ACROSS SPREAD HIGH), the middle between them in metres across the sprite
+;; (image right, for a 2 m votary), how far either side of it they are, and their height as a share of
+;; its own. From behind its body hides them: NIL.
+(defparameter *votary-hand-spots*
+  #((-0.01 0.24 0.61) (-0.14 0.13 0.62) (-0.19 0.06 0.63) (-0.2 0.07 0.63) NIL))
+
+(defun hand-arc (votary spread-scale &rest bolt-args)
+  "Draw an arc between VOTARY's hands as its sprite shows them from the camera: in the plane the sprite
+is drawn in, at the hands of the view it shows, mirrored with it, SPREAD-SCALE times as wide; none from
+behind, where its body hides them. BOLT-ARGS go to BOLT-LINE."
+  (let* ((loc (location votary))
+         (eye (location (camera (scene +main+))))
+         (fx (- (vx loc) (vx eye)))
+         (fz (- (vz loc) (vz eye)))
+         (fl (max 1f-4 (sqrt (+ (* fx fx) (* fz fz))))))
+    (multiple-value-bind (view mirrored) (billboard-view votary eye)
+      (let ((spot (aref *votary-hand-spots* view)))
+        (when spot
+          (destructuring-bind (across spread high) spot
+            (let* ((h (sprite-height votary))
+                   (s (/ h *votary-height*))
+                   ;; The view's right, across the sprite, and a few centimetres toward the camera.
+                   (rx (/ (- fz) fl))
+                   (rz (/ fx fl))
+                   (c (* s (if mirrored (- across) across)))
+                   (cx (- (+ (vx loc) (* rx c)) (* 0.05 (/ fx fl))))
+                   (cz (- (+ (vz loc) (* rz c)) (* 0.05 (/ fz fl))))
+                   (d (* s spread spread-scale))
+                   (y (+ (vy loc) (* h high))))
+              (apply #'bolt-line (- cx (* rx d)) y (- cz (* rz d)) (+ cx (* rx d)) y (+ cz (* rz d)) 3
+                     bolt-args))))))))
+
 (defun crackle (votary k)
-  "Redraw the arc between VOTARY's hands, nearer together and fiercer as K, the charge, grows."
-  (let* ((o (aim-origin votary))
-         (yaw (facing votary))
-         (spread (- 0.35 (* 0.22 k)))
-         (rx (* spread (cos yaw)))
-         (rz (* spread (sin yaw))))
-    (bolt-line (- (vx o) rx) (vy o) (- (vz o) rz) (+ (vx o) rx) (vy o) (+ (vz o) rz) 3
-               :roughness (+ 0.2 (* 0.2 k)) :width (+ 1.0 k) :branch (* 0.3 k) :life (* 1.3 *votary-crackle-time*))))
+  "Redraw the arc between VOTARY's hands, closer and fiercer as K, the charge, grows."
+  (hand-arc votary (- 1.3 (* 0.6 k))
+            :roughness (+ 0.2 (* 0.2 k)) :width (+ 1.0 k) :branch (* 0.3 k)
+            :life (* 1.3 *votary-crackle-time*)))
 
 (defun end-hold (votary)
   "Let go of the beam: on to the recover frame."
@@ -379,9 +408,9 @@ the lamp lit low."
 
 (defun idle-arcs (votary)
   "Redraw VOTARY's idle lightning: an arc between its hands (not while it charges, whose own crackle
-is there) and arcs between the tips of its crown's rods, as the shock nova's bolts. The hands' arc
-follows its facing; the crown's lies in the plane its sprite is drawn in, so it sits on the rods from
-any side."
+is there; HAND-ARC, where its sprite draws its hands) and arcs between the tips of its crown's rods,
+as the shock nova's bolts. Both lie in the plane its sprite is drawn in, so they sit on it from any
+side."
   (let* ((loc (location votary))
          (h (sprite-height votary))
          (s (/ h *votary-height*))
@@ -396,15 +425,7 @@ any side."
          (rz (/ fx fl)))
     (unless (or (charging-arc-p votary) (holding-beam-p votary))
       (when (< (random 1.0) *votary-hand-arc-chance*)
-        (let* ((y (+ (vy loc) (* *votary-hand-height* h)))
-               (out (* 0.1 s))
-               (cx (+ (vx loc) (* out (sin yaw))))
-               (cz (- (vz loc) (* out (cos yaw))))
-               (spread (* 0.22 s))
-               (sx (* spread (cos yaw)))
-               (sz (* spread (sin yaw))))
-          (bolt-line (- cx sx) y (- cz sz) (+ cx sx) y (+ cz sz) 3
-                     :roughness 0.25 :branch 0.3 :white 0.3 :life (* 1.3 *votary-arc-time*)))))
+        (hand-arc votary 1.0 :roughness 0.25 :branch 0.3 :white 0.3 :life (* 1.3 *votary-arc-time*))))
     ;; Five rod tips in a fan, 0.18 m either side of the head, 0.97 to 0.91 of its height; the head
     ;; leans 8 cm toward its face, which shows only from the side.
     (flet ((tip (i)
