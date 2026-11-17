@@ -259,4 +259,4 @@ only rolls), and is shoved out."
           (T (+ 1 *maul-charge-first* (mod (floor (* (age maul) *maul-tremble-rate*)) 2))))))
 
 (defun add-maul (container)
-  (enter (make-instance 'maul) container))
+  (add-weapon-sprite 'maul container))

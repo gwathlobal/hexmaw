@@ -81,12 +81,29 @@ shot lava      "$(player -4.0 5.0 0.35 4.7124)" "$(hold 1)" "$(run 3.0)"
 
 "$hd" "(game (setf *hit-stop* 0.0 *game-state* :paused) T)" >/dev/null
 
-# A blow that finds no one, striking the hall's west wall (x -10), the floor and the planks.
+# A blow that finds no one, striking the hall's west wall (x -10), the floor and the planks, each
+# weapon shown at its hit frame. The sparks start at its tip on screen (WEAPON-TIP-DIRECTION), so
+# the strike waits a frame for the sprites to lay themselves out.
+# wallshot NAME X Z PITCH YAW KEY FRAME-FORM STRIKE-FORM
+wallshot() {
+  local name="$1"
+  if [[ -n "${SHOTS:-}" && " $SHOTS " != *" $name "* ]]; then return; fi
+  "$hd" "(game (reset-run) (setf *game-state* :playing *hit-stop* 1000.0) $(player $2 $3 $4 $5) $(hold $6)
+              (setf (swing-time *player*) NIL (bash-time *player*) NIL (block-raise *player*) 0.0
+                    (spear-jolt *player*) 0.0 (charge-time *player*) NIL)
+              (place-camera *player*) $7 T)" >/dev/null
+  sleep 0.3
+  "$hd" "(game (let ((*spark-pool* (if $before NIL *spark-pool*))) $8 $(run 0.05)) T)" >/dev/null
+  sleep 0.4
+  "$hd" "(screenshot \"$dir/$name.png\")"
+}
+
 west=4.7124
-shot wall-sword "$(player -8.4 0.0 0.05 $west)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :sword *sword-reach*)" "$(run 0.05)"
-shot wall-spear "$(player -7.2 0.0 0.05 $west)" "$(hold 3)" "(place-camera *player*)" "(wall-strike *player* :spear *spear-reach*)" "$(run 0.05)"
-shot wall-maul  "$(player -8.4 0.0 0.1 $west)" "$(hold 6)" "(place-camera *player*)" "(wall-strike *player* :maul *maul-reach* :charge 1.0)" "$(run 0.06)"
-shot wall-bash  "$(player -8.9 0.0 0.05 $west)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :shield *bash-reach*)" "$(run 0.06)"
-shot wall-sweep "$(player -8.7 0.0 0.05 $west)" "$(hold 3)" "(place-camera *player*)" "(wall-strike *player* :haft *sweep-reach*)" "$(run 0.08)"
-shot wall-floor "$(player 0.0 2.0 1.1 0.0)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :sword *sword-reach*)" "$(run 0.05)"
-shot wall-wood  "$(player 9.0 -3.3 0.3 0.0)" "$(hold 1)" "(place-camera *player*)" "(wall-strike *player* :sword *sword-reach*)" "$(run 0.08)"
+wallshot wall-sword -8.4 0.0 0.05 $west 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* :sword *sword-reach*)"
+wallshot wall-spear -7.2 0.0 0.05 $west 3 "(setf (swing-time *player*) (swing-hit-time :spear))" "(wall-strike *player* :spear *spear-reach*)"
+wallshot wall-maul  -8.4 0.0 0.1  $west 6 "(setf (blow-charge *player*) 1.0 (swing-time *player*) (swing-hit-time :maul))" \
+         "(wall-strike *player* :maul *maul-reach* :charge 1.0)"
+wallshot wall-bash  -8.9 0.0 0.05 $west 1 "(setf (block-raise *player*) 1.0 (bash-time *player*) (bash-hit-time :sword))" "(wall-strike *player* :shield *bash-reach*)"
+wallshot wall-sweep -8.7 0.0 0.05 $west 3 "(setf (bash-time *player*) (bash-hit-time :spear))" "(wall-strike *player* :haft *sweep-reach*)"
+wallshot wall-floor 0.0 2.0 1.1 0.0 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* :sword *sword-reach*)"
+wallshot wall-wood  9.0 -3.3 0.3 0.0 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* :sword *sword-reach*)"

@@ -140,4 +140,4 @@ reels back once. With no one in it, it strikes the wall."
           (T (call-next-method)))))
 
 (defun add-spear (container)
-  (enter (make-instance 'spear) container))
+  (add-weapon-sprite 'spear container))

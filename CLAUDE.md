@@ -1658,17 +1658,25 @@ real time instead.
   `weapon-frame` for its strip frame.
   **A blow that finds no one strikes the wall**: the slash and thrust (`swing-miss`'s default
   method), the maul when there is no corpse to pulp, the bash (`bash-hit`) and the spear's sweep
-  (`sweep-hit`) call `wall-strike` with their reach. It asks `wall-strike-point` (gore.lisp) where
-  the line of sight from the eye first meets a solid within that reach, floors and ceilings too,
-  and nothing past a liquid: 0.05 m steps of `solid-at`, bisected to the face, the face's normal
-  (`strike-normal`; a wedge's diagonal has its own). About 20 µs a blow, and it allocates nothing.
+  (`sweep-hit`) call `wall-strike` with their reach. The line goes from the eye through where the
+  weapon's tip is on screen in its hit frame (`weapon-tip-direction`: `*weapon-tips*`, an art pixel
+  of the strip's cell, through the sprite's placement, `*weapon-sprites*`, and the camera's fov), so
+  the sparks start at the tip at any window size: the sword's blade tip low right, the spear's
+  point, the maul head's top, the shield's upper rim, the sweep's spearhead. REACH is how far
+  ahead, so an off-centre line reaches as deep a wall. A re-made strip whose hit frame moves needs
+  its tip measured again (the topmost opaque pixel of that frame; the sweep's rightmost).
+  `wall-strike-point` (gore.lisp) finds where the line first meets a solid, floors and ceilings
+  too, and nothing past a liquid: 0.05 m steps of `solid-at`, bisected to the face, the face's
+  normal (`strike-normal`; a wedge's diagonal has its own). About 20 µs a blow, and it allocates
+  nothing.
   The solid's `solid-strike` (its surface's, `*surface-strikes*`) says what it throws
   (`wall-sparks`, sparks.lisp) and sounds like: `blade-hit-stone` or `maul-hit-stone`,
   `blade-hit-wood`, `footstep-snow`; the bash plays `shield-block`, the haft `bone-hit`. Each
-  blow's counts, speed, sound and feel are `*wall-strikes*`, kept below a hit's: the spear shows
-  its jolt frame 0.12 s, the maul kicks the view 0.2 to 0.4 and hit-stops 0.02 to 0.04 s by
-  charge (`(:charge least full)`, `wall-strike-value`), the bash shoves the player back 1.5 m/s;
-  the sword and the haft have none. `tools/spark_shots.sh`'s `wall-*` shots stage each.
+  blow's counts, speed, sound and feel are `*wall-strikes*`, kept below a hit's: the maul kicks
+  the view 0.2 to 0.4 and hit-stops 0.02 to 0.04 s by charge (`(:charge least full)`,
+  `wall-strike-value`), the bash shoves the player back 1.5 m/s; the sword, the spear and the haft
+  have none (the spear's jolt frame pulled its point away from the sparks). `tools/spark_shots.sh`'s
+  `wall-*` shots stage each at its hit frame.
 - `src/spear.lisp`: the spear, held in both hands, so no shield. Against the sword it reaches further
   (`*spear-reach*` 3.5 m against 2) in a narrower arc (`*spear-arc*` 0.3 rad), staggers more
   (`*spear-pain-bonus*` 35) and is slower: the thrust plays `*thrust-frame-times*` (0.68 s
