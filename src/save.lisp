@@ -82,6 +82,9 @@ their values."
 (defmethod saved-slots append ((necromancer necromancer))
   '(raise-target))
 
+(defmethod saved-slots append ((hag rime-hag))
+  '(wary blizzard blizzard-sense))
+
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
 
@@ -111,7 +114,7 @@ their values."
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing homing-target projectile-velocity submerged evade-asked))
+  '(spell caster homing homing-target projectile-velocity submerged evade-asked gust))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))

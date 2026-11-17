@@ -171,6 +171,8 @@ RGBA-ICON would put them. An icon that won't load only logs."
   (preload-status-auras scene)
   ;; And a riftwalker's rifts.
   (preload-riftwalker scene)
+  ;; And a rime hag's throws.
+  (preload-hag scene)
   ;; And an acolyte's firestorm.
   (preload-firestorm scene)
   ;; So are raised skeletons.

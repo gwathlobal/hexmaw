@@ -1,0 +1,32 @@
+Pixel-art sprite sheet: the 8-frame death animation of the RIME HAG, a witch of the frozen caves, for a Doom/Hexen-style first-person game where monsters are drawn as sprites. The death is seen from the front only. The last frame is the corpse, which stays on the floor.
+
+REFERENCE IMAGES, in the order attached:
+1. The rime hag's turnaround sheet. It is the character design: a stooped, hunched old crone of a little under a man's height, bent at the back, leaning her weight on a staff in her left hand; a long cloak and hood of shaggy GREY FUR stiff and frosted white with hoarfrost at its edges; a MANTLE OF ICICLES hanging from her shoulders over the fur like a short cape of pale blue-white spikes; long thin arms and bony hands with BLUE-WHITE SKIN, a gaunt old face under the hood with pale white eyes, long lank white hair; a STAFF OF BLACK ICE, dark and glassy, taller than she is, topped by a FROZEN LANTERN, a small iron cage around a cold glowing core of pale cyan-white light; ragged hems, bare frostbitten feet. Also the shading style.
+2. The rime hag standing, seen from the front. Match her pixel size, outline weight and scale exactly: frame 1 is exactly as tall as reference 2.
+3. The game's style anchor sheet, for the style only.
+
+THE DEATH: the cold that held her together lets go. Her icicle mantle cracks and she sinks into a heap of fur and rime.
+- Frame 1, HIT: standing as in reference 2 but jolted back, the hood thrown back, the lantern's light flickering.
+- Frame 2, CRACK: jagged cracks run through the icicle mantle and up her blue-white arms; her mouth open; the staff slipping in her grip.
+- Frame 3, SHATTER: the icicle mantle breaks, pieces of pale ice falling round her as solid pixels; she sags at the knees, the staff toppling away from her.
+- Frame 4, SINKING: on her knees, bent forward, the fur cloak spreading round her, the staff lying on the floor beside her, the lantern dark.
+- Frame 5, SLUMPING: she folds forward into the fur, her head down, one bony hand on the floor.
+- Frame 6, HEAP: no more than a low heap of grey fur, frost and broken icicles on the floor, one hand showing.
+- Frame 7, SETTLING: the heap settles lower, white frost spreading over it.
+- Frame 8, CORPSE: a low heap of frosted grey fur and broken icicles, the black ice staff lying across the floor in front of it, its lantern dark. This frame stays on screen.
+
+LAYOUT
+- A grid of 2 rows of 4 equal cells: frames 1 to 4 in the top row, 5 to 8 in the bottom row, each read left to right.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and one horizontal line between the rows, running the full width.
+- Each frame follows on smoothly from the one before: she falls in one place, without jumps between frames, and once down never leaves the floor.
+- The same scale in every frame. In every frame the figure rests on the same ground line near the bottom of its cell; nothing reaches below it, and nothing floats.
+- Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, mist, snow, blood pools or gore.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink, purple or cyan glow bleeding into the background.
+
+HOUSE STYLE (Hexmaw; attach art/style/anchor.png as a style reference, and say which reference it is):
+- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.
+- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.
+- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.
+- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.

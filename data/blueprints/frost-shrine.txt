@@ -19,7 +19,7 @@ legend
   b box 0 0.8 ice, diagonal \ ice-rock 0.8 top ne
   c box 0 0.4 ice, diagonal / ice-rock 0.4 top nw    ; and over the step
   d box 0 0.4 ice, diagonal \ ice-rock 0.4 top ne
-  I box 0 0.8 ice, spawn acolyte south
+  I box 0 0.8 ice, spawn acolyte|!rime-hag south   ; a rime hag, at home here, on any level
   m spawn acolyte south 30
   _ pit 0.2, floor ice                              ; the frozen pond
   { diagonal / floor -0.2 0, pit 0.2, floor ice     ; its shore

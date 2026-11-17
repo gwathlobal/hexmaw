@@ -115,6 +115,18 @@ a footstep on it sounds like).")
 (defun footing-property (footing key)
   (getf (rest (or (assoc footing *footings*) (error "No footing ~s." footing))) key))
 
+;; What a melee blow that strikes a solid of a surface throws (WALL-STRIKE, sword.lisp): any surface
+;; not named here, a flat colour and the arena's gate are stone.
+(defparameter *surface-strikes*
+  '((:beam :wood) (:platform :wood) (:ice-rock :ice-rock) (:ice :ice) (:snow :snow))
+  "Per surface name, its strike kind: :WOOD, :ICE-ROCK, :ICE or :SNOW; anything else :STONE.")
+
+(defun surface-strike (name)
+  "The strike code of surface NAME (a keyword or a material's name) for MAKE-SOLID: its place in
+*SURFACE-STRIKES* from 1, or 0 for stone."
+  (let ((n (and name (position name *surface-strikes* :key #'first :test #'string-equal))))
+    (if n (1+ n) 0)))
+
 (defun surface-footing (name)
   "The footing code of surface NAME (a keyword or a material's name) for MAKE-SOLID:
 its place in *FOOTINGS* from 1, or 0 for an ordinary floor."
@@ -457,21 +469,30 @@ void main(){
   "The cut that takes away the corner on the EAST (else west) and SOUTH (else north) side."
   (+ 1 (if east 0 1) (if south (if east 3 1) 0)))
 
-(defun make-solid (x0 y0 z0 x1 y1 z1 &optional (cut 0) (footing 0))
+(defun make-solid (x0 y0 z0 x1 y1 z1 &optional (cut 0) (footing 0) (strike 0))
   "A solid: its corners, then for a wedge its CUT, then for one with a FOOTING (a code from
-SURFACE-FOOTING) that, after a cut of 0 if it is a box."
-  (let ((box (make-array (cond ((/= 0 footing) 8) ((/= 0 cut) 7) (T 6)) :element-type 'single-float)))
+SURFACE-FOOTING) that, then for one with a STRIKE (SURFACE-STRIKE) that; a 0 stands in for
+those before a value given."
+  (let ((box (make-array (cond ((/= 0 strike) 9) ((/= 0 footing) 8) ((/= 0 cut) 7) (T 6)) :element-type 'single-float)))
     (setf (aref box 0) (float (min x0 x1) 0f0) (aref box 1) (float (min y0 y1) 0f0) (aref box 2) (float (min z0 z1) 0f0)
           (aref box 3) (float (max x0 x1) 0f0) (aref box 4) (float (max y0 y1) 0f0) (aref box 5) (float (max z0 z1) 0f0))
     (when (< 6 (length box)) (setf (aref box 6) (float cut 0f0)))
     (when (< 7 (length box)) (setf (aref box 7) (float footing 0f0)))
+    (when (< 8 (length box)) (setf (aref box 8) (float strike 0f0)))
     box))
 
 (defun solid-tread (s)
   "The key of *FOOTINGS* solid S is made of (:ICE, :SNOW), or NIL for an ordinary floor."
   (declare (type (simple-array single-float (*)) s))
-  (when (< 7 (length s))
+  (when (and (< 7 (length s)) (< 0f0 (aref s 7)))
     (first (nth (1- (truncate (aref s 7))) *footings*))))
+
+(defun solid-strike (s)
+  "What a melee blow strikes in solid S (*SURFACE-STRIKES*): :STONE, :WOOD, :ICE-ROCK, :ICE or :SNOW."
+  (declare (type (simple-array single-float (*)) s))
+  (or (and (< 8 (length s)) (< 0f0 (aref s 8))
+           (second (nth (1- (truncate (aref s 8))) *surface-strikes*)))
+      :stone))
 
 (defun solid-footing (s)
   "The footing (a key of *FOOTINGS*) of what stands on solid S, or NIL for an ordinary floor:
@@ -614,21 +635,35 @@ centre line on X and Z and HEIGHT tall. Touching faces don't count."
   "Run BODY with S bound to every solid that may reach into the XZ rectangle X0 Z0 X1 Z1
 (single-floats): those filed under the columns it touches, or every solid when *SOLIDS*
 isn't indexed. A solid in two of those columns comes up twice."
-  (let ((columns (gensym "COLUMNS")) (i (gensym "I")) (k (gensym "K")) (size (gensym "SIZE")))
+  (let ((columns (gensym "COLUMNS")) (i (gensym "I")) (k (gensym "K")) (size (gensym "SIZE"))
+        (ox (gensym "OX")) (oz (gensym "OZ")))
     `(flet ((visit (,s)
               (declare (type (simple-array single-float (*)) ,s))
               ,@body))
        (declare (inline visit))
        (if (solid-columns-current-p)
-           (let ((,columns *solid-columns*) (,size *solid-column*))
-             (declare (type (simple-array T (* *)) ,columns))
-             (loop for ,i from (max 0 (floor (- ,x0 *solid-columns-x0*) ,size))
-                     to (min (1- (array-dimension ,columns 0)) (floor (- ,x1 *solid-columns-x0*) ,size))
-                   do (loop for ,k from (max 0 (floor (- ,z0 *solid-columns-z0*) ,size))
-                              to (min (1- (array-dimension ,columns 1)) (floor (- ,z1 *solid-columns-z0*) ,size))
+           ;; Typed, so the column arithmetic is open-coded: with the specials untyped it went
+           ;; through generic - and FLOOR, which boxed floats on every question.
+           (let ((,columns *solid-columns*)
+                 (,size (the single-float *solid-column*))
+                 (,ox (the single-float *solid-columns-x0*))
+                 (,oz (the single-float *solid-columns-z0*)))
+             (declare (type (simple-array T (* *)) ,columns)
+                      (type single-float ,size ,ox ,oz))
+             (loop for ,i of-type fixnum from (max 0 (column-index ,x0 ,ox ,size))
+                     to (min (1- (array-dimension ,columns 0)) (column-index ,x1 ,ox ,size))
+                   do (loop for ,k of-type fixnum from (max 0 (column-index ,z0 ,oz ,size))
+                              to (min (1- (array-dimension ,columns 1)) (column-index ,z1 ,oz ,size))
                             do (loop for ,s across (the simple-vector (aref ,columns ,i ,k))
                                      do (visit ,s)))))
            (loop for ,s across *solids* do (visit ,s))))))
+
+(declaim (inline column-index))
+(defun column-index (x origin size)
+  "The column of *SOLID-COLUMNS* coordinate X falls in, from ORIGIN, columns SIZE metres across
+(INDEX-SOLIDS' FLOOR); kept within a fixnum's reach whatever X is."
+  (declare (type single-float x origin size) (optimize speed))
+  (the fixnum (floor (max -1f6 (min 1f6 (/ (- x origin) size))))))
 
 (defun solid-overlapping (x y z half-width height)
   "The first solid overlapped by an upright box standing at X Y Z, HALF-WIDTH out from
@@ -687,8 +722,8 @@ a skin's (SKIN-FOOTING), or FLOOR-TREAD's, if it is slippery."
                 &key surface (color (if surface (vec 1 1 1) (vec 0.6 0.6 0.6))) (solid T))
   "Add a box spanning the two corners, in metres, to CONTAINER. SURFACE (a name in
 *SURFACES*) textures it, tinted by COLOR; without one it is flat COLOR. A surface with a
-footing (*FOOTINGS*) gives the solid that footing."
-  (let ((box (make-solid x0 y0 z0 x1 y1 z1 0 (surface-footing surface)))
+footing (*FOOTINGS*) gives the solid that footing, and one in *SURFACE-STRIKES* its strike kind."
+  (let ((box (make-solid x0 y0 z0 x1 y1 z1 0 (surface-footing surface) (surface-strike surface)))
         (textures (and surface (or (surface-textures surface) (error "No surface called ~s." surface)))))
     (when solid (vector-push-extend box *solids*))
     (let ((location (vec (/ (+ (aref box 0) (aref box 3)) 2)

@@ -1,0 +1,21 @@
+{
+  "prompt": "An old ice witch dying: a long rattling wail falling away into a breathless sigh, as a mantle of icicles cracks and shatters and tinkles to the stone floor. Retro 1990s first-person fantasy game monster sound effect, a single creature, dry, no words, no music.",
+  "prompt_file": "audio/prompts/sfx-hag-death.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 1.8,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794889676,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    1.76,
+    1.76,
+    1.76
+  ]
+}

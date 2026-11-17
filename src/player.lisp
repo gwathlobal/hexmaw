@@ -1107,7 +1107,9 @@ slide on ice, of the water round an eye under it and of a vortex's wind."
       (setf (slide-sound player) (hold-loop (slide-sound player) (and sliding :ice-slide) at
                                             (min 1.0 (/ speed *ice-slide-speed*)))
             (underwater-sound player) (hold-loop (underwater-sound player) (and *eye-underwater* :underwater) at)
-            (whirl-sound player) (hold-loop (whirl-sound player) (and (whirl player) :whirl-wind) at)))))
+            (whirl-sound player) (hold-loop (whirl-sound player)
+                                           (and (or (whirl player) (< (wind-slow-factor player) 1.0)) :whirl-wind)
+                                           at (if (whirl player) 1.0 *wind-volume*))))))
 
 (defmethod hit-surface ((player player) speed x y z &key (threshold *impact-speed*) by)
   (declare (ignore x y z))

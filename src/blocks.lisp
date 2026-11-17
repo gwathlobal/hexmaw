@@ -460,7 +460,8 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
                (cut (or (getf piece :cut) 0)))
           (vector-push-extend (make-solid (vx min) (vy min) (vz min) (vx max) (vy max) (vz max)
                                           (if (= 0 cut) 0 (turn-cut cut (q* rotation (trotation tf))))
-                                          (surface-footing (getf piece :material)))
+                                          (surface-footing (getf piece :material))
+                                          (surface-strike (getf piece :material)))
                               *solids*))))))
 
 (defun turn-cut (cut rotation)
@@ -470,7 +471,8 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
       (corner-cut (< 0 (vx d)) (< 0 (vz d))))))
 
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1)
-                             ("gale-wraith" 1) ("riftwalker" 1) ("arc-votary" 1))
+                             ("gale-wraith" 1) ("riftwalker" 1) ("rime-hag" 1)
+                             ("arc-votary" 1))
   "What a block's spawn_any picks from, each monster with its weight. A level of the run sets
 its own (*RUN-LEVELS*' :POOL). On a generated level it limits named spawns too: a choice keeps
 only the monsters in it, and a block with a named spawn it has none of isn't used

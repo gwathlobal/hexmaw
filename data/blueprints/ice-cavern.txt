@@ -28,13 +28,14 @@ legend
   i spawn any-ogre south
   m spawn any-ogre south 30
   M spawn any-ogre north 30
+  h spawn !rime-hag south 30                      ; a rime hag, at home here, on any level
   $ pickup floor
   & box 0 0.4 ice, pickup reward
 
 plan 0
 #########++++++#####T###########
 #####//................\\#######
-###//..........{{,,,,}}..\\#####
+###//.....hh...{{,,,,}}..\\#####
 #//...//##\\...,&&,jj,,....\\###
 #.$$..######ii.}},,,,{{......\\#
 +.....\\##//...[[______]]..MM..+

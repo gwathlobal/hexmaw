@@ -22,6 +22,62 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   `strength`. New boss and pool kinds change which monsters and boss some seeds place, so a save
   made before starts its level fresh. Sounds: votary-alert, -pain, -death, -charge, -beam-start,
   -beam (loop), arc-zap. The debug hall has one behind its north-west pillar (index 9).
+- **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
+  untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
+  a body question 76 against 120 on seed 11, a 10 m `clear-path-p` 23 µs against 30. Same levels and
+  checks. None of them allocates: a global `get-bytes-consed` read from the eval thread had counted the
+  frames drawn meanwhile.
+- **A blow that misses strikes the wall.** A sword slash, spear thrust, maul blow, shield bash or haft
+  sweep that finds no one strikes the wall within its reach where the weapon's tip is on screen in
+  its hit frame, floors too (`wall-strike` and `weapon-tip-direction`, sword.lisp, `*weapon-tips*`;
+  `wall-strike-point` in gore.lisp, a ray to the face and its normal, wedges' diagonals included),
+  so the sparks start at the tip at any window size: steel sparks and dust off stone and rock, fewer sparks and frost chips
+  off ice-rock, chips off slick ice, a puff off snow, pale splinters off beams and planks
+  (`wall-sparks`, sparks.lisp, with new `:wood` and `:snow` ramps), each solid knowing what it is by a
+  9th value (`surface-strike`, `*surface-strikes*`, greybox.lisp). New sounds `blade-hit-stone`,
+  `maul-hit-stone` and `blade-hit-wood`; a little of a hit's feel, always less (`*wall-strikes*`: the
+  maul's camera kick and a short hit-stop by charge, the bash's small recoil).
+  `tools/spark_shots.sh` stages each (`wall-*`). `solid-tread` no longer reads a strike-only solid's
+  footing of 0 as a tread.
+- **The rime hag's blizzard, and winds.** From level 3 she raises a storm round her (6 m, 10 s, every
+  18 s) when her target is 3 m off or more. Its wind bends every projectile but hers flying through it,
+  more the further it flies (a Fire Bolt at her strikes from 3 m, rarely from 4, never from 5), each
+  projectile by its own gust so long shots can't be aimed off for it; and her foes inside walk at 60%
+  of their speed, so she walks in on them with her nova. She had died at range to free Fire Bolts.
+  Winds are general (`*winds*`, `wind-turn`, `wind-slow` in spells.lisp): the tornado is one too, and
+  turns any projectile through its funnel about 45 degrees. It shows only as snow: up to about a thousand
+  flakes at 12 m/s, a new kind of particle in the spark pool (now 2048 slots) that the winds carry,
+  streaking round her and thinning out toward its edge, so no boundary is drawn. Each cast turns it
+  clockwise or counterclockwise at random, and projectiles bend with it.
+  Its sound is its own loop, `blizzard` (a roar of driving snow and icy wind), not the tornado's.
+- A level rebuilt while a nova's sweep was showing kept its scorch or rime painted on the new level for
+  good (`clear-level` now clears the sweep).
+- **The rime hag shuns Absorb.** For 10 s after Absorb swallows one of her shards, or while she sees
+  it held at her, she throws no shards (one in its wind-up is kept): she drops her rime field on the
+  floor short of the player, where Absorb can't take it, and comes in to 2.5 m for her nova. Holding
+  Absorb at her had been an endless mana spring, as the acolyte's cinders were.
+- **The rime hag, the first frost enemy** (`src/hag.lisp`). A stooped crone of the ice caves who
+  throws rime shards (frost, a chill), from level 2 a ball of rime at the floor ahead of her target
+  that ices the floor and walls round it for 10 s, and when her target comes within 3 m gathers the
+  cold for 1.0 s (a cold lamp, frost drawn in, a breath) and bursts a 5 m frost nova round her (8 to
+  12, a 35% slow, knockback), leaving rime round her feet. A run outruns the nova, a bash or the
+  earthshake breaks the gather, fire melts her rime; she walks her own ice, takes a quarter of frost
+  and half again of fire, and killed by a player who doesn't know frost drops its glyph. She is in
+  the pools of levels 1 and 2 and named by the ice caves (`frost-shrine`, `ice-cavern`,
+  `ice-grotto`) on any level; an elite, and a boss, the Winter Crone, whose nova reaches 7 m. Her
+  art is generated and sliced as the other monsters'; her sounds are nine new clips. Adding a pool
+  kind, spawns and a boss kind changes which monsters some seeds place and every seed's boss draw:
+  a save from before starts its level fresh. `*save-version*` is unchanged.
+- **Skins** (`src/skins.lisp`): something laid over the floor and wall cells for a while, of a kind
+  (texture, rim colours, footing or a look only), drawn per kind in one call. The frost patch and
+  ice floor are ported from the spell-secondary branch and made general, so the bloodroot's roots can
+  use them; they also climb the walls round them now (a look only), never lie on liquids, take a
+  radius and time per patch, and their freeze spares the caster's side. Ice underfoot through
+  `skin-footing` (`slips-on-rime-p` keeps a creature off it). Elements reach skins through
+  `strike-skins` (bursts, novas, projectile and beam impacts, the firestorm). Saved under `:skins`.
+- **Engine hooks for the new enemies**: `spell-impact` (a spell's landing hook), `:nova-radius` per
+  spell, negative resistances named by the forge ("take half again as much"), `taught-effect` (an
+  elemental foe drops its glyph), and `!kind` in a named spawn (placed whatever the level's pool).
 
 - **An elite says what its glow means.** While the crosshair is on one (`aimed-elite`, elite.lisp: the
   nearest body the line of sight meets, `ray-body-hit`, within 15 m and no wall before it), a bar half the

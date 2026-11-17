@@ -486,7 +486,7 @@ def ice_grotto():
     outline(g, L=[5, 3, 1, 1, 1, 1, 1, 1], R=[15, 15, 15, 15, 15, 15, 13, 11])
     region(g, 2, L=[8, 6, 4, 4, 6], R=[10, 12, 14, 14, 12], fill='_', pairs=POND)
     diamond(g, 3, 8)
-    put(g, 6, 9, 'ii'); put(g, 1, 12, 'mm'); put(g, 3, 2, 'mm')
+    put(g, 6, 9, 'ii'); put(g, 1, 12, 'mm'); put(g, 3, 2, 'mm'); put(g, 7, 11, 'hh')
     put(g, 4, 5, '&&'); put(g, 6, 3, '$$')
     return g
 
@@ -529,7 +529,8 @@ def ice_cavern():
     octagon_pillar(g, 6, 17)
     region(g, 2, L=[17, 15, 15, 17], R=[21, 23, 23, 21], fill=',', pairs=SHELF)
     region(g, 7, L=[7, 5, 5, 7], R=[9, 11, 11, 9], fill='v', pairs=HANG)
-    put(g, 4, 12, 'ii'); put(g, 3, 19, 'jj'); put(g, 10, 12, 'mm'); put(g, 5, 27, 'MM'); g[0][20] = 'T'; g[12][11] = 'T'
+    put(g, 4, 12, 'ii'); put(g, 3, 19, 'jj'); put(g, 10, 12, 'mm'); put(g, 5, 27, 'MM'); put(g, 2, 10, 'hh')
+    g[0][20] = 'T'; g[12][11] = 'T'
     put(g, 3, 16, '&&'); put(g, 4, 2, '$$'); put(g, 8, 26, '$$')
     pond_rock(g)
     return g

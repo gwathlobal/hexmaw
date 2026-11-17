@@ -28,7 +28,7 @@
   "How fast a positional sound fades past *SOUND-MIN-DISTANCE*: its volume is (distance / min
 distance) to the minus this, so at 0.75 it loses 4.5 dB a doubling of distance (1 would be 6).")
 (defparameter *clip-min-distances* '(:tornado 12.0 :ogre-land 10.0 :ogre-leap 12.0 :step-heavy 8.0 :waterfall 8.0
-                                     :firestorm-roar 10.0)
+                                     :firestorm-roar 10.0 :blizzard 8.0)
   "Positional clips heard at full volume further off than *SOUND-MIN-DISTANCE*: the big ones.
 Read as a voice is connected (RETUNE-SOUNDS for those connected already).")
 

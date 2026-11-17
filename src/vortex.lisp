@@ -339,6 +339,7 @@ turns aside. It settles to the floor and notes the ceiling."
 (defun start-vortex (vortex)
   "Bring VORTEX's funnel and lamp up and list it, the first time it ticks in the scene."
   (vector-push-extend vortex *vortices*)
+  (add-wind vortex)
   (setf (vortex-funnel vortex) (make-instance 'funnel :centre (centre vortex)))
   (enter (vortex-funnel vortex) (container vortex))
   ;; A loaded one has its lamp back already (RESTORE-EFFECT).
@@ -372,6 +373,26 @@ turns aside. It settles to the floor and notes the ceiling."
       (setf (funnel-strength funnel) (vortex-strength spell-vortex)
             (funnel-height funnel) (min 9.0 (max 2.0 (- (vortex-ceiling spell-vortex) (vy c))))))))
 
+(defparameter *vortex-deflect* 9.0
+  "Radians a second its wind turns a projectile passing through its funnel, at full strength: about
+45 degrees for the Fire Bolt crossing it, more for a slow one. Every projectile, its caster's too.")
+(defparameter *vortex-deflect-margin* 0.4 "Metres outside its funnel's wall that its wind still turns a projectile.")
+
+;; Its wind bends what flies through the funnel, the way it turns.
+(defmethod wind-turn ((vortex spell-vortex) projectile)
+  (let* ((strength (vortex-strength vortex))
+         (c (centre vortex))
+         (at (location projectile))
+         (h (- (vy at) (vy c))))
+    (if (and (< 0.0 strength) (< -0.3 h (- (vortex-ceiling vortex) (vy c))))
+        (let ((dx (- (vx at) (vx c)))
+              (dz (- (vz at) (vz c)))
+              (r (+ *funnel-foot* (* *funnel-flare* (max 0.0 h)) *vortex-deflect-margin*)))
+          (if (< (+ (* dx dx) (* dz dz)) (* r r))
+              (* *vortex-deflect* strength)
+              0.0))
+        0.0)))
+
 (defun caught (vortex)
   "Everything VORTEX holds, which is how a save remembers it."
   (let ((held (loop for creature across *creatures*
@@ -388,6 +409,7 @@ turns aside. It settles to the floor and notes the ceiling."
 ;; whatever it held by then, and a despawn at its end holds nothing.
 (defmethod leave :after ((vortex spell-vortex) container)
   (setf (vortex-sound vortex) (stop-loop (vortex-sound vortex)))
+  (remove-wind vortex)
   (when (vortex-funnel vortex)
     (despawn (vortex-funnel vortex))
     (setf (vortex-funnel vortex) NIL))
