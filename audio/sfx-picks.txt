@@ -51,7 +51,7 @@ bolt-impact 5
 cinder-impact 4
 firestorm-sign 2
 firestorm-ignite 2
-firestorm-roar 7 gain=8 even
+firestorm-roar 12 gain=6 lowcut=120 even
 necro-pain 7
 skull-impact 5
 imp-claw 8

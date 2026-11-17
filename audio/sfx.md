@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-152 clips; tier 1: 96 clips, 317 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 465 s, about 4,650 credits for everything.
+152 clips; tier 1: 96 clips, 341 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 489 s, about 4,890 credits for everything.
 
 ## Player: weapons and shield
 
