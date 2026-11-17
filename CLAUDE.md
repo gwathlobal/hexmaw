@@ -480,7 +480,7 @@ real time instead.
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
+  knight 8, ogre 9, bloodroot 10, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
   whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`;
@@ -986,6 +986,10 @@ real time instead.
   then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
   `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
   riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
+- `src/bloodroot.lisp` (after riftwalker.lisp): the `bloodroot`, the last level's new monster, a
+  rooted heart-bulb whose roots spread over the floor and walls; see "The bloodroot" under "Creature
+  movement" below. Also `lobbed-projectile` (a `spell-projectile` under gravity, `lob-velocity`;
+  `launch-projectile`'s `:class`), the `root-floor` that draws every carpet, and its elite and boss.
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
   empowered form of one of the eight monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
@@ -1069,8 +1073,10 @@ real time instead.
   `update-statuses` runs in each actor's tick and allocates nothing. A creature takes on its
   status's element colour (`status-tint`, `*element-tints*`). Elements: frost also chills
   (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` halves an element for a
-  class (acolyte fire, skeleton frost, gale wraith shock). Drain heals its caster `*drain-share*` of
-  what it took. Statuses are `saved-slots` (`(:status ...)` in a save). A status keeps its
+  class (acolyte fire, skeleton frost, gale wraith shock; the bloodroot resists drain, treated as an
+  element, by half and frost by a quarter, and takes half again from fire). Drain heals its caster
+  `drain-share` of what its target lost (`*drain-share*`, all of it for a bloodroot; `heal-caster`):
+  a creature's drain strikes the player too (`apply-effect :drain` on the player). Statuses are `saved-slots` (`(:status ...)` in a save). A status keeps its
   `duration`, the time it was put on or last renewed for (`afflict` resets it when a re-cast lasts
   longer than what is left), for the HUD's time bar. Damage over time shows on a creature as a
   `status-aura` (its `status-aura` slot, on `afflicted`): its element's loop of small pieces scattered
@@ -2205,6 +2211,95 @@ back contact 3.8 to 2.9 s), from 79% to 86% and 79% to 84% against the strafing 
 Walking round already put the pack at the player's flank: the leap gets there about a second
 sooner, more than it changes where the pack ends up. Touches between imps: 3.0 to 6.0, 10.8 to 5.0,
 5.4 to 7.0 and 8.0 to 8.8 a trial.
+
+### The bloodroot
+
+The `bloodroot` (bloodroot.lisp) is a heart-bulb 1.4 m tall, rooted in the floor (`rooted-p`): it never
+walks (`wander` only waits, its hunt never closes in or backs off), its `momentum` is zeroed every tick,
+no vortex takes it, a riftwalker never calls it (`callable-p`), and it turns to what it would hunt, so it
+notices all round. 110 health, pain 10. It spawns on the third `*run-levels*` entry only: its pool, and
+the `hall`'s and `crypt`'s named spawns (`bloodroot|...`, which the pool filter drops on earlier
+levels, so their picks stay); a settlement before the last level borrows that level's pool without it
+(`*last-level-kinds*`, `settlement-keys`, run.lisp). It isn't in `*spawn-pool*`: the debug hall
+spawns one by name, west of the middle, after every other `debug-spawn`. Its body (0.6 m) can stand in
+a way, on a cistern's 2 m ledge or between a vestry's benches: `build-level` takes out every one whose
+body alone cuts a doorway off from the spawn point (`uproot-blockers`, kit.lisp, after `spread-packs`;
+it draws nothing, so the layout stays), and `tools/levelcheck --strict` fails a level where one still
+does. Over run seeds 1 to 60 it was 183 bloodroots on 57 of the 60 last levels before uprooting, 4 of
+them in a way; none on any other level or in the settlement. Its sounds are `bloodroot-*`,
+`seed-impact`, `bloom-swell`, `bloom`, `root-drink`, `snare-*` and `roots-burn` (`audio/sfx.md`).
+
+**Its roots.** A `root-carpet` (not an entity: the bloodroot owns it) is a window of the nav grid's
+cells round where it grew from, every layer, each empty, rooted or burnt (and a rooted one frosted
+for a while). It grows a ring every `*root-ring-time*` (0.4 s, halved in Glut, faster for a haste
+elite; `root-speed`) while the bulb hunts, from its frontier through `nav-step` at a thin body
+(`*root-body*`), so never through a plugged doorway, over lava or into water, out to `*root-reach*`
+(10 m; the Mother Root's 20). A step pointing at its target or a floor splat within
+`*root-lean-reach*` grows every ring, the rest every other (`leans-p`). A rooted cell beside a wall
+notes the wall's face and how high it goes (`find-walls`), and the roots climb it to `*root-climb*`
+(2.5 m) over `*root-climb-time*`, a look only. The arena's gate, a solid the nav grid doesn't know,
+is checked by `solid-at`. `roots-at x y z` is the bulb whose live roots a point stands on.
+
+**Underfoot** (`feed-on`, only its target: monsters cross unharmed). Grounded on its roots, the
+player is slowed `*root-slow*` (a `:slow` status) and drained `*root-drain*` (3) a second, taken
+every `*root-drain-tick*` as whole points (`hurt-player ... :shove NIL :unblockable T`), the bulb
+healing what they lost. `*snare-stand*` (1 s) on them, unless `snare-guard` still runs, starts the
+**snare** (the player's `snare`, player.lisp): a `*snare-tell*` (0.6 s) tell, four `snare-sprite`s
+bulging round the feet; off the floor at any moment of it (a jump) or more than `*snare-reach*` from
+where it started, the roots close on nothing. Otherwise they hold (`snared-p`: no walk, run or jump,
+on ice too; hands and casts work) for `*snare-hold*` (1.5 s) at `*snare-drain*` (8) a second. A bash
+or a spear's sweep pressed (`break-snare`), the maul's earthshake (which also tears up the roots
+within its reach, `tear-roots`), fire or frost reaching the cell, or the bulb's death free the player;
+each starts `snare-guard` (`*snare-guard*`, 2.5 s). The status icons don't show it yet.
+
+**Drinking** (`drink-splats`): every `*drink-scan*` the splats lying on its live roots (a floor splat
+over a cell, a wall splat beside one below the roots' climb) start being drunk; after `*drink-time*`
+each dissolves (`dissolve-splat`, gore.lisp) and heals the bulb `*drink-per-area*` of its blood's area,
+at most `*drink-max*`. `*glut-drink*` (15) drunk within a second sets off Glut. Its own wounds spray
+sap (`:drain` embers), not blood (`bleeds` NIL), or it would heal off every hit.
+
+**Spit** (`:spit`, cooldown 3 s, 1.5 in Glut): a `blood-seed` lobbed (`lob-velocity`, `*seed-apex*`
+over the higher end) at the floor under the target, ahead of their walk and a little off. Where it
+bursts (`spell-impact` on `blood-seed`) it plants a seed carpet, `*seed-patch-radius*` (1.25 m) grown
+at once, that drains and snares as the main one and lasts `*seed-patch-time*` (12 s), shrinking over
+its last second; a bulb keeps `*max-seed-patches*` (4). It carries damage, so Absorb takes one coming
+at the player. **Bloom** (`:bloom`, cooldown 20 s, first after `*bloom-first*`): with the target within
+8 m in sight, or `*bloom-crowd*` (4) bodies in reach past `*bloom-crowd-gap*`, a 1.2 s tell (the
+clench held, its lamp swelling red, motes drawn in, `bloom-swell`; a flinch breaks it), then `bloom`,
+a drain nova of `:nova-radius` 8 m (`*bloom-radius*`) that spares only the bulb and no shield stops
+(`*unblockable-spells*`). It heals the bulb all it drains (`drain-share` 1), its own side's too; then
+its roots surge `*bloom-surge*` rings and it gluts. **Glut** (`*glut-time*`, 6 s): roots twice as
+fast, spit twice as often, and the sprite washed red, pulsing 0.35 to 0.5 twice a second
+(`own-tint`, creature.lisp, after the flash and status tint, only where stronger).
+
+**Fire, frost and the maul.** `touch-roots at radius element`, from `strike-skins` (skins.lisp:
+bursts, novas, a projectile's impact at 1 m at least, a beam's end, the firestorm's pulses): fire
+burns the rooted cells there (burnt, regrowing from their neighbours after `*root-burn-hold*`), frost
+holds them for `*root-frost-time*` (no growth, drain or snare; drawn rimed), `:tear` (the earthshake)
+as fire. A rime patch over a carpet holds the cells under it (`frost-under-rime`, each ring). Its
+death withers every carpet over `*root-wither-time*`.
+
+**Drawing.** One `root-floor` (`add-root-floor`, `setup-scene`) draws every carpet from one buffer:
+a quad per rooted cell on its floor and one up each wall beside it, as high as the wall goes. Each
+corner carries its cover, the share of the four cells round it that are rooted, and the shader cuts
+the edge where cover falls short of a hashed threshold in clumps of texels, so it is ragged rather
+than square; each vertex carries when its cell rooted, and the shader spreads it in over
+`*root-grow-in*` and climbs its wall from then on `*root-clock*`. So the cells are written only when a
+carpet changes (`*roots-dirty*`). The texture is `bloodroot-roots` (`data/textures/bloodroot.png`,
+keyed to see-through), lit as floors and walls are. Measured with 1032 cells and their walls
+filling the view, world frozen, vsync off: GPU 3.69 ms a frame against 2.40 without the root floor.
+
+**Saving.** `root-state` turns its carpets into plain data (cells by window index, how long ago they
+rooted, burn and frost left) and back, finding their walls and frontier again on the rebuilt nav grid;
+the player's `snare` and `snare-guard` are saved too. **Elite and boss**: `elite-bloodroot` (haste
+grows its roots faster; never `:warded`, since it always faces the player); the Mother Root,
+`bloodroot-boss` (traits `:caster :rooted`: no leap, blink, tornado or ward), its roots over the whole
+arena. Kill gold 18; it teaches drain (`taught-effect`).
+
+To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'bloodroot))`,
+Debug level, then `(setf (alert root) 30.0)` with `root` the bloodroot in `*creatures*`;
+`(rooted-count (carpet root))`, `(patches root)`, `(snare *player*)`; `(start-ability root :bloom)` for a
+Bloom, `(start-glut root)`, and `(strike-skins :fire (vcopy (feet *player*)) 1.5 nil)` to burn.
 
 ### The ogre
 
@@ -3730,7 +3825,9 @@ appears, and the findings by class. `--json` prints the records instead, one obj
 comes from `*last-level-checks*`, which `build-level` keeps, not from the warnings' text.
 `--strict` exits 1 on a worker error, a kit problem, a doorway the player can't walk to, a
 stranded creature other than an ogre (they are expected: see "The ogre"), an ice gate joined
-wrong, a doorway opening onto nothing, or a level kept after `*max-level-attempts*` seeds; other
+wrong, a doorway opening onto nothing, a doorway a rooted creature's body cuts off (`rooted-blocks`,
+kit.lisp: the doorways reached again with `*nav-bodies*` bound to every `rooted-p` creature's disc;
+`blocked_by_rooted`), or a level kept after `*max-level-attempts*` seeds; other
 warnings are reported only.
 
 Use it for every sweep over seeds: the figures in this file (rooms, monsters and pickups per

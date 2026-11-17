@@ -7,6 +7,33 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The bloodroot, the last level's new monster** (src/bloodroot.lisp): a heart-bulb rooted in the
+  floor that never moves, on the third `*run-levels*` entry only (its pool, and the hall's and the
+  crypt's named spawns; a settlement before it borrows the pool without it, `*last-level-kinds*`).
+  Its roots (`root-carpet`) spread over the nav grid's cells a ring at a time, leaning toward its
+  target and spilt blood, and climb the walls as a look; standing on them drains the player (3 a
+  second, the bulb healing what they lose) and slows them, and a second on them snares (a 0.6 s
+  tell a jump or a step off escapes, then 1.5 s held at 8 a second; a bash, a sweep, the earthshake,
+  fire or frost under the feet frees). They drink blood splats. It spits seeds (`lobbed-projectile`,
+  the first arcing projectile) that plant 2.5 m patches, and its Bloom is an 8 m drain nova that
+  feeds on its own side too; after a Bloom or a big drink it gluts (twice as fast, washed red,
+  `own-tint`). Fire burns roots back and any frost holds them, through the shared engine's
+  `strike-skins`; a rime patch over them holds them too. Resists drain and frost, takes half again
+  from fire, teaches drain. Elite (never warded) and boss, the Mother Root (no leap, blink, tornado
+  or ward; roots over the whole arena). Drawn by its own `root-floor`, cells cut ragged from each
+  corner's cover and spread and climbed in the shader, rewritten only when a carpet changes: 1.3
+  ms of GPU with a full carpet filling the view. Saved with its carpets (`root-state`), and the
+  player's snare.
+- **A creature's drain strikes the player and heals any caster** (`apply-effect :drain` on the
+  player, `heal-caster`, `drain-share`), for what the target lost; drain is resisted as an element.
+- **`*unblockable-spells*`**, `launch-projectile`'s `:class`, gore.lisp's splat readers
+  (`splat-lying-p`, `splat-place`, `dissolve-splat`), `rooted-p`, `own-tint`.
+- **`tools/levelcheck` fails a level where a rooted creature cuts a doorway off** (`rooted-blocks`,
+  kit.lisp; `blocked_by_rooted`), and `build-level` uproots one that would (`uproot-blockers`), and `make_texture.py --key` keys a texture drawn on magenta to
+  see-through.
+- **The shared engine for the new enemies** (cherry-picked from the rime hag's branch): skins,
+  per-spell nova radius, weaknesses, taught glyphs.
+
 - **An elite says what its glow means.** While the crosshair is on one (`aimed-elite`, elite.lisp: the
   nearest body the line of sight meets, `ray-body-hit`, within 15 m and no wall before it), a bar half the
   boss's takes the boss bar's place at the top of the screen: its name over it, as the boss's title
