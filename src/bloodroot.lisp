@@ -88,24 +88,18 @@ grow every other ring.")
 (defun bloodroot-atlas ()
   (append (read-atlas "sprites/bloodroot/turnaround.lisp") (list :views '(:front))))
 
-(defun strip-height (strip)
-  "Metres a strip under data/sprites/ draws its cells: their height at 64 art pixels a metre."
-  (/ (getf (read-atlas (format NIL "sprites/~a.lisp" strip)) :cell-height) 64.0))
-
 (define-asset (hexmaw bloodroot-turnaround) image
     #p"sprites/bloodroot/turnaround.png"
   :min-filter :nearest :mag-filter :nearest)
 
-(define-fx-animation bloodroot-idle "sprites/bloodroot/idle" :fps 6 :loop T
-  :size (strip-height "bloodroot/idle"))
-(define-fx-animation bloodroot-spit "sprites/bloodroot/spit" :size (strip-height "bloodroot/spit"))
-(define-fx-animation bloodroot-bloom "sprites/bloodroot/bloom" :size (strip-height "bloodroot/bloom"))
-(define-fx-animation bloodroot-hurt "sprites/bloodroot/hurt" :size (strip-height "bloodroot/hurt"))
-(define-fx-animation bloodroot-death "sprites/bloodroot/death" :fps 8 :size (strip-height "bloodroot/death"))
-(define-fx-animation snare-roots "sprites/bloodroot/snare" :fps 10 :loop T :size (strip-height "bloodroot/snare"))
-(define-fx-animation seed-flight "sprites/bloodroot/seed-flight" :fps 10 :loop T
-  :size (strip-height "bloodroot/seed-flight"))
-(define-fx-animation seed-burst "sprites/bloodroot/seed-burst" :fps 14 :size (strip-height "bloodroot/seed-burst"))
+(define-fx-animation bloodroot-idle "sprites/bloodroot/idle" :fps 6 :loop T :size (/ 92 64.0))
+(define-fx-animation bloodroot-spit "sprites/bloodroot/spit" :size (/ 91 64.0))
+(define-fx-animation bloodroot-bloom "sprites/bloodroot/bloom" :size (/ 91 64.0))
+(define-fx-animation bloodroot-hurt "sprites/bloodroot/hurt" :size (/ 90 64.0))
+(define-fx-animation bloodroot-death "sprites/bloodroot/death" :fps 8 :size (/ 90 64.0))
+(define-fx-animation snare-roots "sprites/bloodroot/snare" :fps 10 :loop T :size (/ 51 64.0))
+(define-fx-animation seed-flight "sprites/bloodroot/seed-flight" :fps 10 :loop T :size (/ 46 64.0))
+(define-fx-animation seed-burst "sprites/bloodroot/seed-burst" :fps 14 :size (/ 78 64.0))
 
 ;; The roots, laid over floors and walls in world space (ROOT-FLOOR); magenta between them keyed
 ;; to see-through, so the stone shows.
@@ -118,7 +112,7 @@ grow every other ring.")
   ;; Damage, so a seed coming at the player can be swallowed by Absorb.
   (:damage :magnitude '(3 5)))
 
-(define-spell bloom (:delivery :nova :title "Bloom")
+(define-spell bloom (:delivery :nova :nova-radius *bloom-radius* :title "Bloom")
   ;; Its drain heals the bulb for all of it (DRAIN-SHARE), and it spares no one but the bulb.
   (:drain :magnitude '(10 14)))
 
@@ -171,9 +165,14 @@ grow every other ring.")
 (define-creature-sounds bloodroot
   :alert :bloodroot-alert :pain :bloodroot-pain :death :bloodroot-death)
 
+;; Its idle pulse is no ability's strip, so the scene doesn't stage it on its own.
+(defmethod stage :after ((bloodroot bloodroot) (area staging-area))
+  (stage (animation-texture (find-fx-animation 'bloodroot-idle)) area))
+
 (defmethod rooted-p ((bloodroot bloodroot)) T)
 (defmethod vortex-proof-p ((bloodroot bloodroot)) T)
 (defmethod drain-share ((bloodroot bloodroot)) 1.0)
+(defmethod taught-effect ((bloodroot bloodroot)) :drain)
 
 (defgeneric root-reach (bloodroot)
   (:method ((bloodroot bloodroot)) *root-reach*))
@@ -197,6 +196,11 @@ grow every other ring.")
 ;;; spreads from the FRONTIER, the rooted cells with room to grow, a ring at a time, through
 ;;; NAV-STEP: so never through a plugged doorway, over lava or into water, and up and down steps.
 
+(defvar *root-clock* 0f0
+  "Seconds the root floor has run while the world does: each cell notes when it rooted, and the
+shader spreads it and climbs its wall from then.")
+(defvar *roots-dirty* T "True when a carpet changed since the root floor last wrote its cells.")
+
 (defclass root-carpet ()
   ((owner :initarg :owner :reader carpet-owner)
    (kind :initarg :kind :initform :main :reader carpet-kind :documentation ":MAIN or :SEED.")
@@ -207,7 +211,6 @@ grow every other ring.")
    (ring-time :initarg :ring-time :initform *root-ring-time* :reader ring-time)
    (ring-timer :initform 0.0 :accessor ring-timer)
    (ring :initform 0 :accessor carpet-ring)
-   (clock :initform 0f0 :accessor carpet-clock :documentation "Seconds it has grown, for each cell's age.")
    (i0 :reader carpet-i0) (j0 :reader carpet-j0) (n :reader carpet-n) (layers :reader carpet-layers)
    (state :reader carpet-state) (born :reader carpet-born) (hold :reader carpet-hold) (frost :reader carpet-frost)
    (walls :reader carpet-walls :documentation "Per cell and side (+X -X +Z -Z): the wall's distance from
@@ -303,7 +306,8 @@ the cell's centre and its top over the floor, both -1 for none; found when it ro
 (defun root-cell (carpet a b k)
   (let ((w (cell-index carpet a b k)))
     (setf (aref (carpet-state carpet) w) 1
-          (aref (carpet-born carpet) w) (carpet-clock carpet))
+          (aref (carpet-born carpet) w) *root-clock*
+          *roots-dirty* T)
     (incf (rooted-count carpet))
     (find-walls carpet a b k)
     (queue-cell carpet w)))
@@ -402,7 +406,7 @@ toward on every ring, the rest on every other (or all at once, ALL)."
                                                            (setf more T))))))))))
                      (when more (queue-cell carpet w))))))))
     (incf (carpet-ring carpet))
-    (swap-frontier carpet)))
+    (swap-frontier carpet))
 
 (defun regrow-cells (carpet dt)
   "Count CARPET's burnt cells' and frost's time down; a burnt cell that may grow again is empty,
@@ -411,11 +415,13 @@ and the rooted cells round it grow into it."
         (n (carpet-n carpet)) (dt (float dt 0f0)))
     (dotimes (w (length state))
       (when (< 0 (aref frost w))
-        (setf (aref frost w) (max 0f0 (- (aref frost w) dt))))
+        (setf (aref frost w) (max 0f0 (- (aref frost w) dt)))
+        (when (= 0 (aref frost w)) (setf *roots-dirty* T)))
       (when (= 2 (aref state w))
         (when (<= (decf (aref hold w) dt) 0)
           (setf (aref state w) 0)
           (multiple-value-bind (a b k) (cell-coords carpet w)
+            (declare (ignore k))
             (loop for di from -1 to 1
                   do (loop for dj from -1 to 1
                            do (let ((na (+ a di)) (nb (+ b dj)))
@@ -446,6 +452,7 @@ Returns how many."
                             (aref (carpet-hold carpet) w) (float *root-burn-hold* 0f0)
                             (aref (carpet-frost carpet) w) 0f0
                             (rooted-count carpet) (1- (rooted-count carpet)))))))))))
+    (when (< 0 touched) (setf *roots-dirty* T))
     touched))
 
 (defmacro do-bloodroots ((root) &body body)
@@ -469,7 +476,8 @@ Returns how many."
 (defun touch-roots (at radius element)
   "A hit of ELEMENT reached the floor round AT out to RADIUS: fire burns roots there, frost holds
 them, :TEAR tears them up."
-  (let ((how (case element (:fire :fire) (:frost :frost) (:tear :tear))))
+  (let ((how (case element (:fire :fire) (:frost :frost) (:tear :tear)))
+        (radius (max radius *bolt-scorch-radius*)))
     (when (and how (< 0 (fill-pointer *creatures*)))
       (let ((touched 0))
         (do-bloodroots (root)
@@ -482,6 +490,15 @@ them, :TEAR tears them up."
             (:frost (spray-sparks at NIL (min 16 (+ 3 (floor touched 6))) :kind :grit :ramp :frost))
             (:tear (spray-sparks at NIL (min 20 (+ 4 (floor touched 4))) :kind :grit :ramp :drain))))
         touched))))
+
+(defun frost-under-rime (carpet)
+  "A rime patch (skins.lisp) lying over CARPET holds the roots under it, as frost does."
+  (dolist (skin *skins*)
+    (when (and (typep skin 'frost-patch) (container skin) (skin-entry skin))
+      (let ((at (location skin)) (r (aref (skin-entry skin) 3)) (c (carpet-centre carpet)))
+        (when (< (+ (expt (- (vx at) (vx c)) 2) (expt (- (vz at) (vz c)) 2))
+                 (expt (+ r (carpet-reach carpet)) 2))
+          (touch-carpet carpet at r :frost))))))
 
 (defun tear-roots (at radius)
   (touch-roots at radius :tear))
@@ -521,10 +538,10 @@ them, :TEAR tears them up."
   (let ((target (bloodroot-target bloodroot))
         (speed (root-speed bloodroot)))
     (do-carpets (carpet bloodroot)
-      (incf (carpet-clock carpet) dt)
       (when (<= (decf (ring-timer carpet) (* speed dt)) 0)
         (setf (ring-timer carpet) (ring-time carpet))
         (regrow-cells carpet (ring-time carpet))
+        (frost-under-rime carpet)
         ;; The main carpet grows while it hunts; a seed's at once.
         (when (or (eq (carpet-kind carpet) :seed) (hunting-p bloodroot))
           (grow-ring carpet (note-lean-points carpet target) (eq (carpet-kind carpet) :seed)))))
@@ -533,8 +550,11 @@ them, :TEAR tears them up."
       (when (carpet-life patch)
         (decf (carpet-life patch) dt)
         (when (< (carpet-life patch) 1.0)
-          (setf (carpet-wither patch) (max 0.0 (- 1.0 (carpet-life patch)))))))
-    (setf (patches bloodroot) (delete-if (lambda (p) (<= (carpet-life p) 0)) (patches bloodroot)))))
+          (setf (carpet-wither patch) (max 0.0 (- 1.0 (carpet-life patch)))
+                *roots-dirty* T))))
+    (when (find-if (lambda (p) (<= (carpet-life p) 0)) (patches bloodroot))
+      (setf (patches bloodroot) (delete-if (lambda (p) (<= (carpet-life p) 0)) (patches bloodroot))
+            *roots-dirty* T))))
 
 (defun feed-on (bloodroot dt)
   "Drain and slow the player standing on BLOODROOT's roots, and close them on one who stays."
@@ -641,7 +661,7 @@ or on a wall beside one, below the roots' climb."
               (multiple-value-bind (a b k) (cell-coords carpet w)
                 (when (or (= face 2)
                           (<= (- y (cell-floor carpet a b k))
-                              (* *root-climb* (min 1.0 (/ (- (carpet-clock carpet) (aref (carpet-born carpet) w))
+                              (* *root-climb* (min 1.0 (/ (- *root-clock* (aref (carpet-born carpet) w))
                                                           *root-climb-time*)))))
                   (return-from splat-on-roots-p T))))))))))
 
@@ -672,7 +692,7 @@ or on a wall beside one, below the roots' climb."
                   (scan
                    (multiple-value-bind (x y z face) (splat-place pool i)
                      (when (splat-on-roots-p bloodroot x y z face)
-                       (setf (aref drinking i) 0f0)))))))))
+                       (setf (aref drinking i) 0f0))))))))
       (let ((whole (floor (heal-carry bloodroot))))
         (when (< 0 whole)
           (decf (heal-carry bloodroot) whole)
@@ -725,8 +745,8 @@ higher of them."
   (unless (frozen-p)
     (decf (vy (projectile-velocity lobbed-projectile)) (* (gravity lobbed-projectile) (float dt 0f0)))))
 
-(defun spit-aim (bloodroot target)
-  "Where BLOODROOT's seed lands: the floor under TARGET, ahead of its walk, off by a little."
+(defun spit-aim (target)
+  "Where a seed spat at TARGET lands: the floor under TARGET, ahead of its walk, off by a little."
   (let* ((feet (body-feet target))
          (v (if (typep target 'player) (velocity target) (vec 0 0 0)))
          (lead (min *seed-lead-max* (* *seed-lead* (sqrt (+ (expt (vx v) 2) (expt (vz v) 2))))))
@@ -736,12 +756,11 @@ higher of them."
          (point (vec (+ (vx feet) (* lead (/ (vx v) speed)) (* off (cos angle)))
                      (vy feet)
                      (+ (vz feet) (* lead (/ (vz v) speed)) (* off (sin angle))))))
-    (declare (ignore bloodroot))
     (or (floor-under point) feet)))
 
 (defun spit-seed (bloodroot)
   (let* ((target (hunt-target bloodroot))
-         (to (spit-aim bloodroot target))
+         (to (spit-aim target))
          (from (v+ (location bloodroot) (vec 0 (* 0.8 (sprite-height bloodroot)) 0)))
          (spell (find-spell 'blood-seed))
          (projectile (launch-projectile spell from (vec 0 1 0) (container bloodroot) bloodroot
@@ -765,7 +784,8 @@ higher of them."
           (play-sound :seed-impact at)
           (push patch (patches bloodroot))
           (when (< *max-seed-patches* (length (patches bloodroot)))
-            (setf (patches bloodroot) (subseq (patches bloodroot) 0 *max-seed-patches*))))))))
+            (setf (patches bloodroot) (subseq (patches bloodroot) 0 *max-seed-patches*)
+                  *roots-dirty* T)))))))
 
 (defmethod release-attack ((bloodroot bloodroot))
   (let ((ability (current-ability bloodroot)))
@@ -828,9 +848,11 @@ higher of them."
             (dotimes (i *root-start-rings*) (grow-ring carpet NIL T)))))
       (cond ((dead bloodroot)
              (do-carpets (carpet bloodroot)
-               (setf (carpet-wither carpet) (min 1.0 (+ (or (carpet-wither carpet) 0.0) (/ dt *root-wither-time*)))))
+               (when (< (or (carpet-wither carpet) 0.0) 1.0)
+                 (setf (carpet-wither carpet) (min 1.0 (+ (or (carpet-wither carpet) 0.0) (/ dt *root-wither-time*)))
+                       *roots-dirty* T)))
              (when (and (carpet bloodroot) (<= 1.0 (carpet-wither (carpet bloodroot))))
-               (setf (carpet bloodroot) NIL (patches bloodroot) ())))
+               (setf (carpet bloodroot) NIL (patches bloodroot) () *roots-dirty* T)))
             ((not (dormant-p bloodroot))
              ;; One view: it notices all round, turned always to what it would hunt.
              (let ((target (hunt-target bloodroot)))
@@ -848,7 +870,8 @@ higher of them."
     (break-snare *player*)))
 
 (defmethod creature-revived ((bloodroot bloodroot))
-  (setf (carpet bloodroot) NIL (patches bloodroot) () (glut bloodroot) 0.0 (stand bloodroot) 0.0
+  (setf *roots-dirty* T
+        (carpet bloodroot) NIL (patches bloodroot) () (glut bloodroot) 0.0 (stand bloodroot) 0.0
         (drain-carry bloodroot) 0.0 (heal-carry bloodroot) 0.0 (last-bloom bloodroot) 100.0)
   (fill (drinking bloodroot) -1f0))
 
@@ -883,19 +906,21 @@ higher of them."
 
 (defparameter *max-root-quads* 6000 "Quads the root floor draws at most, every carpet together.")
 (defparameter *root-floor-lift* 0.014 "Metres above its floor, or off its wall, roots are drawn.")
-(defparameter *root-vertex-floats* 9 "Per vertex: position, normal, cover, frost, its height up a wall.")
+(defparameter *root-vertex-floats* 10
+  "Per vertex: position, normal, cover, frost, height up a wall, and when its cell rooted.")
 
 (defvar *root-floor* NIL "The root floor in the current scene.")
 
 (define-shader-entity root-floor (lit-entity renderable listener)
   ((data :reader root-data)
    (vbo :reader root-vbo)
-   (vao :reader root-vao)))
+   (vao :reader root-vao)
+   (count :initform 0 :accessor root-vertex-count :documentation "Vertices written when the carpets last changed.")))
 
 (defmethod initialize-instance :after ((floor root-floor) &key)
   (let* ((data (make-array (* *max-root-quads* 6 *root-vertex-floats*) :element-type 'single-float
                                                                        :initial-element 0f0))
-         (vbo (make-instance 'vertex-buffer :buffer-data data :data-usage :stream-draw))
+         (vbo (make-instance 'vertex-buffer :buffer-data data :data-usage :dynamic-draw))
          (stride (* 4 *root-vertex-floats*)))
     (setf (slot-value floor 'data) data
           (slot-value floor 'vbo) vbo
@@ -903,7 +928,9 @@ higher of them."
                                                  :vertex-form :triangles
                                                  :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
                                                              (,vbo :size 3 :offset 12 :stride ,stride :index 1)
-                                                             (,vbo :size 3 :offset 24 :stride ,stride :index 2))))))
+                                                             (,vbo :size 3 :offset 24 :stride ,stride :index 2)
+                                                             (,vbo :size 1 :offset 36 :stride ,stride :index 3))))
+    (setf *roots-dirty* T)))
 
 (defmethod stage :after ((floor root-floor) (area staging-area))
   (stage (root-vao floor) area)
@@ -915,6 +942,9 @@ higher of them."
 (defun add-root-floor (scene)
   (setf *root-floor* (make-instance 'root-floor))
   (enter *root-floor* scene))
+
+(define-handler (root-floor tick) (dt)
+  (unless (frozen-p) (incf *root-clock* (float dt 0f0))))
 
 (defun corner-cover (carpet a b k floor da db)
   "The share of the four cells round corner DA DB (each 0 or 1) of window cell A B K that are rooted
@@ -936,64 +966,62 @@ at about FLOOR."
     (/ count 4.0)))
 
 (defun write-root-vertices (floor)
-  "Write every carpet's cells into FLOOR's data; how many vertices."
+  "Write every carpet's cells into FLOOR's data; how many vertices. Only when a carpet changed: how a
+cell spreads over its floor and climbs its wall runs in the shader, from when it rooted."
   (let ((data (root-data floor))
         (k 0)
         (most (* *max-root-quads* 6 *root-vertex-floats*))
         (stride *root-vertex-floats*)
         (c (nav-cell-size *nav-grid*)))
     (declare (type (simple-array single-float (*)) data) (type fixnum k most))
-    (flet ((put (x y z nx ny nz cover frost up)
+    (flet ((put (x y z nx ny nz cover frost up born)
              (setf (aref data k) (float x 0f0) (aref data (+ k 1)) (float y 0f0) (aref data (+ k 2)) (float z 0f0)
                    (aref data (+ k 3)) (float nx 0f0) (aref data (+ k 4)) (float ny 0f0) (aref data (+ k 5)) (float nz 0f0)
                    (aref data (+ k 6)) (float cover 0f0) (aref data (+ k 7)) (float frost 0f0)
-                   (aref data (+ k 8)) (float up 0f0))
+                   (aref data (+ k 8)) (float up 0f0) (aref data (+ k 9)) (float born 0f0))
              (incf k stride)))
       (do-bloodroots (root)
         (do-carpets (carpet root)
           (let* ((state (carpet-state carpet))
                  (walls (carpet-walls carpet))
-                 (n (carpet-n carpet))
-                 (keep (- 1.0 (or (carpet-wither carpet) 0.0)))
-                 (clock (carpet-clock carpet)))
+                 (keep (- 1.0 (or (carpet-wither carpet) 0.0))))
             (dotimes (w (length state))
               (when (and (= 1 (aref state w)) (<= (+ k (* 6 stride)) most))
                 (multiple-value-bind (a b kk) (cell-coords carpet w)
                   (let* ((f (cell-floor carpet a b kk))
-                         (age (- clock (aref (carpet-born carpet) w)))
-                         (grow (* keep (min 1.0 (/ age *root-grow-in*))))
+                         (born (aref (carpet-born carpet) w))
                          (frost (if (< 0 (aref (carpet-frost carpet) w)) 1.0 0.0))
                          (y (+ f *root-floor-lift*)))
                     (multiple-value-bind (cx cz) (cell-point carpet a b)
                       (let* ((x0 (- cx (* 0.5 c))) (x1 (+ cx (* 0.5 c)))
                              (z0 (- cz (* 0.5 c))) (z1 (+ cz (* 0.5 c)))
-                             (c00 (* grow (corner-cover carpet a b kk f 0 0)))
-                             (c10 (* grow (corner-cover carpet a b kk f 1 0)))
-                             (c01 (* grow (corner-cover carpet a b kk f 0 1)))
-                             (c11 (* grow (corner-cover carpet a b kk f 1 1))))
-                        (put x0 y z0 0 1 0 c00 frost 0) (put x1 y z1 0 1 0 c11 frost 0) (put x1 y z0 0 1 0 c10 frost 0)
-                        (put x0 y z0 0 1 0 c00 frost 0) (put x0 y z1 0 1 0 c01 frost 0) (put x1 y z1 0 1 0 c11 frost 0)
-                        ;; Up the walls beside it.
-                        (let ((climb (* *root-climb* keep (min 1.0 (/ age *root-climb-time*)))))
-                          (when (< 0.05 climb)
-                            (loop for side from 0 below 4
-                                  for (dx dz) in '((1 0) (-1 0) (0 1) (0 -1))
-                                  do (let ((face (aref walls (+ (* 8 w) (* 2 side))))
-                                           (top (aref walls (+ (* 8 w) (* 2 side) 1))))
-                                       (when (and (<= 0 face) (<= (+ k (* 6 stride)) most))
-                                         (let* ((h (min top climb))
-                                                (off (- face *root-floor-lift*))
-                                                (px (+ cx (* dx off))) (pz (+ cz (* dz off)))
-                                                ;; Along the wall: across the cell.
-                                                (ax (* 0.5 c (abs dz))) (az (* 0.5 c (abs dx)))
-                                                (nx (- dx)) (nz (- dz)))
-                                           (put (- px ax) f (- pz az) nx 0 nz grow frost 0)
-                                           (put (+ px ax) (+ f h) (+ pz az) nx 0 nz grow frost 1)
-                                           (put (+ px ax) f (+ pz az) nx 0 nz grow frost 0)
-                                           (put (- px ax) f (- pz az) nx 0 nz grow frost 0)
-                                           (put (- px ax) (+ f h) (- pz az) nx 0 nz grow frost 1)
-                                           (put (+ px ax) (+ f h) (+ pz az) nx 0 nz grow frost 1)))))))))))))))))
-    (floor k stride)))
+                             (c00 (* keep (corner-cover carpet a b kk f 0 0)))
+                             (c10 (* keep (corner-cover carpet a b kk f 1 0)))
+                             (c01 (* keep (corner-cover carpet a b kk f 0 1)))
+                             (c11 (* keep (corner-cover carpet a b kk f 1 1))))
+                        (put x0 y z0 0 1 0 c00 frost 0 born) (put x1 y z1 0 1 0 c11 frost 0 born)
+                        (put x1 y z0 0 1 0 c10 frost 0 born)
+                        (put x0 y z0 0 1 0 c00 frost 0 born) (put x0 y z1 0 1 0 c01 frost 0 born)
+                        (put x1 y z1 0 1 0 c11 frost 0 born)
+                        ;; Up the walls beside it, as high as they go; the shader shows the climb.
+                        (loop for side from 0 below 4
+                              for (dx dz) in '((1 0) (-1 0) (0 1) (0 -1))
+                              do (let ((face (aref walls (+ (* 8 w) (* 2 side))))
+                                       (top (aref walls (+ (* 8 w) (* 2 side) 1))))
+                                   (when (and (<= 0 face) (<= (+ k (* 6 stride)) most))
+                                     (let* ((h (min top *root-climb*))
+                                            (off (- face *root-floor-lift*))
+                                            (px (+ cx (* dx off))) (pz (+ cz (* dz off)))
+                                            ;; Along the wall: across the cell.
+                                            (ax (* 0.5 c (abs dz))) (az (* 0.5 c (abs dx)))
+                                            (nx (- dx)) (nz (- dz)))
+                                       (put (- px ax) f (- pz az) nx 0 nz keep frost 0 born)
+                                       (put (+ px ax) (+ f h) (+ pz az) nx 0 nz keep frost h born)
+                                       (put (+ px ax) f (+ pz az) nx 0 nz keep frost 0 born)
+                                       (put (- px ax) f (- pz az) nx 0 nz keep frost 0 born)
+                                       (put (- px ax) (+ f h) (- pz az) nx 0 nz keep frost h born)
+                                       (put (+ px ax) (+ f h) (+ pz az) nx 0 nz keep frost h born))))))))))))))
+    (floor k stride))))
 
 (defun any-carpets-p ()
   (do-bloodroots (root)
@@ -1002,13 +1030,22 @@ at about FLOOR."
 
 (defmethod render ((floor root-floor) (program shader-program))
   (when (and *nav-grid* (any-carpets-p))
-    (let ((count (write-root-vertices floor)))
+    (when *roots-dirty*
+      (setf *roots-dirty* NIL
+            (root-vertex-count floor) (write-root-vertices floor))
+      (when (< 0 (root-vertex-count floor))
+        (update-buffer-data (root-vbo floor) (root-data floor)
+                            :count (* (root-vertex-count floor) *root-vertex-floats* 4))))
+    (let ((count (root-vertex-count floor)))
       (when (< 0 count)
-        (update-buffer-data (root-vbo floor) (root-data floor) :count (* count *root-vertex-floats* 4))
         (setf (uniform program "view_matrix") (view-matrix))
         (setf (uniform program "projection_matrix") (projection-matrix))
         (set-fog-uniforms program)
         (setf (uniform program "texels_per_metre") *texels-per-metre*)
+        (setf (uniform program "clock") *root-clock*)
+        (setf (uniform program "grow_in") (float *root-grow-in* 0f0))
+        (setf (uniform program "climb") (float *root-climb* 0f0))
+        (setf (uniform program "climb_time") (float *root-climb-time* 0f0))
         (setf (uniform program "light_snap") 0.0)
         (setf (uniform program "light_bands") 0.0)
         (render-array (root-vao floor) :vertex-count count)))))
@@ -1017,12 +1054,14 @@ at about FLOOR."
   "layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 in_normal;
 layout (location = 2) in vec3 in_cover;
+layout (location = 3) in float in_born;
 uniform mat4 view_matrix;
 uniform mat4 projection_matrix;
 out vec3 v_world_position;
 out vec3 v_view_position;
 out vec3 v_normal;
 out vec3 v_cover;
+flat out float v_born;
 
 void main(){
   vec4 view_position = view_matrix * vec4(position, 1.0);
@@ -1031,6 +1070,7 @@ void main(){
   v_view_position = view_position.xyz;
   v_normal = in_normal;
   v_cover = in_cover;
+  v_born = in_born;
 }")
 
 (define-class-shader (root-floor :fragment-shader)
@@ -1038,8 +1078,13 @@ void main(){
 in vec3 v_view_position;
 in vec3 v_normal;
 in vec3 v_cover;
+flat in float v_born;
 uniform sampler2D texture_image;
 uniform float texels_per_metre;
+uniform float clock;
+uniform float grow_in;
+uniform float climb;
+uniform float climb_time;
 out vec4 color;
 
 float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -1053,13 +1098,14 @@ void main(){
   vec2 texel = floor(uv * texels_per_metre) + 0.5;
   vec4 roots = texture(texture_image, texel / vec2(textureSize(texture_image, 0)));
   if(roots.a < 0.5) discard;
-  // The edge: where the cover falls short of a ragged threshold, in clumps of texels; up a wall,
-  // the climb's top the same way.
+  float age = clock - v_born;
+  // The edge: where the cover, spreading in as the cell roots, falls short of a ragged threshold,
+  // in clumps of texels.
   float noise = hash2(floor(texel / 3.0)) * 0.35 + hash2(texel) * 0.15;
-  if(v_cover.x < 0.3 + noise) discard;
-  // Up a wall, V_COVER.Z runs from 0 at the floor to 1 at the top of the climb: the roots thin
-  // out over its upper half, raggedly.
-  if(wall && v_cover.z > 1.0 - 1.2 * noise) discard;
+  if(v_cover.x * clamp(age / grow_in, 0.0, 1.0) < 0.3 + noise) discard;
+  // Up a wall, V_COVER.Z is the height over the floor: the roots climb to CLIMB over CLIMB_TIME,
+  // thinning out raggedly toward the top of the climb.
+  if(wall && v_cover.z > climb * clamp(age / climb_time, 0.0, 1.0) * (1.0 - 1.2 * noise)) discard;
   vec3 surface = roots.rgb;
   // Frost holds them: rimed over.
   if(v_cover.y > 0.5) surface = mix(surface, vec3(0.74, 0.86, 0.95), 0.55 + 0.25 * hash2(texel + 7.0));

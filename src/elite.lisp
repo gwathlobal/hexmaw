@@ -20,12 +20,12 @@
 (defparameter *elite-kinds*
   '(("imp" elite-imp) ("acolyte" elite-acolyte) ("knight" elite-knight) ("harpy" elite-harpy)
     ("necromancer" elite-necromancer) ("ogre" elite-ogre) ("gale-wraith" elite-wraith)
-    ("riftwalker" elite-riftwalker))
+    ("riftwalker" elite-riftwalker) ("bloodroot" elite-bloodroot))
   "What can be an elite: the kind as a spawn names it, and the elite's class.")
 
 (defparameter *elite-traits* '(:haste :warded :tough))
 
-(defparameter *elite-trait-denied* '((:warded "knight"))
+(defparameter *elite-trait-denied* '((:warded "knight" "bloodroot"))
   "Each trait with the kinds that never get it.")
 
 (defparameter *elite-override* NIL

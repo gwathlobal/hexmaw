@@ -250,7 +250,9 @@ its last second, as a look and as footing.")
 
 (defun strike-skins (element point radius caster)
   "ELEMENT struck the ball RADIUS metres round POINT, for CASTER: every skin it reaches hears of it
-(SKIN-STRUCK)."
+(SKIN-STRUCK), and a bloodroot's roots there burn or are held by frost (TOUCH-ROOTS, bloodroot.lisp)."
+  (when element
+    (touch-roots point radius element))
   (when (and element *skins*)
     (dolist (skin (copy-list *skins*))
       (when (and (container skin) (skin-reached-p skin point radius))
