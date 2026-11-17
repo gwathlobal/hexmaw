@@ -271,6 +271,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (debug-spawn (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
     ;; The hall imp's packmate, beside it (imp.lisp): together they hold their nerve.
     (debug-spawn (make-instance 'imp :location (vec 1.5 0 -3.5) :facing pi) container)
+    ;; A rime hag by the north wall, between the necromancer and the wraith (hag.lisp).
+    (debug-spawn (make-instance 'rime-hag :location (vec 0.5 0 -9) :facing pi) container)
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2

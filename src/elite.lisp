@@ -20,7 +20,7 @@
 (defparameter *elite-kinds*
   '(("imp" elite-imp) ("acolyte" elite-acolyte) ("knight" elite-knight) ("harpy" elite-harpy)
     ("necromancer" elite-necromancer) ("ogre" elite-ogre) ("gale-wraith" elite-wraith)
-    ("riftwalker" elite-riftwalker))
+    ("riftwalker" elite-riftwalker) ("rime-hag" elite-hag))
   "What can be an elite: the kind as a spawn names it, and the elite's class.")
 
 (defparameter *elite-traits* '(:haste :warded :tough))

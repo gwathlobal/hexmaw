@@ -20,6 +20,7 @@ legend
   4 diagonal / nw, pit 0.2, floor ice
   i spawn any-ogre south
   m spawn any-ogre south 30
+  h spawn !rime-hag south 30                      ; a rime hag, at home here, on any level
   $ pickup floor
   & pit 0.2, floor ice, pickup reward
 
@@ -31,5 +32,5 @@ plan 0
 #..._&&_3344__.#
 +...]]______[[.#
 +..$$....ii..//#
-+..........//###
++..........hh###
 ################

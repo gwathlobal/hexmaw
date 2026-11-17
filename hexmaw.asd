@@ -46,6 +46,7 @@
                (:file "boss")
                (:file "elite")
                (:file "riftwalker")
+               (:file "hag")
                (:file "settlement")
                (:file "townsfolk")
                (:file "pickups")

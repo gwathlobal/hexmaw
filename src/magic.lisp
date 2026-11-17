@@ -17,8 +17,10 @@
 (defparameter *drain-share* 0.5 "Fraction of the health a drain takes that its caster gets.")
 (defparameter *slowest* 0.4 "The least fraction of its speed a slow leaves anything.")
 (defparameter *element-resistances*
-  '((acolyte :fire 0.5) (skeleton-warrior :frost 0.5) (gale-wraith :shock 0.5))
-  "(CLASS ELEMENT FRACTION): CLASS and its subclasses take FRACTION less of ELEMENT's damage.")
+  '((acolyte :fire 0.5) (skeleton-warrior :frost 0.5) (gale-wraith :shock 0.5)
+    (rime-hag :frost 0.75) (rime-hag :fire -0.5))
+  "(CLASS ELEMENT FRACTION): CLASS and its subclasses take FRACTION less of ELEMENT's damage; a
+negative FRACTION, more (the rime hag takes half again of fire).")
 (defparameter *element-tints*
   '(:fire (1.0 0.45 0.1) :frost (0.45 0.75 1.0) :shock (0.85 0.7 1.0) :arcane (0.8 0.4 1.0))
   "Colour a creature takes on while a status of that element is on it.")

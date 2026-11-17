@@ -7,7 +7,8 @@
 #
 #   tools/gen_monster_views.sh WHO ANIM TURNAROUND VIEW... [-- FRONT-SHEET]
 #
-# Writes art/<who>/<anim>-<view>.png (existing ones are kept).
+# Writes art/<who>/<anim>-<view>.png (existing ones are kept). EXTRA_REFS, if set, is a list of
+# images attached after the others (art/style/anchor.png, the house style).
 set -u
 who=$1 anim=$2 turnaround=$3; shift 3
 views=(); front=""
@@ -24,5 +25,6 @@ for view in "${views[@]}"; do
     front-quarter) prompt="$prompt"$'\n'"$(cat "art/prompts/$who-view-front-quarter-strict.txt")" ;;
     *) prompt="$prompt"$'\n\n'"$(cat "art/prompts/$who-follow.txt")"; refs+=(--ref "$front") ;;
   esac
+  for extra in ${EXTRA_REFS:-}; do refs+=(--ref "$extra"); done
   tools/gen_image.py "$out" --prompt "$prompt" "${refs[@]}" --size 1536x1024
 done
