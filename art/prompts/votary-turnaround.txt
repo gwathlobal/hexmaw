@@ -1,0 +1,24 @@
+Pixel-art character turnaround sheet for a monster in a Doom/Hexen-style first-person dark-fantasy dungeon game, where monsters are drawn as sprites seen from several camera angles: the ARC VOTARY, a blind monk who holds a beam of lightning between its hands and turns it slowly on its enemies.
+
+REFERENCE IMAGES, in the order attached: the game's style anchor (an imp, a knight, a stone wall, a flagstone floor, a flask and a sword drawn together), then turnaround sheets of four other monsters from the same game (a red imp, a hooded robed acolyte, a gaunt necromancer with a staff, and a masked assassin). Use them ONLY for the art style and the sheet layout: pixel size, outline weight, shading, how the views are arranged and how far each one is turned. Do not copy anything of their designs. In particular the votary must NOT look like the acolyte: no hood or cowl, no oxblood, no fire; not like the necromancer: no staff, no beard, no green; and not like the assassin: no mask, no crouch, no dagger.
+
+THE ARC VOTARY
+- a tall, gaunt humanoid of a man's height, as tall as the acolyte, standing upright and still, slightly stooped from the shoulders; a shaven head, bare and pale, its EYES SEWN SHUT, a row of dark stitches across each closed lid; a long ankle-length monk's HABIT of undyed pale linen gone grey-brown with grime, with COPPER WIRE stitched through it in bright lines and spirals down the chest, sleeves and hem; a heavy dark LODESTONE, a rough lump of black-grey iron stone, hanging on two iron chains at the middle of its chest; copper bands round both wrists; bare feet under the hem; its two HANDS held apart in front of the chest, palms facing each other a forearm's length apart, with a few pale yellow-white SPARKS jumping between them.
+- It is calm and deliberate, a priest of the storm: no weapon, no armour.
+- A palette unlike the other monsters': grimy pale linen and grey-brown, bright polished copper for the wire and bands, dark iron-grey for the lodestone and its chains, pale skin; pale yellow-white only for the sparks.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right: FRONT (facing the viewer), FRONT THREE-QUARTER, SIDE (profile), REAR THREE-QUARTER, BACK (facing away).
+- In the front three-quarter, side and rear three-quarter views the votary faces IMAGE-LEFT.
+- The same figure at the same scale in every cell, its feet on the same ground line, in the same pose; only the camera angle changes.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- The whole figure fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, smoke or light rays outside the figure. The sparks stay between its hands, never as a halo on the magenta.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink, purple or cyan glow bleeding into the background.
+
+HOUSE STYLE (Hexmaw; the first reference image is the style anchor):
+- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.
+- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.
+- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.
+- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.

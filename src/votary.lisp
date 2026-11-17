@@ -39,15 +39,15 @@ gives out before the beam does.")
 
 ;; A slow, measured step, the hands held apart; four frames per view, the frame following the
 ;; distance walked (STRIDE).
-(define-fx-animation votary-walk "sprites/votary/walk" :loop T :size (* *votary-height* 119/115))
+(define-fx-animation votary-walk "sprites/votary/walk" :loop T :size (* *votary-height* 116/115))
 ;; The beam: the hands wide apart with an arc between them, brought together on a knot of
 ;; lightning (the charge's held frame), thrust forward (the frame the hold holds), recover. Four
 ;; frames per view, on ATTACK-FRAME-TIMES.
-(define-fx-animation votary-cast "sprites/votary/cast" :size (* *votary-height* 125/115))
+(define-fx-animation votary-cast "sprites/votary/cast" :size (* *votary-height* 116/115))
 ;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*.
-(define-fx-animation votary-hurt "sprites/votary/hurt" :size (* *votary-height* 117/115))
+(define-fx-animation votary-hurt "sprites/votary/hurt" :size *votary-height*)
 ;; Lightning crawls over it along the wire, and it falls face down. Front view only.
-(define-fx-animation votary-death "sprites/votary/death" :fps 9 :size (* *votary-height* 120/115))
+(define-fx-animation votary-death "sprites/votary/death" :fps 9 :size *votary-height*)
 
 ;; What each pulse strikes with, whole: the beam is the votary's own (VOTARY-PULSE), the spell its
 ;; damage, look and light.
