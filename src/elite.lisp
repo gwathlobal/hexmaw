@@ -11,6 +11,11 @@
 ;;; - :TOUGH, flinches half as often and takes half the knockback.
 ;;;
 ;;; Its trait comes back with the level when a save is loaded, since the seed draws it again.
+;;;
+;;; What the glow means is told by the boss bar's place at the top of the screen: while the player
+;;; aims at an elite (AIMED-ELITE) a bar half the boss's shows its health, its trait's name under it
+;;; in the glow's colour (hud.lisp). A warded elite also shows the boss's violet arc on the floor
+;;; round its front (UPDATE-WARD, boss.lisp).
 
 (defparameter *elite-kinds*
   '(("imp" elite-imp) ("acolyte" elite-acolyte) ("knight" elite-knight) ("harpy" elite-harpy)
@@ -44,6 +49,14 @@ kind already taller (the ogre), so it goes everywhere its kind goes. Its body is
 (defparameter *elite-light-radius* 3.5)
 (defparameter *elite-light-scale* 0.5 "Its lamp's brightness against the rim's.")
 
+(defparameter *elite-trait-labels* '(:haste "Haste" :warded "Warded" :tough "Tough")
+  "What the HUD's bar calls each trait: the boss bar's own words for its Haste and Warded.")
+(defparameter *elite-aim-cone* 0.12 "Radians either side of the aim within which an elite is aimed at.")
+(defparameter *elite-aim-range* 15.0 "Metres out an elite may be aimed at.")
+(defparameter *elite-ward-hum-range* 12.0
+  "Metres from the player within which a warded elite's ward hums: past *SOUND-MAX-DISTANCE* a
+sound gets no quieter, and a level's warded elites would hum all over it.")
+
 (defun elite-trait-allowed-p (trait kind)
   (not (member kind (rest (assoc trait *elite-trait-denied*)) :test #'string-equal)))
 
@@ -62,7 +75,7 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
         (when traits
           (list (second entry) (nth (min (1- (length traits)) (floor (* pick (length traits)))) traits)))))))
 
-(define-shader-entity elite (rim-glow)
+(define-shader-entity elite (rim-glow ward-arc-mixin)
   ((trait :initarg :trait :initform :tough :reader elite-trait))
   (:documentation "A monster more than its kind, with one trait. List it first in the superclasses."))
 
@@ -98,8 +111,25 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
 (defmethod shield-views ((elite elite))
   (if (eq (elite-trait elite) :warded) (max 1 (or (call-next-method) 0)) (call-next-method)))
 
+(defmethod ward-up-p ((elite elite)) (eq (elite-trait elite) :warded))
+
+(defmethod ward-hum-p ((elite elite))
+  (and *player* (< (vdistance (location elite) (location *player*)) *elite-ward-hum-range*)))
+
+(defun elite-p (thing) (typep thing 'elite))
+
+(defun aimed-elite (player)
+  "The live elite nearest PLAYER's aim, within *ELITE-AIM-CONE* and *ELITE-AIM-RANGE* and in
+sight, or NIL."
+  (seeker-mark (location player) (look-direction player) NIL
+               :cone *elite-aim-cone* :range *elite-aim-range* :test #'elite-p))
+
+(defun elite-trait-label (elite)
+  (getf *elite-trait-labels* (elite-trait elite)))
+
 (defun update-elite-glow (elite)
-  "The rim and its lamp: pulsing while it lives, going out as it dies, gone with its gibs."
+  "The rim, its lamp and a warded one's arc: pulsing while it lives, going out as it dies, gone
+with its gibs."
   (let* ((d (dead elite))
          (k (cond ((gibbed elite) 0.0)
                   (d (max 0.0 (- 1.0 (/ d (max 0.1 (death-duration elite))))))
@@ -108,7 +138,8 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
     (light-rim elite (getf *elite-glow-colors* (elite-trait elite)) strength *elite-light-radius*)
     (let ((lamp (glow-lamp elite)))
       (when lamp
-        (nv* (color lamp) *elite-light-scale*)))))
+        (nv* (color lamp) *elite-light-scale*)))
+    (update-ward elite k)))
 
 (define-handler (elite tick :after) ()
   (update-elite-glow elite))

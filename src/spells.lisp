@@ -1482,22 +1482,24 @@ show AGE seconds into a wind-up of WINDUP."
 ;;; crosshair and turns after it (STEER), so a strafing target is still hit. With no creature
 ;;; in its cone it flies straight. A shield that turns it aside ends the homing, as a skull's.
 
-(defun seeker-mark (origin direction caster)
-  "The live creature nearest to unit vector DIRECTION from ORIGIN, within *SEEKER-CONE* and
-*SEEKER-RANGE* and in sight, that CASTER may strike; NIL if none."
+(defun seeker-mark (origin direction caster &key (cone *seeker-cone*) (range *seeker-range*) test)
+  "The live creature nearest to unit vector DIRECTION from ORIGIN, within CONE and RANGE and in
+sight, that CASTER may strike and TEST, if given, is true of; NIL if none. The HUD's elite bar
+asks it too (AIMED-ELITE, elite.lisp)."
   (let ((best NIL) (best-angle 0.0))
     (loop for c across *creatures*
-          unless (or (dead c) (eq c caster) (and caster (spares-p caster c)) (calm-p c))
+          unless (or (dead c) (eq c caster) (and caster (spares-p caster c)) (calm-p c)
+                     (and test (not (funcall test c))))
             do (let* ((feet (body-feet c))
                       (dx (- (vx feet) (vx origin)))
                       (dy (- (+ (vy feet) (aim-height c)) (vy origin)))
                       (dz (- (vz feet) (vz origin)))
                       (d (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
-                 (when (< 0.1 d *seeker-range*)
+                 (when (< 0.1 d range)
                    (let ((angle (acos (max -1.0 (min 1.0 (/ (+ (* dx (vx direction)) (* dy (vy direction))
                                                                (* dz (vz direction)))
                                                             d))))))
-                     (when (and (< angle *seeker-cone*) (or (null best) (< angle best-angle))
+                     (when (and (< angle cone) (or (null best) (< angle best-angle))
                                 (clear-path-p origin feet (- (+ (vy feet) (aim-height c)) (vy origin))))
                        (setf best c best-angle angle))))))
     best))

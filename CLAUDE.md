@@ -1004,7 +1004,8 @@ real time instead.
   its own (`light-rim`). Warded shows as an arc of violet `aurora` on the floor round its
   front (`update-ward`, `*ward-colors*`), over exactly the sector its reflection covers
   (`ward-arc`: the billboard views `shield-views` covers, a quarter of pi each, so 135°), turning
-  with its facing. Powers are
+  with its facing (`ward-arc-mixin`, which a warded elite has too: `ward-up-p` says whether it
+  shows, `ward-hum-p` whether it hums). Powers are
   `boss-power`s (`define-boss-power`: cooldown, frame times on the kind's `power-animation`, the
   4-frame attack or cast strip, `usable`, `start`, `release`, and `deny`, the kinds and traits that
   never get it). `special-attack` starts the first ready, usable one, then waits `*boss-power-gap*`
@@ -1042,7 +1043,8 @@ real time instead.
   generated level's dead boss makes the player unhurtable. `reset-run` raises the gate and puts it back to sleep
   (`unseal-arena`, `reset-boss`). A save keeps its powers, sleep, enrage and cooldowns
   (`saved-slots`) and the seal (`:arena`). The boss bar across the top of the HUD (hud.lisp) shows
-  its title, health with a mark at half, and its powers, from the seal until it dies.
+  its title, health with a mark at half, and its powers, from the seal until it dies; an elite the
+  player aims at takes its place meanwhile (see `src/elite.lisp`).
   `tools/hd status` shows the arena and boss. The debug level has an arena of its own down a
   corridor south of the hall (see `src/level.lisp`). `(start-boss-fight)` (the main menu's Boss fight in a
   debug version) starts a run on its last level with the player outside the arena's doorway and every
@@ -1165,6 +1167,15 @@ real time instead.
   `*elite-haste*`), `:warded` (violet, its front turns spells back, `shield-views`; never the
   knight's) or `:tough` (bone-white, half the pain chance and the knockback). Summoned and raised
   creatures and the boss never are. A save needn't keep the trait: the rebuild draws it again.
+  **What the glow means** shows where the boss bar goes: while the player aims at an elite
+  (`aimed-elite`: `seeker-mark` with `*elite-aim-cone*`, 0.12 rad, and `*elite-aim-range*`, 15 m,
+  asked every `*elite-aim-step*` from the HUD's tick), a bar half the boss's (`*elite-bar-width*`)
+  shows its health, with no title and its trait's name under it in the glow's colour
+  (`*elite-trait-labels*`: Haste, Warded, Tough). It stays `*elite-bar-linger*` (1.5 s) after the aim
+  leaves, goes when the elite dies, and covers the boss's bar while shown (`shown-foe`, `shown-elite`,
+  hud.lisp; the title and half mark are `boss-only-element`s). A warded elite also shows the boss's
+  violet arc round its front (`ward-arc-mixin`, boss.lisp), humming only within
+  `*elite-ward-hum-range*` (12 m) of the player, since a sound gets no quieter past 50 m.
   `*elite-override*` (`:all`, or a trait) makes every block spawn an elite, on any level (on the test
   level, the blocks attached to it: the shrine and the pool). `tools/hd status` shows `elite:<trait>`.
 - `src/pickups.lisp`: pickups, which the player takes by touching them. `*pickup-kinds*` has the

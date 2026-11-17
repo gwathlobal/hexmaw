@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **An elite says what its glow means.** While the player aims at one (`aimed-elite`, elite.lisp:
+  `seeker-mark`, now with `:cone`, `:range` and `:test`, at 0.12 rad and 15 m), a bar half the
+  boss's takes the boss bar's place at the top of the screen: its health, no title, and its trait's
+  name under it ("Haste", "Warded", "Tough", `*elite-trait-labels*`) in the glow's colour. It stays
+  1.5 s after the aim leaves (`*elite-bar-linger*`), goes at once when the elite dies, and in the
+  arena covers the boss's bar while an elite that followed the player in is aimed at (`shown-foe`,
+  hud.lisp). A warded elite now shows the boss's violet arc on the floor over the sector its front
+  turns spells back from, and hums within 12 m of the player: `update-ward` and the `ward` slots
+  moved from the boss onto `ward-arc-mixin` (boss.lisp), asked through `ward-up-p` and
+  `ward-hum-p`. Nothing new is saved or carried down the stairs.
 - **The casting hands' thumbs point inward in the fire cast's release and the hands flung open
   after it** (every striking spell, the nova's too). Both pictures show the backs of the gauntlets,
   so the thumbs can only be on the inner edges, but they had the hands swapped, a right hand on the

@@ -615,12 +615,38 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
   (and (eq *game-state* :playing) *interact-prompt* T))
 
 ;;; The boss bar: the boss's title, its health and its powers, across the top of the screen
-;;; from the moment the arena's gate drops until it dies (boss.lisp).
+;;; from the moment the arena's gate drops until it dies (boss.lisp). An elite the player aims at
+;;; (AIMED-ELITE, elite.lisp) takes its place while aimed at and *ELITE-BAR-LINGER* after: a bar
+;;; half as wide, no title, and its trait's name under it in its glow's colour.
 
 (defparameter *boss-bar-width* 160 "Art pixels across the boss bar, its frame included.")
 (defparameter *boss-bar-height* 6 "Art pixels up it.")
 (defparameter *boss-bar-color* (vec4 0.62 0.10 0.06 1))
 (defparameter *boss-bar-top* 28 "Pixels from the top of the screen to the top of the title.")
+(defparameter *elite-bar-width* 80 "Art pixels across an aimed elite's bar: half the boss's.")
+(defparameter *elite-aim-step* 0.1 "Seconds between looks for the elite under the aim.")
+(defparameter *elite-bar-linger* 1.5 "Seconds an elite's bar stays after the aim leaves it.")
+
+(defvar *aimed-elite* NIL "The elite whose bar is up, or NIL.")
+(defvar *aimed-left* 0.0 "Seconds of play its bar stays up unless it is aimed at again.")
+(defvar *aim-clock* 0.0 "Seconds of play until the next look for an aimed elite.")
+
+(defun shown-elite ()
+  "The elite whose bar is up, while it lives and is in the scene, else NIL."
+  (let ((elite *aimed-elite*))
+    (and elite (< 0.0 *aimed-left*) (not (dead elite)) (not (gibbed elite)) (container elite) elite)))
+
+(defun update-aimed-elite (dt)
+  "Every *ELITE-AIM-STEP* of play, the elite under the player's aim, if any, holds the bar for
+*ELITE-BAR-LINGER* more."
+  (when (and *player* (eq *game-state* :playing))
+    (setf *aimed-left* (max 0.0 (- *aimed-left* dt)))
+    (when (<= (decf *aim-clock* dt) 0.0)
+      (setf *aim-clock* *elite-aim-step*)
+      (let ((elite (aimed-elite *player*)))
+        (when elite
+          (setf *aimed-elite* elite
+                *aimed-left* *elite-bar-linger*))))))
 
 (define-shader-entity boss-element () ())
 
@@ -629,11 +655,23 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
   (let ((boss (and *arena* (sealed *arena*) (arena-boss *arena*))))
     (and boss (not (dead boss)) boss)))
 
+(defun shown-foe ()
+  "What the bar is for: the aimed elite, else the boss; NIL when the bar is down."
+  (or (shown-elite) (shown-boss)))
+
 (defmethod hud-shown-p ((element boss-element))
-  (and (member *game-state* '(:playing :paused)) (shown-boss) T))
+  (and (member *game-state* '(:playing :paused)) (shown-foe) T))
+
+(define-shader-entity boss-only-element (boss-element) ()
+  (:documentation "A part of the bar an elite's doesn't have: the title and the half mark."))
+
+(defmethod hud-shown-p ((element boss-only-element))
+  (and (call-next-method) (null (shown-elite))))
 
 (define-shader-entity boss-bar (boss-element hud-bar) ())
 (define-shader-entity boss-text (boss-element hud-text) ())
+(define-shader-entity boss-title-text (boss-only-element hud-text) ())
+(define-shader-entity boss-half-mark (boss-only-element hud-bar) ())
 
 (defun boss-powers-text (boss)
   (format NIL "~{~a~^  ~}" (mapcar (lambda (name) (power-label (find-power name))) (active-powers boss))))
@@ -665,12 +703,14 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
    (veils :initform (mapcar (lambda (kind) (make-instance 'status-veil :kind kind)) *veil-kinds*) :reader veils)
    (whirl-streaks :initform (make-instance 'whirl-streaks) :reader whirl-streaks)
    (fps-display :initform (make-hud-text "" 'fps-display) :reader fps-display)
-   (boss-name :initform (make-hud-text "" 'boss-text) :reader boss-name)
+   (boss-name :initform (make-hud-text "" 'boss-title-text) :reader boss-name)
    (boss-bar :initform (make-instance 'boss-bar :fill-color *boss-bar-color*) :reader boss-bar)
-   (boss-half :initform (make-instance 'boss-bar :fill-color (vec4 0 0 0 1)) :reader boss-half
+   (boss-half :initform (make-instance 'boss-half-mark :fill-color (vec4 0 0 0 1)) :reader boss-half
               :documentation "A mark on the bar at half health, where the boss enrages.")
    (boss-powers :initform (make-hud-text "" 'boss-text) :reader boss-powers-line)
-   (shown-boss-text :initform NIL :accessor shown-boss-text)
+   (shown-boss-text :initform NIL :accessor shown-boss-text :documentation "The foe the bar's text is for.")
+   (shown-foe-state :initform NIL :accessor shown-foe-state
+                    :documentation "Whether that boss is enraged, or that elite's trait, as the text shows it.")
    (shown-health :initform NIL :accessor shown-health)
    (shown-mana :initform NIL :accessor shown-mana)
    (shown-stamina :initform NIL :accessor shown-stamina)))
@@ -688,6 +728,7 @@ for *ARRIVAL-MESSAGE-TIME*; on any other level, clear what the level before left
         (fps-display hud)))))
 
 (defun add-hud (container)
+  (setf *aimed-elite* NIL *aimed-left* 0.0)
   (let ((hud (make-instance 'hud)))
     (enter hud container)
     (dolist (element (hud-elements hud) hud)
@@ -736,7 +777,8 @@ numbers; breath has none."
   (let* ((w (width *context*))
          (title-y (- (height *context*) *boss-bar-top* *glyph-height*))
          (k (hud-pixel-scale))
-         (bar-w (* k *boss-bar-width*))
+         (width (if (shown-elite) *elite-bar-width* *boss-bar-width*))
+         (bar-w (* k width))
          (bar-h (* k *boss-bar-height*))
          (bar-y (- title-y 4 bar-h))
          (bar-x (round (- (/ w 2) (/ bar-w 2)))))
@@ -745,7 +787,7 @@ numbers; breath has none."
       (centre (boss-name hud) title-y)
       (centre (boss-powers-line hud) (- bar-y 4 *glyph-height*)))
     (place (boss-bar hud) bar-x bar-y -0.1)
-    (size-bar (boss-bar hud) *boss-bar-width* *boss-bar-height*)
+    (size-bar (boss-bar hud) width *boss-bar-height*)
     ;; In front of the bar, at the middle: one art pixel of the frame's colour.
     (place (boss-half hud) (+ bar-x (* k (floor *boss-bar-width* 2))) bar-y)
     (vsetf (art-size (boss-half hud)) 1 *boss-bar-height*)
@@ -789,15 +831,24 @@ heals."
   ;; A new string each time it changes, so EQ tells.
   (when (and *interact-prompt* (not (eq *interact-prompt* (text (prompt-line hud)))))
     (setf (text (prompt-line hud)) *interact-prompt*))
-  (let ((boss (shown-boss)))
-    (when boss
-      (setf (fill-fraction (boss-bar hud)) (/ (float (max 0 (health boss))) (max-health boss)))
-      ;; Re-uploading text costs a buffer update, so only when the powers change (enraged).
-      (let ((powers (active-powers boss)))
-        (unless (equal powers (shown-boss-text hud))
-          (setf (shown-boss-text hud) powers
-                (text (boss-name hud)) (boss-title boss)
-                (text (boss-powers-line hud)) (boss-powers-text boss))))))
+  (update-aimed-elite dt)
+  (let ((foe (shown-foe)))
+    (when foe
+      (setf (fill-fraction (boss-bar hud)) (/ (float (max 0 (health foe))) (max-health foe)))
+      ;; Re-uploading text costs a buffer update, so only when what it says changes: another
+      ;; foe, or the boss's powers (enraged) or the elite's trait. Compared without allocating.
+      (let ((state (if (typep foe 'boss) (and (enraged foe) T) (elite-trait foe))))
+        (unless (and (eq foe (shown-boss-text hud)) (eq state (shown-foe-state hud)))
+          (setf (shown-boss-text hud) foe
+                (shown-foe-state hud) state)
+          (cond ((typep foe 'boss)
+                 (setf (text (boss-name hud)) (boss-title foe)
+                       (text (boss-powers-line hud)) (boss-powers-text foe)
+                       (foreground (boss-powers-line hud)) *hud-text-color*))
+                (T
+                 (let ((c (getf *elite-glow-colors* (elite-trait foe))))
+                   (setf (text (boss-powers-line hud)) (elite-trait-label foe)
+                         (foreground (boss-powers-line hud)) (vec4 (vx c) (vy c) (vz c) 1)))))))))
   (when (eq *game-state* :playing)
     (loop for (kind left) on *veil-flares* by #'cddr
           do (setf (getf *veil-flares* kind) (max 0.0 (- left dt)))))
