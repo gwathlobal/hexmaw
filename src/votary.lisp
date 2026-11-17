@@ -16,9 +16,9 @@
   "Share of its height its hands are held at, where the beam and the crackle start.")
 (defparameter *votary-range* 11.0 "Metres from its target it starts a beam from (*BEAM-RANGE* is 12).")
 (defparameter *votary-charge* 0.9 "Seconds of the charge's tell before the beam.")
-(defparameter *votary-hold* 3.0 "Seconds it holds the beam at most.")
+(defparameter *votary-hold* 2.0 "Seconds it holds the beam at most.")
 (defparameter *votary-turn* 2.5 "Radians a second it turns, walking or charging: a deliberate turner.")
-(defparameter *votary-beam-turn* 1.2 "Radians a second it turns after its target while it holds the beam.")
+(defparameter *votary-beam-turn* 0.9 "Radians a second it turns after its target while it holds the beam.")
 (defparameter *votary-pain-bonus* 20 "Percent added to its pain chance while it holds the beam.")
 (defparameter *votary-lost-time* 0.75
   "Seconds of pulses striking nothing hostile after which it lets go of the beam and recovers.")
@@ -33,7 +33,7 @@
 (defparameter *arc-water-scale* 1.5 "How much harder a beam strikes what stands in water.")
 (defparameter *arc-block-stamina* 12.0
   "Stamina a pulse costs the player's raised shield: 48 a second against a regen of 8, so a full bar
-gives out before the beam does.")
+lasts about one hold and less doesn't.")
 (defparameter *votary-light-color* (vec 1.5 1.35 0.7)
   "Its lamp's colour at full strength: its lightning's yellow-white.")
 (defparameter *votary-light-radius* 5.0)

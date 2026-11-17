@@ -2172,7 +2172,7 @@ breaks it. With slot 2 in hand, `(setf (block-held *player*) t)` holds Absorb.
 The `arc-votary` (votary.lisp) is a caster, an `ability-user` with one ability, `:arc-beam`, whose
 attack is held rather than thrown (a blind storm-priest in storm teal under a crown of lightning rods): the first monster that makes cover, circling and the shield's
 stamina matter more than a sidestep. It backs off within `keep-away` (4 m) and starts a beam with its
-target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0 0.4)` on
+target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 2.0 0.4)` on
 `votary-cast`, hit frame 2:
 
 - **The charge** (`*votary-charge*`, 0.9 s; `charging-arc-p`, so a bash or the earthshake breaks it):
@@ -2183,15 +2183,16 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
   hands to where the beam would stop, broken up and only drawn now and then, firming as the charge
   grows. It turns at its `turn-speed`, `*votary-turn*`
   (2.5 rad/s).
-- **The hold** (`holding-beam-p`, up to `*votary-hold*`, 3 s, the release frame held): every
+- **The hold** (`holding-beam-p`, up to `*votary-hold*`, 2 s, the release frame held; 3 s, tried first, made a hold
+  that wasn't countered about 42 damage): every
   `*beam-pulse*` (0.25 s) `votary-pulse` strikes what `beam-end` reaches along `votary-aim` (from
   its hands, across the way it faces, tipped to its target's chest) with `arc-beam` whole, 3 to 4
   shock a pulse, about 14 a second, through a `beam-pulse` source (spells.lisp): on the player a
   flash, no shove or hit-stop, and a raised shield meets it at `*arc-block-stamina*` (12) a pulse,
-  so a full bar gives out about 2.3 s into a hold, and then the pulse goes through and the guard is
+  so a full bar lasts about 2.3 s, a whole hold; less, and the pulse goes through and the guard is
   knocked aside. Absorb does nothing: it isn't a projectile. While it holds, its turn is
-  `*votary-beam-turn*` (1.2 rad/s, `turn-speed :around`), so running round it 4 m off (1.75 rad/s)
-  leaves the beam behind, and its pain chance is `*votary-pain-bonus*` (20) higher. After
+  `*votary-beam-turn*` (0.9 rad/s, `turn-speed :around`), so running round it within about 8 m
+  leaves the beam behind (at 1.2, within 6), and its pain chance is `*votary-pain-bonus*` (20) higher. After
   `*votary-lost-time*` (0.75 s) of pulses striking nothing hostile (behind a pillar, circled), or
   with its target dead, it lets go (`end-hold`) and recovers.
 - **What it reaches takes it**, its own allies too, with their flinch and pain: a body in the way

@@ -9,7 +9,7 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 - **The arc votary, a shock monster from level 2 on** (src/votary.lisp). A blind storm-priest that charges
   for 0.9 s (a crackle between its hands, a swelling lamp, a faint ranging line) and then holds a
-  shock beam up to 3 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 1.2 rad/s: run
+  shock beam up to 2 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 0.9 rad/s: run
   round it or step behind cover and it lets go after 0.75 s. Each pulse on the player is a blow the
   shield meets at 12 stamina, with no shove or hit-stop; Absorb does nothing. The beam strikes whatever it
   reaches, its own allies too (a body in the way blocks it), and electrifies the floor round that body
