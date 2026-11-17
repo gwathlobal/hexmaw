@@ -1,0 +1,19 @@
+{
+  "prompt": "A burst of blood magic from a monstrous plant: a wet heavy whump and a rushing suck of air drawn back in, a low dark rumble, blood spattering. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-bloom.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 1.2,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794890927,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    1.2,
+    1.2
+  ]
+}

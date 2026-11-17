@@ -110,3 +110,15 @@ beam-channel 4
 absorb-channel 1
 absorb-take 5          # absorb-channel-1 bent up and down (its .prompt.json has the script)
 freeze 3
+bloodroot-alert 1        # take 2 clips
+bloodroot-pain 1         # take 2 clips
+bloodroot-death 1        # both clip; take 1 less
+bloodroot-spit 2
+seed-impact 2            # take 1 is faint
+bloom-swell 2            # both clip; take 2 far less
+bloom 2
+root-drink 2
+snare-tell 2
+snare-grab 2
+snare-break 2
+roots-burn 1

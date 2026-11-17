@@ -1,0 +1,19 @@
+{
+  "prompt": "A monstrous carnivorous plant wakes in a dark stone dungeon: a wet, creaking hiss of a fleshy pod splitting open, wood and sinew straining, a low gurgling breath through thorny lips. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-bloodroot-alert.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 1.2,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794890901,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    1.2,
+    1.2
+  ]
+}
