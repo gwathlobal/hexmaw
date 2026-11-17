@@ -743,7 +743,7 @@ real time instead.
   ```
 - `src/sparks.lisp`: sparks, embers and grit, simulated like the blood (`spark-pool`,
   `*spark-pool*`, entered by `add-spark-pool` in `setup-scene`): plain arrays of `*max-sparks*`
-  (512) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
+  (1024, for a blizzard's flakes) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
   allocated a frame. They draw no art: each is a quad in the view plane on which the shader lays
   whole texels of the 64-a-metre grid, at least a pixel each (`view_rows`), in three colours of the
   house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`, and the novas' `:frost`,
@@ -754,7 +754,10 @@ real time instead.
   gore's `crossed-face`, `move-to-face` and `reflect-off-diagonal`), lies on a floor it strikes
   slower than `*spark-rest-speed*`, cools down its ramp over `*spark-life*` and goes. An **ember**
   climbs to the rise it left at, wanders on two crossed waves, keeps its heat longer and blinks
-  out over the last `*ember-blink*` of its life; rock or a liquid puts it out. **Grit** (a texel,
+  out over the last `*ember-blink*` of its life; rock or a liquid puts it out. A **flake** (state 7)
+  goes where the winds carry it (`wind-carry` over `*winds*`, which this file defines), fluttering up
+  and down `*flake-flutter*`, a streak as long as its speed; out of every wind it slows and falls at
+  `*flake-fall*`, and rock, a liquid or its life's end takes it (the rime hag's blizzard). **Grit** (a texel,
   or a 2 × 2 chip lit from the upper left, `*grit-big-chance*`) falls, bounces once, settles for
   `*grit-rest*` and dissolves a texel at a time. A liquid swallows any of them.
   `(spray-sparks at dir count &key kind ramp speed spread)` throws them (DIR NIL: up, any way above
@@ -2362,13 +2365,14 @@ Her foes inside it walk at `*blizzard-slow*` (0.6) of their speed (`slow-factor`
 winds with the statuses, down to `*slowest*`), and the player hears the tornado's rushing wind,
 quieter (`*wind-volume*`). While it blows and her nova is ready, a target it holds back draws her in
 (`chase`) instead of a shard or a retreat: close in to hit her and she walks in with the nova. A beam
-isn't bent, nor a touch or a blow. It shows as a curtain of ice and snow on its rim
-(`blizzard-rim`, an `aurora` in `*blizzard-aurora-colors*`, its streaks running and leaning,
-`*blizzard-aurora-spin*`, `*blizzard-aurora-twist*`), another inside it the other way
-(`*blizzard-swirl*`), drifts of snow (`blizzard-snow`, upright on the frost aura's strip, going round
-her at `*blizzard-whirl*`) and frost grit blown round (`blow-snow`), and the tornado's roar, softer
-(`*blizzard-volume*`). Her `blizzard` (seconds left) is saved; the rest comes back from it
-(`light-blizzard`). To see one on the debug level: `(setf (blizzard hag) 9.0)`.
+isn't bent, nor a touch or a blow. All that shows of it is snow, with no edge drawn: about 300 flakes
+at a time (`*blizzard-flakes*` a second, each `*blizzard-flake-life*`) in the spark pool, flake
+particles (`blow-snow`; sparks.lisp) that its wind carries round her (`wind-carry`, an exact turn
+about her feet at `*blizzard-flake-speed*` times each flake's own, `*blizzard-flake-speeds*`), drawn
+as white and pale-blue streaks as long as their speed (the `:snow` ramp). They start thinning out
+toward its edge (`*blizzard-flake-spread*`) and out to `*blizzard-flake-reach*` (1.2) times it, so it
+fades off rather than ends. Its sound is the tornado's roar, softer (`*blizzard-volume*`). Her
+`blizzard` (seconds left) is saved; the rest comes back from it (`light-blizzard`). To see one on the debug level: `(setf (blizzard hag) 9.0)`.
 
 **Shunning Absorb.** A lone caster throwing nothing but projectiles was a mana spring for Absorb, as
 the acolyte was. So for `*hag-wary-time*` (10 s, her `wary`, saved) after Absorb swallows one of her

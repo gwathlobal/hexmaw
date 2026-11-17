@@ -125,7 +125,11 @@ grudge. Returns them."
         (fill-pointer *level-altars*) 0
         *level-doorways* ()
         *arena* NIL
-        *settlement* NIL)
+        *settlement* NIL
+        ;; A nova in flight when the scene was dropped never left it: its sweep would stay painted.
+        *newest-nova* NIL
+        *nova-sweep-radius* 0.0
+        *nova-sweep-trail* 0.0)
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0))
 
 (defun generate-run-level (container depth seed settings &key settlement (entry (nth (1- depth) (run-levels))))

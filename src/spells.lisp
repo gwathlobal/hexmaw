@@ -600,12 +600,10 @@ keeping its speed."
                         (vz v) (* speed (+ (* c uz) (* s wz))))))))))))
 
 ;;; Winds: what blows across a projectile in flight and holds back what walks in it, the tornado
-;;; (vortex.lisp) and the rime hag's blizzard (hag.lisp). Each is in *WINDS* while it blows, and
-;;; answers WIND-TURN and WIND-SLOW. A wind turns a flight about +Y, the way it blows round, so a
-;;; projectile is bent the further it flies through it: one from close in strikes, one from across
-;;; it goes wide.
-
-(defvar *winds* (make-array 4 :adjustable T :fill-pointer 0) "The winds blowing now.")
+;;; (vortex.lisp) and the rime hag's blizzard (hag.lisp). Each is in *WINDS* (sparks.lisp) while it
+;;; blows, and answers WIND-TURN and WIND-SLOW, and WIND-CARRY for the snow it blows round. A wind
+;;; turns a flight about +Y, the way it blows round, so a projectile is bent the further it flies
+;;; through it: one from close in strikes, one from across it goes wide.
 
 (defparameter *wind-volume* 0.6
   "How loud the rushing wind the player hears in a wind that holds them back (a blizzard), against a

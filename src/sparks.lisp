@@ -11,12 +11,15 @@
 ;;;   falls, bounces off what it hits and cools down its ramp's three colours, then goes.
 ;;; - An ember rises, wanders and blinks out (torches, lava): a short streak, as a spark is.
 ;;; - Grit is a texel or a 2 x 2 chip that falls, bounces once, settles and dissolves.
+;;; - A flake is snow carried round by the winds (WIND-CARRY, a rime hag's blizzard): a streak as
+;;;   long as its speed, or a 2 x 2 chip, that goes when it meets rock, falls out of the wind, or
+;;;   its short life ends.
 ;;;
 ;;; The kinds are reworked for 3D from the idea of pixelfx's simulated particles (Patch and
 ;;; Hugo Duprez, MIT); nothing is lifted from its code. They are left out of saves, as
 ;;; status auras are: a load starts with none in flight.
 
-(defparameter *max-sparks* 512 "Slots in the spark pool. Past that a new spark takes the next slot, whatever it holds.")
+(defparameter *max-sparks* 1024 "Slots in the spark pool. Past that a new spark takes the next slot, whatever it holds.")
 (defparameter *spark-streak-time* 0.025 "Seconds of a spark's movement across the view its streak covers.")
 (defparameter *spark-max-streak* 9 "Most texels a streak is long.")
 
@@ -48,6 +51,17 @@
 (defparameter *grit-big-chance* 0.35 "Chance a piece of grit is a 2 x 2 chip, not one texel.")
 (defparameter *grit-flight* 3.0 "Seconds grit flies before it goes, if it lands nowhere.")
 
+(defparameter *flake-flutter* 0.5 "M/s a flake rises and falls by as the wind carries it.")
+(defparameter *flake-fall* 1.5 "M/s a flake out of the wind falls at.")
+
+;;; Winds (spells.lisp has the rest: WIND-TURN, WIND-SLOW): what blows round in the level now.
+(defvar *winds* (make-array 4 :adjustable T :fill-pointer 0) "The winds blowing now.")
+
+(defgeneric wind-carry (wind x y z speed dt)
+  (:documentation "Where WIND carries a flake at X Y Z, whose own SPEED is a factor about 1, in DT
+seconds: (values DX DZ T), or NIL where it doesn't reach. Allocates nothing.")
+  (:method (wind x y z speed dt) (declare (ignore wind x y z speed dt)) NIL))
+
 ;; Three colours of art/style/palette.txt each, hottest (or lightest) first.
 (defparameter *spark-ramps*
   '((:steel "fceab6" "fcb918" "c76733")   ; Steel on steel or stone.
@@ -56,6 +70,7 @@
     (:lava "fcb918" "fe901f" "f11402")    ; Lava's.
     (:dust "c3b698" "a08a71" "77613d")    ; Grit, as pale as the ogre's dust.
     (:frost "deebfd" "a9d4fa" "45b1f5")   ; A frost nova's glitter and chips.
+    (:snow "f9f9f3" "deebfd" "a9d4fa")    ; A blizzard's flakes.
     (:shock "f9f9f3" "f8ec3b" "d8aa38")   ; A shock nova's sparks.
     (:drain "f98497" "f52a5a" "7e2225"))  ; A drain nova's motes.
   "Per ramp: its name and three hex colours from the house palette.")
@@ -89,7 +104,7 @@
    (cursor :initform 0 :accessor pool-cursor :documentation "Where the search for a free slot starts.")
    (state :reader pool-state
           :documentation "Per particle: 0 free, 1 a flying spark, 2 a spark lying cooling, 3 an ember,
-4 flying grit, 5 settled grit, 6 dissolving grit.")
+4 flying grit, 5 settled grit, 6 dissolving grit, 7 a flake.")
    (ramp :reader pool-ramp :documentation "Per particle: its ramp, an index into *SPARK-RAMPS*.")
    (chip :reader pool-chip :documentation "Per grit: its size in texels; per particle else 1.")
    (tone :reader pool-tone :documentation "Per grit: the colour of its ramp it is, 1 or 2.")
@@ -99,7 +114,7 @@
    (ages :reader pool-ages)
    (lives :reader pool-lives :documentation "Per particle: seconds it lasts, or settled grit lies.")
    (seeds :reader pool-seeds :documentation "Per particle: a random number, 0 to 2 pi, for its wander and blink.")
-   (rises :reader pool-rises :documentation "Per ember: the m/s it climbs toward.")
+   (rises :reader pool-rises :documentation "Per ember: the m/s it climbs toward; per flake, its own speed in the wind.")
    (data :reader pool-data :documentation "Vertex data, 6 vertices per particle.")
    (vbo :reader pool-vbo)
    (vao :reader pool-vao)))
@@ -369,11 +384,13 @@ REST-SPEED (and so stays on it), :GONE if it was inside already, else NIL."
         (spark-rest (float *spark-rest-speed* 0f0))
         (grit-bounce (float *grit-bounce* 0f0))
         (grit-friction (float *grit-friction* 0f0))
-        (dissolve (float *grit-dissolve-time* 0f0)))
+        (dissolve (float *grit-dissolve-time* 0f0))
+        (flutter (float *flake-flutter* 0f0))
+        (flake-fall (float *flake-fall* 0f0)))
     (declare (type (simple-array (unsigned-byte 8) (*)) state bounces)
              (type (simple-array single-float (*)) p v ages lives seeds rises)
              (type single-float spark-keep grit-keep spark-fall grit-fall buoyancy wander damping
-                   spark-bounce spark-friction spark-rest grit-bounce grit-friction dissolve))
+                   spark-bounce spark-friction spark-rest grit-bounce grit-friction dissolve flutter flake-fall))
     (dotimes (i (pool-size pool))
       (let ((st (aref state i))
             (b (* 3 i)))
@@ -381,7 +398,7 @@ REST-SPEED (and so stays on it), :GONE if it was inside already, else NIL."
           (let ((age (incf (aref ages i) dt)))
             (declare (type single-float age))
             (case st
-              ((1 3 4)
+              ((1 3 4 7)
                (case st
                  (1 (decf (aref v (+ b 1)) spark-fall)
                   (dotimes (k 3) (setf (aref v (+ b k)) (* spark-keep (aref v (+ b k))))))
@@ -393,7 +410,23 @@ REST-SPEED (and so stays on it), :GONE if it was inside already, else NIL."
                             (aref v (+ b 2)) (* damping (aref v (+ b 2))))
                       (incf (aref v (+ b 1)) (* buoyancy (- (aref rises i) (aref v (+ b 1)))))))
                  (4 (decf (aref v (+ b 1)) grit-fall)
-                  (dotimes (k 3) (setf (aref v (+ b k)) (* grit-keep (aref v (+ b k)))))))
+                  (dotimes (k 3) (setf (aref v (+ b k)) (* grit-keep (aref v (+ b k))))))
+                 (7 (let ((cx 0f0) (cz 0f0) (carried NIL))
+                      (declare (type single-float cx cz))
+                      (loop for wind across *winds*
+                            do (multiple-value-bind (dx dz in)
+                                   (wind-carry wind (aref p b) (aref p (+ b 1)) (aref p (+ b 2)) (aref rises i) dt)
+                                 (when in
+                                   (incf cx (float dx 0f0)) (incf cz (float dz 0f0))
+                                   (setf carried T))))
+                      (if carried
+                          (setf (aref v b) (/ cx dt)
+                                (aref v (+ b 1)) (* flutter (sin (+ (* age 3.1) (aref seeds i))))
+                                (aref v (+ b 2)) (/ cz dt))
+                          ;; Out of the wind: it slows and falls, and its life ends it soon.
+                          (setf (aref v b) (* damping (aref v b))
+                                (aref v (+ b 1)) (- flake-fall)
+                                (aref v (+ b 2)) (* damping (aref v (+ b 2))))))))
                (let* ((nx (+ (aref p b) (* dt (aref v b))))
                       (ny (+ (aref p (+ b 1)) (* dt (aref v (+ b 1)))))
                       (nz (+ (aref p (+ b 2)) (* dt (aref v (+ b 2)))))
@@ -401,7 +434,7 @@ REST-SPEED (and so stays on it), :GONE if it was inside already, else NIL."
                  (cond ((< (aref lives i) age) (setf (aref state i) 0))
                        ((liquid-at nx ny nz) (setf (aref state i) 0))
                        ((null s) (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz))
-                       ((= st 3) (setf (aref state i) 0)) ; An ember that meets rock goes out.
+                       ((or (= st 3) (= st 7)) (setf (aref state i) 0)) ; An ember or flake that meets rock goes.
                        ((= st 1)
                         (case (bounce-spark pool i s nx ny nz spark-bounce spark-friction spark-rest)
                           (:gone (setf (aref state i) 0))
@@ -469,7 +502,7 @@ REST-SPEED (and so stays on it), :GONE if it was inside already, else NIL."
                  (head (+ ramp (* 3 (case st ((4 5 6) (- (aref tones i) 1)) (T stage)))))
                  (tail (+ ramp (* 3 (case st ((4 5 6) (aref tones i)) (T (min 2 (1+ stage)))))))
                  ;; Sparks and embers streak as they move; the rest are still.
-                 (moving (or (= st 1) (= st 3)))
+                 (moving (or (= st 1) (= st 3) (= st 7)))
                  ;; Lying on the floor, a particle stands on it rather than half in it.
                  (lift (case st ((2 5 6) (* chip half-texel)) (T 0f0)))
                  (fade (if (= st 6) (min 1f0 (/ age dissolve)) 0f0))
