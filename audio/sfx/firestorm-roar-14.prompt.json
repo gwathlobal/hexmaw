@@ -1,0 +1,9 @@
+{
+  "source": "audio/sfx/firestorm-roar-10.wav",
+  "made_by": "a whine at 6.0 and 6.19 kHz notched 9 dB (5.94-6.26 kHz, tapered over 60 Hz); 1.5-2.3 s, 2.85-4.3 s and 4.7-5.75 s joined by crossfades of 0.15 and 0.3 s, leaving out a swoop at 2.3-2.85 s the author marked and a burst at 4.3-4.7 s; its last 0.5 s crossfaded (equal power) into its first 0.5 s",
+  "note": "take 13 without the odd sound the author marked at 1.09-1.25 s of its loop",
+  "created": 1794887429,
+  "seconds": [
+    2.35
+  ]
+}
