@@ -29,6 +29,8 @@
 (defparameter *votary-floor-flash* (vec 1.6 1.45 0.75)
   "The flash on the electrified floor at its brightest: a lamp that jumps to a bolt's foot each redrawing.")
 (defparameter *votary-floor-flash-radius* 2.2)
+(defparameter *votary-water-bolts* 5 "Bolts drawn over the electrified water at each redrawing of the beam.")
+(defparameter *votary-water-flash-radius* 3.0 "Reach of the flash that jumps over the electrified water.")
 (defparameter *arc-water-reach* 6.0 "Metres across water a beam runs from what it strikes in it.")
 (defparameter *arc-water-scale* 1.5 "How much harder a beam strikes what stands in water.")
 (defparameter *arc-block-stamina* 12.0
@@ -128,7 +130,13 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
    (floor-spell :initform NIL :documentation "Its beam's spell, weaker, for the floor: made once.")
    (spark-at :initform (vec 0 0 0) :reader spark-at :documentation "A point for the floor's sparks, reused.")
    (floor-lamp :initform NIL :accessor floor-lamp
-               :documentation "The flash on its electrified floor, while its beam electrifies one.")))
+               :documentation "The flash on its electrified floor, while its beam electrifies one.")
+   (water-point :initform (vec 0 0 0) :reader water-point
+                :documentation "Where its beam reached water, on the surface, while WATER-LIVE.")
+   (water-live :initform NIL :accessor water-live
+               :documentation "True while its beam reaches water: the water round there is electrified.")
+   (water-bodies :initform () :accessor water-bodies :documentation "What the water struck at the last pulse.")
+   (water-lamp :initform NIL :accessor water-lamp :documentation "The flash on its electrified water.")))
 
 (define-creature-sounds arc-votary
   :alert :votary-alert :pain :votary-pain :death :votary-death :windup :votary-charge :step :step-light)
@@ -301,8 +309,12 @@ VICTIM. True if it struck anything hostile."
   "A pulse of VOTARY's beam reached water at POINT: strike every other body in water within
 *ARC-WATER-REACH* of it, in a clear line, with an arc over the surface to each. STRUCK is the body
 already struck there, or NIL. True if it struck anything hostile."
-  (let ((hostile NIL)
-        (from (vec (vx point) (+ (vy point) 0.1) (vz point))))
+  (let* ((hostile NIL)
+         (surface (water-surface-at (vx point) (vy point) (vz point)))
+         (from (vec (vx point) (+ surface 0.1) (vz point)))
+         (c (water-point votary)))
+    (setf (vx c) (vx point) (vy c) surface (vz c) (vz point)
+          (water-live votary) T)
     (dolist (body (live-bodies))
       (unless (or (eq body votary) (eq body struck) (not (in-water-p body)))
         (let ((feet (body-feet body)))
@@ -311,12 +323,21 @@ already struck there, or NIL. True if it struck anything hostile."
                      (< (abs (- (vy feet) (vy point))) 2.0)
                      (clear-line-p from (vec (vx feet) (+ (vy feet) 0.3) (vz feet))))
             (let ((to (vec (vx feet) (+ (vy feet) 0.3) (vz feet))))
-              (arc-bolt from to)
+              ;; Its arc is redrawn with the beam (WATER-BOLTS).
+              (push body (water-bodies votary))
               (arc-strike votary body from to :wet T)
               (when (hostile-p votary body) (setf hostile T)))))))
     (when hostile
       (play-sound :arc-zap point))
     hostile))
+
+(defun water-surface-at (x y z)
+  "The height of the surface of the water (deep or shallows) at or about X Y Z, or Y if none is near."
+  (loop for dy in '(0.05 -0.05 -0.3 0.3 -0.8)
+        for liquid = (liquid-at x (+ y dy) z)
+        when (and liquid (member (liquid-kind liquid) '(:water :shallows)))
+          return (aref (liquid-bounds liquid) 4)
+        finally (return y)))
 
 (defun water-beyond-p (end direction)
   "True if a beam that stopped at END along DIRECTION stopped on the surface of water."
@@ -331,7 +352,9 @@ round that, and the water. Returns where the beam stops and the body it reached 
   (multiple-value-bind (origin dir) (votary-aim votary)
     (multiple-value-bind (end victim) (beam-end origin dir votary)
       (let ((hit NIL) (wet-at NIL) (wet-body NIL))
-        (setf (floor-live votary) NIL)
+        (setf (floor-live votary) NIL
+              (water-live votary) NIL
+              (water-bodies votary) ())
         ;; Whatever it reaches takes it, an ally too: a body in the way blocks it. The floor round
         ;; that body is electrified.
         (when victim
@@ -475,7 +498,49 @@ core and a thinner one forking about it, as the shock nova's are, each lasting t
         (last-stretch x1 y1 z1 :roughness 0.04 :width 3.0 :white 0.6 :life life))
       (if (floor-live votary)
           (floor-bolts votary life)
-          (douse-floor votary)))))
+          (douse-floor votary))
+      (if (water-live votary)
+          (water-bolts votary life)
+          (douse-water votary)))))
+
+(defun water-bolts (votary life)
+  "Redraw the electrified water round where VOTARY's beam reached it, as its floor is: bolts skating
+over the surface at random spots out to *ARC-WATER-REACH*, thinning toward it, only where there is
+water under them, none through a wall from the middle or by the player's eye, a few spiking up off it,
+the flash jumping between them; and an arc over the surface to each body the water strikes. Sparks go
+out in water, so there are none."
+  (let* ((c (water-point votary))
+         (cx (vx c)) (cy (+ (vy c) 0.02)) (cz (vz c))
+         (reach *arc-water-reach*)
+         (eye (location (camera (scene +main+))))
+         (flashed NIL))
+    (dotimes (i *votary-water-bolts*)
+      (let* ((a (random #.(float (* 2 pi) 0f0)))
+             (d (* reach (expt (random 1.0) 0.75)))
+             (x (+ cx (* d (cos a))))
+             (z (+ cz (* d (sin a))))
+             (water (liquid-at x (- cy 0.07) z)))
+        (when (and water (member (liquid-kind water) '(:water :shallows))
+                   (<= 0.81 (+ (expt (- x (vx eye)) 2) (expt (- z (vz eye)) 2)))
+                   (or (< d 0.5) (clear-line-p (vec cx (+ cy 0.15) cz) (vec x (+ cy 0.15) z))))
+          (unless flashed
+            (flash-lamp votary 'water-lamp x cy z *votary-water-flash-radius*)
+            (setf flashed T))
+          (let ((b (+ a (- (random 2.4) 1.2)))
+                (len (+ 0.5 (random 0.9))))
+            (bolt-line x cy z (+ x (* len (cos b))) cy (+ z (* len (sin b))) 3
+                       :roughness 0.3 :width 1.5 :white 0.3 :branch 0.3 :life life))
+          (when (< (random 1.0) 0.3)
+            (bolt-line x cy z (+ x (- (random 0.3) 0.15)) (+ cy 0.15 (random 0.3)) (+ z (- (random 0.3) 0.15)) 2
+                       :roughness 0.35 :width 1.5 :white 0.4 :life life)))))
+    (dolist (body (water-bodies votary))
+      (when (and (not (typep body 'player)) (target-live-p body))
+        (let ((feet (body-feet body))
+              (a (random #.(float (* 2 pi) 0f0)))
+              (d (random 0.8)))
+          (bolt-line (+ cx (* d (cos a))) cy (+ cz (* d (sin a)))
+                     (vx feet) (+ (max cy (vy feet)) 0.2) (vz feet) 3
+                     :roughness 0.25 :width 1.5 :white 0.3 :branch 0.2 :life life))))))
 
 (defun floor-bolts (votary life)
   "Redraw the electrified floor round what VOTARY's beam strikes, as the shock nova's bolts are drawn:
@@ -561,7 +626,8 @@ behind, where its body hides them. BOLT-ARGS go to BOLT-LINE."
 (defun release-beam (votary)
   "Stop the held beam's loop, and put out the flash on its floor."
   (setf (beam-sound votary) (stop-loop (beam-sound votary)))
-  (douse-floor votary))
+  (douse-floor votary)
+  (douse-water votary))
 
 (defun douse-floor (votary)
   (setf (floor-live votary) NIL)
@@ -571,11 +637,23 @@ behind, where its body hides them. BOLT-ARGS go to BOLT-LINE."
 
 (defun flash-floor (votary x y z)
   "Light the flash on VOTARY's electrified floor at X Y Z, the foot of a bolt, at a flickering strength."
-  (let ((lamp (floor-lamp votary))
+  (flash-lamp votary 'floor-lamp x y z *votary-floor-flash-radius*))
+
+(defun douse-water (votary)
+  (setf (water-live votary) NIL
+        (water-bodies votary) ())
+  (when (water-lamp votary)
+    (remove-lamp (water-lamp votary))
+    (setf (water-lamp votary) NIL)))
+
+(defun flash-lamp (votary slot x y z radius)
+  "Light the flash VOTARY keeps in SLOT (FLOOR-LAMP or WATER-LAMP) at X Y Z, the foot of a bolt, at a
+flickering strength: made if it has none, and placed in its room again since it moved."
+  (let ((lamp (slot-value votary slot))
         (k (+ 0.5 (random 0.7))))
     (unless (and lamp (find lamp *lamps*))
-      (setf lamp (add-lamp (floor-point votary) *votary-floor-flash* *votary-floor-flash-radius*)
-            (floor-lamp votary) lamp))
+      (setf lamp (add-lamp (vec x y z) *votary-floor-flash* radius)
+            (slot-value votary slot) lamp))
     (let ((at (location lamp))
           (color (color lamp)))
       (setf (vx at) x (vy at) (+ y 0.3) (vz at) z

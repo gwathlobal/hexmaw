@@ -2218,8 +2218,14 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 2.0
 - **Water** (`in-water-p`: feet in `:water` or `:shallows`, or afloat): a body struck in water takes
   `*arc-water-scale*` (1.5) times as much (`wet-spell`, a `scaled-spell` made once), and so does
   every other body in water within `*arc-water-reach*` (6 m) of it, in a clear line, the votary's
-  allies too (`water-strike`, an arc over the surface to each). A beam that stops on a water surface
-  (`water-beyond-p`) strikes the water there, so a swimmer can't duck under it.
+  allies too (`water-strike`). A beam that stops on a water surface (`water-beyond-p`) strikes the
+  water there, so a swimmer can't duck under it. While it does, the water is electrified as the floor
+  is (`water-live`, `water-point` on the surface, `water-surface-at`), redrawn with the beam
+  (`water-bolts`): `*votary-water-bolts*` bolts skating over the surface at random spots out to
+  `*arc-water-reach*`, thinning toward it, only where there is water under them, none through a wall
+  from the middle or by the player's eye, a few spiking up off it; an arc over the surface to each
+  other body it strikes (`water-bodies`); and a flash jumping between them (`water-lamp`,
+  `*votary-water-flash-radius*`, `flash-lamp`). No sparks: water puts them out.
 
 At rest it crackles, as the shock nova's bolts do (`votary-sparks`, `idle-arcs`, every
 `*votary-arc-time*` while the player is within `*votary-arc-reach*`): an arc between its hands

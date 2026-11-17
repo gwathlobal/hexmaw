@@ -15,7 +15,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   reaches, its own allies too (a body in the way blocks it), and electrifies the floor round that body
   out to 3.5 m: anyone else standing there takes half a pulse, past any shield, unless they jump. In
   water it strikes 1.5 times as hard and
-  runs to every body in the same water within 6 m. +20 pain chance while it holds; resists shock 0.75;
+  runs to every body in the same water within 6 m, and the water is shown electrified as the floor is
+  (bolts skating over the surface, a flash, an arc to each body struck). +20 pain chance while it holds; resists shock 0.75;
   teaches shock (the shared `taught-effect`); kill gold 10. In the pools of run levels 2 and 3 and
   `*spawn-pool*`, and the 30% spawn of the pool, cistern, canal end and creek blocks is
   `arc-votary|acolyte`. Boss: the Arc Hierophant (4 to 6 a pulse, its floor 5 m round); elite: `elite-votary`.
