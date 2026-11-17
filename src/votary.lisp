@@ -421,20 +421,30 @@ Y1 Z1, and whether it comes at the camera. One ending at the player's eye stops
 (OUT DOWN), metres out along the way to the bolt and down from the eye, below the view's middle, where
 their chest is.")
 
-(defun last-stretch (x1 y1 z1 &rest bolt-args)
+(defun last-stretch (x1 y1 z1 &rest bolt-args &key (side 0.0) (lower 0.0) &allow-other-keys)
   "Carry a bolt that stopped short of the player's eye, at X1 Y1 Z1, the rest of the way into their
 view: a short stretch, nearly straight (its jitter scales with its length, and so close to the camera
-any more crosses the view), to the bottom of the view where their chest is."
+any more crosses the view), to the bottom of the view where their chest is; SIDE metres to the view's
+right and LOWER further down, for a jump's scattered landings."
   (let* ((eye (location (camera (scene +main+))))
          (dx (- x1 (vx eye))) (dy (- y1 (vy eye))) (dz (- z1 (vz eye)))
-         (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz))))))
-    (destructuring-bind (out down) *votary-bolt-chest*
-      (apply #'bolt-line x1 y1 z1
-             (+ (vx eye) (* out (/ dx len))) (- (+ (vy eye) (* out (/ dy len))) down) (+ (vz eye) (* out (/ dz len)))
-             2 bolt-args))))
+         (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+         (hl (max 1f-4 (sqrt (+ (* dx dx) (* dz dz)))))
+         ;; The view's right, across the way to the bolt.
+         (rx (/ (- dz) hl))
+         (rz (/ dx hl)))
+    (let ((args (copy-list bolt-args)))
+      (remf args :side)
+      (remf args :lower)
+      (destructuring-bind (out down) *votary-bolt-chest*
+        (apply #'bolt-line x1 y1 z1
+               (+ (vx eye) (* out (/ dx len)) (* side rx))
+               (- (+ (vy eye) (* out (/ dy len))) down lower)
+               (+ (vz eye) (* out (/ dz len)) (* side rz))
+               2 args)))))
 
 (defun eye-bolt (x0 y0 z0 x1 y1 z1 depth &key (roughness 0.2) (width 2.0) (white 0.0) (branch 0.0)
-                                               (drop 0.0) (life 0.05))
+                                               (drop 0.0) (life 0.05) (side 0.0) (lower 0.0))
   "A bolt from X0 Y0 Z0 to X1 Y1 Z1 that keeps out of the player's eye: ending within
 *VOTARY-BOLT-CLEARANCE* of it, its jagged part stops that far off, with no forks, and LAST-STRETCH
 carries it on into the bottom of the view."
@@ -451,17 +461,39 @@ carries it on into the bottom of the view."
     (bolt-line x0 y0 z0 x1 y1 z1 depth :roughness roughness :width width :white white
                                        :branch (if close 0.0 branch) :drop drop :life life)
     (when close
-      (last-stretch x1 y1 z1 :roughness 0.04 :width width :white white :drop drop :life life))))
+      (last-stretch x1 y1 z1 :roughness 0.04 :width width :white white :drop drop :life life
+                             :side side :lower lower))))
+
+(defparameter *votary-jump-bolts* '(2 3) "Least and most bolts a jump is drawn as at each redrawing.")
+
+(defun body-spot (body)
+  "A random spot on BODY as the camera sees it: across its sprite within its body's radius, from a
+third to nine tenths of its height up: X Y Z."
+  (let* ((feet (body-feet body))
+         (eye (location (camera (scene +main+))))
+         (fx (- (vx feet) (vx eye)))
+         (fz (- (vz feet) (vz eye)))
+         (fl (max 1f-4 (sqrt (+ (* fx fx) (* fz fz)))))
+         (across (* (body-radius body) (- (random 2.0) 1.0))))
+    (values (+ (vx feet) (* across (/ (- fz) fl)))
+            (+ (vy feet) (* (body-height body) (+ 0.33 (random 0.57))))
+            (+ (vz feet) (* across (/ fx fl))))))
 
 (defun chain-bolt (votary life)
-  "Redraw the jump of VOTARY's beam from the ally it reached to what it strikes, while both live."
+  "Redraw the jump of VOTARY's beam from the ally it reached to what it strikes, while both live: not
+one bolt, which read as the beam going on through the ally, but two or three, each from a random spot
+on the ally to a random spot on what it strikes, more jagged and forked than the beam and redrawn every
+time, so it crackles. On the player they land scattered over the bottom of the view."
   (let ((from (chain-from votary))
         (to (chain-to votary)))
     (when (and from to (not (dead from)) (target-live-p to))
-      (let ((a (body-chest from))
-            (b (body-chest to)))
-        (eye-bolt (vx a) (vy a) (vz a) (vx b) (vy b) (vz b) 4
-                  :roughness 0.15 :width 3.0 :white 0.6 :branch 0.2 :life life)))))
+      (destructuring-bind (least most) *votary-jump-bolts*
+        (dotimes (i (+ least (random (1+ (- most least)))))
+          (multiple-value-bind (x0 y0 z0) (body-spot from)
+            (multiple-value-bind (x1 y1 z1) (body-spot to)
+              (eye-bolt x0 y0 z0 x1 y1 z1 4 :roughness 0.25 :width 2.0 :white 0.4 :branch 0.3
+                                            :life (* 0.6 life)
+                                            :side (- (random 0.7) 0.35) :lower (random 0.15)))))))))
 
 (defun beam-bolts (votary)
   "Redraw VOTARY's held beam as lightning from its palms to where it ends: a broad bolt with a white
