@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The rime hag's blizzard, and winds.** From level 3 she raises a storm round her (6 m, 10 s, every
+  18 s) when her target is 3 m off or more. Its wind bends every projectile but hers flying through it,
+  more the further it flies (a Fire Bolt at her strikes from 3 m, rarely from 4, never from 5), each
+  projectile by its own gust so long shots can't be aimed off for it; and her foes inside walk at 60%
+  of their speed, so she walks in on them with her nova. She had died at range to free Fire Bolts.
+  Winds are general (`*winds*`, `wind-turn`, `wind-slow` in spells.lisp): the tornado is one too, and
+  turns any projectile through its funnel about 45 degrees.
 - **The rime hag shuns Absorb.** For 10 s after Absorb swallows one of her shards, or while she sees
   it held at her, she throws no shards (one in its wind-up is kept): she drops her rime field on the
   floor short of the player, where Absorb can't take it, and comes in to 2.5 m for her nova. Holding

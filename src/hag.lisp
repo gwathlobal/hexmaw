@@ -29,6 +29,33 @@ throws none and comes in for the nova instead, icing the floor short of them whe
 (defparameter *rime-field-short* 1.3
   "Metres short of a target holding Absorb that she drops the rime field, so it lands on the floor
 and not on them, where Absorb would swallow it.")
+(defparameter *blizzard-radius* 6.0 "Metres round her the blizzard reaches across; a boss's *BLIZZARD-BOSS-SCALE* times it.")
+(defparameter *blizzard-boss-scale* 1.25)
+(defparameter *blizzard-height* 3.5 "Metres over her feet it reaches.")
+(defparameter *blizzard-time* 10.0 "Seconds it blows, once raised.")
+(defparameter *blizzard-cooldown* 18.0 "Seconds from raising one to the next: it is down for the rest.")
+(defparameter *blizzard-first* 1.0 "Seconds of cooldown it starts with.")
+(defparameter *blizzard-form* 0.6 "Seconds it takes to rise to full strength.")
+(defparameter *blizzard-fade* 0.8 "Seconds it takes to die down at its end or her death.")
+(defparameter *blizzard-turn* 1.2
+  "Radians a second its wind turns a projectile flying through it (WIND-TURN), times its GUST: the
+Fire Bolt from 3 m always strikes her, from 4 m a third of the time, and from 5 m or its rim (6 m) it
+goes 0.5 to 1.4 m wide. Not her own.")
+(defparameter *blizzard-slow* 0.6 "Fraction of their speed it leaves her foes inside it.")
+(defparameter *blizzard-snow* 12.0 "Drifts of snow a second blown round inside it.")
+(defparameter *blizzard-snow-life* '(0.9 1.6) "Least and most seconds a drift lasts.")
+(defparameter *blizzard-whirl* 1.6 "Radians a second the snow goes round her.")
+(defparameter *blizzard-grit* 50.0 "Frost grit a second blown round inside it.")
+(defparameter *blizzard-grit-speed* '(3.0 6.0) "Least and most m/s the grit leaves at, round her.")
+(defparameter *blizzard-aurora-colors*
+  (mapcar #'nova-hex '("9fd8f6" "e4f4ff" "6fb4e0" "3c78a8" "ffffff"))
+  "The colours of the curtains round its rim and inside, as *GRAVE-AURORA-COLORS*: ice and snow.")
+(defparameter *blizzard-aurora-spin* -0.5 "Turns a second its streaks run round, with the wind. Read when one is raised.")
+(defparameter *blizzard-aurora-twist* 0.3 "Whole turns they lean, foot to top. Read when one is raised.")
+(defparameter *blizzard-swirl* '(0.55 -0.8 0.4)
+  "The inner curtain: (FRACTION SPIN TWIST), its radius as a fraction of the rim's. Read when one is raised.")
+(defparameter *blizzard-swirl-strength* 0.6 "How bright the inner curtain is against the rim's.")
+(defparameter *blizzard-volume* 0.7 "How loud its roar is at full strength.")
 (defparameter *hag-gather-pain-bonus* 20 "Percent added to her pain chance while she gathers the nova.")
 (defparameter *hag-gather-light* (vec 0.6 1.3 2.2) "Her lamp's colour at the gather's height.")
 (defparameter *hag-gather-light-radius* 6.0)
@@ -52,6 +79,8 @@ and not on them, where Absorb would swallow it.")
 (define-fx-animation hag-hurt "sprites/hag/hurt" :size (* *hag-height* 110/109))
 ;; Her icicle mantle cracks and she sinks into a heap of frosted fur: the corpse. Front only.
 (define-fx-animation hag-death "sprites/hag/death" :fps 9 :size (* *hag-height* 109/109))
+;; The blizzard's drifts of snow: the frost aura's strip (magic.lisp), at the monsters' density.
+(define-fx-animation blizzard-snow "sprites/status/frost" :fps 10 :loop T :size (/ 90 64.0))
 
 ;;; Her spells. The shard flies on the player's frost look; the rime field is a slower ball that
 ;;; lays its patch where it bursts (SPELL-IMPACT); the nova reaches 5 m, a boss's 7.
@@ -89,6 +118,10 @@ and not on them, where Absorb would swallow it.")
         (make-instance 'ability :name :rime-field :spell 'rime-field :animation 'hag-cast
                                 :frame-times '(0.35 0.35 0.25 0.3) :hit-frame 2 :pause 1.0
                                 :cooldown *rime-field-cooldown*)
+        ;; From level 3: the staff raised, and the storm rises round her.
+        (make-instance 'ability :name :blizzard :animation 'hag-cast
+                                :frame-times '(0.3 0.45 0.25 0.3) :hit-frame 2 :pause 0.4
+                                :cooldown *blizzard-cooldown*)
         ;; The gather is the tell: 1.0 s to the burst.
         (make-instance 'ability :name :frost-nova :spell 'hag-nova :animation 'hag-nova
                                 :frame-times '(0.3 0.7 0.25 0.4) :hit-frame 2 :pause 1.2
@@ -105,7 +138,7 @@ and not on them, where Absorb would swallow it.")
    (death-animation :initform 'hag-death)
    (gibs :initform '((:flesh 0 0 1 2 4 5 6 7)))
    (abilities :initform (hag-abilities))
-   (cooldowns :initform (list :frost-nova 0.0 :rime-field *rime-field-first*))
+   (cooldowns :initform (list :frost-nova 0.0 :rime-field *rime-field-first* :blizzard *blizzard-first*))
    (attack-range :initform 12.0)
    (keep-away :initform 3.5)
    (cast-offset :initform 0.3)
@@ -117,7 +150,18 @@ and not on them, where Absorb would swallow it.")
    (gather-lamp :initform NIL :accessor gather-lamp :documentation "Her lamp, lit through the nova's gather.")
    (mote-timer :initform 0.0 :accessor mote-timer)
    (wary :initform 0.0 :accessor wary
-         :documentation "Seconds left that she feeds the player's Absorb no shards (*HAG-WARY-TIME*).")))
+         :documentation "Seconds left that she feeds the player's Absorb no shards (*HAG-WARY-TIME*).")
+   (blizzard :initform 0.0 :accessor blizzard
+             :documentation "Seconds left of her blizzard, 0 with none (*BLIZZARD-TIME*).")
+   (blizzard-centre :initform (vec 0 0 0) :reader blizzard-centre
+                    :documentation "Her feet, shared with the blizzard's curtains and snow.")
+   (blizzard-rim :initform NIL :accessor blizzard-rim :documentation "The curtain round its rim, while it blows.")
+   (blizzard-swirl :initform NIL :accessor blizzard-swirl :documentation "The curtain inside it.")
+   (blizzard-sound :initform NIL :accessor blizzard-sound)
+   (snow-timer :initform 0.0 :accessor snow-timer)
+   (grit-timer :initform 0.0 :accessor grit-timer)
+   (blizzard-scratch :initform (vec 0 0 0) :reader blizzard-scratch :documentation "A point for the grit, reused.")
+   (blizzard-way :initform (vec 0 0 0) :reader blizzard-way :documentation "A way for the grit, reused.")))
 
 (define-creature-sounds rime-hag
   :alert :hag-alert :pain :hag-pain :death :hag-death :step :step-light)
@@ -170,8 +214,16 @@ and not on them, where Absorb would swallow it.")
        (ready-p hag :rime-field)
        (on-a-floor-p target)))
 
+(defun blizzard-ready-p (hag distance)
+  (and (level-ability-p :blizzard)
+       (<= (blizzard hag) 0.0)
+       (<= *hag-nova-trigger* distance)
+       (ready-p hag :blizzard)))
+
 (defmethod hunt-from-range ((hag rime-hag))
-  "Burst a frost nova at a target come too close, if it is ready. If it holds Absorb at her or
+  "Burst a frost nova at a target come too close, if it is ready. Raise a blizzard at one further
+off, if she may and it is ready; and while it blows, with the nova ready, walk in on a target it
+holds back instead of backing off. If it holds Absorb at her or
 swallowed a shard lately (SHUNS-TARGET-P), throw it no shard: a rime field short of it if she may,
 else close in to *HAG-WARY-REACH* for the nova. Else back off from one too close, and with one in
 range and sight throw a rime field ahead of it if she may, else a shard; or close in."
@@ -181,6 +233,12 @@ range and sight throw a rime field ahead of it if she may, else a shard; or clos
                     (clear-path-p (location hag) (body-feet target) (cast-height hag)))))
     (cond ((and seen (hag-nova-ready-p hag target distance))
            (start-ability hag :frost-nova))
+          ((and seen (blizzard-ready-p hag distance))
+           (start-ability hag :blizzard))
+          ;; Her wind holds it back: come in for the nova.
+          ((and (< 0.0 (blizzard hag)) (ready-p hag :frost-nova) (on-a-floor-p target)
+                (< (wind-slow hag target) 1.0))
+           (chase hag))
           ((shuns-target-p hag target)
            ;; Ice the floor short of them, then come in for the nova, and wait close for it.
            (cond ((and seen (rime-field-ready-p hag target distance))
@@ -260,7 +318,8 @@ range and sight throw a rime field ahead of it if she may, else a shard; or clos
       ;; Absorb raised at her in her wind-up: she keeps the shard.
       (:shard (unless (shuns-target-p hag (hunt-target hag)) (release-attack-spell hag)))
       (:rime-field (throw-rime-field hag))
-      (:frost-nova (burst-hag-nova hag)))
+      (:frost-nova (burst-hag-nova hag))
+      (:blizzard (raise-blizzard hag)))
     (when (< 0 (ability-cooldown ability))
       (setf (getf (cooldowns hag) (ability-name ability))
             (* (ability-cooldown ability) (depth-scale :cooldown))))))
@@ -294,16 +353,167 @@ range and sight throw a rime field ahead of it if she may, else a shard; or clos
   (unless (frozen-p)
     (run-cooldowns rime-hag dt)
     (setf (wary rime-hag) (max 0.0 (- (wary rime-hag) dt)))
-    (update-gather rime-hag dt)))
+    (update-gather rime-hag dt))
+  (update-blizzard rime-hag dt))
 
 (defmethod leave :after ((hag rime-hag) container)
   (declare (ignore container))
+  (douse-blizzard hag)
   (when (gather-lamp hag)
     (remove-lamp (gather-lamp hag))
     (setf (gather-lamp hag) NIL)))
 
+;;; The blizzard (from level 3 of a run, `:blizzard' in its abilities): a storm of snow round her,
+;;; *BLIZZARD-RADIUS* across, for *BLIZZARD-TIME*. Its wind bends every projectile but hers flying
+;;; through it (WIND-TURN, spells.lisp), so one from across it goes wide and one from close in
+;;; strikes, and it holds back her foes inside it (WIND-SLOW): close in to hit her and she walks in
+;;; on you with the nova. It goes with her, and dies down with her. Its rim is a curtain of ice and
+;;; snow running round, another inside it the other way, drifts of snow and frost grit blown round.
+
+(defun blizzard-radius (hag)
+  (if (typep hag 'boss) (* *blizzard-radius* *blizzard-boss-scale*) *blizzard-radius*))
+
+(defun blizzard-strength (hag)
+  "0 (none) to 1 (full): rising over *BLIZZARD-FORM*, dying down over its last *BLIZZARD-FADE*."
+  (let ((left (blizzard hag)))
+    (if (<= left 0.0)
+        0.0
+        (max 0.0 (min 1.0
+                      (/ (- *blizzard-time* left) *blizzard-form*)
+                      (/ left *blizzard-fade*))))))
+
+(defun in-blizzard-p (hag point)
+  "True if POINT is inside HAG's blizzard."
+  (let* ((c (blizzard-centre hag))
+         (h (- (vy point) (vy c))))
+    (and (< -0.5 h *blizzard-height*)
+         (let ((dx (- (vx point) (vx c)))
+               (dz (- (vz point) (vz c)))
+               (r (blizzard-radius hag)))
+           (< (+ (* dx dx) (* dz dz)) (* r r))))))
+
+(defmethod wind-turn ((hag rime-hag) projectile)
+  (let ((k (blizzard-strength hag)))
+    (if (and (< 0.0 k)
+             (not (eq hag (caster projectile)))
+             (in-blizzard-p hag (location projectile)))
+        (* k *blizzard-turn*)
+        0.0)))
+
+(defmethod wind-slow ((hag rime-hag) actor)
+  (if (and (< 0.5 (blizzard-strength hag))
+           (not (eq hag actor))
+           (hostile-p hag actor)
+           (in-blizzard-p hag (body-feet actor)))
+      *blizzard-slow*
+      1.0))
+
+(defun raise-blizzard (hag)
+  (setf (blizzard hag) *blizzard-time*)
+  (play-sound :gust-cast (location hag))
+  (let ((loc (location hag)))
+    (spray-sparks (vec (vx loc) (+ (vy loc) 1.0) (vz loc)) NIL 30 :kind :grit :ramp :frost :speed '(3.0 6.0))))
+
+(defun light-blizzard (hag)
+  "Raise HAG's blizzard's curtains and roar and set its wind blowing (again after a load)."
+  (let ((c (blizzard-centre hag))
+        (r (blizzard-radius hag)))
+    (destructuring-bind (fraction spin twist) *blizzard-swirl*
+      (setf (blizzard-rim hag) (make-instance 'aurora :centre c :radius r :colors *blizzard-aurora-colors*
+                                                      :spin *blizzard-aurora-spin* :twist *blizzard-aurora-twist*)
+            (blizzard-swirl hag) (make-instance 'aurora :centre c :radius (* fraction r)
+                                                        :colors *blizzard-aurora-colors* :spin spin :twist twist)))
+    (enter (blizzard-rim hag) (container hag))
+    (enter (blizzard-swirl hag) (container hag))
+    (setf (blizzard-sound hag) (start-loop :tornado c 0.0))
+    (add-wind hag)))
+
+(defun douse-blizzard (hag)
+  "Take HAG's blizzard's curtains, roar and wind away."
+  (remove-wind hag)
+  (setf (blizzard-sound hag) (stop-loop (blizzard-sound hag)))
+  (when (blizzard-rim hag)
+    (despawn (blizzard-rim hag))
+    (setf (blizzard-rim hag) NIL))
+  (when (blizzard-swirl hag)
+    (despawn (blizzard-swirl hag))
+    (setf (blizzard-swirl hag) NIL)))
+
+(defun blow-snow (hag dt)
+  "Drifts of snow and frost grit blown round inside HAG's blizzard."
+  (let* ((c (blizzard-centre hag))
+         (radius (blizzard-radius hag)))
+    (when (<= (decf (snow-timer hag) dt) 0)
+      (incf (snow-timer hag) (/ (+ 0.5 (random 1.0)) *blizzard-snow*))
+      (let* ((r (* radius (+ 0.15 (* 0.85 (sqrt (random 1.0))))))
+             (a (random (float (* 2 pi) 0f0)))
+             (x (+ (vx c) (* r (cos a))))
+             (z (+ (vz c) (* r (sin a))))
+             (animation (find-fx-animation 'blizzard-snow))
+             (y (+ (vy c) (* 0.5 (animation-size animation)) (random 1.2))))
+        (unless (solid-at x y z)
+          (enter (make-instance 'blizzard-snow :animation animation :storm-centre c :angle a :radius r
+                                               :life (range-random *blizzard-snow-life*)
+                                               :location (vec x y z))
+                 (container hag)))))
+    (when (<= (decf (grit-timer hag) dt) 0)
+      (incf (grit-timer hag) (/ (+ 0.5 (random 1.0)) *blizzard-grit*))
+      (let* ((r (* radius (+ 0.1 (random 0.9))))
+             (a (random (float (* 2 pi) 0f0)))
+             (at (blizzard-scratch hag))
+             (way (blizzard-way hag)))
+        (setf (vx at) (+ (vx c) (* r (cos a))) (vy at) (+ (vy c) 0.2 (random 2.5)) (vz at) (+ (vz c) (* r (sin a)))
+              (vx way) (- (sin a)) (vy way) 0.1 (vz way) (cos a))
+        (unless (solid-at (vx at) (vy at) (vz at))
+          (spray-sparks at way 1 :kind :grit :ramp :frost :speed *blizzard-grit-speed* :spread 0.25))))))
+
+(defun update-blizzard (hag dt)
+  "Run DT seconds of HAG's blizzard: count it down (down to its fade at her death), keep it on her
+feet, its curtains as tall and bright as it is strong, and its snow blowing."
+  (let ((frozen (frozen-p)))
+    (when (and (dead hag) (< *blizzard-fade* (blizzard hag)))
+      (setf (blizzard hag) *blizzard-fade*))
+    (unless frozen
+      (setf (blizzard hag) (max 0.0 (- (blizzard hag) dt))))
+    (cond ((and (< 0.0 (blizzard hag)) (container hag))
+           (unless (blizzard-rim hag)
+             (light-blizzard hag))
+           (let ((feet (body-feet hag))
+                 (c (blizzard-centre hag))
+                 (k (blizzard-strength hag)))
+             (setf (vx c) (vx feet) (vy c) (vy feet) (vz c) (vz feet))
+             (setf (aurora-height (blizzard-rim hag)) (* k *blizzard-height*)
+                   (aurora-strength (blizzard-rim hag)) k
+                   (aurora-height (blizzard-swirl hag)) (* k 0.8 *blizzard-height*)
+                   (aurora-strength (blizzard-swirl hag)) (* k *blizzard-swirl-strength*))
+             (move-loop (blizzard-sound hag) c (* k *blizzard-volume*))
+             (unless frozen
+               (blow-snow hag dt))))
+          ((blizzard-rim hag)
+           (douse-blizzard hag)))))
+
+(define-shader-entity blizzard-snow (upright-fx)
+  ((storm-centre :initarg :storm-centre :reader storm-centre :documentation "The blizzard's centre, shared.")
+   (angle :initarg :angle :accessor snow-angle :documentation "Radians round the centre, from +X toward +Z.")
+   (radius :initarg :radius :reader snow-radius)
+   (life :initarg :life :reader snow-life)))
+
+(define-handler (blizzard-snow tick :after) (dt)
+  (unless (frozen-p)
+    (let* ((c (storm-centre blizzard-snow))
+           (a (incf (snow-angle blizzard-snow) (* *blizzard-whirl* dt)))
+           (r (snow-radius blizzard-snow))
+           (loc (location blizzard-snow)))
+      (setf (vx loc) (+ (vx c) (* r (cos a)))
+            (vz loc) (+ (vz c) (* r (sin a))))
+      (when (< (snow-life blizzard-snow) (age blizzard-snow))
+        (despawn blizzard-snow)))))
+
 (defun preload-hag (scene)
-  "Load what a rime hag throws mid-game: the frost look's flight and burst."
+  "Load what a rime hag throws mid-game: the frost look's flight and burst, and her blizzard's snow."
+  (preload (make-instance 'blizzard-snow :animation (find-fx-animation 'blizzard-snow) :storm-centre (vec 0 0 0)
+                                         :angle 0.0 :radius 0.0 :life 1.0)
+           scene)
   (preload (make-instance 'fx-sprite :animation (find-fx-animation 'frost-flight)) scene)
   (preload (make-instance 'fx-sprite :animation (find-fx-animation 'frost-burst)) scene))
 

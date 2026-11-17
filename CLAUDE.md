@@ -940,7 +940,10 @@ real time instead.
   quarry is inside. `vortex-aim-point` places the player's where their aim meets the floor, 3 to 8 m
   off. It shows as a `funnel` (a shared mesh, `*funnel-vao*`, staged by `preload-vortex`; spiral
   bands snapped to whole cells, premultiplied, no depth written, `late-rank` 0.5) with `ogre-dust`
-  puffs round its foot; from inside, `whirl-streaks` (hud.lisp) rush across the view. To look at
+  puffs round its foot; from inside, `whirl-streaks` (hud.lisp) rush across the view. It is a
+  **wind** (`*winds*`, spells.lisp): a projectile passing through its funnel, within
+  `*vortex-deflect-margin*` of its wall, any caster's, is turned `*vortex-deflect*` (9 rad/s) the way
+  it spins (`wind-turn`), so a Fire Bolt crossing it goes off about 45 degrees. To look at
   one: `tools/hd '(game (cast-spell (find-spell (quote tempest)) (vec 0 0.5 1) (vec 0 0 1) (scene +main+)))'`.
 - `src/wraith.lisp`: the `gale-wraith`, a `flyer` and an `ability-user` (necromancer.lisp) that
   floats `*wraith-hover*` off the floor, in sword reach. Its tornado takes a `*tempest-cast-time*`
@@ -2344,6 +2347,28 @@ the first caster that punishes a player who closes in. Her `hunt-from-range` tak
 - **Rime shard** (`:shard`, `rime-shard`): a frost projectile, 10 m/s, 4 to 6 and frost's chill, on
   the player's frost look. Absorb swallows it for mana, once: then she **shuns** the player
   (`shuns-target-p`).
+
+Before all but the nova, from level 3 of a run (`(level-ability-p :blizzard)`), with her target 3 m
+off or more: the **blizzard** (`:blizzard`, cooldown `*blizzard-cooldown*`, 18 s from its cast, from
+`*blizzard-first*`; the cast strip's 0.75 s to the raise). A storm round her, `*blizzard-radius*`
+(6 m; a boss's 1.25 times it) across and `*blizzard-height*` (3.5 m) up, for `*blizzard-time*` (10 s),
+rising over `*blizzard-form*` and dying down over `*blizzard-fade*`, at once when she dies. It is a
+**wind** (`*winds*`, spells.lisp: `wind-turn`, `wind-slow`, `add-wind`; the tornado is one too): every
+projectile but hers flying through it turns `*blizzard-turn*` (1.2 rad/s) about +Y the way it blows,
+times its own `gust` (`*wind-gust*`, 0.6 to 1.4, drawn from `*roll-random*` as it leaves and saved, so
+a long shot can't be aimed off for it; `blow-projectile`). So the Fire Bolt at her middle strikes from
+3 m every time, from 4 m about four in ten, and from 5 m or the rim never (measured, 10 shots each).
+Her foes inside it walk at `*blizzard-slow*` (0.6) of their speed (`slow-factor`, magic.lisp, takes the
+winds with the statuses, down to `*slowest*`), and the player hears the tornado's rushing wind,
+quieter (`*wind-volume*`). While it blows and her nova is ready, a target it holds back draws her in
+(`chase`) instead of a shard or a retreat: close in to hit her and she walks in with the nova. A beam
+isn't bent, nor a touch or a blow. It shows as a curtain of ice and snow on its rim
+(`blizzard-rim`, an `aurora` in `*blizzard-aurora-colors*`, its streaks running and leaning,
+`*blizzard-aurora-spin*`, `*blizzard-aurora-twist*`), another inside it the other way
+(`*blizzard-swirl*`), drifts of snow (`blizzard-snow`, upright on the frost aura's strip, going round
+her at `*blizzard-whirl*`) and frost grit blown round (`blow-snow`), and the tornado's roar, softer
+(`*blizzard-volume*`). Her `blizzard` (seconds left) is saved; the rest comes back from it
+(`light-blizzard`). To see one on the debug level: `(setf (blizzard hag) 9.0)`.
 
 **Shunning Absorb.** A lone caster throwing nothing but projectiles was a mana spring for Absorb, as
 the acolyte was. So for `*hag-wary-time*` (10 s, her `wary`, saved) after Absorb swallows one of her
@@ -3863,8 +3888,9 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's, riftwalker's and
   acolyte's abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
   `:abilities` names the abilities a level's monsters may use beyond their first (`level-ability-p`):
-  none on level 1, the acolyte's `:firestorm` and the pack imp's `:flank-leap` (see "The imp") on
-  levels 2 and 3 (and so in the settlement).
+  none on level 1, the acolyte's `:firestorm`, the pack imp's `:flank-leap` (see "The imp") and the
+  rime hag's `:rime-field` on levels 2 and 3 (and so in the settlement), and her `:blizzard` on
+  level 3 (and in the settlement when it is at depth 3).
 
 Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
 budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,

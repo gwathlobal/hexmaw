@@ -83,7 +83,7 @@ their values."
   '(raise-target))
 
 (defmethod saved-slots append ((hag rime-hag))
-  '(wary))
+  '(wary blizzard))
 
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
@@ -111,7 +111,7 @@ their values."
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing homing-target projectile-velocity submerged evade-asked))
+  '(spell caster homing homing-target projectile-velocity submerged evade-asked gust))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
@@ -244,7 +244,7 @@ status auras, which come back from their statuses."
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
         (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura carried-loot
-                                                                       storm-flame falling-cinder)))
+                                                                       storm-flame falling-cinder blizzard-snow)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))

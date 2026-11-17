@@ -336,6 +336,9 @@ burst over every body within it of point AT."
 (defparameter *free-projectile-lifetime* 1.0
   "Seconds the player's free spells fly before they vanish: 20 m at the bolt's speed.")
 (defparameter *projectile-size* 0.18 "Collision diameter in metres; the sprite can be bigger.")
+(defparameter *wind-gust* '(0.6 1.4)
+  "Least and most of a wind's turn that one projectile takes (its GUST, drawn from *ROLL-RANDOM*).")
+
 (defparameter *impact-pullback* 0.25
   "Metres back along the flight path where the impact plays, so it isn't buried in the wall.")
 
@@ -355,6 +358,9 @@ for the player.")
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
 and bursts only on entering one from outside.")
+   (gust :initform 1.0 :accessor gust
+         :documentation "How hard the winds it flies through bend it, from *WIND-GUST*, drawn as it
+leaves (BLOW-PROJECTILE): so a long shot through a wind can't be aimed off to allow for it.")
    (evade-asked :initform NIL :accessor evade-asked
                 :documentation "The creature last asked whether it evades this (the player's)
 projectile about to reach it, so each is asked once.")
@@ -408,7 +414,9 @@ its strike, and the acolyte's firestorm :IGNITE as it comes down and :STORM whil
                                                         (hunt-target caster)))
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
-    (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T))
+    (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T)
+          (gust projectile) (let ((range *wind-gust*))
+                              (+ (first range) (random (float (- (second range) (first range)) 0f0) *roll-random*))))
     (nv* (projectile-velocity projectile) (float (projectile-speed spell) 0f0))
     (enter projectile container)
     (attach-glow projectile (light-color spell) (light-radius spell))
@@ -591,6 +599,56 @@ keeping its speed."
                         (vy v) (* speed (+ (* c uy) (* s wy)))
                         (vz v) (* speed (+ (* c uz) (* s wz))))))))))))
 
+;;; Winds: what blows across a projectile in flight and holds back what walks in it, the tornado
+;;; (vortex.lisp) and the rime hag's blizzard (hag.lisp). Each is in *WINDS* while it blows, and
+;;; answers WIND-TURN and WIND-SLOW. A wind turns a flight about +Y, the way it blows round, so a
+;;; projectile is bent the further it flies through it: one from close in strikes, one from across
+;;; it goes wide.
+
+(defvar *winds* (make-array 4 :adjustable T :fill-pointer 0) "The winds blowing now.")
+
+(defparameter *wind-volume* 0.6
+  "How loud the rushing wind the player hears in a wind that holds them back (a blizzard), against a
+tornado's hold.")
+
+(defgeneric wind-turn (wind projectile)
+  (:documentation "Radians a second WIND turns PROJECTILE's flight about +Y, from +X toward +Z (its
+way round); 0 where it doesn't reach it.")
+  (:method (wind projectile) (declare (ignore wind projectile)) 0.0))
+
+(defgeneric wind-slow (wind actor)
+  (:documentation "The fraction of its speed WIND leaves ACTOR (the player or a creature); 1 where
+it doesn't reach it.")
+  (:method (wind actor) (declare (ignore wind actor)) 1.0))
+
+(defun add-wind (wind)
+  (unless (find wind *winds*) (vector-push-extend wind *winds*)))
+
+(defun remove-wind (wind)
+  (let ((at (position wind *winds*)))
+    (when at
+      (replace *winds* *winds* :start1 at :start2 (1+ at))
+      (decf (fill-pointer *winds*)))))
+
+(defun wind-slow-factor (actor)
+  "The fraction of its speed the winds leave ACTOR."
+  (let ((k 1.0))
+    (loop for wind across *winds* do (setf k (* k (wind-slow wind actor))))
+    k))
+
+(defun blow-projectile (projectile dt)
+  "Turn PROJECTILE's flight by the winds it is in, for DT seconds."
+  (when (< 0 (fill-pointer *winds*))
+    (let ((turn 0.0))
+      (loop for wind across *winds* do (incf turn (wind-turn wind projectile)))
+      (unless (= turn 0.0)
+        (let* ((a (* turn (gust projectile) dt))
+               (c (cos a)) (s (sin a))
+               (v (projectile-velocity projectile))
+               (x (vx v)) (z (vz v)))
+          (setf (vx v) (- (* c x) (* s z))
+                (vz v) (+ (* s x) (* c z))))))))
+
 (defparameter *evade-look-ahead* 0.2
   "Seconds of flight ahead of the player's projectile that a creature sees it coming (EVADE-PROJECTILE).")
 
@@ -660,6 +718,7 @@ least: so the plain Fire Bolt melts rime.")
                           (and (not (eq (caster spell-projectile) *player*)) *player*))))
           (when (and target (not (eq target (caster spell-projectile))) (target-live-p target))
             (steer spell-projectile (float dt 0f0) target))))
+      (blow-projectile spell-projectile (float dt 0f0))
       (when (and *player* (eq (caster spell-projectile) *player*))
         (look-ahead spell-projectile r))
       (nv+* loc (projectile-velocity spell-projectile) dt)

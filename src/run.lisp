@@ -25,7 +25,7 @@
             ("riftwalker" 2))
      :loot (:weapons 2 :enchant-chance 0.8 :enchant-cost (3 6) :enchant-effects 2
             :runes 2 :rune-power (24 40) :rune-effects 3 :area-chance 0.5 :authored-chance 0.5)
-     :skip-scale 0.5 :elite-chance 0.2 :abilities (:firestorm :flank-leap :rime-field)
+     :skip-scale 0.5 :elite-chance 0.2 :abilities (:firestorm :flank-leap :rime-field :blizzard)
      :sight 1.3 :hearing 1.6 :alert 1.6 :pause 0.7 :cooldown 0.8))
   "A run's levels, first to last. :ROOMS is how many rooms the generator aims for, and :EXIT
 the block it puts on the doorway furthest from the start (or a list of them, tried in order):

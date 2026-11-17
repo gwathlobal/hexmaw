@@ -87,9 +87,12 @@ HUD's time bar (status-icons.lisp); NIL until set, when LEFT stands in.")
       (setf (statuses actor) (delete-if (lambda (status) (<= (status-left status) 0)) (statuses actor))))))
 
 (defun slow-factor (actor)
-  "Fraction of its speed ACTOR's slow leaves it, 1 with none."
-  (let ((slow (status-of actor :slow)))
-    (if slow (max *slowest* (- 1.0 (/ (status-magnitude slow) 100.0))) 1.0)))
+  "Fraction of its speed ACTOR's slow and the winds it is in (WIND-SLOW) leave it, 1 with none."
+  (let ((slow (status-of actor :slow))
+        (wind (wind-slow-factor actor)))
+    (if (or slow (< wind 1.0))
+        (max *slowest* (* wind (if slow (- 1.0 (/ (status-magnitude slow) 100.0)) 1.0)))
+        1.0)))
 
 (defun absorb-ward (actor amount)
   "The part of AMOUNT damage that gets past ACTOR's ward, which loses the rest."

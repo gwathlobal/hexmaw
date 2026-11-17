@@ -111,6 +111,7 @@ grudge. Returns them."
         (fill-pointer *torch-points*) 0
         (fill-pointer *ember-sources*) 0
         (fill-pointer *vortices*) 0
+        (fill-pointer *winds*) 0
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
         (fill-pointer *liquids*) 0
