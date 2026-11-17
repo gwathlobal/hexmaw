@@ -36,7 +36,7 @@
 (:name "dungeon-drips" :files ("dungeon-drips.ogg") :seconds (8.0) :space NIL :loop T)
 (:name "earthshake" :files ("earthshake.ogg") :seconds (1.2) :space T :loop NIL)
 (:name "firestorm-ignite" :files ("firestorm-ignite.ogg") :seconds (1.2) :space T :loop NIL)
-(:name "firestorm-roar" :files ("firestorm-roar.ogg") :seconds (4.0) :space T :loop T)
+(:name "firestorm-roar" :files ("firestorm-roar.ogg") :seconds (2.35) :space T :loop T)
 (:name "firestorm-sign" :files ("firestorm-sign.ogg") :seconds (4.0) :space T :loop T)
 (:name "flesh-hit" :files ("flesh-hit.ogg") :seconds (0.48) :space T :loop NIL)
 (:name "flesh-wet" :files ("flesh-wet.ogg") :seconds (0.48) :space T :loop NIL)

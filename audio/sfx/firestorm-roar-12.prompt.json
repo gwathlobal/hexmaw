@@ -1,0 +1,9 @@
+{
+  "source": "audio/sfx/firestorm-roar-10.wav",
+  "made_by": "its steady part, 1.5 s to 5.75 s, its last 0.5 s crossfaded (equal power) into its first 0.5 s: 3.75 s",
+  "note": "take 10 opens with 1.5 s of near silence before the roar, which would loop as a gap",
+  "created": 1794886466,
+  "seconds": [
+    3.75
+  ]
+}

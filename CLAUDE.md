@@ -1541,7 +1541,7 @@ real time instead.
   (distance / min)^-`*sound-rolloff*` (0.75: 4.5 dB a doubling; at 1 and 2 m, as it was, sounds
   were barely heard across a room), no quieter past `*sound-max-distance*` (50 m). A big sound keeps
   full volume further out (`*clip-min-distances*`: the tornado and the ogre's leap roar 12 m, its
-  landing 10, its footsteps 8). `tune-voice` sets them on a voice as it connects;
+  landing and the firestorm's roar 10, the ogre's footsteps 8). `tune-voice` sets them on a voice as it connects;
   `(game (retune-sounds))` re-tunes those connected already after a change.
   A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
   a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
