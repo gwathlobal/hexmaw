@@ -134,6 +134,7 @@ same in any process and thread."
      "altars" (length *level-altars*)
      "unreachable" (length (getf checks :unreachable))
      "stranded" (coerce (mapcar #'class-label (getf checks :stranded)) 'vector)
+     "blocked_by_rooted" (length (getf checks :blocked-by-rooted))
      "ice_joins" (length (getf checks :ice-joins))
      "seconds" seconds
      "warnings" (coerce (reverse (collected-warnings collector)) 'vector)

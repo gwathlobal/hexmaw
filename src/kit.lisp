@@ -190,16 +190,59 @@ player, who can. A boss (boss.lisp) is left out: it stays in its arena."
                  (push creature stranded))))
     (nreverse stranded)))
 
+(defun rooted-bodies ()
+  "A *NAV-BODIES* vector of the creatures that never leave their spot (ROOTED-P: a bloodroot), or NIL."
+  (make-nav-bodies (loop for c across *creatures*
+                         when (and (rooted-p c) (not (dead c)))
+                           collect (let ((at (home c)))
+                                     (list (vx at) (vz at) (body-radius c) (- (vy at) 0.5) (+ (vy at) 0.5))))))
+
+(defun rooted-blocks ()
+  "The doorways the player can walk to that a rooted creature's body (ROOTED-BODIES) cuts them off
+from: none, or the level has one standing in a way."
+  (let ((bodies (rooted-bodies)))
+    (when (and bodies *nav-grid*)
+      (let ((free (unreachable-doorways)))
+        (let ((*nav-bodies* bodies))
+          (set-difference (unreachable-doorways) free))))))
+
+(defun uproot-blockers ()
+  "Take out of the level every rooted creature (not a boss) whose body alone cuts a doorway off from
+the spawn point: a bloodroot on a cistern's ledge, between a vestry's benches. It draws nothing, so
+the layout and every other creature stay as they were. Returns how many."
+  (let ((rooted (loop for c across *creatures*
+                      when (and (rooted-p c) (not (typep c 'boss)) (not (dead c))) collect c))
+        (removed 0))
+    (when (and rooted *nav-grid*)
+      (let ((free (unreachable-doorways)))
+        (dolist (c rooted)
+          (let ((*nav-bodies* (let ((at (home c)))
+                                (make-nav-bodies (list (list (vx at) (vz at) (body-radius c)
+                                                             (- (vy at) 0.5) (+ (vy at) 0.5)))))))
+            (when (set-difference (unreachable-doorways) free)
+              (v:info :hexmaw "Uprooted ~a at ~a: it stood in the way." (type-of c) (home c))
+              (when (container c) (despawn c))
+              (setf (fill-pointer *creatures*)
+                    (let ((j 0))
+                      (loop for d across *creatures*
+                            unless (eq d c) do (setf (aref *creatures* j) d) (incf j))
+                      j))
+              (incf removed))))))
+    removed))
+
 (defun check-reachable ()
-  "Warn about every doorway of the level the player can't walk to, and every creature
-that can't walk to the player. Returns both."
+  "Warn about every doorway of the level the player can't walk to, every creature that can't walk
+to the player, and every doorway a rooted creature cuts off. Returns all three."
   (let ((lost (unreachable-doorways))
-        (stranded (stranded-creatures)))
+        (stranded (stranded-creatures))
+        (blocked (rooted-blocks)))
     (dolist (c lost)
       (v:warn :hexmaw "Can't walk to ~a at ~a from the spawn point." c (connector-location c)))
     (dolist (c stranded)
       (v:warn :hexmaw "~a at ~a can't walk to the spawn point." (type-of c) (home c)))
-    (values lost stranded)))
+    (dolist (c blocked)
+      (v:warn :hexmaw "A rooted creature cuts ~a at ~a off from the spawn point." c (connector-location c)))
+    (values lost stranded blocked)))
 
 ;;; Checking one block: *LEVEL* :BLOCK is *CHECK-BLOCK* alone, every doorway open. Each
 ;;; doorway has its probes (a river's, one per bank), and what joins what on the nav grid

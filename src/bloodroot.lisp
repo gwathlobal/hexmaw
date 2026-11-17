@@ -77,7 +77,7 @@ grow every other ring.")
 (defparameter *bolt-scorch-radius* 0.75 "Metres a single fire or frost hit with no area touches roots round it.")
 (defparameter *root-touch-height* 1.5 "Metres above or below a hit roots it touches may lie.")
 
-(defparameter *bloodroot-light* (vec 0.5 0.06 0.05) "Its veins' glow at rest.")
+(defparameter *bloodroot-light* (vec 0.16 0.02 0.02) "Its veins' glow at rest: dim, since it stands in it.")
 (defparameter *bloodroot-light-radius* 3.5)
 (defparameter *bloom-light* (vec 2.6 0.35 0.25) "Its glow just before a Bloom bursts.")
 (defparameter *bloom-light-radius* 9.0)
@@ -518,6 +518,52 @@ them, :TEAR tears them up."
                     (setf best root best-d d)))))))))
     best))
 
+;;; Saving: a carpet as plain data, its cells by window index with how long ago they rooted; a
+;;; load lays them again on the same nav grid (the seed builds the same level) and finds their
+;;; walls and frontier anew.
+
+(defun carpet-record (carpet)
+  (let ((cells ()))
+    (dotimes (w (length (carpet-state carpet)))
+      (let ((state (aref (carpet-state carpet) w)))
+        (unless (= 0 state)
+          (push (list w state (- *root-clock* (aref (carpet-born carpet) w))
+                      (aref (carpet-hold carpet) w) (aref (carpet-frost carpet) w))
+                cells))))
+    (let ((at (carpet-centre carpet)))
+      (list :kind (carpet-kind carpet) :centre (list (vx at) (vy at) (vz at)) :reach (carpet-reach carpet)
+            :life (carpet-life carpet) :wither (carpet-wither carpet) :ring-time (ring-time carpet)
+            :ring (carpet-ring carpet) :cells (nreverse cells)))))
+
+(defun restore-carpet (owner record)
+  (destructuring-bind (&key kind centre reach life wither ring-time ring cells) record
+    (let ((carpet (make-instance 'root-carpet :owner owner :kind kind :centre (apply #'vec centre)
+                                              :reach reach :life life :ring-time ring-time)))
+      (setf (carpet-wither carpet) wither
+            (carpet-ring carpet) ring)
+      (loop for (w state age hold frost) in cells
+            do (setf (aref (carpet-state carpet) w) state
+                     (aref (carpet-born carpet) w) (float (- *root-clock* age) 0f0)
+                     (aref (carpet-hold carpet) w) (float hold 0f0)
+                     (aref (carpet-frost carpet) w) (float frost 0f0))
+               (when (= state 1)
+                 (incf (rooted-count carpet))
+                 (multiple-value-bind (a b k) (cell-coords carpet w)
+                   (find-walls carpet a b k))
+                 (queue-cell carpet w)))
+      (swap-frontier carpet)
+      carpet)))
+
+(defun root-state (bloodroot)
+  (list :main (and (carpet bloodroot) (carpet-record (carpet bloodroot)))
+        :patches (mapcar #'carpet-record (patches bloodroot))))
+
+(defun (setf root-state) (state bloodroot)
+  (setf (carpet bloodroot) (and (getf state :main) *nav-grid* (restore-carpet bloodroot (getf state :main)))
+        (patches bloodroot) (and *nav-grid* (mapcar (lambda (r) (restore-carpet bloodroot r)) (getf state :patches)))
+        *roots-dirty* T)
+  state)
+
 ;;; The tick.
 
 (define-handler (bloodroot tick :before) ()
@@ -597,13 +643,16 @@ them, :TEAR tears them up."
          (at (getf snare :at))
          (left (- (getf snare :left) dt)))
     (setf (getf (snare player) :left) left)
+    ;; Off the floor at any moment of the tell, a jump, and the roots close on nothing.
+    (when (and (eq :tell (getf snare :phase)) (not (on-floor-p player)))
+      (setf (getf (snare player) :jumped) T))
     (cond ((not (snare-cell-live-p bloodroot at))
            ;; Burnt, frosted or torn up under the feet.
            (break-snare player))
           ((< 0 left))
           ((eq :tell (getf snare :phase))
            (let ((feet (feet player)))
-             (if (and (on-floor-p player)
+             (if (and (on-floor-p player) (not (getf (snare player) :jumped))
                       (< (sqrt (+ (expt (- (vx feet) (vx at)) 2) (expt (- (vz feet) (vz at)) 2))) *snare-reach*))
                  (progn
                    (setf (snare player) (list :root bloodroot :phase :held :left *snare-hold* :at at))
@@ -766,7 +815,7 @@ higher of them."
          (projectile (launch-projectile spell from (vec 0 1 0) (container bloodroot) bloodroot
                                         :class 'lobbed-projectile)))
     (v<- (projectile-velocity projectile) (lob-velocity from to *seed-apex* (gravity projectile)))
-    (play-sound :bloodroot-spit from)))
+    (play-sound (spell-sound spell :cast) from)))
 
 (defmethod spell-impact ((name (eql 'blood-seed)) spell at caster container victim)
   (declare (ignore spell container victim))
@@ -781,7 +830,6 @@ higher of them."
       (let ((patch (start-carpet bloodroot :seed (vec (vx at) floor (vz at)) *seed-patch-radius*
                                  :life *seed-patch-time* :ring-time *seed-ring-time*)))
         (when patch
-          (play-sound :seed-impact at)
           (push patch (patches bloodroot))
           (when (< *max-seed-patches* (length (patches bloodroot)))
             (setf (patches bloodroot) (subseq (patches bloodroot) 0 *max-seed-patches*)
@@ -818,7 +866,7 @@ higher of them."
                       (min 1.0 (/ (attack-time bloodroot) (attack-hit-time bloodroot)))))
            (k (cond ((dead bloodroot) 0.0)
                     (tell (+ 0.2 (* 0.8 tell tell)))
-                    ((< 0 (glut bloodroot)) (+ 0.15 (* 0.1 (sin (* 2 pi *glut-pulse* (glut bloodroot))))))
+                    ((< 0 (glut bloodroot)) (+ 0.06 (* 0.04 (sin (* 2 pi *glut-pulse* (glut bloodroot))))))
                     (T 0.0)))
            (color (color lamp)))
       (setf (vx color) (+ (* (- 1 k) (if (dead bloodroot) 0.0 (vx *bloodroot-light*))) (* k (vx *bloom-light*)))

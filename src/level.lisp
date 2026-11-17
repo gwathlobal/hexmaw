@@ -193,9 +193,11 @@ creatures (CHECK-REACHABLE), :ICE-JOINS (CHECK-ICE-JOINS). Level sweeps read it 
                     (return))))
     ;; Before the checks, which count the packs too.
     (spread-packs container *last-level-seed*)
-    (multiple-value-bind (lost stranded) (check-reachable)
+    ;; A rooted creature never moves out of a way it stands in (kit.lisp).
+    (uproot-blockers)
+    (multiple-value-bind (lost stranded blocked) (check-reachable)
       (setf *last-level-checks* (list :attempts attempts :problem last-problem
-                                      :unreachable lost :stranded stranded
+                                      :unreachable lost :stranded stranded :blocked-by-rooted blocked
                                       :ice-joins (when (eq *level* :generated) (check-ice-joins))))
       (place-pickups container :guards (remove-if-not #'hoard-guard-p stranded)))
     (setf *built-pickups* (length *pickups*))))
