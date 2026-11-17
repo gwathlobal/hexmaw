@@ -39,6 +39,7 @@
                (:file "spells")
                (:file "player")
                (:file "magic")
+               (:file "skins")
                (:file "vortex")
                (:file "wraith")
                (:file "acolyte")

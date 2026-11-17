@@ -50,6 +50,9 @@ otherwise a burst where the spell strikes.")
 
    (strike-animation :initarg :strike-animation :initform NIL :reader strike-animation
                      :documentation "What bursts up out of a :CIRCLE's floor when it strikes, played many times over it.")
+   (nova-radius :initarg :nova-radius :initform NIL :reader nova-radius-of
+                :documentation "Metres a :NOVA delivery reaches round its caster, besides its effects'
+area; NIL for *NOVA-RADIUS* (SPELL-NOVA-RADIUS).")
    (overcharge :initarg :overcharge :initform 0.0 :accessor spell-overcharge
                :documentation "How far the cast that made this copy was overcharged, 0 to 1 (OVERCHARGED-SPELL).")
    (effects :initarg :effects :reader spell-effects)))
@@ -300,9 +303,12 @@ a touch, a weapon's enchantment."))
   (v- (if (typep target 'player) (feet target) (location target)) (strike-origin source)))
 
 (defun burst-spell (spell point caster)
-  "Burst SPELL's effects that have an area over every body within it of POINT."
+  "Burst SPELL's effects that have an area over every body within it of POINT, and over the skins
+it reaches (STRIKE-SKINS, skins.lisp: fire melts rime)."
   (dolist (effect (spell-effects spell))
     (when (and (target-effect-p effect) (< 0 (effect-area effect)))
+      (when (effect-element effect)
+        (strike-skins (effect-element effect) point (effect-area effect) caster))
       (let ((burst (make-instance 'strike :spell spell :caster caster :origin point)))
         (dolist (body (burst-victims point (effect-area effect) caster))
           (apply-effect (effect-kind effect) effect body burst))))))
@@ -523,7 +529,7 @@ WATER it hisses out; QUIET, it makes no sound (a held beam's, which has its own)
                                                                 (max 1 (round (* k (second m)))))
                                                e))))))))
     (dolist (slot '(title projectile-speed projectile-animation impact-animation light-color light-radius
-                    homing lifetime))
+                    homing lifetime nova-radius))
       (setf (slot-value copy slot) (slot-value spell slot)))
     (setf (slot-value copy 'pain-bonus) pain-bonus)
     copy))
@@ -629,6 +635,26 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
   (:documentation "TARGET swallows PROJECTILE."))
 
 ;; After FX-SPRITE's tick, which animates and ages it.
+(defgeneric spell-impact (name spell at caster container victim)
+  (:documentation "What the spell named NAME (a symbol of *SPELLS*; a forged spell's name is a
+string) does where its projectile struck, AT, besides its effects: VICTIM is the body it struck,
+or NIL for a wall, floor or liquid (the rime field lays its patch, hag.lisp).")
+  (:method (name spell at caster container victim)
+    (declare (ignore name spell at caster container victim))
+    NIL))
+
+(defparameter *impact-skin-reach* 1.0
+  "Metres round where a projectile strikes that its element reaches the skins (STRIKE-SKINS), at
+least: so the plain Fire Bolt melts rime.")
+
+(defun projectile-landed (projectile at victim)
+  "PROJECTILE struck at AT (VICTIM, or NIL): its element on the skins there, and its spell's own hook."
+  (let* ((spell (spell projectile))
+         (element (spell-element spell)))
+    (when element
+      (strike-skins element at (max *impact-skin-reach* (spell-burst-radius spell)) (caster projectile)))
+    (spell-impact (spell-name spell) spell at (caster projectile) (container projectile) victim)))
+
 (define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
     (let* ((loc (location spell-projectile))
@@ -662,10 +688,12 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
                    (apply-effect (effect-kind effect) effect victim spell-projectile)))
                (let ((at (impact-point spell-projectile)))
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
+                 (projectile-landed spell-projectile at victim)
                  (impact spell-projectile :at at)))
               ((or entered (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)))
                (let ((at (impact-point spell-projectile)))
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
+                 (projectile-landed spell-projectile at NIL)
                  (impact spell-projectile :at at
                                           :water (and entered (liquid-property (liquid-kind entered) :swim)))))
               ((< (projectile-lifetime spell-projectile) (age spell-projectile))
@@ -888,7 +916,18 @@ void main(){
 ;;; and behind it fire leaves a scorch and frost a rime for *NOVA-TRAIL-TIME*. Each element throws
 ;;; its own particles (sparks.lisp).
 
-(defparameter *nova-radius* 5.0"Metres a nova reaches round its caster, besides its effects' area.")
+(defparameter *nova-radius* 5.0 "Metres a nova reaches round its caster, besides its effects' area,
+unless the spell says otherwise (SPELL-NOVA-RADIUS).")
+
+(defun spell-nova-radius (spell)
+  "Metres SPELL's nova reaches round its caster, besides its effects' area."
+  (or (nova-radius-of spell) *nova-radius*))
+
+(defun spell-element (spell)
+  "The element of SPELL's first striking damage effect, or NIL."
+  (loop for effect in (spell-effects spell)
+        when (and (target-effect-p effect) (eq :damage (effect-kind effect)) (effect-element effect))
+          return (effect-element effect)))
 (defparameter *nova-grow-time* 0.4 "Seconds a nova takes to grow to its reach.")
 (defparameter *nova-start-radius* 0.7 "Metres a nova's sphere starts at.")
 (defparameter *nova-trail-time* 1.2 "Seconds a nova's scorch or rime lies after it has grown.")
@@ -1113,7 +1152,7 @@ void main(){
 
 (defun place-nova (spell origin container caster)
   "Burst SPELL round ORIGIN for CASTER: its sphere grows from there and strikes what it reaches."
-  (let* ((reach (+ *nova-radius* (spell-burst-radius spell)))
+  (let* ((reach (+ (spell-nova-radius spell) (spell-burst-radius spell)))
          (victims (sort (mapcar (lambda (body) (list body (nova-distance origin body)))
                                 (burst-victims origin reach caster))
                         #'< :key #'second))
@@ -1123,6 +1162,9 @@ void main(){
                                           :floor-y (or floor (- (vy origin) 1.0))
                                           :animation (find-fx-animation 'ogre-dust))))
     (enter nova container)
+    (let ((element (spell-element spell)))
+      (when element
+        (strike-skins element origin reach caster)))
     (play-sound (spell-sound spell :impact) origin)
     (when (eq caster *player*)
       (kick-camera *nova-camera-shake*))
@@ -1154,7 +1196,7 @@ void main(){
          (source (make-instance 'strike :spell spell :caster (caster nova) :origin origin)))
     (overcharge-breaks-guard spell body origin)
     (dolist (effect (spell-effects spell))
-      (when (and (target-effect-p effect) (<= distance (+ *nova-radius* (effect-area effect) 0.05)))
+      (when (and (target-effect-p effect) (<= distance (+ (spell-nova-radius spell) (effect-area effect) 0.05)))
         (apply-effect (effect-kind effect) effect body source)))
     (push (cons body (age nova)) (nova-struck nova))
     (let ((chest (vec (vx (body-feet body)) (+ (vy (body-feet body)) (* 0.55 (body-height body))) (vz (body-feet body)))))
@@ -1581,6 +1623,9 @@ stopped. QUIET, it makes no sound."
            (unless quiet (play-sound :shield-deflect end)))
           (T
            (strike-with-spell spell victim origin caster end)))
+    (let ((element (spell-element spell)))
+      (when element
+        (strike-skins element end *impact-skin-reach* caster)))
     (play-impact spell end container :quiet quiet)
     end))
 

@@ -43,6 +43,7 @@
 (:name "flounder" :files ("flounder.ogg") :seconds (2.25) :space T :loop T)
 (:name "footstep-snow" :files ("footstep-snow.ogg") :seconds (0.337) :space NIL :loop NIL)
 (:name "footstep-stone" :files ("footstep-stone.ogg") :seconds (0.15) :space NIL :loop NIL)
+(:name "freeze" :files ("freeze.ogg") :seconds (1.0) :space T :loop NIL)
 (:name "game-saved" :files ("game-saved.ogg") :seconds (1.0) :space NIL :loop NIL)
 (:name "gate-drop" :files ("gate-drop.ogg") :seconds (1.066) :space T :loop NIL)
 (:name "gate-rise" :files ("gate-rise.ogg") :seconds (1.931) :space T :loop NIL)
