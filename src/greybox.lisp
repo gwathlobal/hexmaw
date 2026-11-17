@@ -654,11 +654,34 @@ with nothing at Y under its centre, stands on that ledge's."
                (setf edge s)))))
     (and edge (solid-tread edge))))
 
+(defvar *skin-patches* (make-array 0 :adjustable T :fill-pointer T)
+  "What skins lie over the level's floors and walls for a while (SKIN, skins.lisp: a rime hag's
+ice): each a simple-vector (X Y Z RADIUS GRID-X GRID-Z N CELL HEIGHTS FOOTING WALLS KIND), its
+centre and the radius it reaches now, the corner of its grid of N by N cells CELL metres a side,
+each cell's floor height row by row (most-negative-single-float where it has none), the footing
+it is underfoot (a key of *FOOTINGS*, or NIL for a look only), its wall cells (SKIN-WALL-CELLS)
+and its kind (*SKIN-KINDS*). CLEAR-LEVEL empties it.")
+
+(defun skin-footing (x y z)
+  "The footing of the skin the point X Y Z stands on (within its radius, on the floor of its cell
+there), or NIL."
+  (loop for p across *skin-patches*
+        do (when (and (aref p 9)
+                      (< (+ (expt (- x (aref p 0)) 2) (expt (- z (aref p 2)) 2)) (expt (aref p 3) 2)))
+             (let* ((n (aref p 6))
+                    (c (aref p 7))
+                    (i (floor (- x (aref p 4)) c))
+                    (j (floor (- z (aref p 5)) c)))
+               (when (and (< -1 i n) (< -1 j n)
+                          (< (abs (- y (aref (aref p 8) (+ i (* j n))))) 0.15))
+                 (return (aref p 9)))))))
+
 (defun floor-footing (x y z &optional (radius 0.0))
   "The footing of the floor whose top is at Y under the point X Z, as SOLID-FOOTING, or NIL:
-FLOOR-TREAD's, if it is slippery."
-  (let ((tread (floor-tread x y z radius)))
-    (and tread (footing-property tread :friction) tread)))
+a skin's (SKIN-FOOTING), or FLOOR-TREAD's, if it is slippery."
+  (or (skin-footing x y z)
+      (let ((tread (floor-tread x y z radius)))
+        (and tread (footing-property tread :friction) tread))))
 
 (defun add-box (container x0 y0 z0 x1 y1 z1
                 &key surface (color (if surface (vec 1 1 1) (vec 0.6 0.6 0.6))) (solid T))

@@ -352,6 +352,8 @@ tear it apart; NIL for *GIB-OVERKILL*.")
    (summoned :initarg :summoned :initform NIL :reader summoned
              :documentation "True if it came into the level mid-game (a raised skeleton): a
 reset takes it away instead of reviving it.")
+   (thaw :initform 0.0 :accessor thaw
+         :documentation "Seconds before a skin's frost can freeze it again (FREEZE, skins.lisp).")
    (rising :initform 0.0 :accessor rising
            :documentation "Seconds left of getting up from where it was raised; it does
 nothing else meanwhile, and plays its death backwards.")
@@ -799,11 +801,24 @@ A flyer hovers over it.")
   (when (eq (brain creature) :walking)
     (walk-path creature dt)))
 
+(defgeneric slips-on-rime-p (creature)
+  (:documentation "True if a skin's footing (SKIN-FOOTING, greybox.lisp: a rime patch's ice) is
+CREATURE's footing too; NIL for one at home on it (the rime hag on her own ice).")
+  (:method ((creature creature)) T))
+
+(defgeneric taught-effect (creature)
+  (:documentation "The effect (a glyph's :TEACHES, pickups.lisp) CREATURE drops the glyph of when
+the player kills it not knowing it, or NIL: an elemental foe teaches its element.")
+  (:method ((creature creature)) NIL))
+
 (defun update-footing (creature)
-  "Find the footing CREATURE stands on. Stepping onto ice mid-walk, it carries its walk's
-speed onto it as momentum, so it doesn't stall at the edge."
+  "Find the footing CREATURE stands on: a skin's, if it slips on one (SLIPS-ON-RIME-P), else its
+floor's. Stepping onto ice mid-walk, it carries its walk's speed onto it as momentum, so it
+doesn't stall at the edge."
   (let ((footing (and *nav-grid* (let ((loc (location creature)))
-                                   (nav-footing-at (vx loc) (vy loc) (vz loc))))))
+                                   (or (and (slips-on-rime-p creature)
+                                            (skin-footing (vx loc) (vy loc) (vz loc)))
+                                       (nav-footing-at (vx loc) (vy loc) (vz loc)))))))
     (when (and footing (not (footing creature)) (not (dead creature)) (eq (brain creature) :walking))
       (let ((m (momentum creature))
             (speed (walking-speed creature))
@@ -1915,7 +1930,8 @@ after the flinch, block and attack.")
             (bash-poise creature) (max 0.0 (- (bash-poise creature) dt))
             (flank-timer creature) (max 0.0 (- (flank-timer creature) dt))
             (slot-ban-timer creature) (max 0.0 (- (slot-ban-timer creature) dt))
-            (stirring creature) (max 0.0 (- (stirring creature) dt)))
+            (stirring creature) (max 0.0 (- (stirring creature) dt))
+            (thaw creature) (max 0.0 (- (thaw creature) dt)))
       (when (and (slot-bans creature) (<= (slot-ban-timer creature) 0))
         (setf (slot-bans creature) ()))
       (when (and (statuses creature) (not (dead creature)) (not (dormant-p creature)))
@@ -1949,6 +1965,8 @@ after the flinch, block and attack.")
                     ((< 0 (stagger creature)))
                     ((< 0 (reel creature)))
                     ((dormant-p creature))
+                    ;; Frozen by a rime patch (skins.lisp): it neither thinks nor strikes.
+                    ((status-of creature :freeze))
                     (afloat
                      (flounder creature dt))
                     (T

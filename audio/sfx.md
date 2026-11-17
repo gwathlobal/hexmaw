@@ -65,6 +65,7 @@ First-person, so stereo is fine (`:speech`).
 | tempest-cast | 1 | 1P | 1.2 | 3 | `release-spell` player.lisp:176, tempest |
 | tornado | 1 | P L | 4 | 2 | `start-vortex` vortex.lisp:332 until `leave :after` 380; volume by `vortex-strength` |
 | whirl-wind | 2 | 1P L | 3 | 2 | `note-caught` vortex.lisp:687 while `(whirl player)` |
+| freeze | 1 | P | 1.0 | 3 | `freeze-patch` skins.lisp, a frost patch forming (a rime hag's ice) |
 
 ## Player: body and movement
 

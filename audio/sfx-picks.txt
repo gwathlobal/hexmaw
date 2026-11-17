@@ -109,3 +109,4 @@ beam-cast 1
 beam-channel 4
 absorb-channel 1
 absorb-take 5          # absorb-channel-1 bent up and down (its .prompt.json has the script)
+freeze 3
