@@ -292,6 +292,25 @@ a touch, a weapon's enchantment."))
 (defmethod effect-direction ((source strike) target)
   (v- (if (typep target 'player) (feet target) (location target)) (strike-origin source)))
 
+(defgeneric effect-shove (source)
+  (:documentation "What an effect delivered by SOURCE does to the player besides its damage, as
+HURT-PLAYER's SHOVE: T for a blow's shove and hit-stop, NIL for none (a creature's held beam, whose
+pulses would otherwise shove and freeze four times a second).")
+  (:method (source) T))
+
+(defgeneric effect-block-cost (source)
+  (:documentation "Stamina the player's raised shield pays for a blow delivered by SOURCE, or NIL for
+the usual *BLOCK-STAMINA-SCALE* a point of its damage.")
+  (:method (source) NIL))
+
+(defclass beam-pulse (strike)
+  ((block-cost :initarg :block-cost :initform NIL :reader beam-pulse-block-cost))
+  (:documentation "The source of one strike of a beam a creature holds (votary.lisp): no shove or
+hit-stop, and its own stamina against a raised shield."))
+
+(defmethod effect-shove ((source beam-pulse)) NIL)
+(defmethod effect-block-cost ((source beam-pulse)) (beam-pulse-block-cost source))
+
 (defun burst-spell (spell point caster)
   "Burst SPELL's effects that have an area over every body within it of POINT."
   (dolist (effect (spell-effects spell))
@@ -1548,14 +1567,16 @@ a held beam: its effects over time and statuses are whole, since a strike only r
     pulse))
 
 (defun beam-end (origin direction caster)
-  "Where a beam from ORIGIN along unit vector DIRECTION stops, and the creature it reached
-there or NIL."
+  "Where a beam from ORIGIN along unit vector DIRECTION stops, and the body it reached there (a
+creature, or the player when CASTER is anyone else) or NIL."
   (let ((point (vcopy origin))
         (r 0.04)
-        (wet (liquid-at (vx origin) (vy origin) (vz origin))))
+        (wet (liquid-at (vx origin) (vy origin) (vz origin)))
+        (player (and *player* (not (eq caster *player*)) (< 0 (health *player*)) *player*)))
     (loop repeat (ceiling *beam-range* *beam-step*)
           do (nv+* point direction *beam-step*)
-             (let ((victim (creature-at point *beam-reach* caster)))
+             (let ((victim (or (creature-at point *beam-reach* caster)
+                               (and player (player-at-p player point *beam-reach*) player))))
                (when victim
                  (return-from beam-end (values point victim))))
              (when (or (solid-overlapping (vx point) (- (vy point) r) (vz point) r (* 2 r))
@@ -1568,7 +1589,8 @@ there or NIL."
   "Strike with SPELL along unit vector DIRECTION from ORIGIN for CASTER, at once. Returns where it
 stopped. QUIET, it makes no sound."
   (multiple-value-bind (end victim) (beam-end origin direction caster)
-    (cond ((and victim (shielded-p victim origin))
+    ;; A creature's shield stops it here; the player's is HURT-PLAYER's to meet.
+    (cond ((and (typep victim 'creature) (shielded-p victim origin))
            (block-hit victim)
            (unless quiet (play-sound :shield-deflect end)))
           (T
@@ -1586,7 +1608,9 @@ stopped. QUIET, it makes no sound."
    (end :initarg :end :initform (vec 0 0 1) :reader beam-end-point)
    (color :initarg :color :initform (vec 1 1 1) :reader beam-color)
    (held :initarg :held :initform NIL :accessor beam-held
-         :documentation "True while the player holds it: it stays lit, and fades once let go.")
+         :documentation "True while its caster holds it: it stays lit, and fades once let go.")
+   (strength :initarg :strength :initform 1.0 :accessor beam-strength
+             :documentation "How bright it is, 1 for a strike: a creature's ranging line is faint.")
    (age :initform 0.0 :accessor age)))
 
 (defparameter *beam-segments* 48 "Quads along a beam's ribbon. Read when it is made (a restart).")
@@ -1626,7 +1650,7 @@ stopped. QUIET, it makes no sound."
           (uniform program "end_point") (beam-end-point beam)
           (uniform program "eye") (location camera)
           (uniform program "width") (float *beam-width* 0f0)
-          (uniform program "fade") (float (- 1.0 (/ (age beam) *beam-time*)) 0f0)
+          (uniform program "fade") (float (* (beam-strength beam) (- 1.0 (/ (age beam) *beam-time*))) 0f0)
           (uniform program "beam_color") (beam-color beam)
           (uniform program "texels_per_metre") *texels-per-metre*
           (uniform program "light_steps") *aurora-light-steps*

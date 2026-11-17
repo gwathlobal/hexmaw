@@ -191,6 +191,7 @@ CASTER and those CASTER spares."
     (if (< 0 (effect-duration effect))
         (afflict target :damage amount (effect-duration effect) :element element :caster (caster source))
         (hurt-player target amount (effect-origin source)
+                     :shove (effect-shove source) :blockable T :block-cost (effect-block-cost source)
                      :unblockable (effect-unblockable-p source) :by (caster source)))
     (element-rider target element)))
 
