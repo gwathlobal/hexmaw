@@ -83,7 +83,7 @@ run's first levels had neither.")
   "Gold a generated level's gold pickups hold, per monster in it, at the first depth (GOLD-SCALE).
 Placed after the health and mana, on the spots they leave.")
 (defparameter *kill-gold* '((imp 4) (skeleton-warrior 3) (acolyte 7) (harpy 7) (knight 10) (necromancer 14)
-                            (gale-wraith 12) (ogre 16) (boss 120))
+                            (gale-wraith 12) (ogre 16) (rime-hag 9) (boss 120))
   "Coin a monster the player kills drops straight into the bag, by class (the first that it is
 of), at the first depth (GOLD-SCALE). One that is no class here drops 5.")
 (defparameter *gold-depth-step* 0.3 "How much more gold each depth past the first is worth.")
@@ -586,7 +586,26 @@ GUARDS are the stranded ogres, each of which gets a hoard (PLACE-HOARDS, loot.li
   (let ((entry (find-if (lambda (e) (typep creature (first e))) *kill-gold*)))
     (round (* (if entry (second entry) 5) (gold-scale)))))
 
+(defun glyph-kind-teaching (effect)
+  "The pickup kind of the glyph that teaches EFFECT, or NIL."
+  (first (find effect *pickup-kinds* :key (lambda (entry) (getf (rest entry) :teaches)))))
+
+(defun drop-taught-glyph (creature)
+  "An elemental foe teaches its element (TAUGHT-EFFECT, creature.lisp): killed by a player who
+doesn't know it, it drops that glyph where it fell, once a level per glyph. The run's placed
+glyphs are left as they are, so layouts and saves stay put."
+  (let* ((effect (taught-effect creature))
+         (kind (and effect (glyph-kind-teaching effect))))
+    (when (and kind (not (member effect (known-effects *player*)))
+               (not (loop for i from *built-pickups* below (length *pickups*)
+                          thereis (eq kind (pickup-kind (aref *pickups* i))))))
+      (let* ((loc (location creature))
+             (floor (or (and *nav-grid* (nav-floor-at (vx loc) (+ (vy loc) 0.1) (vz loc))) (vy loc))))
+        (drop-loot (container creature) kind (vx loc) floor (vz loc))))))
+
 (defmethod creature-died :after ((creature creature) by)
+  (when (and (eq by *player*) *player* (container creature) (member *level* '(:generated :test)))
+    (drop-taught-glyph creature))
   (when (and (eq by *player*) (monster-p creature) (eq *level* :generated))
     (let* ((coins (kill-gold creature))
            (rest (- coins (give-gold *player* coins))))

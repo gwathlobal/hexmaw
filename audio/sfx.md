@@ -68,6 +68,7 @@ First-person, so stereo is fine (`:speech`).
 | tempest-cast | 1 | 1P | 1.2 | 3 | `release-spell` player.lisp:176, tempest |
 | tornado | 1 | P L | 4 | 2 | `start-vortex` vortex.lisp:332 until `leave :after` 380; volume by `vortex-strength` |
 | whirl-wind | 2 | 1P L | 3 | 2 | `note-caught` vortex.lisp:687 while `(whirl player)` |
+| freeze | 1 | P | 1.0 | 3 | `freeze-patch` skins.lisp, a frost patch forming (a rime hag's ice) |
 
 ## Player: body and movement
 
@@ -161,6 +162,16 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | rift-impact | 1 | P | 0.8 | 3 | `impact` spells.lisp, a rift |
 | rift-blink | 1 | P | 0.8 | 3 | `rift-move` riftwalker.lisp, the teleport, at both ends: a blink, a pull, a push, a swap, a called ally |
 | rift-call | 2 | P | 1.2 | 2 | `begin-call` riftwalker.lisp, where the ally will step out (it steps out 1 s later) |
+| hag-alert | 1 | P | 1.2 | 3 | alert: rime hag |
+| hag-pain | 1 | P | 0.5 | 3 | pain: rime hag |
+| hag-death | 1 | P | 1.8 | 3 | death: rime hag |
+| hag-cast | 1 | P | 0.6 | 3 | wind-up: the rime hag's shard and rime field (`creature-sound` hag.lisp) |
+| hag-gather | 1 | P | 1.0 | 3 | wind-up: the rime hag's frost nova, the gather (its tell) |
+| frost-nova | 1 | P | 1.2 | 3 | `place-nova` spells.lisp, `hag-nova` (the rime hag's burst) |
+| rime-form | 1 | P | 0.8 | 3 | `impact` spells.lisp, `rime-field`, where it lays its rime patch |
+| shard-flight | 1 | P L | 1.5 | 3 | `launch-projectile` spells.lisp, `rime-shard` and `rime-field` |
+| shard-impact | 1 | P | 0.6 | 3 | `impact` spells.lisp, `rime-shard` |
+| blizzard | 1 | P L | 4 | 2 | `light-blizzard` hag.lisp, the rime hag's blizzard, until it dies down; volume by `blizzard-strength` |
 | step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |
 | step-heavy | 2 | P | 0.6 | 3 | step: ogre |

@@ -480,7 +480,7 @@ real time instead.
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
+  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp, wraith and rime hag 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
   whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`;
@@ -556,7 +556,8 @@ real time instead.
   older than that key. What it stores is everything that
   changes in play, so a load is the moment of the save, nothing in flight lost: the player,
   every creature by its index in `*creatures*` (raised skeletons recreated), every effect in
-  the scene (projectiles, circles, impacts, with their glows), the blood pool's arrays,
+  the scene (projectiles, circles, impacts, with their glows), the blood pool's arrays, the skins
+  over floors and walls (`:skins`, skins.lisp),
   which pickups are taken and what imps dropped (`:drops`, `dropped-pickups`: pickups past
   `*built-pickups*`, which the seed doesn't place), `*hit-stop*` and the random states. Damage and knockback roll from their own state
   (`*roll-random*`, spells.lisp), since blood and wandering draw from `random` a number of
@@ -674,6 +675,9 @@ real time instead.
   path search (`nav-flood`, under `*nav-hazards*` `:avoid` or `:wade`) charges a step onto a
   slippery cell `*nav-ice-cost*` (1.5) times its length, so routes keep to the snow beside a
   frozen river and cross it the short way; a straight walk still goes straight over it, skidding.
+  Ice laid in play is a skin (`src/skins.lisp`, a rime hag's rime): `floor-footing` asks
+  `skin-footing` first, and a creature's `update-footing` does unless `slips-on-rime-p` says no (the
+  hag on her own ice); the nav arrays don't change, so paths don't cost it.
 - `src/fx.lisp`: animated camera-facing effect sprites (`fx-sprite`, `spawn-fx`); fullbright,
   no fog. Projectiles are effect sprites. `face-camera` turns a sprite parallel to the view
   plane: about X by the pitch, then about +Y by the yaw (`nq*` turns by its first quaternion
@@ -739,7 +743,7 @@ real time instead.
   ```
 - `src/sparks.lisp`: sparks, embers and grit, simulated like the blood (`spark-pool`,
   `*spark-pool*`, entered by `add-spark-pool` in `setup-scene`): plain arrays of `*max-sparks*`
-  (512) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
+  (2048, for a blizzard's flakes) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
   allocated a frame. They draw no art: each is a quad in the view plane on which the shader lays
   whole texels of the 64-a-metre grid, at least a pixel each (`view_rows`), in three colours of the
   house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`, the novas' `:frost`,
@@ -750,7 +754,10 @@ real time instead.
   gore's `crossed-face`, `move-to-face` and `reflect-off-diagonal`), lies on a floor it strikes
   slower than `*spark-rest-speed*`, cools down its ramp over `*spark-life*` and goes. An **ember**
   climbs to the rise it left at, wanders on two crossed waves, keeps its heat longer and blinks
-  out over the last `*ember-blink*` of its life; rock or a liquid puts it out. **Grit** (a texel,
+  out over the last `*ember-blink*` of its life; rock or a liquid puts it out. A **flake** (state 7)
+  goes where the winds carry it (`wind-carry` over `*winds*`, which this file defines), fluttering up
+  and down `*flake-flutter*`, a streak as long as its speed; out of every wind it slows and falls at
+  `*flake-fall*`, and rock, a liquid or its life's end takes it (the rime hag's blizzard). **Grit** (a texel,
   or a 2 × 2 chip lit from the upper left, `*grit-big-chance*`) falls, bounces once, settles for
   `*grit-rest*` and dissolves a texel at a time. A liquid swallows any of them.
   `(spray-sparks at dir count &key kind ramp speed spread)` throws them (DIR NIL: up, any way above
@@ -826,7 +833,8 @@ real time instead.
   `beam` (a shared ribbon, `*beam-vao*`, staged by `preload-spells`, texel-stepped, added light). The
   player holds a beam (player.lisp): every `*beam-pulse*` a `pulse-spell` with
   `beam-pulse-share` of its instant effects, for that share of its price. **Nova**: a sphere growing
-  from the caster's chest out to `*nova-radius*` (5 m) plus its effects' area over `*nova-grow-time*`
+  from the caster's chest out to its `spell-nova-radius` (`:nova-radius`, by default `*nova-radius*`,
+  5 m; the rime hag's 5, the Winter Crone's 7) plus its effects' area over `*nova-grow-time*`
   (0.4 s), from `*nova-start-radius*` and slowing as it goes (`spell-nova`, `place-nova`; its camera
   kick `*nova-camera-shake*`). It spares its caster; the bodies it reaches (`burst-victims` at the
   cast, nearest first, by `nova-distance` to their upright cylinder) are struck as the sphere reaches
@@ -940,7 +948,10 @@ real time instead.
   quarry is inside. `vortex-aim-point` places the player's where their aim meets the floor, 3 to 8 m
   off. It shows as a `funnel` (a shared mesh, `*funnel-vao*`, staged by `preload-vortex`; spiral
   bands snapped to whole cells, premultiplied, no depth written, `late-rank` 0.5) with `ogre-dust`
-  puffs round its foot; from inside, `whirl-streaks` (hud.lisp) rush across the view. To look at
+  puffs round its foot; from inside, `whirl-streaks` (hud.lisp) rush across the view. It is a
+  **wind** (`*winds*`, spells.lisp): a projectile passing through its funnel, within
+  `*vortex-deflect-margin*` of its wall, any caster's, is turned `*vortex-deflect*` (9 rad/s) the way
+  it spins (`wind-turn`), so a Fire Bolt crossing it goes off about 45 degrees. To look at
   one: `tools/hd '(game (cast-spell (find-spell (quote tempest)) (vec 0 0.5 1) (vec 0 0 1) (scene +main+)))'`.
 - `src/wraith.lisp`: the `gale-wraith`, a `flyer` and an `ability-user` (necromancer.lisp) that
   floats `*wraith-hover*` off the floor, in sword reach. Its tornado takes a `*tempest-cast-time*`
@@ -991,8 +1002,10 @@ real time instead.
   then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
   `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
   riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
+- `src/hag.lisp` (after riftwalker.lisp): the `rime-hag`, the frost caster, with her elite and
+  boss (`elite-hag`, `hag-boss`, the Winter Crone). See "The rime hag" under "Creature movement".
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
-  empowered form of one of the eight monsters (`*boss-kinds*`: kind, class such as `imp-boss`
+  empowered form of one of the nine monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
   likely, with three powers (`boss-powers`): two from the start, the third when it enrages at
   `*boss-enrage-at*` (half) health (`active-powers`). `make-boss`, from a `spawn boss` in a
@@ -1073,8 +1086,10 @@ real time instead.
   blow after the shield, `absorb-ward`). One of each kind; a second keeps the stronger and the longer.
   `update-statuses` runs in each actor's tick and allocates nothing. A creature takes on its
   status's element colour (`status-tint`, `*element-tints*`). Elements: frost also chills
-  (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` halves an element for a
-  class (acolyte fire, skeleton frost, gale wraith shock). Drain heals its caster `*drain-share*` of
+  (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` takes a share of an element off
+  a class (acolyte fire, skeleton frost, gale wraith shock: half; the rime hag's frost: three
+  quarters), and a negative share adds to it (the rime hag takes half again of fire); the forge
+  says who takes less and who more (`resisters`). Drain heals its caster `*drain-share*` of
   what it took. Statuses are `saved-slots` (`(:status ...)` in a save). A status keeps its
   `duration`, the time it was put on or last renewed for (`afflict` resets it when a re-cast lasts
   longer than what is left), for the HUD's time bar. Damage over time shows on a creature as a
@@ -1107,6 +1122,34 @@ real time instead.
   so a free one returned gives none. Rifts and gusts carry no damage and still strike; nothing that
   isn't a projectile is taken. The starting Absorb Projectiles takes 35-50 (50%, power 9, so 9 stamina a
   second): a cinder gives 5 mana for 5 stamina, a grave skull 6.
+- `src/skins.lisp` (after magic.lisp): **skins**, something laid over the level's floors and walls in
+  play for a while and drawn on them in world space: so far the rime hag's rime. A kind
+  (`define-skin-kind`, `*skin-kinds*`: an image of the hexmaw pool, its rim and inner colours, the
+  footing it is underfoot or NIL for a look only; `:ice` is the ice caves' `ice` texture, footing
+  `:ice`) is drawn by a `skin-floor` of its own (`add-skin-floors`, `setup-scene`), every skin of it in
+  one call from a stream buffer, `*max-skin-cells*` (2400) a kind: quads a hair off each cell,
+  the texture laid at 64 texels a metre on the face, texels under half alpha see-through, lit as the
+  face, the skin's circle its edge in jagged steps of whole texels frosted in the rim colours, and on
+  walls a jagged top. A `skin` (class; `lay-skin`) covers the nav grid's 0.5 m cells within its
+  radius whose floors are within `*patch-climb*` (1 m) of the floor it was laid on and under no
+  liquid (`skin-floor-cells`: steps, pits and ledges, never lava or water), and the walls round it
+  (`skin-wall-cells`: square boxes' upright faces turned to its middle, in clear sight from a metre
+  over it, from its floor up `*skin-wall-height*` (2.5 m), 0.5 m cells on the world's grid; a
+  wedge's diagonal stays bare). Its entry in `*skin-patches*` (greybox.lisp: centre, the radius drawn
+  now, the cell grid and each cell's floor height, footing, wall cells, kind) is what `skin-footing`
+  and the drawer read; set a cell's height to lay it. It lasts `time`, shrinking away over its last
+  second (`skin-tick`), and is saved (`:skins`, `skin-record` and `restore-skin`, its cells worked out
+  again) and cleared by a reset (`clear-skins`). An element striking near one reaches it through
+  `strike-skins` (from `burst-spell`, `place-nova`, a projectile's and a beam's impact, at least
+  `*impact-skin-reach*` round, and the firestorm's pulses), which asks `skin-struck` of each: fire
+  melts a `frost-patch` (`lay-frost-patch`: a radius, a time, renewing its caster's within
+  `*patch-renew-reach*`; with no floor within `*patch-reach*` under the point, only the walls ice
+  over), which as it forms freezes (`freeze`: the `:freeze` status, ice blue, thinking stopped, a
+  creature's `thaw` guarding it for `*freeze-guard*` after; a boss half as long) the creatures on it
+  its caster is `hostile-p` to, never its side. The frost patch and its ice floor were ported from
+  the spell-secondary branch. A spell's own landing hook is `spell-impact` (spells.lisp), on its name.
+  To look at one: `(game (lay-frost-patch (vec -8.5 0.5 2.0) (scene +main+) :radius 3.5 :time 60.0))`
+  on the debug level, by the hall's west wall.
 - `src/forge.lisp`: the spellforge, used at an altar (`add-altar`, pickups.lisp; `near-altar-p`, within
   `*altar-reach*` across and `*altar-height*` of its top; the HUD's prompt line says "[E] Spellforge"
   there, the altar being one of E's targets, `interact-target`, townsfolk.lisp). E opens it (`open-forge`, `*game-state*`
@@ -1165,7 +1208,7 @@ real time instead.
   `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
   every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
   its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `elite-riftwalker`
-  in riftwalker.lisp, `*elite-kinds*`):
+  in riftwalker.lisp, `elite-hag` in hag.lisp, `*elite-kinds*`):
   `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
   `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
   kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
@@ -1220,6 +1263,10 @@ real time instead.
   boss full of potions. Mana doesn't regenerate, so they are its only source in a run. A new kind of pickup is a
   method on `collect-pickup`. To try one: `(setf (health *player*) 50)` and
   stand on `(location (aref *pickups* 0))`.
+  **An elemental foe teaches its element**: a creature whose `taught-effect` (creature.lisp; the rime
+  hag's `:frost`) the player doesn't know, killed by them on a generated or the test level, drops that
+  glyph where it fell (`drop-taught-glyph`, from `creature-died`), once a level per glyph; the run's
+  placed glyphs stay as they are, and a save keeps the drop (`:drops`).
   **Glyphs** are pickup kinds with `:teaches` (`:glyph-frost` .. `:glyph-area`): touched, they teach
   the player an effect for the forge (`learn-glyph`: `known-effects`, a gold flash, a message), and
   one already known stays. Each level of a run has `*glyphs-per-level*` (2), the run's six shuffled by
@@ -1546,7 +1593,7 @@ real time instead.
   (distance / min)^-`*sound-rolloff*` (0.75: 4.5 dB a doubling; at 1 and 2 m, as it was, sounds
   were barely heard across a room), no quieter past `*sound-max-distance*` (50 m). A big sound keeps
   full volume further out (`*clip-min-distances*`: the tornado and the ogre's leap roar 12 m, its
-  landing and the firestorm's roar 10, the ogre's footsteps 8). `tune-voice` sets them on a voice as it connects;
+  landing and the firestorm's roar 10, the ogre's footsteps and the blizzard 8). `tune-voice` sets them on a voice as it connects;
   `(game (retune-sounds))` re-tunes those connected already after a change.
   A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
   a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
@@ -2306,6 +2353,89 @@ were stranded, and no other creature.
 an imp-sized body fits; `(show-nav :radius 1.0 :height 2.5)` shows a bigger one, and
 `(hide-nav)` or a reset clears them; `(show-nav :radius 1.0 :height 2.7)` shows the ogre's. `tools/hd status` shows each creature's `brain`
 (`idle`, `walking` or `attacking`).
+
+### The rime hag
+
+The `rime-hag` (hag.lisp) is the frost caster, an `ability-user` that hunts from range: 1.7 m, 30
+health, pain 30, a slow hobble (`walk-speed` 1.0, `chase-speed` 1.7), `keep-away` 3.5 m. She is
+the first caster that punishes a player who closes in. Her `hunt-from-range` takes, in order:
+
+- **Frost nova** (`:frost-nova`, `hag-nova`, cooldown `*hag-nova-cooldown*`, 9 s): her target
+  within `*hag-nova-trigger*` (3 m), on a floor and not swimming. The tell is a 1.0 s gather
+  (frames `(0.3 0.7 0.25 0.4)`, hit frame 2, the nova strip's hunched frames): `hag-gather` plays,
+  a cold lamp swells (`*hag-gather-light*`), frost motes are drawn in toward her chest
+  (`update-gather`), and her pain chance is `*hag-gather-pain-bonus*` (20) higher. Then a frost nova
+  bursts round her chest, reaching 5 m (the spell's `:nova-radius`): 8 to 12 frost, a 35% slow for
+  3 s and knockback 4, striking her allies too, and a rime patch round her feet. A run (7 m/s) from
+  3 m is out of reach in the gather; a walk barely. A raised shield takes the damage but not the
+  slow. A bash in the gather interrupts it three times in four (`winding-up-p`: her 30, the gather's 20
+  and the bash's 50, at most `*max-pain-chance*`), and the earthshake's flinch always does.
+  The spear's 3.5 m reaches her from outside the trigger.
+- Backing off a target within `keep-away` (`retreat`).
+- **Rime field** (`:rime-field`, cooldown `*rime-field-cooldown*`, 12 s, from `*rime-field-first*`;
+  `(level-ability-p :rime-field)`, so from level 2 of a run): a slower ball (`rime-field`, 9 m/s,
+  2 to 4 frost over 1.5 m) at the floor `*rime-field-lead-time*` of its movement ahead of the target,
+  at most `*rime-field-lead*` (1.5 m; `rime-field-point`), within `*rime-field-range*` (11 m). Where it
+  bursts, on a body (round its feet), the floor or a wall, `spell-impact` lays a rime patch
+  (`lay-frost-patch`, skins.lisp): `*rime-patch-radius*` (3.5 m) for `*rime-patch-time*` (10 s),
+  freezing her foes on it for `*rime-freeze*` (1 s), and icing the walls round it. Absorb takes it
+  only if the player walks into it.
+- **Rime shard** (`:shard`, `rime-shard`): a frost projectile, 10 m/s, 4 to 6 and frost's chill, on
+  the player's frost look. Absorb swallows it for mana, once: then she **shuns** the player
+  (`shuns-target-p`).
+
+Before all but the nova, from level 3 of a run (`(level-ability-p :blizzard)`), with her target 3 m
+off or more: the **blizzard** (`:blizzard`, cooldown `*blizzard-cooldown*`, 18 s from its cast, from
+`*blizzard-first*`; the cast strip's 0.75 s to the raise). A storm round her, `*blizzard-radius*`
+(6 m; a boss's 1.25 times it) across and `*blizzard-height*` (3.5 m) up, for `*blizzard-time*` (10 s),
+rising over `*blizzard-form*` and dying down over `*blizzard-fade*`, at once when she dies. It is a
+**wind** (`*winds*`, spells.lisp: `wind-turn`, `wind-slow`, `add-wind`; the tornado is one too): every
+projectile but hers flying through it turns `*blizzard-turn*` (1.2 rad/s) about +Y the way it blows,
+times its own `gust` (`*wind-gust*`, 0.6 to 1.4, drawn from `*roll-random*` as it leaves and saved, so
+a long shot can't be aimed off for it; `blow-projectile`). So the Fire Bolt at her middle strikes from
+3 m every time, from 4 m about four in ten, and from 5 m or the rim never (measured, 10 shots each).
+Her foes inside it walk at `*blizzard-slow*` (0.6) of their speed (`slow-factor`, magic.lisp, takes the
+winds with the statuses, down to `*slowest*`), and the player hears the tornado's rushing wind,
+quieter (`*wind-volume*`). While it blows and her nova is ready, a target it holds back draws her in
+(`chase`) instead of a shard or a retreat: close in to hit her and she walks in with the nova. A beam
+isn't bent, nor a touch or a blow. Each cast turns it clockwise or counterclockwise at random
+(`blizzard-sense`, saved), its flakes and the way it bends projectiles alike. All that shows of it is
+snow, with no edge drawn: `*blizzard-flakes*` (1200) a second, each `*blizzard-flake-life*`, so up to
+about a thousand at once in the open (590 by the debug hall's north wall, where rock takes many) in the spark pool, flake
+particles (`blow-snow`; sparks.lisp) that its wind carries round her (`wind-carry`, an exact turn
+about her feet at `*blizzard-flake-speed*` times each flake's own, `*blizzard-flake-speeds*`), drawn
+as white and pale-blue streaks as long as their speed (the `:snow` ramp). They start thinning out
+toward its edge (`*blizzard-flake-spread*`) and out to `*blizzard-flake-reach*` (1.2) times it, so it
+fades off rather than ends. Its sound is its own loop, `blizzard`, a roar of driving snow and icy
+wind (`*blizzard-volume*`, full within 8 m, `*clip-min-distances*`). Her
+`blizzard` (seconds left) is saved; the rest comes back from it (`light-blizzard`). To see one on the debug level: `(setf (blizzard hag) 9.0)`.
+
+**Shunning Absorb.** A lone caster throwing nothing but projectiles was a mana spring for Absorb, as
+the acolyte was. So for `*hag-wary-time*` (10 s, her `wary`, saved) after Absorb swallows one of her
+shards (`note-absorbed`), or while she sees it held at her (`absorbing-at-p`, acolyte.lisp, renewing
+it), she throws no shards: one in its wind-up when Absorb comes up is kept (`release-attack`). She
+throws the rime field where she may, dropped `*rime-field-short*` (1.3 m) short of the target toward
+her (`rime-field-short-point`), so it bursts on the floor and not on them, and otherwise comes in to
+`*hag-wary-reach*` (2.5 m), inside the nova's trigger, and waits there facing them for the nova. So a
+player holding Absorb at her gets one shard's mana (about 4.5) and her nova, and one timing Absorb to
+her shards' flight one shard every 10 s.
+
+Her rime is ice underfoot for the player and every creature but her (`slips-on-rime-p`), so imps
+skid on it and are knocked into walls; fire melts it (`strike-skins`: the Fire Bolt's impact, a
+fire burst or nova, the firestorm). No rime lies on lava, water or shallows; a swimming target gets
+shards only. She takes a quarter of frost and half again of fire (`*element-resistances*`), and
+killed by a player who doesn't know frost she drops its glyph (`taught-effect`). Her pools: levels 1
+and 2 of a run (`("rime-hag" 1)`), and the ice caves name her on any level (`frost-shrine`'s
+`acolyte|!rime-hag`, a `spawn !rime-hag south 30` in `ice-cavern` and `ice-grotto`). Kill gold 9. As
+an elite, `elite-hag`; as a boss, the Winter Crone (scale 1.7, traits `(:caster)`), her nova
+`hag-nova-boss`, 7 m. Over run seeds 1 to 60 (`tools/levelcheck --runs 1-60`), 1.85 a level on the
+first level (52 of 60 had one), 2.3 to 2.7 on the second, 9 on the 60 last levels (the ice caves'),
+8 in the 60 settlements (which take the second level's pool), none stranded. A rime patch filling
+half the view cost about 0.9 ms of GPU a frame in the test hall (2.5 to 2.9 ms without, vsync off,
+world frozen), her nova over it 0.6 more. On the debug level she stands by the north wall between the necromancer and the
+wraith (`(setf *debug-level-monsters* (list 'rime-hag))`). To try her:
+`(setf (alert hag) 30.0)` with the player 8 m off for shards, within 3 m for the nova, and
+`(setf (getf (cooldowns hag) :rime-field) 0.0)` for a field.
 
 ## Generating art
 
@@ -3173,6 +3303,27 @@ python3 tools/slice_frames.py art/spells/rift-flash.png data/sprites/rift --pixe
 python3 -c "from PIL import Image; p='data/sprites/rift/burst.png'; im=Image.open(p).convert('RGBA'); im.putdata([(0,0,0,0) if a and r<90 and g>170 and b>170 and abs(g-b)<50 else (r,g,b,a) for r,g,b,a in im.getdata()]); im.save(p)"
 ```
 
+The rime hag (a stooped crone in shaggy grey fur stiff with hoarfrost, a mantle of icicles, blue-white
+skin, a staff of black ice with a frozen lantern in her left hand) is `art/hag/turnaround-1.png`
+(`art/prompts/hag-turnaround.txt`, the imp's, acolyte's, necromancer's and wraith's sheets and
+`art/style/anchor.png` as style references), sliced at `--height 109` for her 1.7 m, staff included.
+No view needed mirroring. Her walk (a hobble on the staff), cast (the staff swung forward, a shard at
+its lantern: the shard and the rime field), nova (the gather, hunched with rime crawling up her: what
+the tell holds, deeper, the burst, recover) and flinch are made with `EXTRA_REFS=art/style/anchor.png
+tools/gen_monster_views.sh hag <anim> ...` (`EXTRA_REFS` attaches images after the others), from her
+standing cells (`tools/cut_stands.py art/hag/turnaround-1.png art/hag`); the death (`hag-death.txt`,
+front only) cracks the icicle mantle and sinks her into a heap of frosted fur, the staff across the
+floor: the corpse. Every strip takes `--cold`, which keeps her icicles and skin blue: the usual
+keying's despill turned them grey. A few back-quarter frames have the staff in the other hand.
+
+```bash
+python3 tools/slice_turnaround.py art/hag/turnaround-1.png data/sprites/hag/turnaround --height 109 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk:20 cast:20 nova:20 hurt:10; do python3 tools/slice_views.py data/sprites/hag $a $(for v in $V; do echo art/hag/${a%:*}-$v.png; done) --height 872 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --cold; done
+python3 tools/slice_frames.py art/hag/death.png data/sprites/hag --pixel 4.32 --anchor bottom --filter box --cold death:8
+for s in turnaround walk cast nova hurt death; do tools/restyle.py --house data/sprites/hag/$s.png; done
+```
+
 The status auras (magic.lisp) are 8-frame loops in `data/sprites/status/`, each a generated 2 × 4
 sheet on magenta of small separate pieces over a body-sized area, the middle left open. Shock came
 first (`art/prompts/status-shock.txt`, the bolt sheet and the torch's flame sheet as references);
@@ -3415,9 +3566,11 @@ has its guaranteed spawns and two `m spawn ... 30`, or `m` and `M` where it has 
 spawn; a generated level rolls them, the test level leaves them out, and the gallery and
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight` (on a generated level only
 those of it in the level's pool, and a block with a named spawn the pool has none of is left out,
-`block-fits-pool-p`: so the high quarter's `spawn ogre` rooms wait for a level with the ogre), or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith and
-riftwalker 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+`block-fits-pool-p`: so the high quarter's `spawn ogre` rooms wait for a level with the ogre; a
+choice marked `!`, `acolyte|!rime-hag`, is the block's own, placed whatever the pool and never
+barring the block, `native-kind-p`: the ice caves' rime hags), or `any`
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith,
+riftwalker and rime hag 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state; one float draw whatever the weights, so changing a pool's weights never changes the layout,
@@ -3775,8 +3928,9 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's, riftwalker's and
   acolyte's abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
   `:abilities` names the abilities a level's monsters may use beyond their first (`level-ability-p`):
-  none on level 1, the acolyte's `:firestorm` and the pack imp's `:flank-leap` (see "The imp") on
-  levels 2 and 3 (and so in the settlement).
+  none on level 1, the acolyte's `:firestorm`, the pack imp's `:flank-leap` (see "The imp") and the
+  rime hag's `:rime-field` on levels 2 and 3 (and so in the settlement), and her `:blizzard` on
+  level 3 (and in the settlement when it is at depth 3).
 
 Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
 budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,

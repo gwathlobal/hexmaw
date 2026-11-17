@@ -50,6 +50,9 @@ otherwise a burst where the spell strikes.")
 
    (strike-animation :initarg :strike-animation :initform NIL :reader strike-animation
                      :documentation "What bursts up out of a :CIRCLE's floor when it strikes, played many times over it.")
+   (nova-radius :initarg :nova-radius :initform NIL :reader nova-radius-of
+                :documentation "Metres a :NOVA delivery reaches round its caster, besides its effects'
+area; NIL for *NOVA-RADIUS* (SPELL-NOVA-RADIUS).")
    (overcharge :initarg :overcharge :initform 0.0 :accessor spell-overcharge
                :documentation "How far the cast that made this copy was overcharged, 0 to 1 (OVERCHARGED-SPELL).")
    (effects :initarg :effects :reader spell-effects)))
@@ -293,9 +296,12 @@ a touch, a weapon's enchantment."))
   (v- (if (typep target 'player) (feet target) (location target)) (strike-origin source)))
 
 (defun burst-spell (spell point caster)
-  "Burst SPELL's effects that have an area over every body within it of POINT."
+  "Burst SPELL's effects that have an area over every body within it of POINT, and over the skins
+it reaches (STRIKE-SKINS, skins.lisp: fire melts rime)."
   (dolist (effect (spell-effects spell))
     (when (and (target-effect-p effect) (< 0 (effect-area effect)))
+      (when (effect-element effect)
+        (strike-skins (effect-element effect) point (effect-area effect) caster))
       (let ((burst (make-instance 'strike :spell spell :caster caster :origin point)))
         (dolist (body (burst-victims point (effect-area effect) caster))
           (apply-effect (effect-kind effect) effect body burst))))))
@@ -330,6 +336,9 @@ burst over every body within it of point AT."
 (defparameter *free-projectile-lifetime* 1.0
   "Seconds the player's free spells fly before they vanish: 20 m at the bolt's speed.")
 (defparameter *projectile-size* 0.18 "Collision diameter in metres; the sprite can be bigger.")
+(defparameter *wind-gust* '(0.6 1.4)
+  "Least and most of a wind's turn that one projectile takes (its GUST, drawn from *ROLL-RANDOM*).")
+
 (defparameter *impact-pullback* 0.25
   "Metres back along the flight path where the impact plays, so it isn't buried in the wall.")
 
@@ -349,6 +358,9 @@ for the player.")
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
 and bursts only on entering one from outside.")
+   (gust :initform 1.0 :accessor gust
+         :documentation "How hard the winds it flies through bend it, from *WIND-GUST*, drawn as it
+leaves (BLOW-PROJECTILE): so a long shot through a wind can't be aimed off to allow for it.")
    (evade-asked :initform NIL :accessor evade-asked
                 :documentation "The creature last asked whether it evades this (the player's)
 projectile about to reach it, so each is asked once.")
@@ -364,7 +376,11 @@ projectile about to reach it, so each is asked once.")
     gust (:cast :gust-cast)
     rift-pull (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
     rift-swap (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
-    rift-push (:cast :rift-cast :flight :rift-flight :impact :rift-impact))
+    rift-push (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rime-shard (:flight :shard-flight :impact :shard-impact)
+    rime-field (:flight :shard-flight :impact :rime-form)
+    hag-nova (:impact :frost-nova)
+    hag-nova-boss (:impact :frost-nova))
   "Each spell's clips (sound.lisp) by event: :CAST where a creature lets it go, :FLIGHT its
 projectile's loop, :IMPACT its burst, :CIRCLE a circle's loop through its wind-up and :STRIKE
 its strike, and the acolyte's firestorm :IGNITE as it comes down and :STORM while it burns. The player's own casts sound from the hands (player.lisp).")
@@ -398,7 +414,9 @@ its strike, and the acolyte's firestorm :IGNITE as it comes down and :STORM whil
                                                         (hunt-target caster)))
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
-    (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T))
+    (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T)
+          (gust projectile) (let ((range *wind-gust*))
+                              (+ (first range) (random (float (- (second range) (first range)) 0f0) *roll-random*))))
     (nv* (projectile-velocity projectile) (float (projectile-speed spell) 0f0))
     (enter projectile container)
     (attach-glow projectile (light-color spell) (light-radius spell))
@@ -515,7 +533,7 @@ WATER it hisses out; QUIET, it makes no sound (a held beam's, which has its own)
                                                                 (max 1 (round (* k (second m)))))
                                                e))))))))
     (dolist (slot '(title projectile-speed projectile-animation impact-animation light-color light-radius
-                    homing lifetime))
+                    homing lifetime nova-radius))
       (setf (slot-value copy slot) (slot-value spell slot)))
     (setf (slot-value copy 'pain-bonus) pain-bonus)
     copy))
@@ -581,6 +599,54 @@ keeping its speed."
                         (vy v) (* speed (+ (* c uy) (* s wy)))
                         (vz v) (* speed (+ (* c uz) (* s wz))))))))))))
 
+;;; Winds: what blows across a projectile in flight and holds back what walks in it, the tornado
+;;; (vortex.lisp) and the rime hag's blizzard (hag.lisp). Each is in *WINDS* (sparks.lisp) while it
+;;; blows, and answers WIND-TURN and WIND-SLOW, and WIND-CARRY for the snow it blows round. A wind
+;;; turns a flight about +Y, the way it blows round, so a projectile is bent the further it flies
+;;; through it: one from close in strikes, one from across it goes wide.
+
+(defparameter *wind-volume* 0.6
+  "How loud the rushing wind the player hears in a wind that holds them back (a blizzard), against a
+tornado's hold.")
+
+(defgeneric wind-turn (wind projectile)
+  (:documentation "Radians a second WIND turns PROJECTILE's flight about +Y, from +X toward +Z (its
+way round); 0 where it doesn't reach it.")
+  (:method (wind projectile) (declare (ignore wind projectile)) 0.0))
+
+(defgeneric wind-slow (wind actor)
+  (:documentation "The fraction of its speed WIND leaves ACTOR (the player or a creature); 1 where
+it doesn't reach it.")
+  (:method (wind actor) (declare (ignore wind actor)) 1.0))
+
+(defun add-wind (wind)
+  (unless (find wind *winds*) (vector-push-extend wind *winds*)))
+
+(defun remove-wind (wind)
+  (let ((at (position wind *winds*)))
+    (when at
+      (replace *winds* *winds* :start1 at :start2 (1+ at))
+      (decf (fill-pointer *winds*)))))
+
+(defun wind-slow-factor (actor)
+  "The fraction of its speed the winds leave ACTOR."
+  (let ((k 1.0))
+    (loop for wind across *winds* do (setf k (* k (wind-slow wind actor))))
+    k))
+
+(defun blow-projectile (projectile dt)
+  "Turn PROJECTILE's flight by the winds it is in, for DT seconds."
+  (when (< 0 (fill-pointer *winds*))
+    (let ((turn 0.0))
+      (loop for wind across *winds* do (incf turn (wind-turn wind projectile)))
+      (unless (= turn 0.0)
+        (let* ((a (* turn (gust projectile) dt))
+               (c (cos a)) (s (sin a))
+               (v (projectile-velocity projectile))
+               (x (vx v)) (z (vz v)))
+          (setf (vx v) (- (* c x) (* s z))
+                (vz v) (+ (* s x) (* c z))))))))
+
 (defparameter *evade-look-ahead* 0.2
   "Seconds of flight ahead of the player's projectile that a creature sees it coming (EVADE-PROJECTILE).")
 
@@ -621,6 +687,26 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
   (:documentation "TARGET swallows PROJECTILE."))
 
 ;; After FX-SPRITE's tick, which animates and ages it.
+(defgeneric spell-impact (name spell at caster container victim)
+  (:documentation "What the spell named NAME (a symbol of *SPELLS*; a forged spell's name is a
+string) does where its projectile struck, AT, besides its effects: VICTIM is the body it struck,
+or NIL for a wall, floor or liquid (the rime field lays its patch, hag.lisp).")
+  (:method (name spell at caster container victim)
+    (declare (ignore name spell at caster container victim))
+    NIL))
+
+(defparameter *impact-skin-reach* 1.0
+  "Metres round where a projectile strikes that its element reaches the skins (STRIKE-SKINS), at
+least: so the plain Fire Bolt melts rime.")
+
+(defun projectile-landed (projectile at victim)
+  "PROJECTILE struck at AT (VICTIM, or NIL): its element on the skins there, and its spell's own hook."
+  (let* ((spell (spell projectile))
+         (element (spell-element spell)))
+    (when element
+      (strike-skins element at (max *impact-skin-reach* (spell-burst-radius spell)) (caster projectile)))
+    (spell-impact (spell-name spell) spell at (caster projectile) (container projectile) victim)))
+
 (define-handler (spell-projectile tick :after) (dt)
   (unless (frozen-p)
     (let* ((loc (location spell-projectile))
@@ -630,6 +716,7 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
                           (and (not (eq (caster spell-projectile) *player*)) *player*))))
           (when (and target (not (eq target (caster spell-projectile))) (target-live-p target))
             (steer spell-projectile (float dt 0f0) target))))
+      (blow-projectile spell-projectile (float dt 0f0))
       (when (and *player* (eq (caster spell-projectile) *player*))
         (look-ahead spell-projectile r))
       (nv+* loc (projectile-velocity spell-projectile) dt)
@@ -654,10 +741,12 @@ to get out of the way (the riftwalker's blink, riftwalker.lisp). Asked once per 
                    (apply-effect (effect-kind effect) effect victim spell-projectile)))
                (let ((at (impact-point spell-projectile)))
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
+                 (projectile-landed spell-projectile at victim)
                  (impact spell-projectile :at at)))
               ((or entered (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)))
                (let ((at (impact-point spell-projectile)))
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
+                 (projectile-landed spell-projectile at NIL)
                  (impact spell-projectile :at at
                                           :water (and entered (liquid-property (liquid-kind entered) :swim)))))
               ((< (projectile-lifetime spell-projectile) (age spell-projectile))
@@ -880,7 +969,18 @@ void main(){
 ;;; and behind it fire leaves a scorch and frost a rime for *NOVA-TRAIL-TIME*. Each element throws
 ;;; its own particles (sparks.lisp).
 
-(defparameter *nova-radius* 5.0"Metres a nova reaches round its caster, besides its effects' area.")
+(defparameter *nova-radius* 5.0 "Metres a nova reaches round its caster, besides its effects' area,
+unless the spell says otherwise (SPELL-NOVA-RADIUS).")
+
+(defun spell-nova-radius (spell)
+  "Metres SPELL's nova reaches round its caster, besides its effects' area."
+  (or (nova-radius-of spell) *nova-radius*))
+
+(defun spell-element (spell)
+  "The element of SPELL's first striking damage effect, or NIL."
+  (loop for effect in (spell-effects spell)
+        when (and (target-effect-p effect) (eq :damage (effect-kind effect)) (effect-element effect))
+          return (effect-element effect)))
 (defparameter *nova-grow-time* 0.4 "Seconds a nova takes to grow to its reach.")
 (defparameter *nova-start-radius* 0.7 "Metres a nova's sphere starts at.")
 (defparameter *nova-trail-time* 1.2 "Seconds a nova's scorch or rime lies after it has grown.")
@@ -1105,7 +1205,7 @@ void main(){
 
 (defun place-nova (spell origin container caster)
   "Burst SPELL round ORIGIN for CASTER: its sphere grows from there and strikes what it reaches."
-  (let* ((reach (+ *nova-radius* (spell-burst-radius spell)))
+  (let* ((reach (+ (spell-nova-radius spell) (spell-burst-radius spell)))
          (victims (sort (mapcar (lambda (body) (list body (nova-distance origin body)))
                                 (burst-victims origin reach caster))
                         #'< :key #'second))
@@ -1115,6 +1215,9 @@ void main(){
                                           :floor-y (or floor (- (vy origin) 1.0))
                                           :animation (find-fx-animation 'ogre-dust))))
     (enter nova container)
+    (let ((element (spell-element spell)))
+      (when element
+        (strike-skins element origin reach caster)))
     (play-sound (spell-sound spell :impact) origin)
     (when (eq caster *player*)
       (kick-camera *nova-camera-shake*))
@@ -1146,7 +1249,7 @@ void main(){
          (source (make-instance 'strike :spell spell :caster (caster nova) :origin origin)))
     (overcharge-breaks-guard spell body origin)
     (dolist (effect (spell-effects spell))
-      (when (and (target-effect-p effect) (<= distance (+ *nova-radius* (effect-area effect) 0.05)))
+      (when (and (target-effect-p effect) (<= distance (+ (spell-nova-radius spell) (effect-area effect) 0.05)))
         (apply-effect (effect-kind effect) effect body source)))
     (push (cons body (age nova)) (nova-struck nova))
     (let ((chest (vec (vx (body-feet body)) (+ (vy (body-feet body)) (* 0.55 (body-height body))) (vz (body-feet body)))))
@@ -1573,6 +1676,9 @@ stopped. QUIET, it makes no sound."
            (unless quiet (play-sound :shield-deflect end)))
           (T
            (strike-with-spell spell victim origin caster end)))
+    (let ((element (spell-element spell)))
+      (when element
+        (strike-skins element end *impact-skin-reach* caster)))
     (play-impact spell end container :quiet quiet)
     end))
 

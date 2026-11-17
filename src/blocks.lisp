@@ -471,7 +471,7 @@ CONTAINER (or its batch, while a level is built), and add its solid to *SOLIDS*.
       (corner-cut (< 0 (vx d)) (< 0 (vz d))))))
 
 (defparameter *spawn-pool* '(("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1)
-                             ("gale-wraith" 1) ("riftwalker" 1))
+                             ("gale-wraith" 1) ("riftwalker" 1) ("rime-hag" 1))
   "What a block's spawn_any picks from, each monster with its weight. A level of the run sets
 its own (*RUN-LEVELS*' :POOL). On a generated level it limits named spawns too: a choice keeps
 only the monsters in it, and a block with a named spawn it has none of isn't used
@@ -529,6 +529,15 @@ so a seed builds the same level whatever the condition."
   "True if KIND, a spawn's kind, is one of *SPAWN-POOL*'s."
   (find kind *spawn-pool* :key #'first :test #'string-equal))
 
+(defun native-kind-p (kind)
+  "True if KIND, one choice of a named spawn, is marked \"!kind\": placed even on a level whose
+pool hasn't the kind, the block being its home (the ice caves' rime hags, hag.lisp)."
+  (and (< 1 (length kind)) (char= #\! (char kind 0))))
+
+(defun spawn-kind-name (kind)
+  "KIND, one choice of a named spawn, without its native mark."
+  (if (native-kind-p kind) (subseq kind 1) kind))
+
 (defun named-spawn-p (kind)
   "True if a spawn of KIND names its monsters, \"a\" or \"a|b\", rather than drawing from the
 pool (\"any\", \"any-a|b\") or being the boss."
@@ -542,7 +551,8 @@ quarter's rooms, which spawn ogres, wait for a level whose pool has the ogre)."
   (every (lambda (spawn)
            (let ((kind (getf spawn :kind)))
              (or (not (named-spawn-p kind))
-                 (some #'pooled-kind-p (uiop:split-string kind :separator "|")))))
+                 (some (lambda (k) (or (native-kind-p k) (pooled-kind-p k)))
+                       (uiop:split-string kind :separator "|")))))
          (getf (find-block name) :spawns)))
 
 (defun spawn-choice (kind)
@@ -556,9 +566,10 @@ the hall's knight|...|ogre is no ogre where the pool has none."
                            (remove-if (lambda (choice) (member (first choice) left-out :test #'string-equal))
                                       *spawn-pool*)))
                         ((string-equal kind "boss") '(("boss" 1)))
+                        ;; A native choice (\"!kind\") is kept whatever the pool.
                         (T (loop for k in (uiop:split-string kind :separator "|")
-                                 when (or (not (eq *level* :generated)) (pooled-kind-p k))
-                                   collect (list k 1)))))
+                                 when (or (not (eq *level* :generated)) (native-kind-p k) (pooled-kind-p k))
+                                   collect (list (spawn-kind-name k) 1)))))
          ;; One float draw, whatever the weights and even with no choice left: an integer
          ;; RANDOM draws a varying number of times, so changing a pool's weights would change
          ;; the rest of the level.

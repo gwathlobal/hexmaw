@@ -851,13 +851,28 @@ CLASS made with INITARGS. The row, and the text's widget."
 Jersey 15 isn't fixed-width, so a little under.")
 
 (defun resisters (element)
-  "Who takes less of ELEMENT, as a phrase: \"acolytes take half\"."
+  "Who takes less of ELEMENT, and who more, as a phrase: \"acolytes take half\", \"rime hags
+take a quarter; skeleton warriors take half again as much\"."
   (let ((entries (remove element *element-resistances* :key #'second :test-not #'eq)))
-    (when entries
-      (format NIL "~{~a~^ and ~} take ~a"
-              (mapcar (lambda (e) (string-downcase (substitute #\Space #\- (format NIL "~as" (first e))))) entries)
-              (let ((fraction (third (first entries))))
-                (if (= fraction 0.5) "half" (format NIL "~d% less" (round (* 100 fraction)))))))))
+    (flet ((phrase (entries)
+             (when entries
+               (format NIL "~{~a~^ and ~} take ~a"
+                       (mapcar (lambda (e) (string-downcase (substitute #\Space #\- (format NIL "~as" (first e))))) entries)
+                       (let ((fraction (third (first entries))))
+                         (cond ((= fraction 0.5) "half")
+                               ((= fraction 0.75) "a quarter")
+                               ((= fraction -0.5) "half again as much")
+                               ((< fraction 0) (format NIL "~d% more" (round (* -100 fraction))))
+                               (T (format NIL "~d% less" (round (* 100 fraction))))))))))
+      ;; One phrase per fraction, so \"take half\" never covers a class that takes a quarter.
+      (let ((groups ()))
+        (dolist (e entries)
+          (let ((group (assoc (third e) groups)))
+            (if group (push e (cdr group)) (push (list (third e) e) groups))))
+        (let ((phrases (loop for (nil . group) in (sort (nreverse groups) #'> :key #'first)
+                             collect (phrase (reverse group)))))
+          (when phrases
+            (format NIL "~{~a~^; ~}" phrases)))))))
 
 (defun effect-about (effect)
   "What EFFECT, an effect draft, does, in a sentence or two: its kind's rule, its element's quirk

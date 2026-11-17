@@ -106,9 +106,12 @@ grudge. Returns them."
   (setf (fill-pointer *solids*) 0
         (fill-pointer *creatures*) 0
         (fill-pointer *lamps*) 0
+        (fill-pointer *skin-patches*) 0
+        *skins* ()
         (fill-pointer *torch-points*) 0
         (fill-pointer *ember-sources*) 0
         (fill-pointer *vortices*) 0
+        (fill-pointer *winds*) 0
         (fill-pointer *rooms*) 0
         (fill-pointer *portals*) 0
         (fill-pointer *liquids*) 0
@@ -122,7 +125,11 @@ grudge. Returns them."
         (fill-pointer *level-altars*) 0
         *level-doorways* ()
         *arena* NIL
-        *settlement* NIL)
+        *settlement* NIL
+        ;; A nova in flight when the scene was dropped never left it: its sweep would stay painted.
+        *newest-nova* NIL
+        *nova-sweep-radius* 0.0
+        *nova-sweep-trail* 0.0)
   (setf (vx *spawn-point*) 0.0 (vy *spawn-point*) 0.0 (vz *spawn-point*) 5.0))
 
 (defun generate-run-level (container depth seed settings &key settlement (entry (nth (1- depth) (run-levels))))
@@ -269,6 +276,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (debug-spawn (make-instance 'ogre :location (vec 7.5 0 1.5) :facing (- (/ pi 2))) container)
     ;; The hall imp's packmate, beside it (imp.lisp): together they hold their nerve.
     (debug-spawn (make-instance 'imp :location (vec 1.5 0 -3.5) :facing pi) container)
+    ;; A rime hag by the north wall, between the necromancer and the wraith (hag.lisp).
+    (debug-spawn (make-instance 'rime-hag :location (vec 0.5 0 -9) :facing pi) container)
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2
