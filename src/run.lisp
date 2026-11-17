@@ -15,14 +15,14 @@
      :sight 1.0 :hearing 1.0 :alert 1.0 :pause 1.0 :cooldown 1.0)
     (:rooms 19 :exit "descent" :altar-chance 0.4
      :pool (("imp" 3) ("acolyte" 1) ("knight" 1) ("harpy" 1) ("necromancer" 1) ("ogre" 1) ("gale-wraith" 1)
-            ("riftwalker" 1))
+            ("riftwalker" 1) ("arc-votary" 1))
      :loot (:weapons 1 :enchant-chance 0.5 :enchant-cost (2 3) :enchant-effects 1
             :runes 2 :rune-power (16 28) :rune-effects 2 :area-chance 0.3 :authored-chance 0.35)
      :skip-scale 0.75 :elite-chance 0.12 :abilities (:firestorm :flank-leap)
      :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
     (:rooms 22 :exit "arena" :altar-chance 0.4
      :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2)
-            ("riftwalker" 2))
+            ("riftwalker" 2) ("arc-votary" 1))
      :loot (:weapons 2 :enchant-chance 0.8 :enchant-cost (3 6) :enchant-effects 2
             :runes 2 :rune-power (24 40) :rune-effects 3 :area-chance 0.5 :authored-chance 0.5)
      :skip-scale 0.5 :elite-chance 0.2 :abilities (:firestorm :flank-leap)

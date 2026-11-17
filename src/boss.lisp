@@ -24,7 +24,8 @@
     ("necromancer" necromancer-boss necromancer "Archnecromancer" 1.5 (:caster))
     ("ogre" ogre-boss ogre "Ogre Warlord" 1.3 ())
     ("gale-wraith" wraith-boss gale-wraith "Storm Wraith" 1.7 (:flyer :caster))
-    ("riftwalker" riftwalker-boss riftwalker "Rift Lord" 1.6 ()))
+    ("riftwalker" riftwalker-boss riftwalker "Rift Lord" 1.6 ())
+    ("arc-votary" votary-boss arc-votary "Arc Hierophant" 1.6 (:caster)))
   "What a boss can be: the kind as a spawn names it, the boss's class, the class it is an
 empowered form of, its title, how much bigger it is drawn, and its traits, which deny it
 powers. Every kind is as likely.")
