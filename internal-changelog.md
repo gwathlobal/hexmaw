@@ -17,6 +17,7 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   flakes at 12 m/s, a new kind of particle in the spark pool (now 2048 slots) that the winds carry,
   streaking round her and thinning out toward its edge, so no boundary is drawn. Each cast turns it
   clockwise or counterclockwise at random, and projectiles bend with it.
+  Its sound is its own loop, `blizzard` (a roar of driving snow and icy wind), not the tornado's.
 - A level rebuilt while a nova's sweep was showing kept its scorch or rime painted on the new level for
   good (`clear-level` now clears the sweep).
 - **The rime hag shuns Absorb.** For 10 s after Absorb swallows one of her shards, or while she sees

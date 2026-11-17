@@ -52,7 +52,7 @@ so under 1 crowds them to the middle; some start past the edge (*BLIZZARD-FLAKE-
 (defparameter *blizzard-flake-reach* 1.2 "Times its radius that its wind still carries flakes, and that they start within.")
 (defparameter *blizzard-flake-chips* 0.0
   "Share of flakes that are 2 × 2 specks rather than streaks: the pool shades a chip as grit, so they read as dust.")
-(defparameter *blizzard-volume* 0.7 "How loud its roar is at full strength.")
+(defparameter *blizzard-volume* 1.0 "How loud its roar (the `blizzard' loop) is at full strength.")
 (defparameter *hag-gather-pain-bonus* 20 "Percent added to her pain chance while she gathers the nova.")
 (defparameter *hag-gather-light* (vec 0.6 1.3 2.2) "Her lamp's colour at the gather's height.")
 (defparameter *hag-gather-light-radius* 6.0)
@@ -430,7 +430,7 @@ range and sight throw a rime field ahead of it if she may, else a shard; or clos
 
 (defun light-blizzard (hag)
   "Set HAG's blizzard's wind blowing and its roar sounding (again after a load)."
-  (setf (blizzard-sound hag) (start-loop :tornado (blizzard-centre hag) 0.0))
+  (setf (blizzard-sound hag) (start-loop :blizzard (blizzard-centre hag) 0.0))
   (add-wind hag))
 
 (defun douse-blizzard (hag)

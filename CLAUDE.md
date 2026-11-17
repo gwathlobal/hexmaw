@@ -1588,7 +1588,7 @@ real time instead.
   (distance / min)^-`*sound-rolloff*` (0.75: 4.5 dB a doubling; at 1 and 2 m, as it was, sounds
   were barely heard across a room), no quieter past `*sound-max-distance*` (50 m). A big sound keeps
   full volume further out (`*clip-min-distances*`: the tornado and the ogre's leap roar 12 m, its
-  landing and the firestorm's roar 10, the ogre's footsteps 8). `tune-voice` sets them on a voice as it connects;
+  landing and the firestorm's roar 10, the ogre's footsteps and the blizzard 8). `tune-voice` sets them on a voice as it connects;
   `(game (retune-sounds))` re-tunes those connected already after a change.
   A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
   a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
@@ -2373,7 +2373,8 @@ particles (`blow-snow`; sparks.lisp) that its wind carries round her (`wind-carr
 about her feet at `*blizzard-flake-speed*` times each flake's own, `*blizzard-flake-speeds*`), drawn
 as white and pale-blue streaks as long as their speed (the `:snow` ramp). They start thinning out
 toward its edge (`*blizzard-flake-spread*`) and out to `*blizzard-flake-reach*` (1.2) times it, so it
-fades off rather than ends. Its sound is the tornado's roar, softer (`*blizzard-volume*`). Her
+fades off rather than ends. Its sound is its own loop, `blizzard`, a roar of driving snow and icy
+wind (`*blizzard-volume*`, full within 8 m, `*clip-min-distances*`). Her
 `blizzard` (seconds left) is saved; the rest comes back from it (`light-blizzard`). To see one on the debug level: `(setf (blizzard hag) 9.0)`.
 
 **Shunning Absorb.** A lone caster throwing nothing but projectiles was a mana spring for Absorb, as

@@ -15,6 +15,7 @@
 (:name "blade-hit-flesh" :files ("blade-hit-flesh.ogg") :seconds (0.48) :space T :loop NIL)
 (:name "blink-in" :files ("blink-in.ogg") :seconds (1.2) :space T :loop NIL)
 (:name "blink-out" :files ("blink-out.ogg") :seconds (1.2) :space T :loop NIL)
+(:name "blizzard" :files ("blizzard.ogg") :seconds (4.0) :space T :loop T)
 (:name "body-impact" :files ("body-impact.ogg") :seconds (0.6) :space NIL :loop NIL)
 (:name "bolt-cast" :files ("bolt-cast.ogg") :seconds (0.883) :space NIL :loop NIL)
 (:name "bolt-flight" :files ("bolt-flight.ogg") :seconds (2.25) :space T :loop T)

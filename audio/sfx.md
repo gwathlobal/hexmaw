@@ -168,6 +168,7 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | rime-form | 1 | P | 0.8 | 3 | `impact` spells.lisp, `rime-field`, where it lays its rime patch |
 | shard-flight | 1 | P L | 1.5 | 3 | `launch-projectile` spells.lisp, `rime-shard` and `rime-field` |
 | shard-impact | 1 | P | 0.6 | 3 | `impact` spells.lisp, `rime-shard` |
+| blizzard | 1 | P L | 4 | 2 | `light-blizzard` hag.lisp, the rime hag's blizzard, until it dies down; volume by `blizzard-strength` |
 | step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |
 | step-heavy | 2 | P | 0.6 | 3 | step: ogre |

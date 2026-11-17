@@ -119,3 +119,4 @@ frost-nova 1
 rime-form 1
 shard-flight 1
 shard-impact 1
+blizzard 2 even

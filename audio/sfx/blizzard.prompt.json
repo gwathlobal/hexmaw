@@ -1,0 +1,19 @@
+{
+  "prompt": "A howling blizzard whirling close by in a stone hall: a constant hiss and roar of driving snow and icy wind, fine ice crystals rattling and sweeping past, a cold whistling howl over it. Airier than a tornado, no rumbling debris. The same intensity throughout, no gusts, no build-up, no fade. Retro 1990s first-person fantasy game sound effect, one even texture that loops seamlessly, no music.",
+  "prompt_file": "audio/prompts/sfx-blizzard.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": true,
+  "duration_seconds": 4.0,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794943446,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    4.0,
+    4.0
+  ]
+}
