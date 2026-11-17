@@ -3140,6 +3140,36 @@ python3 tools/slice_frames.py art/spells/rift-flash.png data/sprites/rift --pixe
 python3 -c "from PIL import Image; p='data/sprites/rift/burst.png'; im=Image.open(p).convert('RGBA'); im.putdata([(0,0,0,0) if a and r<90 and g>170 and b>170 and abs(g-b)<50 else (r,g,b,a) for r,g,b,a in im.getdata()]); im.save(p)"
 ```
 
+The bloodroot (a heart-bulb of knotted root and wet flesh, split by a thorn-ringed maw, ember-red
+veins, roots splaying into the floor) is one view: near-symmetric, so its atlas has `:views
+(:front)` (`bloodroot-atlas`) and it looks the same from every side. Its design is
+`art/bloodroot/design-2.png` (`art/prompts/bloodroot-design.txt`, the anchor, the imp's and the
+necromancer's turnarounds as references), and every sheet is drawn from it
+(`art/bloodroot/gen-strips.sh`: `bloodroot-<sheet>.txt` plus `bloodroot-common.txt` and
+`style-common.txt`, the design and the anchor as references). The idle sheet opens with a copy of
+the bulb at rest, which is its turnaround frame; the attacks sheet opens with one too, sliced as a
+throwaway `scale` animation. `--pixel` is that frame's height in the sheet over 90 (1.4 m at 64 px a
+metre). The snare's roots and the seed take their own scale; the seed, an effect, keeps its outline:
+
+```bash
+D=data/sprites/bloodroot
+python3 tools/slice_frames.py art/bloodroot/idle-1.png $D --pixel 4.87 --anchor bottom --filter box turnaround:1 idle:4 hurt:2
+python3 tools/slice_frames.py art/bloodroot/attacks-2.png $D --pixel 3.6 --anchor bottom --filter box scale:1 spit:4 bloom:4 && rm $D/scale.*
+python3 tools/slice_frames.py art/bloodroot/death-1.png $D --pixel 5.07 --anchor bottom --filter box death:8
+python3 tools/slice_frames.py art/bloodroot/snare-1.png $D --pixel 9 --anchor bottom --filter box snare:6
+tools/restyle.py --house $D/{turnaround,idle,hurt,spit,bloom,death,snare}.png
+python3 tools/slice_frames.py art/spells/blood-seed-2.png $D --pixel 5 --filter box seed-flight:4 seed-burst:5
+tools/restyle.py --palette art/style/palette.txt $D/seed-flight.png $D/seed-burst.png
+```
+
+Its roots are a texture with see-through gaps, `data/textures/bloodroot.png` (`art/prompts/texture-bloodroot.txt`:
+roots on magenta), which `make_texture.py --key` keys to alpha, the magenta under a root's edge filled
+with a dark tone of it:
+
+```bash
+tools/make_texture.py art/textures/bloodroot-1.png data/textures/bloodroot --metres 2 --palette art/style/palette.txt --key
+```
+
 The status auras (magic.lisp) are 8-frame loops in `data/sprites/status/`, each a generated 2 × 4
 sheet on magenta of small separate pieces over a body-sized area, the middle left open. Shock came
 first (`art/prompts/status-shock.txt`, the bolt sheet and the torch's flame sheet as references);
