@@ -2203,8 +2203,17 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
   allies too (`water-strike`, an arc over the surface to each). A beam that stops on a water surface
   (`water-beyond-p`) strikes the water there, so a swimmer can't duck under it.
 
-Its light is a held `beam` (`votary-light`), let go to fade when it neither charges nor holds
-(`rest-votary`); the beam's burst plays where it stops, but not within `*votary-burst-clearance*`
+At rest it crackles, as the shock nova's bolts do (`votary-sparks`, `idle-arcs`, every
+`*votary-arc-time*` while the player is within `*votary-arc-reach*`): an arc between its hands
+(`*votary-hand-arc-chance*`, along its facing, not while it charges, whose crackle is there) and arcs
+between the tips of its crown's five rods (`*votary-crown-arc-chance*` each pair, in the plane its
+sprite is drawn in, the head 8 cm toward its face, so they sit on the rods from any side), sized by
+its `sprite-height` so the Hierophant's are bigger. Its lamp, at its hands
+(`*votary-hand-height*` of its height, where the beam starts), is lit while it lives: at rest at
+`*votary-idle-glow*` of its strength in its lightning's yellow (`*votary-light-color*`), so its idle
+lightning lights it and what is round it, rising through the charge to full while it holds; dead, it
+goes out (`douse-votary`). Its beam's light is a held `beam` (`votary-light`), let go to fade when it
+neither charges nor holds (`rest-votary`); the beam's burst plays where it stops, but not within `*votary-burst-clearance*`
 (2.5 m) of the player's eye (on them, or on the water they swim in), where sparks stand in for it.
 A hold costs about 0.4 ms of GPU a frame (the ribbon and its lamp, seen from 7 m). Over run seeds 1 to
 60 there were 3.3 votaries and 0.6 elite votaries a level from depth 2 on, none on level 1, and the

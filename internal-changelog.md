@@ -25,7 +25,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   Its first design, a beige linen habit, was the walls' own colour with no hard outline; it is now a
   storm-teal robe over black with brass fittings, blazing sewn-shut eyes and a crown of lightning rods,
   2 m with the crown, its beam from its hands (`*votary-hand-height*`). `tools/yellow_sparks.py` turns
-  the salmon-pink fringe the slicers leave on yellow lightning back to yellow.
+  the salmon-pink fringe the slicers leave on yellow lightning back to yellow. At rest it crackles as
+  the shock nova does, arcs between its hands and between its crown's rods (`idle-arcs`), and its lamp
+  stays lit low in the lightning's yellow while it lives, so the lightning lights it and the floor round
+  it.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
   a body question 76 against 120 on seed 11, a 10 m `clear-path-p` 23 µs against 30. Same levels and

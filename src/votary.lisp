@@ -12,7 +12,7 @@
 ;;; strikes harder and runs through it to every body in the water within *ARC-WATER-REACH*.
 
 (defparameter *votary-height* 2.0 "Votary height in metres, its crown of rods to its feet.")
-(defparameter *votary-hand-height* 0.58
+(defparameter *votary-hand-height* 0.6
   "Share of its height its hands are held at, where the beam and the crackle start.")
 (defparameter *votary-range* 11.0 "Metres from its target it starts a beam from (*BEAM-RANGE* is 12).")
 (defparameter *votary-charge* 0.9 "Seconds of the charge's tell before the beam.")
@@ -28,8 +28,15 @@
 (defparameter *arc-block-stamina* 12.0
   "Stamina a pulse costs the player's raised shield: 48 a second against a regen of 8, so a full bar
 gives out before the beam does.")
-(defparameter *votary-light-color* (vec 1.3 1.4 1.6) "Its lamp's colour at full strength, near white.")
+(defparameter *votary-light-color* (vec 1.5 1.35 0.7)
+  "Its lamp's colour at full strength: its lightning's yellow-white.")
 (defparameter *votary-light-radius* 5.0)
+(defparameter *votary-idle-glow* 0.35
+  "How bright its lamp is at rest, against the beam's: its idle lightning lights it and what is near.")
+(defparameter *votary-arc-time* 0.08 "Seconds between redrawings of its idle lightning.")
+(defparameter *votary-hand-arc-chance* 0.75 "Chance each redrawing puts an arc between its hands at rest.")
+(defparameter *votary-crown-arc-chance* 0.45 "Chance each redrawing puts an arc between two of its crown's rods.")
+(defparameter *votary-arc-reach* 25.0 "Metres from the player within which it draws its idle lightning.")
 (defparameter *votary-ranging-strength* 0.25 "How bright the ranging line is against the beam.")
 (defparameter *votary-crackle-time* 0.06 "Seconds between redrawings of the crackle between its hands.")
 (defparameter *votary-burst-clearance* 2.5
@@ -94,6 +101,7 @@ gives out before the beam does.")
    (lost-timer :initform 0.0 :accessor lost-timer
                :documentation "Seconds of the beam's pulses that struck nothing hostile, in a row.")
    (crackle-timer :initform 0.0 :accessor crackle-timer)
+   (arc-timer :initform 0.0 :accessor arc-timer :documentation "Seconds to its idle lightning's next redrawing.")
    (aim-timer :initform 0.0 :accessor aim-timer)
    (beam-light :initform NIL :accessor beam-light :documentation "Its BEAM while it charges or holds.")
    (lamp :initform NIL :accessor votary-lamp)
@@ -347,21 +355,85 @@ water. Returns where the beam stops."
   "Let go of the beam: on to the recover frame."
   (setf (attack-time votary) (+ (attack-hit-time votary) (third (attack-frame-times votary)))))
 
-(defun rest-votary (votary)
-  "Neither charging nor holding: the light fades, the lamp and the loop stop."
+(defun release-beam (votary)
+  "Let go of the beam's light, which fades, and its loop."
   (let ((beam (beam-light votary)))
     (when beam
       (setf (beam-held beam) NIL
             (beam-light votary) NIL)))
+  (setf (beam-sound votary) (stop-loop (beam-sound votary))))
+
+(defun douse-votary (votary)
+  "Put VOTARY's light out for good: dead, or gone from the scene."
+  (release-beam votary)
   (when (votary-lamp votary)
     (remove-lamp (votary-lamp votary))
-    (setf (votary-lamp votary) NIL))
-  (setf (beam-sound votary) (stop-loop (beam-sound votary))))
+    (setf (votary-lamp votary) NIL)))
+
+(defun rest-votary (votary)
+  "Neither charging nor holding: the beam's light fades and its loop stops; its idle lightning keeps
+the lamp lit low."
+  (release-beam votary)
+  (votary-aim votary)
+  (votary-glow votary *votary-idle-glow*))
+
+(defun idle-arcs (votary)
+  "Redraw VOTARY's idle lightning: an arc between its hands (not while it charges, whose own crackle
+is there) and arcs between the tips of its crown's rods, as the shock nova's bolts. The hands' arc
+follows its facing; the crown's lies in the plane its sprite is drawn in, so it sits on the rods from
+any side."
+  (let* ((loc (location votary))
+         (h (sprite-height votary))
+         (s (/ h *votary-height*))
+         (yaw (facing votary))
+         (camera (camera (scene +main+)))
+         (eye (location camera))
+         (fx (- (vx loc) (vx eye)))
+         (fz (- (vz loc) (vz eye)))
+         (fl (max 1f-4 (sqrt (+ (* fx fx) (* fz fz)))))
+         ;; The view's right, across the sprite.
+         (rx (/ (- fz) fl))
+         (rz (/ fx fl)))
+    (unless (or (charging-arc-p votary) (holding-beam-p votary))
+      (when (< (random 1.0) *votary-hand-arc-chance*)
+        (let* ((y (+ (vy loc) (* *votary-hand-height* h)))
+               (out (* 0.1 s))
+               (cx (+ (vx loc) (* out (sin yaw))))
+               (cz (- (vz loc) (* out (cos yaw))))
+               (spread (* 0.22 s))
+               (sx (* spread (cos yaw)))
+               (sz (* spread (sin yaw))))
+          (bolt-line (- cx sx) y (- cz sz) (+ cx sx) y (+ cz sz) 3
+                     :roughness 0.25 :branch 0.3 :white 0.3 :life (* 1.3 *votary-arc-time*)))))
+    ;; Five rod tips in a fan, 0.18 m either side of the head, 0.97 to 0.91 of its height; the head
+    ;; leans 8 cm toward its face, which shows only from the side.
+    (flet ((tip (i)
+             (let ((a (- (* 0.5 i) 1.0)))
+               (values (+ (vx loc) (* rx 0.18 s a) (* 0.08 s (sin yaw)))
+                       (+ (vy loc) (* h (- 0.97 (* 0.06 a a))))
+                       (- (+ (vz loc) (* rz 0.18 s a)) (* 0.08 s (cos yaw)))))))
+      (dotimes (i 4)
+        (when (< (random 1.0) *votary-crown-arc-chance*)
+          (multiple-value-bind (x0 y0 z0) (tip i)
+            (multiple-value-bind (x1 y1 z1) (tip (1+ i))
+              (bolt-line x0 y0 z0 x1 y1 z1 2 :roughness 0.3 :branch 0.2 :white 0.3
+                                             :life (* 1.3 *votary-arc-time*)))))))))
+
+(defun votary-sparks (votary dt)
+  "VOTARY's idle lightning, redrawn every *VOTARY-ARC-TIME* while the player is near enough to see it."
+  (when (<= (decf (arc-timer votary) dt) 0.0)
+    (setf (arc-timer votary) *votary-arc-time*)
+    (let ((player *player*))
+      (when player
+        (let ((a (location votary))
+              (b (location player)))
+          (when (< (+ (expt (- (vx a) (vx b)) 2) (expt (- (vz a) (vz b)) 2)) (expt *votary-arc-reach* 2))
+            (idle-arcs votary)))))))
 
 (defun charge-votary (votary dt)
   (let ((k (min 1.0 (/ (attack-time votary) (attack-hit-time votary)))))
     (votary-aim votary)
-    (votary-glow votary (* 0.8 k))
+    (votary-glow votary (+ *votary-idle-glow* (* (- 0.8 *votary-idle-glow*) k)))
     (when (<= (decf (crackle-timer votary) dt) 0.0)
       (setf (crackle-timer votary) *votary-crackle-time*)
       (crackle votary k))
@@ -396,12 +468,15 @@ water. Returns where the beam stops."
 (define-handler (arc-votary tick :after) (dt)
   (unless (frozen-p)
     (run-cooldowns arc-votary dt)
-    (cond ((charging-arc-p arc-votary) (charge-votary arc-votary dt))
-          ((holding-beam-p arc-votary) (hold-votary-beam arc-votary dt))
-          (T (rest-votary arc-votary)))))
+    (cond ((dead arc-votary) (douse-votary arc-votary))
+          (T
+           (cond ((charging-arc-p arc-votary) (charge-votary arc-votary dt))
+                 ((holding-beam-p arc-votary) (hold-votary-beam arc-votary dt))
+                 (T (rest-votary arc-votary)))
+           (votary-sparks arc-votary dt)))))
 
 (defmethod leave :after ((votary arc-votary) container)
-  (rest-votary votary))
+  (douse-votary votary))
 
 ;;; As a boss (boss.lisp): the Arc Hierophant, its beam stronger and its jump longer. Its powers'
 ;;; attacks show its cast. And as an elite (elite.lisp).
