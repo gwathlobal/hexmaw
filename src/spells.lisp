@@ -255,6 +255,10 @@ horizontal part counts."))
 delivered by SOURCE.")
   (:method (source) NIL))
 
+(defparameter *unblockable-spells* '(bloom)
+  "Spells whose bursts and novas no raised shield stops: they come up from the floor (a
+bloodroot's Bloom, bloodroot.lisp).")
+
 (defmethod apply-effect ((kind (eql :knockback)) effect (target creature) source)
   ;; A flash, so a push alone reads as a hit; it carries the creature (SHOVED-P) until it slows.
   (setf (flash target) (max (flash target) *flash-time*))
@@ -288,6 +292,9 @@ a touch, a weapon's enchantment."))
 
 (defmethod effect-origin ((source strike))
   (strike-origin source))
+
+(defmethod effect-unblockable-p ((source strike))
+  (and (member (spell-name (spell source)) *unblockable-spells*) T))
 
 (defmethod effect-direction ((source strike) target)
   (v- (if (typep target 'player) (feet target) (location target)) (strike-origin source)))
@@ -385,9 +392,10 @@ its strike, and the acolyte's firestorm :IGNITE as it comes down and :STORM whil
 (defmethod effect-direction ((source spell-projectile) target)
   (projectile-velocity source))
 
-(defun launch-projectile (spell origin direction container caster)
-  "Fire SPELL from ORIGIN along unit vector DIRECTION, on behalf of CASTER."
-  (let ((projectile (make-instance 'spell-projectile
+(defun launch-projectile (spell origin direction container caster &key (class 'spell-projectile))
+  "Fire SPELL from ORIGIN along unit vector DIRECTION, on behalf of CASTER, as a projectile of
+CLASS (a LOBBED-PROJECTILE arcs, bloodroot.lisp)."
+  (let ((projectile (make-instance class
                                   :spell spell :caster caster :launcher caster :location (vcopy origin)
                                   :homing (if (eq (spell-delivery spell) :seeker)
                                               *seeker-turn*

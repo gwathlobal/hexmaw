@@ -330,6 +330,7 @@ whatever it was doing. True if it went."
 
 (defun callable-p (riftwalker c)
   (and (not (eq c riftwalker))
+       (not (rooted-p c))
        (not (dead c))
        (not (dormant-p c))
        (not (typep c 'boss))

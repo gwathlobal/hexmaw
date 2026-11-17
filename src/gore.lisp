@@ -430,6 +430,28 @@ the drop isn't needed."
             (aref ages oldest) 0f0)
       (decf (splat-count pool)))))
 
+;;; Other code reads splats only through these, so the pool's layout stays this file's: a
+;;; bloodroot's roots drink them (bloodroot.lisp).
+
+(defun splat-lying-p (pool i)
+  "True if slot I of POOL is a splat, not dissolving."
+  (= 2 (aref (pool-state pool) i)))
+
+(defun splat-place (pool i)
+  "Slot I's splat: values its X Y Z, the face it lies on (0 to 5 for +X -X +Y -Y +Z -Z, 2 a
+floor) and its blood, an area in art pixels squared."
+  (let ((p (pool-positions pool)) (b (* 3 i)))
+    (values (aref p b) (aref p (+ b 1)) (aref p (+ b 2))
+            (logand 7 (aref (pool-side pool) i))
+            (aref (pool-velocities pool) b))))
+
+(defun dissolve-splat (pool i)
+  "Start slot I's splat dissolving now, as the oldest does when there are too many."
+  (when (splat-lying-p pool i)
+    (setf (aref (pool-state pool) i) 3
+          (aref (pool-ages pool) i) 0f0)
+    (decf (splat-count pool))))
+
 (defun lay-splat (pool i face)
   "Turn drop I of POOL, which has landed on FACE (0 to 5 for +X -X +Y -Y +Z -Z), into a
 splat, or into a bigger one already there. A fast drop smears into a streak on the floor,

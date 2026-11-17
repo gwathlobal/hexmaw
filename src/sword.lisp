@@ -187,6 +187,8 @@ the sword's shield.")
 
 (defun player-bash (player)
   (unless (bash-time player)
+    ;; Driven down at the feet, it tears roots that hold them (bloodroot.lisp).
+    (break-snare player)
     (play-sound :shield-bash)
     (setf (bash-time player) 0.0
           (bash-pending player) T)))

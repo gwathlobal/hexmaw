@@ -218,16 +218,44 @@ CASTER and those CASTER spares."
   (afflict target :ward (roll (effect-magnitude effect)) (max 1 (effect-duration effect)))
   (flash-resource target :ward))
 
+(defgeneric drain-share (caster)
+  (:documentation "Fraction of the health a drain CASTER casts takes that it gets back.")
+  (:method (caster) *drain-share*))
+
+(defgeneric heal-caster (caster amount)
+  (:documentation "CASTER gets AMOUNT health back from a drain (a bloodroot's roots, its Bloom).")
+  (:method (caster amount) NIL))
+
+(defmethod heal-caster ((caster creature) amount)
+  (when (and (not (dead caster)) (< 0 amount))
+    (setf (health caster) (min (max-health caster) (+ (health caster) amount)))))
+
+(defun drained-gain (caster lost)
+  "The health CASTER gets back from a drain that took LOST."
+  (round (* (drain-share caster) (max 0 lost))))
+
+;; What the caster gets is a share of what the target lost: a dormant boss struck, or a blow
+;; at a corpse, gives nothing.
 (defmethod apply-effect ((kind (eql :drain)) effect (target creature) source)
   (unless (dead target)
     (let* ((before (max 0 (health target)))
-           (amount (roll (effect-magnitude effect))))
+           (amount (resisted target :drain (roll (effect-magnitude effect))))
+           (caster (caster source)))
       (hurt target amount :from (effect-origin source) :pain-bonus (spell-pain-bonus (spell source))
-                          :by (caster source))
-      (let ((gain (round (* *drain-share* (min amount before))))
-            (caster (caster source)))
-        (when (and (typep caster 'player) (< 0 gain))
-          (restore-resource caster :health gain))))))
+                          :by caster)
+      (let ((gain (drained-gain caster (- before (max 0 (health target))))))
+        (cond ((and (typep caster 'player) (< 0 gain))
+               (restore-resource caster :health gain))
+              (caster (heal-caster caster gain)))))))
+
+;; A creature's drain (a bloodroot's Bloom) on the player: what the shield, a ward or a
+;; blessing takes off isn't drained.
+(defmethod apply-effect ((kind (eql :drain)) effect (target player) source)
+  (let ((before (health target))
+        (caster (caster source)))
+    (hurt-player target (roll (effect-magnitude effect)) (effect-origin source)
+                 :shove NIL :unblockable (effect-unblockable-p source) :by caster)
+    (heal-caster caster (drained-gain caster (- before (max 0 (health target)))))))
 
 ;;; Absorb: held on themself (HOLD-CHANNEL, player.lisp), it swallows the hostile projectiles that
 ;;; carry damage and reach the player from within *BLOCK-ARC* of their view, as a raised shield
