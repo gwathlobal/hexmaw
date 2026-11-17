@@ -742,8 +742,8 @@ real time instead.
   (512) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
   allocated a frame. They draw no art: each is a quad in the view plane on which the shader lays
   whole texels of the 64-a-metre grid, at least a pixel each (`view_rows`), in three colours of the
-  house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`, and the novas' `:frost`,
-  `:shock`, `:drain`), fullbright,
+  house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`, the novas' `:frost`,
+  `:shock`, `:drain`, and a wall struck's `:wood` and `:snow`), fullbright,
   unfogged and opaque. A **spark** is a streak, its tail as far behind its head as it moves across
   the view in `*spark-streak-time*`, 1 to `*spark-max-streak*` (9) texels, the first third its
   ramp's hotter colour; it falls under `*spark-gravity*`, bounces off solids (`bounce-spark`, on
@@ -758,8 +758,13 @@ real time instead.
   knight: `block-hit`, so a spell, bash or sweep glancing off, and a sword or spear blow on a
   covered view, `swing-strike`), `strike-sparks` (the spear's counter, `*counter-sparks*`; the
   maul's blow, `*maul-sparks*` 6 to 26 by charge, faster too), `floor-sparks` (the earthshake, in
-  front of the player; the ogre's landing and slam, where its maul comes down) and `kick-grit`,
-  from `kick-dust` (ogre.lisp), `*grit-per-puff*` round every dust puff. Embers rise from
+  front of the player; the ogre's landing and slam, where its maul comes down), `kick-grit`,
+  from `kick-dust` (ogre.lisp), `*grit-per-puff*` round every dust puff, and `wall-sparks`, a
+  melee blow that found no one striking a wall or floor (`wall-strike`, sword.lisp): off the face
+  about its normal, glancing the way the blow came in (`*wall-spark-glance*`), the sparks and grit
+  the surface's share of the weapon's (`*wall-strike-kinds*`: stone sparks and throws dust, ice-rock
+  fewer sparks and frost chips, slick ice and snow only chips and a puff, wood only pale
+  splinters). Embers rise from
   `*ember-sources*` (`add-torch-embers` from `add-torch`, `add-lava-embers` from `add-liquid` for a
   surface that glows, as many as its area, `*lava-ember-area*`; `clear-level` empties them), each on
   its own timer, only within `*ember-reach*` of the player (`send-up-embers`), and only while the
@@ -1651,6 +1656,27 @@ real time instead.
   counter. `blow-reaches-p` is the test every melee blow makes of one creature (reach, arc,
   height, a clear line), `looked-at-creature` the nearest that passes it. The sprite's tick asks
   `weapon-frame` for its strip frame.
+  **A blow that finds no one strikes the wall**: the slash and thrust (`swing-miss`'s default
+  method), the maul when there is no corpse to pulp, the bash (`bash-hit`) and the spear's sweep
+  (`sweep-hit`) call `wall-strike` with their reach. The line goes from the eye through where the
+  weapon's tip is on screen in its hit frame (`weapon-tip-direction`: `*weapon-tips*`, an art pixel
+  of the strip's cell, through the sprite's placement, `*weapon-sprites*`, and the camera's fov), so
+  the sparks start at the tip at any window size: the sword's blade tip low right, the spear's
+  point, the maul head's top, the shield's upper rim, the sweep's spearhead. REACH is how far
+  ahead, so an off-centre line reaches as deep a wall. A re-made strip whose hit frame moves needs
+  its tip measured again (the topmost opaque pixel of that frame; the sweep's rightmost).
+  `wall-strike-point` (gore.lisp) finds where the line first meets a solid, floors and ceilings
+  too, and nothing past a liquid: 0.05 m steps of `solid-at`, bisected to the face, the face's
+  normal (`strike-normal`; a wedge's diagonal has its own). About 20 µs a blow, and it allocates
+  nothing.
+  The solid's `solid-strike` (its surface's, `*surface-strikes*`) says what it throws
+  (`wall-sparks`, sparks.lisp) and sounds like: `blade-hit-stone` or `maul-hit-stone`,
+  `blade-hit-wood`, `footstep-snow`; the bash plays `shield-block`, the haft `bone-hit`. Each
+  blow's counts, speed, sound and feel are `*wall-strikes*`, kept below a hit's: the maul kicks
+  the view 0.2 to 0.4 and hit-stops 0.02 to 0.04 s by charge (`(:charge least full)`,
+  `wall-strike-value`), the bash shoves the player back 1.5 m/s; the sword, the spear and the haft
+  have none (the spear's jolt frame pulled its point away from the sparks). `tools/spark_shots.sh`'s
+  `wall-*` shots stage each at its hit frame.
 - `src/spear.lisp`: the spear, held in both hands, so no shield. Against the sword it reaches further
   (`*spear-reach*` 3.5 m against 2) in a narrower arc (`*spear-arc*` 0.3 rad), staggers more
   (`*spear-pain-bonus*` 35) and is slower: the thrust plays `*thrust-frame-times*` (0.68 s
@@ -1812,7 +1838,10 @@ Units are metres, +Y is up, and the player spawns at `*spawn-point*` facing −Z
 (north). Collision is axis-aligned boxes in `*solids*`, resolved one axis at a time, and
 wedges: a solid with a 7th value is a box with one vertical corner cut away along the
 diagonal between the corners beside it (`make-solid`'s `cut`: 1 north-east, 2 north-west,
-3 south-west, 4 south-east; `corner-cut`), a 45° wall when the box is square. Every
+3 south-west, 4 south-east; `corner-cut`), a 45° wall when the box is square. Its 8th
+value is its footing (`src/footing.lisp`) and its 9th its strike kind (`surface-strike`, from
+`*surface-strikes*`: `:wood`, `:ice-rock`, `:ice`, `:snow`; none is stone, `solid-strike`),
+what a melee blow on it throws; a 0 stands in for a value before one given. Every
 question about solids goes through greybox.lisp: `solid-overlapping` (an upright box),
 `solid-at` (a point, gore.lisp), `solid-covers-p` (heights over a point); all of them
 apply the diagonal (`%wedge-depth`). Moving into a diagonal stops flush against it
@@ -1820,8 +1849,12 @@ apply the diagonal (`%wedge-depth`). Moving into a diagonal stops flush against 
 the player's `move-flat`, `move-creature`), so walking straight at a 45° wall slides along
 it as in Doom. Once a level is built, `index-solids` files every solid under the 4 m
 columns it reaches into, and a question looks only in the columns it touches
-(`do-solids-near`): a body question takes about 0.2 µs and a 10 m `clear-path-p` 0.07 ms on
-seed 11, against 75 µs and 5 ms when they walked all 586 solids with untyped arithmetic.
+(`do-solids-near`): a body question takes about 0.08 µs, a point (`solid-at`) 0.06 µs and a
+10 m `clear-path-p` 0.025 ms on seed 11, against 75 µs and 5 ms when they walked all 586 solids
+with untyped arithmetic. The column arithmetic is typed (`column-index`, the specials read with
+`the single-float`): left generic it took twice as long (0.12 µs a point or body). None of them
+allocates. To measure allocation, run the loop inside `(game ...)`: `sb-ext:get-bytes-consed`
+counts every thread, so measured from the eval thread it adds the frames drawn meanwhile.
 When `*solids*` isn't the vector indexed (the nav grid binds it to the solids near a tile)
 or has grown since (a box added from the REPL), they walk it whole, typed.
 Actors (the player and live creatures, not corpses) are bodies: upright boxes that block

@@ -57,7 +57,10 @@
     (:dust "c3b698" "a08a71" "77613d")    ; Grit, as pale as the ogre's dust.
     (:frost "deebfd" "a9d4fa" "45b1f5")   ; A frost nova's glitter and chips.
     (:shock "f9f9f3" "f8ec3b" "d8aa38")   ; A shock nova's sparks.
-    (:drain "f98497" "f52a5a" "7e2225"))  ; A drain nova's motes.
+    (:drain "f98497" "f52a5a" "7e2225")   ; A drain nova's motes.
+    ;; Grit takes the second and third colours: fresh splinters are paler than the timber.
+    (:wood "e0a16f" "c39e76" "8c6d54")    ; Splinters off a beam or planks.
+    (:snow "f9f9f3" "deebfd" "b5c3cc"))   ; Snow struck loose.
   "Per ramp: its name and three hex colours from the house palette.")
 
 (defun spark-ramp-colors ()
@@ -263,6 +266,35 @@ at the height a wound bleeds, back toward FROM and up."
 
 (defun floor-sparks (x y z &optional (count *floor-sparks*))
   (spray-sparks (vec x (+ y 0.03) z) NIL count :spread 1.2))
+
+(defparameter *wall-strike-kinds*
+  '((:stone :sparks 1.0 :grit 1.0 :grit-ramp :dust)
+    (:ice-rock :sparks 0.6 :grit 1.3 :grit-ramp :frost)
+    (:ice :sparks 0.0 :grit 1.5 :grit-ramp :frost)
+    (:snow :sparks 0.0 :grit 2.0 :grit-ramp :snow)
+    (:wood :sparks 0.0 :grit 2.0 :grit-ramp :wood))
+  "Per strike kind (SOLID-STRIKE, greybox.lisp): how many of a blow's sparks and grit it throws, as
+a share of the weapon's, and the grit's ramp.")
+(defparameter *wall-spark-glance* 0.6 "Share of the aim mirrored off the face that wall sparks go along, beside its normal.")
+(defparameter *wall-spark-lift* 0.25 "Upward lean of wall sparks.")
+
+(defun wall-sparks (x y z nx ny nz dx dy dz strike &key (sparks 8) (grit 4) (speed *spark-speed*) (spread *spark-spread*))
+  "Throw a blow's SPARKS and GRIT off the face with normal NX NY NZ at X Y Z that a blow along DX
+DY DZ struck, as its STRIKE kind throws them (*WALL-STRIKE-KINDS*): about the normal, glancing
+the way the blow came in."
+  (let* ((kind (rest (or (assoc strike *wall-strike-kinds*) (assoc :stone *wall-strike-kinds*))))
+         (into (+ (* dx nx) (* dy ny) (* dz nz)))
+         (g *wall-spark-glance*)
+         ;; The aim mirrored off the face.
+         (rx (- dx (* 2 into nx))) (ry (- dy (* 2 into ny))) (rz (- dz (* 2 into nz)))
+         (at (vec (+ x (* 0.02 nx)) (+ y (* 0.02 ny)) (+ z (* 0.02 nz))))
+         (dir (vec (+ nx (* g rx)) (+ ny (* g ry) *wall-spark-lift*) (+ nz (* g rz))))
+         (n-sparks (round (* sparks (getf kind :sparks))))
+         (n-grit (round (* grit (getf kind :grit)))))
+    (when (< 0 n-sparks)
+      (spray-sparks at dir n-sparks :speed speed :spread spread))
+    (when (< 0 n-grit)
+      (spray-sparks at dir n-grit :kind :grit :ramp (getf kind :grit-ramp) :spread (+ spread 0.3)))))
 
 ;;; Embers rise from torches and lava, each source on its own timer, only near the player.
 

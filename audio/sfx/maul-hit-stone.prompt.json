@@ -1,0 +1,21 @@
+{
+  "prompt": "A heavy iron maul head slamming into a stone wall: one hard, deep crack of stone struck, a short ring of iron, and a patter of chips and grit falling. No flesh, no voice. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-maul-hit-stone.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 0.7,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794888793,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.68,
+    0.68,
+    0.68
+  ]
+}

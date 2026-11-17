@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-152 clips; tier 1: 96 clips, 341 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 489 s, about 4,890 credits for everything.
+155 clips; tier 1: 96 clips, 341 s of takes, tier 2: 33 clips, 82 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 494 s, about 4,940 credits for everything.
 
 ## Player: weapons and shield
 
@@ -48,6 +48,9 @@ First-person, so stereo is fine (`:speech`).
 | maul-crush | 1 | P | 0.8 | 3 | `swing-strike :maul` and `swing-miss :maul` maul.lisp, a kill torn apart or a corpse pulped |
 | maul-guard-break | 1 | P | 0.8 | 3 | `knock-guard-aside` maul.lisp, a full blow on a shield or ward |
 | earthshake | 1 | P | 1.2 | 3 | `earthshake-hit` maul.lisp |
+| blade-hit-stone | 2 | P | 0.5 | 3 | `wall-strike` sword.lisp, a sword slash or spear thrust that finds no one striking stone, rock or ice |
+| maul-hit-stone | 2 | P | 0.7 | 3 | `wall-strike` sword.lisp, a maul blow that finds no one, on stone, rock or ice |
+| blade-hit-wood | 2 | P | 0.5 | 3 | `wall-strike` sword.lisp, a blow that finds no one striking a beam or planks (snow plays `footstep-snow`, a bash on a wall `shield-block`, the haft's sweep `bone-hit`) |
 
 ## Player: spells
 

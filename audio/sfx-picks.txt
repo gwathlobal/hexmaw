@@ -101,6 +101,9 @@ draw-maul 6
 earthshake 6 gain=10
 maul-crush 6
 maul-hit 6
+blade-hit-stone 2 1   # 1 has 3 clipped samples, under the limiter
+maul-hit-stone 1 3
+blade-hit-wood 3
 maul-swing 5
 maul-charge 17
 maul-full 6
