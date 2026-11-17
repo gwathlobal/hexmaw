@@ -2285,7 +2285,8 @@ corner carries its cover, the share of the four cells round it that are rooted, 
 the edge where cover falls short of a hashed threshold in clumps of texels, so it is ragged rather
 than square; each vertex carries when its cell rooted, and the shader spreads it in over
 `*root-grow-in*` and climbs its wall from then on `*root-clock*`. So the cells are written only when a
-carpet changes (`*roots-dirty*`). The texture is `bloodroot-roots` (`data/textures/bloodroot.png`,
+carpet changes (`*roots-dirty*`), 0.2 ms for a full carpet of 1032 cells (each cell's floor is kept,
+`carpet-floors`, and the loops are typed). The texture is `bloodroot-roots` (`data/textures/bloodroot.png`,
 keyed to see-through), lit as floors and walls are. Measured with 1032 cells and their walls
 filling the view, world frozen, vsync off: GPU 3.69 ms a frame against 2.40 without the root floor.
 
