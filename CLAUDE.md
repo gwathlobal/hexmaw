@@ -480,7 +480,7 @@ real time instead.
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
+  knight 8, ogre 9, riftwalker 11, skeleton and arc votary 20, acolyte and harpy 25, imp and wraith 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
   whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`;
@@ -817,10 +817,14 @@ real time instead.
   `*overcharge-pain-bonus*`). **Seeker**: a projectile that picks the live creature nearest the aim
   (`seeker-mark`, within `*seeker-cone*` and `*seeker-range*`, in sight) and turns after it at
   `*seeker-turn*`. **Beam**: no flight; it strikes the first body or wall along the aim within
-  `*beam-range*` (12 m) at once (`beam-end`, `beam-strike`; a covering shield stops it), its light a
+  `*beam-range*` (12 m) at once (`beam-end`, `beam-strike`; a covering shield stops it; for any
+  caster but the player it reaches the player's body too), its light a
   `beam` (a shared ribbon, `*beam-vao*`, staged by `preload-spells`, texel-stepped, added light). The
   player holds a beam (player.lisp): every `*beam-pulse*` a `pulse-spell` with
-  `beam-pulse-share` of its instant effects, for that share of its price. **Nova**: a sphere growing
+  `beam-pulse-share` of its instant effects, for that share of its price; a creature holds one too
+  (the arc votary, votary.lisp), each strike a `beam-pulse` source: on the player, no shove or hit-stop
+  (`effect-shove`), the shield meeting it anyway (`hurt-player`'s `:blockable`) for its own stamina
+  (`effect-block-cost`, `:block-cost`). A beam's `strength` dims its light (a ranging line). **Nova**: a sphere growing
   from the caster's chest out to `*nova-radius*` (5 m) plus its effects' area over `*nova-grow-time*`
   (0.4 s), from `*nova-start-radius*` and slowing as it goes (`spell-nova`, `place-nova`; its camera
   kick `*nova-camera-shake*`). It spares its caster; the bodies it reaches (`burst-victims` at the
@@ -986,8 +990,11 @@ real time instead.
   then 2 on level 3). On the test level it stands by the hall's west wall. To try it:
   `(setf (alert riftwalker) 30.0)` with the player 6 to 16 m off for a pull, and `(cooldowns
   riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
+- `src/votary.lisp` (after riftwalker.lisp): the `arc-votary`, a blind monk that holds a shock beam,
+  its elite (`elite-votary`) and its boss (`votary-boss`, the Arc Hierophant). See "The arc votary"
+  under "Creature movement" below.
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
-  empowered form of one of the eight monsters (`*boss-kinds*`: kind, class such as `imp-boss`
+  empowered form of one of the nine monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
   likely, with three powers (`boss-powers`): two from the start, the third when it enrages at
   `*boss-enrage-at*` (half) health (`active-powers`). `make-boss`, from a `spawn boss` in a
@@ -1069,7 +1076,7 @@ real time instead.
   `update-statuses` runs in each actor's tick and allocates nothing. A creature takes on its
   status's element colour (`status-tint`, `*element-tints*`). Elements: frost also chills
   (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` halves an element for a
-  class (acolyte fire, skeleton frost, gale wraith shock). Drain heals its caster `*drain-share*` of
+  class (acolyte fire, skeleton frost, gale wraith shock; the arc votary takes a quarter of shock, 0.75). Drain heals its caster `*drain-share*` of
   what it took. Statuses are `saved-slots` (`(:status ...)` in a save). A status keeps its
   `duration`, the time it was put on or last renewed for (`afflict` resets it when a re-cast lasts
   longer than what is left), for the HUD's time bar. Damage over time shows on a creature as a
@@ -1160,7 +1167,7 @@ real time instead.
   `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
   every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
   its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `elite-riftwalker`
-  in riftwalker.lisp, `*elite-kinds*`):
+  in riftwalker.lisp, `elite-votary` in votary.lisp, `*elite-kinds*`):
   `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
   `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
   kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
@@ -1630,7 +1637,7 @@ real time instead.
   fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
   asked by `hurt-player`, so it covers creatures' spells too) does `*block-damage-scale*` of
   its damage and shoves `*block-shove-scale*` as far, for `*block-stamina-scale*` stamina a point
-  of the blow's damage; a blow with `:guard-break` (the knight's,
+  of the blow's damage (a beam pulse's own, `*arc-block-stamina*`, see "The arc votary"); a blow with `:guard-break` (the knight's,
   the ogre's slam) also knocks it aside (`break-guard`: down at once, and `guard-broken`
   keeps it down), a blow with more cost than the stamina left goes through in full and knocks
   it aside for at least `*stamina-guard-break*`,
@@ -2079,6 +2086,62 @@ Debug level, then with the player 4 to 10 m from it
 `(let ((a (aref *creatures* 0))) (setf (getf (cooldowns a) :firestorm) 0.0 (swallowed a) 2 (alert a) 30.0))`.
 `(acolyte-storm a)` is the storm, `(burning storm)` how long it has burnt; `(hurt a 1 :force-pain t)`
 breaks it. With slot 2 in hand, `(setf (block-held *player*) t)` holds Absorb.
+
+### The arc votary
+
+The `arc-votary` (votary.lisp) is a caster, an `ability-user` with one ability, `:arc-beam`, whose
+attack is held rather than thrown: the first monster that makes cover, circling and the shield's
+stamina matter more than a sidestep. It backs off within `keep-away` (4 m) and starts a beam with its
+target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0 0.4)` on
+`votary-cast`, hit frame 2:
+
+- **The charge** (`*votary-charge*`, 0.9 s; `charging-arc-p`, so a bash or the earthshake breaks it):
+  an arc crackling between its hands (`crackle`, `bolt-line` from hand to hand every
+  `*votary-crackle-time*`, closer together and fiercer as it grows), a lamp swelling at them
+  (`votary-glow`, `*votary-light-color*`), the `votary-charge` crackle, and a ranging line: its
+  `beam` held faint (`beam-strength`, `*votary-ranging-strength*` with a flicker), aimed every
+  `*votary-aim-time*` at where the beam would stop. It turns at its `turn-speed`, `*votary-turn*`
+  (2.5 rad/s).
+- **The hold** (`holding-beam-p`, up to `*votary-hold*`, 3 s, the release frame held): every
+  `*beam-pulse*` (0.25 s) `votary-pulse` strikes what `beam-end` reaches along `votary-aim` (from
+  its hands, across the way it faces, tipped to its target's chest) with `arc-beam` whole, 3 to 4
+  shock a pulse, about 14 a second, through a `beam-pulse` source (spells.lisp): on the player a
+  flash, no shove or hit-stop, and a raised shield meets it at `*arc-block-stamina*` (12) a pulse,
+  so a full bar gives out about 2.3 s into a hold, and then the pulse goes through and the guard is
+  knocked aside. Absorb does nothing: it isn't a projectile. While it holds, its turn is
+  `*votary-beam-turn*` (1.2 rad/s, `turn-speed :around`), so running round it 4 m off (1.75 rad/s)
+  leaves the beam behind, and its pain chance is `*votary-pain-bonus*` (20) higher. After
+  `*votary-lost-time*` (0.75 s) of pulses striking nothing hostile (behind a pillar, circled), or
+  with its target dead, it lets go (`end-hold`) and recovers.
+- **The jump**: a beam that reaches one of its allies (anything `hostile-p` says it doesn't fight)
+  spares it and jumps from its chest to the nearest hostile body within `chain-reach`
+  (`*arc-chain-reach*` 3.5 m, edge to edge, clear line; `chain-target`), with an arc (`arc-bolt`)
+  and `arc-zap`: monsters crowding the player let it reach round them.
+- **Water** (`in-water-p`: feet in `:water` or `:shallows`, or afloat): a body struck in water takes
+  `*arc-water-scale*` (1.5) times as much (`wet-spell`, a `scaled-spell` made once), and so does
+  every other body in water within `*arc-water-reach*` (6 m) of it, in a clear line, the votary's
+  allies too (`water-strike`, an arc over the surface to each). A beam that stops on a water surface
+  (`water-beyond-p`) strikes the water there, so a swimmer can't duck under it.
+
+Its light is a held `beam` (`votary-light`), let go to fade when it neither charges nor holds
+(`rest-votary`); the beam's burst plays where it stops, but not within `*votary-burst-clearance*`
+(2.5 m) of the player's eye (on them, or on the water they swim in), where sparks stand in for it.
+A hold costs about 0.4 ms of GPU a frame (the ribbon and its lamp, seen from 7 m). Over run seeds 1 to
+60 there were 3.3 votaries and 0.6 elite votaries a level from depth 2 on, none on level 1, and the
+Hierophant was 4 of the 60 bosses. A save keeps `pulse-timer` and `lost-timer`; the light, lamp and loop come back in its tick.
+It resists shock 0.75 and teaches it (`taught-effect`): killed by a player who doesn't
+know shock, it drops the shock glyph. Kill gold 10. It spawns from level 2 of a run on (weight 1 in
+both pools), and the 30% spawn of the `pool`, `cistern`, `canal-end`, `creek-cavern`,
+`creek-spring`, `creek-sink` and `creek-sink-sump` is `arc-votary|acolyte`, so it stands on their
+ledges and banks from level 2 on (an acolyte on level 1). As a boss it is the Arc Hierophant
+(`votary-boss`: `hierophant-beam`, 4 to 6 a pulse, its jump 5 m; a power in play stops its beam).
+On the debug level it stands behind the hall's north-west pillar.
+
+To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list
+'arc-votary 'imp) *revive-time* NIL)`, Debug level, then with the player 5 to 11 m off and in its
+sight `(let ((v (find-if (lambda (c) (typep c 'arc-votary)) *creatures*))) (stop-walking v 0.0)
+(setf (alert v) 30.0))`. The debug level's `pool` (deep water, x -15.5 to -8.5, z -34.5 to -27.5)
+has a ledge to stand it on for the water rule.
 
 ### The necromancer
 
@@ -3140,6 +3203,26 @@ python3 tools/slice_frames.py art/spells/rift-flash.png data/sprites/rift --pixe
 python3 -c "from PIL import Image; p='data/sprites/rift/burst.png'; im=Image.open(p).convert('RGBA'); im.putdata([(0,0,0,0) if a and r<90 and g>170 and b>170 and abs(g-b)<50 else (r,g,b,a) for r,g,b,a in im.getdata()]); im.save(p)"
 ```
 
+The arc votary (a blind monk, its eyes sewn shut, a grimy linen habit stitched through with copper
+wire in spirals, a black lodestone on two chains at its chest, copper wrist bands, bare feet, its
+hands held apart with pale yellow-white sparks between them) is `art/votary/turnaround-1.png`
+(`art/prompts/votary-turnaround.txt`, with `style-common.txt` folded in: `art/style/anchor.png`
+and the imp's, acolyte's, necromancer's and riftwalker's sheets as references), sliced at
+`--height 115` for its 1.8 m; no view needed mirroring. Its walk (slow and measured, the hands held
+apart), cast (four frames: the hands wide with an arc between them; brought together on a blazing
+knot, the charge's held frame; thrust forward, the hold's frame, only a stub of the beam drawn, since
+the game draws the beam; recover) and flinch are made with `tools/gen_monster_views.sh votary <anim>
+...` after `tools/cut_stands.py art/votary/turnaround-1.png art/votary`, and its front-only death
+(`votary-death.txt`) burns along the wire, splits the lodestone and lays it face down. Its strips take
+`--violet`, which keeps the sparks' blends.
+
+```bash
+python3 tools/slice_turnaround.py art/votary/turnaround-1.png data/sprites/votary/turnaround --height 115 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk:20 cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/votary $a $(for v in $V; do echo art/votary/${a%:*}-$v.png; done) --height 920 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
+python3 tools/slice_frames.py art/votary/death.png data/sprites/votary --pixel 4.1 --anchor bottom --filter box --violet death:8
+```
+
 The status auras (magic.lisp) are 8-frame loops in `data/sprites/status/`, each a generated 2 × 4
 sheet on magenta of small separate pieces over a body-sized area, the middle left open. Shock came
 first (`art/prompts/status-shock.txt`, the bolt sheet and the torch's flame sheet as references);
@@ -3383,8 +3466,8 @@ spawn; a generated level rolls them, the test level leaves them out, and the gal
 `check-kit` place them all), and MONSTER may be a choice, `imp|knight` (on a generated level only
 those of it in the level's pool, and a block with a named spawn the pool has none of is left out,
 `block-fits-pool-p`: so the high quarter's `spawn ogre` rooms wait for a level with the ogre), or `any`
-(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith and
-riftwalker 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+(one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith,
+riftwalker and arc votary 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state; one float draw whatever the weights, so changing a pool's weights never changes the layout,
@@ -3731,7 +3814,7 @@ harder going down, by keys in each entry (none are flat stat multipliers):
 
 - built into the level (`level-settings` sets their variables for the generator, so a save keeps
   them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre,
-  wraith or riftwalker on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  wraith, riftwalker or arc votary on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
   which also limits named spawns: a choice keeps the kinds in the pool, and a block naming only kinds
   outside it isn't used (`block-fits-pool-p`; on level 1 the high quarter's rooms, which spawn ogres,
   and so the whole high quarter; the log says which),

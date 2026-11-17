@@ -7,6 +7,22 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The arc votary, a shock monster from level 2 on** (src/votary.lisp). A blind monk that charges
+  for 0.9 s (a crackle between its hands, a swelling lamp, a faint ranging line) and then holds a
+  shock beam up to 3 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 1.2 rad/s: run
+  round it or step behind cover and it lets go after 0.75 s. Each pulse on the player is a blow the
+  shield meets at 12 stamina, with no shove or hit-stop; Absorb does nothing. The beam jumps from an
+  ally it reaches to the nearest hostile body within 3.5 m, and in water strikes 1.5 times as hard and
+  runs to every body in the same water within 6 m. +20 pain chance while it holds; resists shock 0.75;
+  teaches shock (the shared `taught-effect`); kill gold 10. In the pools of run levels 2 and 3 and
+  `*spawn-pool*`, and the 30% spawn of the pool, cistern, canal end and creek blocks is
+  `arc-votary|acolyte`. Boss: the Arc Hierophant (4 to 6 a pulse, a 5 m jump); elite: `elite-votary`.
+  Engine: `beam-end` reaches the player's body for any other caster; a `beam-pulse` strike source,
+  `effect-shove` and `effect-block-cost`, and `hurt-player`'s `:blockable` and `:block-cost`; a beam's
+  `strength`. New boss and pool kinds change which monsters and boss some seeds place, so a save
+  made before starts its level fresh. Sounds: votary-alert, -pain, -death, -charge, -beam-start,
+  -beam (loop), arc-zap. The debug hall has one behind its north-west pillar (index 9).
+
 - **An elite says what its glow means.** While the crosshair is on one (`aimed-elite`, elite.lisp: the
   nearest body the line of sight meets, `ray-body-hit`, within 15 m and no wall before it), a bar half the
   boss's takes the boss bar's place at the top of the screen: its name over it, as the boss's title
