@@ -2196,8 +2196,10 @@ target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 3.0
   with its target dead, it lets go (`end-hold`) and recovers.
 - **The jump**: a beam that reaches one of its allies (anything `hostile-p` says it doesn't fight)
   spares it and jumps from its chest to the nearest hostile body within `chain-reach`
-  (`*arc-chain-reach*` 3.5 m, edge to edge, clear line; `chain-target`), with an arc (`arc-bolt`)
-  and `arc-zap`: monsters crowding the player let it reach round them.
+  (`*arc-chain-reach*` 3.5 m, edge to edge, clear line; `chain-target`), with `arc-zap` and sparks off
+  the ally: monsters crowding the player let it reach round them. The jump (`chain-from`, `chain-to`,
+  set at each pulse) is redrawn with the beam (`chain-bolt`, through `eye-bolt`, which keeps a bolt
+  out of the player's eye as the beam's is kept), so a jump onto the player runs into their view.
 - **Water** (`in-water-p`: feet in `:water` or `:shallows`, or afloat): a body struck in water takes
   `*arc-water-scale*` (1.5) times as much (`wet-spell`, a `scaled-spell` made once), and so does
   every other body in water within `*arc-water-reach*` (6 m) of it, in a clear line, the votary's

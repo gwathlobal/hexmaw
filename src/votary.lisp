@@ -114,7 +114,10 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
    (aim-origin :initform (vec 0 0 0) :reader aim-origin)
    (aim-direction :initform (vec 0 0 -1) :reader aim-direction)
    (bolt-end :initform (vec 0 0 0) :reader bolt-end :documentation "Where the held beam's lightning ends.")
-   (bolt-timer :initform 0.0 :accessor bolt-timer :documentation "Seconds to the held beam's next redrawing.")))
+   (bolt-timer :initform 0.0 :accessor bolt-timer :documentation "Seconds to the held beam's next redrawing.")
+   (chain-from :initform NIL :accessor chain-from
+               :documentation "The ally the beam jumps from at its last pulse, or NIL: its jump is drawn with the beam.")
+   (chain-to :initform NIL :accessor chain-to :documentation "What that jump strikes.")))
 
 (define-creature-sounds arc-votary
   :alert :votary-alert :pain :votary-pain :death :votary-death :windup :votary-charge :step :step-light)
@@ -292,6 +295,8 @@ water. Returns where the beam stops and the body it reached there, or NIL."
   (multiple-value-bind (origin dir) (votary-aim votary)
     (multiple-value-bind (end victim) (beam-end origin dir votary)
       (let ((hit NIL) (wet-at NIL) (wet-body NIL))
+        (setf (chain-from votary) NIL
+              (chain-to votary) NIL)
         (cond ((null victim))
               ((hostile-p votary victim)
                (setf hit T)
@@ -305,8 +310,11 @@ water. Returns where the beam stops and the body it reached there, or NIL."
                    (let ((from (body-chest victim))
                          (to (body-chest next))
                          (wet (in-water-p next)))
-                     (setf hit T)
-                     (arc-bolt from to)
+                     (setf hit T
+                           (chain-from votary) victim
+                           (chain-to votary) next)
+                     ;; Its jump is redrawn with the beam (BEAM-BOLTS); a burst of sparks off the ally.
+                     (spray-sparks from NIL 5 :ramp :shock :speed '(1.0 3.0))
                      (play-sound :arc-zap from)
                      (arc-strike votary next from to :wet wet)
                      (when wet (setf wet-at (body-feet next) wet-body next)))))))
@@ -425,6 +433,36 @@ any more crosses the view), to the bottom of the view where their chest is."
              (+ (vx eye) (* out (/ dx len))) (- (+ (vy eye) (* out (/ dy len))) down) (+ (vz eye) (* out (/ dz len)))
              2 bolt-args))))
 
+(defun eye-bolt (x0 y0 z0 x1 y1 z1 depth &key (roughness 0.2) (width 2.0) (white 0.0) (branch 0.0)
+                                               (drop 0.0) (life 0.05))
+  "A bolt from X0 Y0 Z0 to X1 Y1 Z1 that keeps out of the player's eye: ending within
+*VOTARY-BOLT-CLEARANCE* of it, its jagged part stops that far off, with no forks, and LAST-STRETCH
+carries it on into the bottom of the view."
+  (let* ((eye (location (camera (scene +main+))))
+         (near (sqrt (+ (expt (- x1 (vx eye)) 2) (expt (- y1 (vy eye)) 2) (expt (- z1 (vz eye)) 2))))
+         (close (< near *votary-bolt-clearance*)))
+    (when close
+      (let* ((dx (- x0 x1)) (dy (- y0 y1)) (dz (- z0 z1))
+             (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+             (back (min (* 0.9 len) (- *votary-bolt-clearance* near))))
+        (setf x1 (+ x1 (* back (/ dx len)))
+              y1 (+ y1 (* back (/ dy len)))
+              z1 (+ z1 (* back (/ dz len))))))
+    (bolt-line x0 y0 z0 x1 y1 z1 depth :roughness roughness :width width :white white
+                                       :branch (if close 0.0 branch) :drop drop :life life)
+    (when close
+      (last-stretch x1 y1 z1 :roughness 0.04 :width width :white white :drop drop :life life))))
+
+(defun chain-bolt (votary life)
+  "Redraw the jump of VOTARY's beam from the ally it reached to what it strikes, while both live."
+  (let ((from (chain-from votary))
+        (to (chain-to votary)))
+    (when (and from to (not (dead from)) (target-live-p to))
+      (let ((a (body-chest from))
+            (b (body-chest to)))
+        (eye-bolt (vx a) (vy a) (vz a) (vx b) (vy b) (vz b) 4
+                  :roughness 0.15 :width 3.0 :white 0.6 :branch 0.2 :life life)))))
+
 (defun beam-bolts (votary)
   "Redraw VOTARY's held beam as lightning from its palms to where it ends: a broad bolt with a white
 core and a thinner one forking about it, as the shock nova's are, each lasting two redrawings."
@@ -437,7 +475,8 @@ core and a thinner one forking about it, as the shock nova's are, each lasting t
       (bolt-line x0 y0 z0 x1 y1 z1 5 :roughness (* 1.8 r) :width 1.5 :white 0.2 :branch (* fork 0.35)
                                      :drop 0.15 :life life)
       (when close
-        (last-stretch x1 y1 z1 :roughness 0.04 :width 3.0 :white 0.6 :life life)))))
+        (last-stretch x1 y1 z1 :roughness 0.04 :width 3.0 :white 0.6 :life life))
+      (chain-bolt votary life))))
 
 (defun ranging-bolt (votary k)
   "Redraw the charge's ranging line as faint lightning from the knot between its hands to where the
