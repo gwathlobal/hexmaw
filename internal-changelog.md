@@ -32,7 +32,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   Its held beam is drawn as lightning from its palms to what it strikes, redrawn 25 times a second as
   the shock nova's bolts, not a straight ribbon; struck head-on, the bolt stops 1.5 m short of the eye
   and has no forks. The charge's ranging line is lightning too, faint: one broken thread an art pixel
-  wide that firms as the charge grows. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
+  wide that firms as the charge grows. The lightning ends in the middle of a creature it strikes, where its
+  sprite is, not at the edge of the beam's reach (0.55 m short of an imp), and on the player runs on
+  from 1.5 m off in a short, nearly straight stretch into the bottom of the view. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
   view, and none from behind.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and

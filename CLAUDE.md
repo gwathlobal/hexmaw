@@ -2220,10 +2220,14 @@ lightning lights it and what is round it, rising through the charge to full whil
 goes out (`douse-votary`). The held beam is lightning, not the player's ribbon (`beam-bolts`, every
 `*votary-bolt-time*`): a broad bolt with a white core and a thinner one forking about it, as the shock
 nova's, from its palms where its hold pose draws them (`palm-point`, `*votary-palm-spots*`, as the hand
-arcs' spots) to where the beam stops (`bolt-end`), straying `*votary-bolt-roughness*` of its length. A
-bolt ending at the player's eye stops `*votary-bolt-clearance*` (1.5 m) short of it and has no forks:
-near the camera perspective blew its jitter and forks up across the whole view. The charge's ranging
-line is lightning too, but faint (`ranging-bolt`); both stop short of the eye (`bolt-span`). The beam's
+arcs' spots) to where the beam stops (`bolt-end`), straying `*votary-bolt-roughness*` of its length. On a
+creature it ends in the middle of its body at the height struck (`aim-bolt-end`), where its sprite is
+drawn: the beam touches a body at the edge of its reach, an imp's 0.55 m and an ogre's 1.2 m short of
+the sprite. A bolt ending at the player's eye has no forks and its jagged part stops
+`*votary-bolt-clearance*` (1.5 m) short of it (near the camera perspective blew its jitter and forks
+up across the whole view); a short, nearly straight stretch carries it on into the bottom of their
+view, where their chest is (`last-stretch`, `*votary-bolt-chest*`). The charge's ranging
+line is lightning too, but faint (`ranging-bolt`), and ends the same ways (`bolt-span`). The beam's
 burst plays where it stops, but not within `*votary-burst-clearance*`
 (2.5 m) of the player's eye (on them, or on the water they swim in), where sparks stand in for it.
 A hold cost about 0.4 ms of GPU a frame with its first, straight ribbon (seen from 7 m); its lightning, about 150 bolt segments alive at once, isn't measured. Over run seeds 1 to

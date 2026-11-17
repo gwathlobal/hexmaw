@@ -288,7 +288,7 @@ already struck there, or NIL. True if it struck anything hostile."
 
 (defun votary-pulse (votary)
   "One strike of VOTARY's held beam: what it reaches along its aim, a jump from an ally, and the
-water. Returns where the beam stops."
+water. Returns where the beam stops and the body it reached there, or NIL."
   (multiple-value-bind (origin dir) (votary-aim votary)
     (multiple-value-bind (end victim) (beam-end origin dir votary)
       (let ((hit NIL) (wet-at NIL) (wet-body NIL))
@@ -322,7 +322,17 @@ water. Returns where the beam stops."
                 (and *player* (< (vdistance end (location *player*)) *votary-burst-clearance*)))
             (spray-sparks end NIL 2 :ramp :shock :speed '(0.5 2.0))
             (play-impact (find-spell (votary-beam-spell votary)) end (container votary) :quiet T))
-        end))))
+        (values end victim)))))
+
+(defun aim-bolt-end (votary end victim)
+  "Set where VOTARY's lightning ends: at END, where its beam stopped, or, on a creature, at that
+height in the middle of its body, where its sprite is drawn: the beam touches a body at the edge of
+its reach, an imp's 0.55 m and an ogre's 1.2 m short of the sprite."
+  (let ((e (bolt-end votary)))
+    (if (typep victim 'creature)
+        (let ((loc (location victim)))
+          (setf (vx e) (vx loc) (vy e) (vy end) (vz e) (vz loc)))
+        (v<- e end))))
 
 (defun votary-glow (votary k)
   "VOTARY's lamp at its hands, K of its full strength."
@@ -398,6 +408,23 @@ Y1 Z1, and whether it comes at the camera. One ending at the player's eye stops
                 z1 (+ z1 (* back (/ dz len))))))
       (values x0 y0 z0 x1 y1 z1 close))))
 
+(defparameter *votary-bolt-chest* '(0.6 0.45)
+  "Where a bolt struck at the player's eye runs into their view from *VOTARY-BOLT-CLEARANCE* off:
+(OUT DOWN), metres out along the way to the bolt and down from the eye, below the view's middle, where
+their chest is.")
+
+(defun last-stretch (x1 y1 z1 &rest bolt-args)
+  "Carry a bolt that stopped short of the player's eye, at X1 Y1 Z1, the rest of the way into their
+view: a short stretch, nearly straight (its jitter scales with its length, and so close to the camera
+any more crosses the view), to the bottom of the view where their chest is."
+  (let* ((eye (location (camera (scene +main+))))
+         (dx (- x1 (vx eye))) (dy (- y1 (vy eye))) (dz (- z1 (vz eye)))
+         (len (max 1f-4 (sqrt (+ (* dx dx) (* dy dy) (* dz dz))))))
+    (destructuring-bind (out down) *votary-bolt-chest*
+      (apply #'bolt-line x1 y1 z1
+             (+ (vx eye) (* out (/ dx len))) (- (+ (vy eye) (* out (/ dy len))) down) (+ (vz eye) (* out (/ dz len)))
+             2 bolt-args))))
+
 (defun beam-bolts (votary)
   "Redraw VOTARY's held beam as lightning from its palms to where it ends: a broad bolt with a white
 core and a thinner one forking about it, as the shock nova's are, each lasting two redrawings."
@@ -408,15 +435,21 @@ core and a thinner one forking about it, as the shock nova's are, each lasting t
           (fork (if close 0.0 1.0)))
       (bolt-line x0 y0 z0 x1 y1 z1 6 :roughness r :width 3.0 :white 0.6 :branch (* fork 0.15) :life life)
       (bolt-line x0 y0 z0 x1 y1 z1 5 :roughness (* 1.8 r) :width 1.5 :white 0.2 :branch (* fork 0.35)
-                                     :drop 0.15 :life life))))
+                                     :drop 0.15 :life life)
+      (when close
+        (last-stretch x1 y1 z1 :roughness 0.04 :width 3.0 :white 0.6 :life life)))))
 
 (defun ranging-bolt (votary k)
   "Redraw the charge's ranging line as faint lightning from the knot between its hands to where the
 beam would strike: one thread an art pixel wide, broken up, that firms as K, the charge, grows."
   (when (< (random 1.0) (+ 0.5 (* 0.4 k)))
-    (multiple-value-bind (x0 y0 z0 x1 y1 z1) (bolt-span votary *votary-hand-spots*)
-      (bolt-line x0 y0 z0 x1 y1 z1 5 :roughness (* 0.8 *votary-bolt-roughness*) :width 1.0
-                                     :drop (- 0.6 (* 0.4 k)) :life (* 1.2 *votary-aim-time*)))))
+    (multiple-value-bind (x0 y0 z0 x1 y1 z1 close) (bolt-span votary *votary-hand-spots*)
+      (let ((drop (- 0.6 (* 0.4 k)))
+            (life (* 1.2 *votary-aim-time*)))
+        (bolt-line x0 y0 z0 x1 y1 z1 5 :roughness (* 0.8 *votary-bolt-roughness*) :width 1.0
+                                       :drop drop :life life)
+        (when close
+          (last-stretch x1 y1 z1 :roughness 0.04 :width 1.0 :drop drop :life life))))))
 
 (defun hand-arc (votary spread-scale &rest bolt-args)
   "Draw an arc between VOTARY's hands as its sprite shows them from the camera: in the plane the sprite
@@ -519,7 +552,7 @@ side."
       (crackle votary k))
     (when (<= (decf (aim-timer votary) dt) 0.0)
       (setf (aim-timer votary) *votary-aim-time*)
-      (v<- (bolt-end votary) (beam-end (aim-origin votary) (aim-direction votary) votary))
+      (multiple-value-call #'aim-bolt-end votary (beam-end (aim-origin votary) (aim-direction votary) votary))
       (ranging-bolt votary k))))
 
 (defun hold-votary-beam (votary dt)
@@ -534,11 +567,11 @@ side."
           (when (<= (decf (pulse-timer votary) dt) 0.0)
             (incf (pulse-timer votary) *beam-pulse*)
             (setf (aim-timer votary) *votary-aim-time*)
-            (v<- (bolt-end votary) (votary-pulse votary)))
+            (multiple-value-call #'aim-bolt-end votary (votary-pulse votary)))
           ;; Between strikes the lightning follows the aim.
           (when (<= (decf (aim-timer votary) dt) 0.0)
             (setf (aim-timer votary) *votary-aim-time*)
-            (v<- (bolt-end votary) (beam-end (aim-origin votary) (aim-direction votary) votary)))
+            (multiple-value-call #'aim-bolt-end votary (beam-end (aim-origin votary) (aim-direction votary) votary)))
           (when (<= (decf (bolt-timer votary) dt) 0.0)
             (setf (bolt-timer votary) *votary-bolt-time*)
             (beam-bolts votary))
