@@ -19,7 +19,7 @@
 ;;; Hugo Duprez, MIT); nothing is lifted from its code. They are left out of saves, as
 ;;; status auras are: a load starts with none in flight.
 
-(defparameter *max-sparks* 1024 "Slots in the spark pool. Past that a new spark takes the next slot, whatever it holds.")
+(defparameter *max-sparks* 2048 "Slots in the spark pool. Past that a new spark takes the next slot, whatever it holds.")
 (defparameter *spark-streak-time* 0.025 "Seconds of a spark's movement across the view its streak covers.")
 (defparameter *spark-max-streak* 9 "Most texels a streak is long.")
 

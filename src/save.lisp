@@ -83,7 +83,7 @@ their values."
   '(raise-target))
 
 (defmethod saved-slots append ((hag rime-hag))
-  '(wary blizzard))
+  '(wary blizzard blizzard-sense))
 
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))

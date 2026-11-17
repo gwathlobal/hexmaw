@@ -743,7 +743,7 @@ real time instead.
   ```
 - `src/sparks.lisp`: sparks, embers and grit, simulated like the blood (`spark-pool`,
   `*spark-pool*`, entered by `add-spark-pool` in `setup-scene`): plain arrays of `*max-sparks*`
-  (1024, for a blizzard's flakes) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
+  (2048, for a blizzard's flakes) slots, written each frame into one stream-draw vertex buffer and drawn in one call, nothing
   allocated a frame. They draw no art: each is a quad in the view plane on which the shader lays
   whole texels of the 64-a-metre grid, at least a pixel each (`view_rows`), in three colours of the
   house palette (`*spark-ramps*`: `:steel`, `:ward`, `:fire`, `:lava`, `:dust`, and the novas' `:frost`,
@@ -2365,8 +2365,10 @@ Her foes inside it walk at `*blizzard-slow*` (0.6) of their speed (`slow-factor`
 winds with the statuses, down to `*slowest*`), and the player hears the tornado's rushing wind,
 quieter (`*wind-volume*`). While it blows and her nova is ready, a target it holds back draws her in
 (`chase`) instead of a shard or a retreat: close in to hit her and she walks in with the nova. A beam
-isn't bent, nor a touch or a blow. All that shows of it is snow, with no edge drawn: about 300 flakes
-at a time (`*blizzard-flakes*` a second, each `*blizzard-flake-life*`) in the spark pool, flake
+isn't bent, nor a touch or a blow. Each cast turns it clockwise or counterclockwise at random
+(`blizzard-sense`, saved), its flakes and the way it bends projectiles alike. All that shows of it is
+snow, with no edge drawn: `*blizzard-flakes*` (1200) a second, each `*blizzard-flake-life*`, so up to
+about a thousand at once in the open (590 by the debug hall's north wall, where rock takes many) in the spark pool, flake
 particles (`blow-snow`; sparks.lisp) that its wind carries round her (`wind-carry`, an exact turn
 about her feet at `*blizzard-flake-speed*` times each flake's own, `*blizzard-flake-speeds*`), drawn
 as white and pale-blue streaks as long as their speed (the `:snow` ramp). They start thinning out

@@ -42,9 +42,9 @@ and not on them, where Absorb would swallow it.")
 Fire Bolt from 3 m always strikes her, from 4 m a third of the time, and from 5 m or its rim (6 m) it
 goes 0.5 to 1.4 m wide. Not her own.")
 (defparameter *blizzard-slow* 0.6 "Fraction of their speed it leaves her foes inside it.")
-(defparameter *blizzard-flakes* 500.0 "Flakes a second it throws up round her, at full strength.")
+(defparameter *blizzard-flakes* 1200.0 "Flakes a second it throws up round her, at full strength.")
 (defparameter *blizzard-flake-life* '(0.5 1.3) "Least and most seconds a flake lasts.")
-(defparameter *blizzard-flake-speed* 7.5 "M/s the wind carries a flake round her, times the flake's own speed.")
+(defparameter *blizzard-flake-speed* 12.0 "M/s the wind carries a flake round her, times the flake's own speed.")
 (defparameter *blizzard-flake-speeds* '(0.6 1.4) "Least and most of that a flake goes at.")
 (defparameter *blizzard-flake-spread* 0.7
   "How the flakes thin out toward its edge: a flake starts RADIUS × u^SPREAD out, u even in 0..1,
@@ -149,6 +149,8 @@ so under 1 crowds them to the middle; some start past the edge (*BLIZZARD-FLAKE-
    (blizzard :initform 0.0 :accessor blizzard
              :documentation "Seconds left of her blizzard, 0 with none (*BLIZZARD-TIME*).")
    (blizzard-centre :initform (vec 0 0 0) :reader blizzard-centre :documentation "Her feet, while it blows.")
+   (blizzard-sense :initform 1.0 :accessor blizzard-sense
+                   :documentation "The way her blizzard turns: 1 from +X toward +Z, -1 the other way; drawn at each cast.")
    (blizzard-sound :initform NIL :accessor blizzard-sound)
    (flake-debt :initform 0.0 :accessor flake-debt :documentation "Flakes owed to the pool, a fraction carried over.")))
 
@@ -387,7 +389,7 @@ range and sight throw a rime field ahead of it if she may, else a shard; or clos
     (if (and (< 0.0 k)
              (not (eq hag (caster projectile)))
              (in-blizzard-p hag (location projectile)))
-        (* k *blizzard-turn*)
+        (* k (blizzard-sense hag) *blizzard-turn*)
         0.0)))
 
 (defmethod wind-slow ((hag rime-hag) actor)
@@ -411,14 +413,15 @@ range and sight throw a rime field ahead of it if she may, else a shard; or clos
           ;; Round her the way it turns projectiles, at the flake's speed: an exact turn about her
           ;; feet, so the flakes keep their circles.
           (let* ((r (max 0.4 (sqrt r2)))
-                 (a (/ (* k *blizzard-flake-speed* speed dt) r))
+                 (a (/ (* k (blizzard-sense hag) *blizzard-flake-speed* speed dt) r))
                  (ca (cos a)) (sa (sin a)))
             (values (- (- (* ca rx) (* sa rz)) rx)
                     (- (+ (* sa rx) (* ca rz)) rz)
                     T)))))))
 
 (defun raise-blizzard (hag)
-  (setf (blizzard hag) *blizzard-time*)
+  (setf (blizzard hag) *blizzard-time*
+        (blizzard-sense hag) (if (< (random 1.0) 0.5) 1.0 -1.0))
   (play-sound :gust-cast (location hag)))
 
 (defun blizzard-up-p (hag)

@@ -13,9 +13,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   projectile by its own gust so long shots can't be aimed off for it; and her foes inside walk at 60%
   of their speed, so she walks in on them with her nova. She had died at range to free Fire Bolts.
   Winds are general (`*winds*`, `wind-turn`, `wind-slow` in spells.lisp): the tornado is one too, and
-  turns any projectile through its funnel about 45 degrees. It shows only as snow: about 300 flakes, a
-  new kind of particle in the spark pool (now 1024 slots) that the winds carry, streaking round her and
-  thinning out toward its edge, so no boundary is drawn.
+  turns any projectile through its funnel about 45 degrees. It shows only as snow: up to about a thousand
+  flakes at 12 m/s, a new kind of particle in the spark pool (now 2048 slots) that the winds carry,
+  streaking round her and thinning out toward its edge, so no boundary is drawn. Each cast turns it
+  clockwise or counterclockwise at random, and projectiles bend with it.
 - A level rebuilt while a nova's sweep was showing kept its scorch or rime painted on the new level for
   good (`clear-level` now clears the sweep).
 - **The rime hag shuns Absorb.** For 10 s after Absorb swallows one of her shards, or while she sees
