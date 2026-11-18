@@ -697,7 +697,7 @@ void main(){
     (let ((k (float scale 0f0)))
       ;; The billboard and the creature have already sized it from its kind's height.
       (setf (sprite-height boss) (* k (sprite-height boss))
-            (slot-value boss 'size-scale) k)
+            (slot-value boss 'size-scale) (* k (size-scale boss)))
       (nv* (scaling boss) k)
       (nv* (base-scaling boss) k)
       (setf (body-radius boss) (min *boss-max-radius* (* k (body-radius boss)))

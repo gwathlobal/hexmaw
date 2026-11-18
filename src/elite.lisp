@@ -88,7 +88,7 @@ Draws from *ELITE-RANDOM* the same whatever it decides, so one spawn's roll neve
          (k (if (< *nav-clearance-height* h) 1.0 (min *elite-size-scale* (/ *nav-clearance-height* h)))))
     ;; The billboard and the creature have already sized it from its kind's height.
     (setf (sprite-height elite) (* k h)
-          (slot-value elite 'size-scale) k)
+          (slot-value elite 'size-scale) (* k (size-scale elite)))
     (nv* (scaling elite) k)
     (nv* (base-scaling elite) k)
     ;; Its body stays its kind's: a wider one would need wider cells of the nav grid.

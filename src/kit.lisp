@@ -169,10 +169,11 @@ its own size and step. A creature whose own cell is too tight for it can't plan 
 at all, so that counts too. Walks go both ways, so one search from FROM per size does. A
 walker's chase wades when there is no dry way (CHASE-PATH), so these walks may too, and they
 cross deep water: no creature swims, but one beyond a flooded run waits there for the
-player, who can. A boss (boss.lisp) is left out: it stays in its arena."
+player, who can. A boss (boss.lisp) is left out: it stays in its arena; so is a rooted creature
+(the bloodroot), which never walks (ROOTED-BLOCKS asks whether one stands in the way instead)."
   (let ((searches (make-hash-table :test 'equal)) (stranded ()) (*nav-hazards* :swim))
     (when *nav-grid*
-      (loop for creature across (remove-if (lambda (c) (typep c 'boss)) *creatures*)
+      (loop for creature across (remove-if (lambda (c) (or (typep c 'boss) (rooted-p c))) *creatures*)
             for r = (float (body-radius creature) 0f0)
             for h = (float (sprite-height creature) 0f0)
             for step = (float (step-height creature) 0f0)
