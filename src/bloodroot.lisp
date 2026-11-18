@@ -957,10 +957,16 @@ higher of them."
 
 (defparameter *max-root-quads* 6000 "Quads the root floor draws at most, every carpet together.")
 (defparameter *root-floor-lift* 0.014 "Metres above its floor, or off its wall, roots are drawn.")
-(defparameter *root-vertex-floats* 10
-  "Per vertex: position, normal, cover, frost, height up a wall, and when its cell rooted.")
+(defparameter *root-vertex-floats* 11
+  "Per vertex: position, normal, cover, frost, height up a wall, when its cell rooted, and how far it
+is from its bulb, for the heartbeat running out along the veins.")
+(defparameter *root-beat-period* 1.3 "Seconds between the bulb's heartbeats.")
+(defparameter *root-beat-speed* 6.0 "Metres a second a heartbeat runs out along the roots.")
+(defparameter *root-vein-glow* 0.45 "How brightly the roots' veins glow between heartbeats, unlit.")
+(defparameter *root-beat-glow* 1.6 "How much more brightly they glow as a heartbeat passes.")
 
 (defvar *root-floor* NIL "The root floor in the current scene.")
+(defvar *root-tufts* NIL "The root tufts in the current scene.")
 
 (define-shader-entity root-floor (lit-entity renderable listener)
   ((data :reader root-data)
@@ -980,7 +986,7 @@ higher of them."
                                                  :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
                                                              (,vbo :size 3 :offset 12 :stride ,stride :index 1)
                                                              (,vbo :size 3 :offset 24 :stride ,stride :index 2)
-                                                             (,vbo :size 1 :offset 36 :stride ,stride :index 3))))
+                                                             (,vbo :size 2 :offset 36 :stride ,stride :index 3))))
     (setf *roots-dirty* T)))
 
 (defmethod stage :after ((floor root-floor) (area staging-area))
@@ -991,8 +997,11 @@ higher of them."
   (bind (// 'hexmaw 'bloodroot-roots) :texture0))
 
 (defun add-root-floor (scene)
-  (setf *root-floor* (make-instance 'root-floor))
-  (enter *root-floor* scene))
+  "Enter the root floor and the tufts standing on it."
+  (setf *root-floor* (make-instance 'root-floor)
+        *root-tufts* (make-instance 'root-tufts))
+  (enter *root-floor* scene)
+  (enter *root-tufts* scene))
 
 (define-handler (root-floor tick) (dt)
   (unless (frozen-p) (incf *root-clock* (float dt 0f0))))
@@ -1033,15 +1042,19 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
         (climb (float *root-climb* 0f0)))
     (declare (type (simple-array single-float (*)) data) (type fixnum k most)
              (type single-float c x0 z0 lift climb) (optimize speed (safety 0) (debug 0)))
-    (flet ((put (x y z nx nz ny cover frost up born)
+    (let ((dist 0f0))
+     (declare (type single-float dist))
+     (flet ((put (x y z nx nz ny cover frost up born)
              (declare (type single-float x y z nx ny nz cover frost up born))
              (setf (aref data k) x (aref data (+ k 1)) y (aref data (+ k 2)) z
                    (aref data (+ k 3)) nx (aref data (+ k 4)) ny (aref data (+ k 5)) nz
                    (aref data (+ k 6)) cover (aref data (+ k 7)) frost
-                   (aref data (+ k 8)) up (aref data (+ k 9)) born)
-             (incf k 10)))
+                   (aref data (+ k 8)) up (aref data (+ k 9)) born (aref data (+ k 10)) dist)
+             (incf k 11)))
       (declare (inline put))
       (do-bloodroots (root)
+       (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0)))
+        (declare (type single-float bx bz))
         (do-carpets (carpet root)
           (let* ((state (carpet-state carpet))
                  (floors (carpet-floors carpet))
@@ -1056,7 +1069,7 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
                      (type (simple-array single-float (*)) floors borns frosts walls)
                      (type fixnum n layers i0 j0) (type single-float keep))
             (dotimes (w (length state))
-              (when (and (= 1 (aref state w)) (<= (+ k 60) most))
+              (when (and (= 1 (aref state w)) (<= (+ k 66) most))
                 (multiple-value-bind (rest a) (floor w n)
                   (multiple-value-bind (kk b) (floor rest n)
                     (let* ((f (aref floors w))
@@ -1072,6 +1085,7 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
                            (c01 (* keep (corner-cover state floors n layers a b kk f 0 1)))
                            (c11 (* keep (corner-cover state floors n layers a b kk f 1 1))))
                       (declare (type single-float f born frost y cx cz h xa xb za zb c00 c10 c01 c11))
+                      (setf dist (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))))
                       (put xa y za 0f0 0f0 1f0 c00 frost 0f0 born) (put xb y zb 0f0 0f0 1f0 c11 frost 0f0 born)
                       (put xb y za 0f0 0f0 1f0 c10 frost 0f0 born)
                       (put xa y za 0f0 0f0 1f0 c00 frost 0f0 born) (put xa y zb 0f0 0f0 1f0 c01 frost 0f0 born)
@@ -1080,7 +1094,7 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
                       (dotimes (side 4)
                         (let ((face (aref walls (+ (* 8 w) (* 2 side))))
                               (top (aref walls (+ (* 8 w) (* 2 side) 1))))
-                          (when (and (<= 0 face) (<= (+ k 60) most))
+                          (when (and (<= 0 face) (<= (+ k 66) most))
                             (let* ((dx (case side (0 1f0) (1 -1f0) (T 0f0)))
                                    (dz (case side (2 1f0) (3 -1f0) (T 0f0)))
                                    (wh (min top climb))
@@ -1096,8 +1110,8 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
                               (put (+ px ax) f (+ pz az) nx nz 0f0 keep frost 0f0 born)
                               (put (- px ax) f (- pz az) nx nz 0f0 keep frost 0f0 born)
                               (put (- px ax) top-y (- pz az) nx nz 0f0 keep frost wh born)
-                              (put (+ px ax) top-y (+ pz az) nx nz 0f0 keep frost wh born))))))))))))))
-    (floor k 10)))
+                              (put (+ px ax) top-y (+ pz az) nx nz 0f0 keep frost wh born))))))))))))))))
+    (floor k 11)))
 
 (defun any-carpets-p ()
   (do-bloodroots (root)
@@ -1111,7 +1125,8 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
             (root-vertex-count floor) (write-root-vertices floor))
       (when (< 0 (root-vertex-count floor))
         (update-buffer-data (root-vbo floor) (root-data floor)
-                            :count (* (root-vertex-count floor) *root-vertex-floats* 4))))
+                            :count (* (root-vertex-count floor) *root-vertex-floats* 4)))
+      (when *root-tufts* (write-tufts *root-tufts*)))
     (let ((count (root-vertex-count floor)))
       (when (< 0 count)
         (setf (uniform program "view_matrix") (view-matrix))
@@ -1124,13 +1139,22 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
         (setf (uniform program "climb_time") (float *root-climb-time* 0f0))
         (setf (uniform program "light_snap") 0.0)
         (setf (uniform program "light_bands") 0.0)
+        (set-beat-uniforms program)
         (render-array (root-vao floor) :vertex-count count)))))
+
+(defun set-beat-uniforms (program)
+  "The heartbeat's uniforms, which the root floor and its tufts share (ROOT_BEAT in their shaders)."
+  (setf (uniform program "beat_period") (float *root-beat-period* 0f0))
+  (setf (uniform program "beat_speed") (float *root-beat-speed* 0f0))
+  (setf (uniform program "vein_glow") (float *root-vein-glow* 0f0))
+  (setf (uniform program "beat_glow") (float *root-beat-glow* 0f0)))
+
 
 (define-class-shader (root-floor :vertex-shader)
   "layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 in_normal;
 layout (location = 2) in vec3 in_cover;
-layout (location = 3) in float in_born;
+layout (location = 3) in vec2 in_born;
 uniform mat4 view_matrix;
 uniform mat4 projection_matrix;
 out vec3 v_world_position;
@@ -1138,6 +1162,7 @@ out vec3 v_view_position;
 out vec3 v_normal;
 out vec3 v_cover;
 flat out float v_born;
+out float v_dist;
 
 void main(){
   vec4 view_position = view_matrix * vec4(position, 1.0);
@@ -1146,7 +1171,8 @@ void main(){
   v_view_position = view_position.xyz;
   v_normal = in_normal;
   v_cover = in_cover;
-  v_born = in_born;
+  v_born = in_born.x;
+  v_dist = in_born.y;
 }")
 
 (define-class-shader (root-floor :fragment-shader)
@@ -1155,6 +1181,7 @@ in vec3 v_view_position;
 in vec3 v_normal;
 in vec3 v_cover;
 flat in float v_born;
+in float v_dist;
 uniform sampler2D texture_image;
 uniform float texels_per_metre;
 uniform float clock;
@@ -1164,6 +1191,21 @@ uniform float climb_time;
 out vec4 color;
 
 float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+uniform float beat_period;
+uniform float beat_speed;
+uniform float vein_glow;
+uniform float beat_glow;
+
+// How much a root texel at DIST metres from its bulb glows now: its veins (saturated reds) only,
+// faintly at rest and flaring as each heartbeat, a lub and a dub, runs out from the bulb. Stepped,
+// as the aurora's light is, so it stays on the art's few tones.
+float root_beat(vec3 surface, float dist, float clock){
+  float vein = (surface.r > 0.4 && surface.g + surface.b < 0.45 * surface.r) ? 1.0 : 0.0;
+  float p = fract((clock - dist / beat_speed) / beat_period);
+  float beat = exp(-p * p / 0.002) + exp(-(1.0 - p) * (1.0 - p) / 0.002)
+             + 0.6 * exp(-(p - 0.16) * (p - 0.16) / 0.002);
+  return vein * floor((vein_glow + beat_glow * beat) * 4.0) / 4.0;
+}
 
 void main(){
   bool wall = abs(v_normal.y) < 0.5;
@@ -1188,7 +1230,236 @@ void main(){
   vec3 normal = normalize(v_normal);
   vec3 light = band_light(light_at(snap_position(v_world_position), normal, 1.0, v_world_position + normal * 0.05));
   vec3 lamp = lamp_part(light);
-  color = vec4(fog_lit(surface * (light - lamp), surface * lamp, length(v_view_position)), 1.0);
+  // The veins glow on their own, fogged as lamp light is, so the carpet shows across a dark room.
+  vec3 glow = surface * lamp + roots.rgb * root_beat(roots.rgb, v_dist, clock) * (1.0 - v_cover.y);
+  color = vec4(fog_lit(surface * (light - lamp), glow, length(v_view_position)), 1.0);
+}")
+
+;;; Tufts: the roots standing up out of the carpet, so it has height and shows from across a room
+;;; (a carpet lying flat, dark red-brown on a brown floor, was easy to miss). One of the strip's
+;;; tufts stands on most rooted floor cells, chosen, placed and sized by a hash of the cell, turned
+;;; about +Y to face the camera plane as a billboard is, all drawn in one call from the buffer the
+;;; root floor's cells are written with. A cell's tuft rises out of its floor as the cell roots and
+;;; sinks back as its carpet withers; the floor hides what is under it.
+
+(define-fx-animation root-tendrils "sprites/bloodroot/tendrils" :size (/ 34 64.0))
+
+(defparameter *root-tuft-share* 0.55 "Share of rooted floor cells a tuft stands on.")
+(defparameter *root-tuft-jitter* 0.16 "Metres a tuft stands off its cell's middle, at most, each way.")
+(defparameter *root-tuft-scale* '(0.8 1.1) "Smallest and largest a tuft is drawn, of its art's size.")
+(defparameter *root-tuft-grow* 0.6 "Seconds a tuft takes to rise out of the floor.")
+(defparameter *root-tuft-stagger* 0.5 "Seconds, at most, a tuft rises after its cell roots.")
+(defparameter *root-tuft-sink* 0.03 "Metres a tuft's foot stands under its floor.")
+(defparameter *root-tuft-sway* 1.5 "Art pixels a tuft's tip sways each way.")
+(defparameter *max-root-tufts* 4000 "Tufts drawn at most, every carpet together.")
+(defparameter *root-tuft-floats* 12
+  "Per vertex: the foot, the corner (across, up), the size, the frame, when it rose, frost, how
+much of its carpet is left, and its distance from its bulb.")
+
+(define-shader-entity root-tufts (lit-entity renderable listener)
+  ((data :reader tuft-data)
+   (vbo :reader tuft-vbo)
+   (vao :reader tuft-vao)
+   (count :initform 0 :accessor tuft-vertex-count)))
+
+(defmethod initialize-instance :after ((tufts root-tufts) &key)
+  (let* ((data (make-array (* *max-root-tufts* 6 *root-tuft-floats*) :element-type 'single-float
+                                                                       :initial-element 0f0))
+         (vbo (make-instance 'vertex-buffer :buffer-data data :data-usage :dynamic-draw))
+         (stride (* 4 *root-tuft-floats*)))
+    (setf (slot-value tufts 'data) data
+          (slot-value tufts 'vbo) vbo
+          (slot-value tufts 'vao) (make-instance 'vertex-array
+                                                 :vertex-form :triangles
+                                                 :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
+                                                             (,vbo :size 4 :offset 12 :stride ,stride :index 1)
+                                                             (,vbo :size 4 :offset 28 :stride ,stride :index 2)
+                                                             (,vbo :size 1 :offset 44 :stride ,stride :index 3))))))
+
+(defmethod stage :after ((tufts root-tufts) (area staging-area))
+  (stage (tuft-vao tufts) area)
+  (stage (// 'hexmaw 'root-tendrils) area))
+
+(defmethod bind-textures :after ((tufts root-tufts))
+  (bind (// 'hexmaw 'root-tendrils) :texture0))
+
+(declaim (inline tuft-hash))
+(defun tuft-hash (i j k salt)
+  "A number from 0 below 1 for world nav cell I J K and SALT, the same every time it is asked."
+  (declare (type fixnum i j k salt) (optimize speed (safety 0)))
+  (let ((h (logand #xfffffff (+ (* i 73856093) (* j 19349663) (* k 83492791) (* salt 50331653)))))
+    (declare (type (unsigned-byte 28) h))
+    (setf h (logand #xfffffff (* (logxor h (ash h -13)) 73856093)))
+    (setf h (logand #xfffffff (* (logxor h (ash h -11)) 19349663)))
+    (/ (float (logxor h (ash h -15)) 0f0) 268435456f0)))
+
+(defun write-tufts (tufts)
+  "Write a tuft for every rooted floor cell that has one into TUFTS' data, when a carpet changed."
+  (let* ((data (tuft-data tufts))
+         (k 0)
+         (most (* *max-root-tufts* 6 *root-tuft-floats*))
+         (atlas (animation-atlas (find-fx-animation 'root-tendrils)))
+         (frames (getf atlas :frames))
+         (art-w (/ (float (getf atlas :cell-width) 0f0) (float *texels-per-metre* 0f0)))
+         (art-h (/ (float (getf atlas :cell-height) 0f0) (float *texels-per-metre* 0f0)))
+         (c (float (nav-cell-size *nav-grid*) 0f0))
+         (x0 (float (nav-x0 *nav-grid*) 0f0))
+         (z0 (float (nav-z0 *nav-grid*) 0f0))
+         (share (float *root-tuft-share* 0f0))
+         (jitter (float *root-tuft-jitter* 0f0))
+         (small (float (first *root-tuft-scale*) 0f0))
+         (big (float (second *root-tuft-scale*) 0f0))
+         (stagger (float *root-tuft-stagger* 0f0))
+         (sink (float *root-tuft-sink* 0f0))
+         (dist 0f0))
+    (declare (type (simple-array single-float (*)) data) (type fixnum k most frames)
+             (type single-float art-w art-h c x0 z0 share jitter small big stagger sink dist))
+    (flet ((put (x y z u v w h frame born frost keep)
+             (declare (type single-float x y z u v w h frame born frost keep))
+             (setf (aref data k) x (aref data (+ k 1)) y (aref data (+ k 2)) z
+                   (aref data (+ k 3)) u (aref data (+ k 4)) v (aref data (+ k 5)) w (aref data (+ k 6)) h
+                   (aref data (+ k 7)) frame (aref data (+ k 8)) born (aref data (+ k 9)) frost
+                   (aref data (+ k 10)) keep (aref data (+ k 11)) dist)
+             (incf k 12)))
+      (declare (inline put))
+      (do-bloodroots (root)
+        (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0)))
+          (declare (type single-float bx bz))
+          (do-carpets (carpet root)
+            (let ((state (carpet-state carpet))
+                  (floors (carpet-floors carpet))
+                  (borns (carpet-born carpet))
+                  (frosts (carpet-frost carpet))
+                  (n (carpet-n carpet))
+                  (i0 (carpet-i0 carpet)) (j0 (carpet-j0 carpet))
+                  (keep (float (- 1.0 (or (carpet-wither carpet) 0.0)) 0f0)))
+              (declare (type (simple-array (unsigned-byte 8) (*)) state)
+                       (type (simple-array single-float (*)) floors borns frosts)
+                       (type fixnum n i0 j0) (type single-float keep))
+              (dotimes (w (length state))
+                (when (and (= 1 (aref state w)) (<= (+ k 72) most))
+                  (multiple-value-bind (rest a) (floor w n)
+                    (multiple-value-bind (kk b) (floor rest n)
+                      (let ((i (+ i0 a)) (j (+ j0 b)))
+                        (when (< (tuft-hash i j kk 0) share)
+                          (let* ((cx (+ x0 (* (+ i 0.5f0) c) (* jitter (- (* 2 (tuft-hash i j kk 1)) 1))))
+                                 (cz (+ z0 (* (+ j 0.5f0) c) (* jitter (- (* 2 (tuft-hash i j kk 2)) 1))))
+                                 (y (- (aref floors w) sink))
+                                 (scale (+ small (* (- big small) (tuft-hash i j kk 3))))
+                                 (tw (* art-w scale)) (th (* art-h scale))
+                                 (frame (float (min (1- frames) (floor (* frames (tuft-hash i j kk 4)))) 0f0))
+                                 (born (+ (aref borns w) (* stagger (tuft-hash i j kk 5))))
+                                 (frost (if (< 0 (aref frosts w)) 1f0 0f0)))
+                            (declare (type single-float cx cz y scale tw th frame born frost))
+                            (setf dist (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))))
+                            (put cx y cz -0.5f0 0f0 tw th frame born frost keep)
+                            (put cx y cz 0.5f0 0f0 tw th frame born frost keep)
+                            (put cx y cz 0.5f0 1f0 tw th frame born frost keep)
+                            (put cx y cz -0.5f0 0f0 tw th frame born frost keep)
+                            (put cx y cz 0.5f0 1f0 tw th frame born frost keep)
+                            (put cx y cz -0.5f0 1f0 tw th frame born frost keep)))))))))))))
+    (setf (tuft-vertex-count tufts) (floor k 12))
+    (when (< 0 k)
+      (update-buffer-data (tuft-vbo tufts) data :count (* k 4)))))
+
+(defmethod render ((tufts root-tufts) (program shader-program))
+  (let ((count (tuft-vertex-count tufts)))
+    (when (and *nav-grid* (< 0 count) (any-carpets-p))
+      (let ((atlas (animation-atlas (find-fx-animation 'root-tendrils))))
+        (setf (uniform program "view_matrix") (view-matrix))
+        (setf (uniform program "projection_matrix") (projection-matrix))
+        (set-fog-uniforms program)
+        (setf (uniform program "clock") *root-clock*)
+        (setf (uniform program "grow") (float *root-tuft-grow* 0f0))
+        (setf (uniform program "sway") (/ (float *root-tuft-sway* 0f0) (float *texels-per-metre* 0f0)))
+        (setf (uniform program "cell_width") (float (getf atlas :cell-width) 0f0))
+        (setf (uniform program "cell_height") (float (getf atlas :cell-height) 0f0))
+        (setf (uniform program "cell_gap") (float (getf atlas :gap) 0f0))
+        (setf (uniform program "light_snap") 0.0)
+        (setf (uniform program "light_bands") 0.0)
+        (set-beat-uniforms program)
+        (render-array (tuft-vao tufts) :vertex-count count)))))
+
+(define-class-shader (root-tufts :vertex-shader)
+  "layout (location = 0) in vec3 foot;
+layout (location = 1) in vec4 quad;
+layout (location = 2) in vec4 info;
+layout (location = 3) in float in_dist;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+uniform float clock;
+uniform float grow;
+uniform float sway;
+out vec3 v_world_position;
+out vec3 v_view_position;
+out vec2 v_uv;
+flat out float v_frame;
+flat out float v_frost;
+flat out vec3 v_probe;
+out float v_dist;
+
+void main(){
+  // Turned about +Y to face the camera plane, as a billboard is.
+  vec3 right = vec3(view_matrix[0][0], 0.0, view_matrix[2][0]);
+  right = length(right) > 0.001 ? normalize(right) : vec3(1.0, 0.0, 0.0);
+  float rise = clamp((clock - info.y) / grow, 0.0, 1.0) * info.w;
+  // Rising out of the floor and sinking back into it: the floor hides the rest.
+  float up = quad.y * quad.w - (1.0 - rise) * quad.w;
+  // The tip sways, in whole art pixels.
+  float lean = floor(sin(clock * 1.7 + foot.x * 3.1 + foot.z * 2.3) * 1.5 + 0.5) * sway * quad.y;
+  vec3 position = foot + right * (quad.x * quad.z + lean) + vec3(0.0, up, 0.0);
+  vec4 view_position = view_matrix * vec4(position, 1.0);
+  gl_Position = projection_matrix * view_position;
+  v_world_position = position;
+  v_view_position = view_position.xyz;
+  v_uv = vec2(quad.x + 0.5, quad.y);
+  v_frame = info.x;
+  v_frost = info.z;
+  v_probe = foot + vec3(0.0, 0.3, 0.0);
+  v_dist = in_dist;
+}")
+
+(define-class-shader (root-tufts :fragment-shader)
+  "in vec3 v_world_position;
+in vec3 v_view_position;
+in vec2 v_uv;
+flat in float v_frame;
+flat in float v_frost;
+flat in vec3 v_probe;
+in float v_dist;
+uniform sampler2D texture_image;
+uniform float clock;
+uniform float cell_width;
+uniform float cell_height;
+uniform float cell_gap;
+out vec4 color;
+uniform float beat_period;
+uniform float beat_speed;
+uniform float vein_glow;
+uniform float beat_glow;
+
+// How much a root texel at DIST metres from its bulb glows now: its veins (saturated reds) only,
+// faintly at rest and flaring as each heartbeat, a lub and a dub, runs out from the bulb. Stepped,
+// as the aurora's light is, so it stays on the art's few tones.
+float root_beat(vec3 surface, float dist, float clock){
+  float vein = (surface.r > 0.4 && surface.g + surface.b < 0.45 * surface.r) ? 1.0 : 0.0;
+  float p = fract((clock - dist / beat_speed) / beat_period);
+  float beat = exp(-p * p / 0.002) + exp(-(1.0 - p) * (1.0 - p) / 0.002)
+             + 0.6 * exp(-(p - 0.16) * (p - 0.16) / 0.002);
+  return vein * floor((vein_glow + beat_glow * beat) * 4.0) / 4.0;
+}
+
+void main(){
+  vec2 size = vec2(textureSize(texture_image, 0));
+  vec2 texel = min(floor(v_uv * vec2(cell_width, cell_height)), vec2(cell_width, cell_height) - 1.0);
+  vec4 tuft = texture(texture_image, vec2(v_frame * (cell_width + cell_gap) + texel.x + 0.5, texel.y + 0.5) / size);
+  if(tuft.a < 0.5) discard;
+  vec3 surface = tuft.rgb;
+  if(v_frost > 0.5) surface = mix(surface, vec3(0.74, 0.86, 0.95), 0.55);
+  vec3 light = band_light(light_at(snap_position(v_world_position), vec3(0), 0.0, v_probe));
+  vec3 lamp = lamp_part(light);
+  vec3 glow = surface * lamp + tuft.rgb * root_beat(tuft.rgb, v_dist, clock) * (1.0 - v_frost);
+  color = vec4(fog_lit(surface * (light - lamp), glow, length(v_view_position)), 1.0);
 }")
 
 ;;; Elites and the Mother Root.

@@ -2501,6 +2501,20 @@ carpet changes (`*roots-dirty*`), 0.2 ms for a full carpet of 1032 cells (each c
 `carpet-floors`, and the loops are typed). The texture is `bloodroot-roots` (`data/textures/bloodroot.png`,
 keyed to see-through), lit as floors and walls are. Measured with 1032 cells and their walls
 filling the view, world frozen, vsync off: GPU 3.69 ms a frame against 2.40 without the root floor.
+Lying flat, dark red-brown on a brown floor, the carpet was easy to miss, so it stands up and glows.
+**Tufts** (`root-tufts`, `*root-tufts*`, entered with the floor and written with it, `write-tufts`):
+on `*root-tuft-share*` (0.55) of the rooted floor cells one of the eight tufts of the `root-tendrils`
+strip (`data/sprites/bloodroot/tendrils`, 25 to 50 cm), picked, placed within `*root-tuft-jitter*` of
+the cell's middle and sized within `*root-tuft-scale*` by a hash of the cell (`tuft-hash`, so a rewrite
+puts it back where it was), turned about +Y to face the camera plane as a billboard is, its tip
+swaying by whole art pixels; it rises out of the floor over `*root-tuft-grow*` once its cell roots
+(staggered by up to `*root-tuft-stagger*`) and sinks back as its carpet withers, the floor hiding the
+rest. 599 tufts on a full carpet, rewritten in 0.12 ms with nothing allocated; GPU 4.9 ms a frame
+against 4.2 without them, the whole carpet in view. **The heartbeat**: in both shaders the veins (the
+texture's saturated reds, `root_beat`) glow unlit, fogged as lamp light, at `*root-vein-glow*` and
+flare by `*root-beat-glow*` as a lub-dub every `*root-beat-period*` (1.3 s) runs out from the bulb at
+`*root-beat-speed*` (6 m/s; each vertex carries its distance from its bulb), stepped in quarters;
+frost puts it out.
 
 **Saving.** `root-state` turns its carpets into plain data (cells by window index, how long ago they
 rooted, burn and frost left) and back, finding their walls and frontier again on the rebuilt nav grid;
@@ -3589,7 +3603,8 @@ necromancer's turnarounds as references), and every sheet is drawn from it
 `style-common.txt`, the design and the anchor as references). The idle sheet opens with a copy of
 the bulb at rest, which is its turnaround frame; the attacks sheet opens with one too, sliced as a
 throwaway `scale` animation. `--pixel` is that frame's height in the sheet over 90 (1.4 m at 64 px a
-metre). The snare's roots and the seed take their own scale; the seed, an effect, keeps its outline:
+metre). The tufts standing on its roots (`art/prompts/bloodroot-tendrils.txt`, the snare sheet as a
+third reference) are sliced at `--pixel 13`, the tallest about half a metre. The snare's roots and the seed take their own scale; the seed, an effect, keeps its outline:
 
 ```bash
 D=data/sprites/bloodroot
@@ -3597,7 +3612,8 @@ python3 tools/slice_frames.py art/bloodroot/idle-1.png $D --pixel 4.87 --anchor 
 python3 tools/slice_frames.py art/bloodroot/attacks-2.png $D --pixel 3.6 --anchor bottom --filter box scale:1 spit:4 bloom:4 && rm $D/scale.*
 python3 tools/slice_frames.py art/bloodroot/death-1.png $D --pixel 5.07 --anchor bottom --filter box death:8
 python3 tools/slice_frames.py art/bloodroot/snare-1.png $D --pixel 9 --anchor bottom --filter box snare:6
-tools/restyle.py --house $D/{turnaround,idle,hurt,spit,bloom,death,snare}.png
+python3 tools/slice_frames.py art/bloodroot/tendrils-1.png $D --pixel 13 --anchor bottom --filter box tendrils:8
+tools/restyle.py --house $D/{turnaround,idle,hurt,spit,bloom,death,snare,tendrils}.png
 python3 tools/slice_frames.py art/spells/blood-seed-2.png $D --pixel 5 --filter box seed-flight:4 seed-burst:5
 tools/restyle.py --palette art/style/palette.txt $D/seed-flight.png $D/seed-burst.png
 ```

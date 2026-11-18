@@ -2,6 +2,11 @@
 
 Every change worth recording, internal ones included: an entry in the commit that earns it,
 under `## Unreleased`, given its date and version when a release is cut. The changelog
+
+- The bloodroot's roots stand up and glow: tufts of thorned roots (a new generated strip, eight
+  tufts) rise out of most rooted cells, facing the camera, and the veins of the floor roots and the
+  tufts glow, flaring with a heartbeat that runs out from the bulb, so the carpet shows across a
+  dark room. About 0.7 ms of GPU a frame with a full carpet in view.
 players get is `CHANGELOG.md`, drafted from this one at each release and approved before it
 ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 

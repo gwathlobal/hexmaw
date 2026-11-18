@@ -1,0 +1,21 @@
+Pixel-art sprite sheet: the BLOODROOT'S TENDRILS, for a Doom/Hexen-style first-person dungeon game: small tufts of thorned roots standing up out of the stone floor wherever the bloodroot's roots have spread, so the player sees its carpet of roots from across a dark room. Each tuft is drawn on its own, seen from the side, upright, standing on the ground line at the bottom of its cell. No floor is drawn: only the roots, their bases cut off flat at the ground line as if they come up out of the floor.
+
+The roots are the bloodroot's own (reference 1): knotted dark red-brown root bark, wet crimson where it splits, small curved bone-coloured thorns, and bright glowing ember-red veins running up each root, brighter than on the bulb so the roots stand out against a dark brown floor.
+
+THE FRAMES, eight different tufts, each the same width, between 25 and 50 centimetres tall, in proportion to reference 1's 1.4 metre bulb (so each tuft is a small fraction of the bulb's height):
+- Cell 1: a single tendril rising and curling over at its tip like a fern head.
+- Cell 2: two thin runners arching up out of the floor and crossing each other.
+- Cell 3: a cluster of three short thorny shoots, the middle one tallest.
+- Cell 4: a loop of root arching up out of the floor and back down into it, thorns along its back.
+- Cell 5: a low spiky knot of thorns and root, wide and short.
+- Cell 6: a tall thin shoot leaning to one side, ending in a small glowing red bud.
+- Cell 7: two tendrils twisting round each other as they rise, splitting apart at the top.
+- Cell 8: a stubby shoot with three thorns, short and thick.
+- A grid of 2 rows of 4 equal cells: cells 1 to 4 in the top row, 5 to 8 in the bottom row, read left to right.
+
+LAYOUT RULES
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin lines of pure cyan (#00FFFF): vertical lines between the columns, each running the full height of the image, and horizontal lines between the rows, each running the full width.
+- The same scale in every frame, every tuft standing on the bottom of its cell. Everything fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur or other objects.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.
