@@ -25,7 +25,7 @@ legend
   & water, pickup reward
   i spawn any east
   j spawn any west
-  m spawn any east 30
+  m spawn arc-votary|acolyte east 30
   M spawn any west 30
 
 plan 0

@@ -25,6 +25,8 @@
     ("ogre" ogre-boss ogre "Ogre Warlord" 1.3 ())
     ("gale-wraith" wraith-boss gale-wraith "Storm Wraith" 1.7 (:flyer :caster))
     ("riftwalker" riftwalker-boss riftwalker "Rift Lord" 1.6 ())
+    ("rime-hag" hag-boss rime-hag "Winter Crone" 1.7 (:caster))
+    ("arc-votary" votary-boss arc-votary "Arc Hierophant" 1.6 (:caster))
     ;; Rooted: no power that moves it (bloodroot.lisp); it hunts from range as a caster does.
     ("bloodroot" bloodroot-boss bloodroot "Mother Root" 1.7 (:caster :rooted)))
   "What a boss can be: the kind as a spawn names it, the boss's class, the class it is an

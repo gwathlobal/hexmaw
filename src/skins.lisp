@@ -34,19 +34,26 @@ ledge, not the storey above.")
 ;;; Kinds.
 
 (defvar *skin-kinds* ()
-  "(NAME :TEXTURE asset :RIM (r g b) :INNER (r g b) :FOOTING key): what each kind of skin is
-drawn with, the colour its rim is frosted, the one just inside it, and the footing it is
-underfoot (a key of *FOOTINGS*, or NIL for a look only). DEFINE-SKIN-KIND adds one.")
+  "(NAME :TEXTURE asset :RIM (r g b) :INNER (r g b) :FOOTING key :EDGE mode): what each kind of
+skin is drawn with, the colour its rim is frosted, the one just inside it, the footing it is
+underfoot (a key of *FOOTINGS*, or NIL for a look only), and how its edge is found (:CIRCLE or
+:COVER). DEFINE-SKIN-KIND adds one.")
 
-(defmacro define-skin-kind (name &key texture (rim ''(0.78 0.89 0.96)) (inner ''(0.59 0.77 0.9)) footing)
+(defmacro define-skin-kind (name &key texture (rim ''(0.78 0.89 0.96)) (inner ''(0.59 0.77 0.9)) footing
+                                      (edge :circle))
   "Define skin kind NAME (a keyword): drawn with the hexmaw pool's image TEXTURE (an asset name,
 laid at 64 texels a metre; texels under half alpha are see-through), its rim RIM and just inside
-it INNER (linear RGB lists), underfoot FOOTING. ADD-SKIN-FLOORS gives each kind its own drawer, so
-a kind defined after the scene was set up shows from the next one."
+it INNER (linear RGB lists), underfoot FOOTING. EDGE :CIRCLE cuts it at the skin's circle (entry
+index 3, the radius drawn now) in jagged texel steps; :COVER at its cells' own outline, for a skin
+that grows cell by cell (roots): each floor cell's corner carries the share of the four cells
+round it that are laid, on its floor (SKIN-CORNER-COVER), and the shader cuts where that share
+plus hashed noise falls under a half, so a lone cell shows nothing and a carpet's edge runs ragged
+half a cell inside its outer cells; wall cells are whole. ADD-SKIN-FLOORS gives each kind its own
+drawer, so a kind defined after the scene was set up shows from the next one."
   `(progn
      (setf *skin-kinds* (remove ,name *skin-kinds* :key #'first))
      (setf *skin-kinds* (append *skin-kinds* (list (list ,name :texture ',texture :rim ,rim :inner ,inner
-                                                          :footing ,footing))))
+                                                          :footing ,footing :edge ,edge))))
      ,name))
 
 (defun skin-kind-property (kind property)
@@ -390,9 +397,25 @@ AT). Returns the patch, or NIL."
 
 (defparameter *max-skin-cells* 2400 "Cells each kind's drawer draws at most, floors and walls together.")
 (defparameter *skin-lift* 0.012 "Metres off its floor or wall a skin is drawn.")
-(defparameter *skin-vertex-floats* 12
+(defparameter *skin-vertex-floats* 13
   "Per vertex: position, the skin's centre X Z and radius, the face's normal, the texture's two
-world coordinates on the face, and the top of a wall cell's skin (far up for a floor).")
+world coordinates on the face, the top of a wall cell's skin (far up for a floor), and the
+corner's cover (1 but for a :COVER kind's floor, SKIN-CORNER-COVER).")
+
+(defun skin-corner-cover (heights n a b)
+  "The share of the four cells round corner A B (0 to N each way) of a skin's grid of N by N
+cells, HEIGHTS row by row, that are laid, on about the floor of the first laid one found."
+  (declare (type (simple-array single-float (*)) heights) (type fixnum n a b))
+  (let ((laid 0) (floor most-negative-single-float))
+    (declare (type fixnum laid) (type single-float floor))
+    (loop for (i j) in '((-1 -1) (0 -1) (-1 0) (0 0))
+          for ci = (+ a i) and cj = (+ b j)
+          do (when (and (< -1 ci n) (< -1 cj n))
+               (let ((h (aref heights (+ ci (* cj n)))))
+                 (when (< most-negative-single-float h)
+                   (when (= floor most-negative-single-float) (setf floor h))
+                   (when (< (abs (- h floor)) 0.3) (incf laid))))))
+    (* 0.25 laid)))
 
 (defvar *skin-floors* () "Each kind's drawer in the current scene.")
 
@@ -414,7 +437,8 @@ world coordinates on the face, and the top of a wall cell's skin (far up for a f
                                                  :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
                                                              (,vbo :size 3 :offset 12 :stride ,stride :index 1)
                                                              (,vbo :size 3 :offset 24 :stride ,stride :index 2)
-                                                             (,vbo :size 3 :offset 36 :stride ,stride :index 3))))))
+                                                             (,vbo :size 3 :offset 36 :stride ,stride :index 3)
+                                                             (,vbo :size 1 :offset 48 :stride ,stride :index 4))))))
 
 (defun skin-texture (floor)
   (// 'hexmaw (skin-kind-property (skin-kind floor) :texture)))
@@ -440,14 +464,18 @@ world coordinates on the face, and the top of a wall cell's skin (far up for a f
         (kind (skin-kind floor))
         (k 0)
         (most (* *max-skin-cells* 6 *skin-vertex-floats*))
-        (lift *skin-lift*))
-    (declare (type (simple-array single-float (*)) data) (type fixnum k most))
+        (lift *skin-lift*)
+        (cover-p (eq :cover (skin-kind-property (skin-kind floor) :edge)))
+        (q 1f0))
+    (declare (type (simple-array single-float (*)) data) (type fixnum k most) (type single-float q))
+    ;; Q is the cover PUT writes: set before each corner.
     (flet ((put (x y z cx cz r nx ny nz u v top)
              (setf (aref data k) x (aref data (+ k 1)) y (aref data (+ k 2)) z
                    (aref data (+ k 3)) cx (aref data (+ k 4)) cz (aref data (+ k 5)) r
                    (aref data (+ k 6)) nx (aref data (+ k 7)) ny (aref data (+ k 8)) nz
-                   (aref data (+ k 9)) u (aref data (+ k 10)) v (aref data (+ k 11)) top)
-             (incf k 12)))
+                   (aref data (+ k 9)) u (aref data (+ k 10)) v (aref data (+ k 11)) top
+                   (aref data (+ k 12)) q)
+             (incf k 13)))
       (loop for entry across *skin-patches*
             when (eq kind (aref entry 11))
               do (let* ((cx (aref entry 0)) (cz (aref entry 2)) (r (aref entry 3))
@@ -463,13 +491,16 @@ world coordinates on the face, and the top of a wall cell's skin (far up for a f
                            (let* ((x0 (float (+ ox (* a c)) 0f0)) (z0 (float (+ oz (* b c)) 0f0))
                                   (x1 (float (+ x0 c) 0f0)) (z1 (float (+ z0 c) 0f0))
                                   (y (float (+ h lift) 0f0)))
-                             ;; Unless the whole cell lies outside its circle.
-                             (when (< (+ (expt (- (+ x0 (* 0.5 c)) cx) 2) (expt (- (+ z0 (* 0.5 c)) cz) 2))
-                                      (expt (+ r (* 0.71 c)) 2))
-                               (put x0 y z0 cx cz r 0f0 1f0 0f0 x0 z0 far) (put x1 y z1 cx cz r 0f0 1f0 0f0 x1 z1 far)
-                               (put x1 y z0 cx cz r 0f0 1f0 0f0 x1 z0 far)
-                               (put x0 y z0 cx cz r 0f0 1f0 0f0 x0 z0 far) (put x0 y z1 cx cz r 0f0 1f0 0f0 x0 z1 far)
-                               (put x1 y z1 cx cz r 0f0 1f0 0f0 x1 z1 far)))))))
+                             ;; Unless the whole cell lies outside its circle (a circle kind's).
+                             (when (or cover-p
+                                       (< (+ (expt (- (+ x0 (* 0.5 c)) cx) 2) (expt (- (+ z0 (* 0.5 c)) cz) 2))
+                                          (expt (+ r (* 0.71 c)) 2)))
+                               (flet ((corner (x z i j)
+                                        (setf q (if cover-p (float (skin-corner-cover heights n (+ a i) (+ b j)) 0f0) 1f0))
+                                        (put x y z cx cz r 0f0 1f0 0f0 x z far)))
+                                 (corner x0 z0 0 0) (corner x1 z1 1 1) (corner x1 z0 1 0)
+                                 (corner x0 z0 0 0) (corner x0 z1 0 1) (corner x1 z1 1 1))))))))
+                   (setf q 1f0)
                    ;; Its wall cells, a hair out from their faces.
                    (let ((top (float (+ (aref entry 1) *skin-wall-height*) 0f0)))
                      (loop for w from 0 below (length walls) by 7
@@ -507,6 +538,7 @@ world coordinates on the face, and the top of a wall cell's skin (far up for a f
           (setf (uniform program "rim_color") (vec r g b)))
         (destructuring-bind (r g b) (skin-kind-property (skin-kind floor) :inner)
           (setf (uniform program "inner_color") (vec r g b)))
+        (setf (uniform program "cover_edge") (if (eq :cover (skin-kind-property (skin-kind floor) :edge)) 1.0 0.0))
         (render-array (skin-vao floor) :vertex-count count)))))
 
 (define-class-shader (skin-floor :vertex-shader)
@@ -514,6 +546,7 @@ world coordinates on the face, and the top of a wall cell's skin (far up for a f
 layout (location = 1) in vec3 in_patch;
 layout (location = 2) in vec3 in_normal;
 layout (location = 3) in vec3 in_face;
+layout (location = 4) in float in_cover;
 uniform mat4 view_matrix;
 uniform mat4 projection_matrix;
 out vec3 v_world_position;
@@ -521,6 +554,7 @@ out vec3 v_view_position;
 out vec3 v_patch;
 out vec3 v_normal;
 out vec3 v_face;
+out float v_cover;
 
 void main(){
   vec4 view_position = view_matrix * vec4(position, 1.0);
@@ -530,6 +564,7 @@ void main(){
   v_patch = in_patch;
   v_normal = in_normal;
   v_face = in_face;
+  v_cover = in_cover;
 }")
 
 (define-class-shader (skin-floor :fragment-shader)
@@ -538,10 +573,12 @@ in vec3 v_view_position;
 in vec3 v_patch;
 in vec3 v_normal;
 in vec3 v_face;
+in float v_cover;
 uniform sampler2D texture_image;
 uniform float texels_per_metre;
 uniform vec3 rim_color;
 uniform vec3 inner_color;
+uniform float cover_edge;
 out vec4 color;
 
 float hash(float n){ return fract(sin(n * 127.1) * 43758.5453); }
@@ -556,8 +593,17 @@ void main(){
   float a = atan(p.y, p.x) / 6.2831853 + 0.5;
   float edge = r - floor(hash(floor(a * 48.0)) * 6.0) / texels_per_metre;
   float d = length(p);
-  if(d > edge) discard;
-  float in_rim = (edge - d) * texels_per_metre;
+  float in_rim;
+  if(cover_edge > 0.5){
+    // Its cells' own outline: the corners' cover, ragged by noise in blocks of 3 texels.
+    vec2 block = floor(v_world_position.xz * texels_per_metre / 3.0);
+    float value = v_cover + (hash(block.x * 7.13 + block.y * 157.31) - 0.5) * 0.4;
+    if(value < 0.5) discard;
+    in_rim = (value - 0.5) * 32.0;
+  }else{
+    if(d > edge) discard;
+    in_rim = (edge - d) * texels_per_metre;
+  }
   // On a wall, a jagged top as well.
   float top = v_face.z - floor(hash(floor(texel.x / 4.0) + 17.0) * 8.0) / texels_per_metre;
   float y = (floor(v_world_position.y * texels_per_metre) + 0.5) / texels_per_metre;

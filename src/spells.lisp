@@ -302,6 +302,25 @@ a touch, a weapon's enchantment."))
 (defmethod effect-direction ((source strike) target)
   (v- (if (typep target 'player) (feet target) (location target)) (strike-origin source)))
 
+(defgeneric effect-shove (source)
+  (:documentation "What an effect delivered by SOURCE does to the player besides its damage, as
+HURT-PLAYER's SHOVE: T for a blow's shove and hit-stop, NIL for none (a creature's held beam, whose
+pulses would otherwise shove and freeze four times a second).")
+  (:method (source) T))
+
+(defgeneric effect-block-cost (source)
+  (:documentation "Stamina the player's raised shield pays for a blow delivered by SOURCE, or NIL for
+the usual *BLOCK-STAMINA-SCALE* a point of its damage.")
+  (:method (source) NIL))
+
+(defclass beam-pulse (strike)
+  ((block-cost :initarg :block-cost :initform NIL :reader beam-pulse-block-cost))
+  (:documentation "The source of one strike of a beam a creature holds (votary.lisp): no shove or
+hit-stop, and its own stamina against a raised shield."))
+
+(defmethod effect-shove ((source beam-pulse)) NIL)
+(defmethod effect-block-cost ((source beam-pulse)) (beam-pulse-block-cost source))
+
 (defun burst-spell (spell point caster)
   "Burst SPELL's effects that have an area over every body within it of POINT, and over the skins
 it reaches (STRIKE-SKINS, skins.lisp: fire melts rime)."
@@ -343,6 +362,9 @@ burst over every body within it of point AT."
 (defparameter *free-projectile-lifetime* 1.0
   "Seconds the player's free spells fly before they vanish: 20 m at the bolt's speed.")
 (defparameter *projectile-size* 0.18 "Collision diameter in metres; the sprite can be bigger.")
+(defparameter *wind-gust* '(0.6 1.4)
+  "Least and most of a wind's turn that one projectile takes (its GUST, drawn from *ROLL-RANDOM*).")
+
 (defparameter *impact-pullback* 0.25
   "Metres back along the flight path where the impact plays, so it isn't buried in the wall.")
 
@@ -362,6 +384,9 @@ for the player.")
    (submerged :initform NIL :accessor submerged
               :documentation "True while it is in a liquid: one cast under water flies on in it,
 and bursts only on entering one from outside.")
+   (gust :initform 1.0 :accessor gust
+         :documentation "How hard the winds it flies through bend it, from *WIND-GUST*, drawn as it
+leaves (BLOW-PROJECTILE): so a long shot through a wind can't be aimed off to allow for it.")
    (evade-asked :initform NIL :accessor evade-asked
                 :documentation "The creature last asked whether it evades this (the player's)
 projectile about to reach it, so each is asked once.")
@@ -378,6 +403,12 @@ projectile about to reach it, so each is asked once.")
     rift-pull (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
     rift-swap (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
     rift-push (:cast :rift-cast :flight :rift-flight :impact :rift-impact)
+    rime-shard (:flight :shard-flight :impact :shard-impact)
+    rime-field (:flight :shard-flight :impact :rime-form)
+    hag-nova (:impact :frost-nova)
+    hag-nova-boss (:impact :frost-nova)
+    static-recoil (:impact :votary-recoil)
+    hierophant-recoil (:impact :votary-recoil)
     blood-seed (:cast :bloodroot-spit :impact :seed-impact)
     bloom (:impact :bloom))
   "Each spell's clips (sound.lisp) by event: :CAST where a creature lets it go, :FLIGHT its
@@ -414,7 +445,9 @@ CLASS (a LOBBED-PROJECTILE arcs, bloodroot.lisp)."
                                                         (hunt-target caster)))
                                   :animation (find-fx-animation (projectile-animation spell)))))
     (v<- (projectile-velocity projectile) direction)
-    (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T))
+    (setf (submerged projectile) (and (liquid-at (vx origin) (vy origin) (vz origin)) T)
+          (gust projectile) (let ((range *wind-gust*))
+                              (+ (first range) (random (float (- (second range) (first range)) 0f0) *roll-random*))))
     (nv* (projectile-velocity projectile) (float (projectile-speed spell) 0f0))
     (enter projectile container)
     (attach-glow projectile (light-color spell) (light-radius spell))
@@ -597,6 +630,54 @@ keeping its speed."
                         (vy v) (* speed (+ (* c uy) (* s wy)))
                         (vz v) (* speed (+ (* c uz) (* s wz))))))))))))
 
+;;; Winds: what blows across a projectile in flight and holds back what walks in it, the tornado
+;;; (vortex.lisp) and the rime hag's blizzard (hag.lisp). Each is in *WINDS* (sparks.lisp) while it
+;;; blows, and answers WIND-TURN and WIND-SLOW, and WIND-CARRY for the snow it blows round. A wind
+;;; turns a flight about +Y, the way it blows round, so a projectile is bent the further it flies
+;;; through it: one from close in strikes, one from across it goes wide.
+
+(defparameter *wind-volume* 0.6
+  "How loud the rushing wind the player hears in a wind that holds them back (a blizzard), against a
+tornado's hold.")
+
+(defgeneric wind-turn (wind projectile)
+  (:documentation "Radians a second WIND turns PROJECTILE's flight about +Y, from +X toward +Z (its
+way round); 0 where it doesn't reach it.")
+  (:method (wind projectile) (declare (ignore wind projectile)) 0.0))
+
+(defgeneric wind-slow (wind actor)
+  (:documentation "The fraction of its speed WIND leaves ACTOR (the player or a creature); 1 where
+it doesn't reach it.")
+  (:method (wind actor) (declare (ignore wind actor)) 1.0))
+
+(defun add-wind (wind)
+  (unless (find wind *winds*) (vector-push-extend wind *winds*)))
+
+(defun remove-wind (wind)
+  (let ((at (position wind *winds*)))
+    (when at
+      (replace *winds* *winds* :start1 at :start2 (1+ at))
+      (decf (fill-pointer *winds*)))))
+
+(defun wind-slow-factor (actor)
+  "The fraction of its speed the winds leave ACTOR."
+  (let ((k 1.0))
+    (loop for wind across *winds* do (setf k (* k (wind-slow wind actor))))
+    k))
+
+(defun blow-projectile (projectile dt)
+  "Turn PROJECTILE's flight by the winds it is in, for DT seconds."
+  (when (< 0 (fill-pointer *winds*))
+    (let ((turn 0.0))
+      (loop for wind across *winds* do (incf turn (wind-turn wind projectile)))
+      (unless (= turn 0.0)
+        (let* ((a (* turn (gust projectile) dt))
+               (c (cos a)) (s (sin a))
+               (v (projectile-velocity projectile))
+               (x (vx v)) (z (vz v)))
+          (setf (vx v) (- (* c x) (* s z))
+                (vz v) (+ (* s x) (* c z))))))))
+
 (defparameter *evade-look-ahead* 0.2
   "Seconds of flight ahead of the player's projectile that a creature sees it coming (EVADE-PROJECTILE).")
 
@@ -666,6 +747,7 @@ least: so the plain Fire Bolt melts rime.")
                           (and (not (eq (caster spell-projectile) *player*)) *player*))))
           (when (and target (not (eq target (caster spell-projectile))) (target-live-p target))
             (steer spell-projectile (float dt 0f0) target))))
+      (blow-projectile spell-projectile (float dt 0f0))
       (when (and *player* (eq (caster spell-projectile) *player*))
         (look-ahead spell-projectile r))
       (nv+* loc (projectile-velocity spell-projectile) dt)
@@ -1600,14 +1682,16 @@ a held beam: its effects over time and statuses are whole, since a strike only r
     pulse))
 
 (defun beam-end (origin direction caster)
-  "Where a beam from ORIGIN along unit vector DIRECTION stops, and the creature it reached
-there or NIL."
+  "Where a beam from ORIGIN along unit vector DIRECTION stops, and the body it reached there (a
+creature, or the player when CASTER is anyone else) or NIL."
   (let ((point (vcopy origin))
         (r 0.04)
-        (wet (liquid-at (vx origin) (vy origin) (vz origin))))
+        (wet (liquid-at (vx origin) (vy origin) (vz origin)))
+        (player (and *player* (not (eq caster *player*)) (< 0 (health *player*)) *player*)))
     (loop repeat (ceiling *beam-range* *beam-step*)
           do (nv+* point direction *beam-step*)
-             (let ((victim (creature-at point *beam-reach* caster)))
+             (let ((victim (or (creature-at point *beam-reach* caster)
+                               (and player (player-at-p player point *beam-reach*) player))))
                (when victim
                  (return-from beam-end (values point victim))))
              (when (or (solid-overlapping (vx point) (- (vy point) r) (vz point) r (* 2 r))
@@ -1620,7 +1704,8 @@ there or NIL."
   "Strike with SPELL along unit vector DIRECTION from ORIGIN for CASTER, at once. Returns where it
 stopped. QUIET, it makes no sound."
   (multiple-value-bind (end victim) (beam-end origin direction caster)
-    (cond ((and victim (shielded-p victim origin))
+    ;; A creature's shield stops it here; the player's is HURT-PLAYER's to meet.
+    (cond ((and (typep victim 'creature) (shielded-p victim origin))
            (block-hit victim)
            (unless quiet (play-sound :shield-deflect end)))
           (T
@@ -1641,7 +1726,7 @@ stopped. QUIET, it makes no sound."
    (end :initarg :end :initform (vec 0 0 1) :reader beam-end-point)
    (color :initarg :color :initform (vec 1 1 1) :reader beam-color)
    (held :initarg :held :initform NIL :accessor beam-held
-         :documentation "True while the player holds it: it stays lit, and fades once let go.")
+         :documentation "True while its caster holds it: it stays lit, and fades once let go.")
    (age :initform 0.0 :accessor age)))
 
 (defparameter *beam-segments* 48 "Quads along a beam's ribbon. Read when it is made (a restart).")

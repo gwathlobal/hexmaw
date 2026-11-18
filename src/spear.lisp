@@ -100,12 +100,14 @@ broken (IMPALE)."
 (defun sweep-hit (player)
   "Sweep the haft through every creature in its arc: each shoved, staggered only in the wind-up of
 an attack and not poised (BASH-HIT's rules). One a shield covers glances off it, and the player
-reels back once."
+reels back once. With no one in it, it strikes the wall."
   (let ((feet (feet player))
-        (glanced NIL))
+        (glanced NIL)
+        (struck NIL))
     (loop for c across *creatures*
           when (and (not (dead c)) (blow-reaches-p player c *sweep-reach* *sweep-arc*))
-            do (if (shielded-p c feet)
+            do (setf struck T)
+               (if (shielded-p c feet)
                    (progn
                      (play-sound :bash-glance (location c))
                      (block-hit c)
@@ -119,7 +121,10 @@ reels back once."
                                     (float (* *sweep-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0)))))
     (when glanced
       (shove-player player (location glanced) *bash-recoil*)
-      (break-guard player *bash-recoil-guard*))))
+      (break-guard player *bash-recoil-guard*))
+    ;; With no one in its arc, the haft strikes the wall the crosshair meets (WALL-STRIKE, sword.lisp).
+    (unless struck
+      (wall-strike player :haft *sweep-reach*))))
 
 (define-shader-entity spear (sword)
   ((animation :initform (find-fx-animation 'spear))))
@@ -136,4 +141,4 @@ reels back once."
           (T (call-next-method)))))
 
 (defun add-spear (container)
-  (enter (make-instance 'spear) container))
+  (add-weapon-sprite 'spear container))

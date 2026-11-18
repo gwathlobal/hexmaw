@@ -30,6 +30,10 @@
 (defparameter *sword-swing-first* 4 "Strip index of the slash's first frame.")
 
 (defparameter *hotbar-keys* '(:1 :2 :3 :4 :5 :6 :7 :8 :9) "The key of each hotbar slot.")
+(defvar *weapon-sprites* ()
+  "The weapon sprites on screen, by the class each was made as (sword, spear, maul, shield):
+WEAPON-TIP-DIRECTION reads where they are.")
+
 (defparameter *weapon-switch-time* 0.15 "Seconds to lower a weapon, and again to raise the next.")
 
 (defparameter *swing-frame-times* '(0.05 0.07 0.07 0.04 0.06 0.07 0.08 0.08)
@@ -280,8 +284,119 @@ be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
         (swing-miss player weapon))))
 
 (defgeneric swing-miss (player weapon)
-  (:documentation "WEAPON's swing found no one living to land on: the maul pulps a corpse (maul.lisp).")
-  (:method (player weapon) (declare (ignore player weapon)) NIL))
+  (:documentation "WEAPON's swing found no one living to land on: it strikes the wall in its reach
+(WALL-STRIKE); the maul first pulps a corpse (maul.lisp).")
+  (:method (player weapon) (wall-strike player weapon (swing-reach weapon))))
+
+;;; A blow that finds no one strikes the wall where its weapon's tip is on screen at the hit frame
+;;; (*WEAPON-TIPS*): sparks and grit off stone (SOLID-STRIKE, greybox.lisp; WALL-SPARKS, sparks.lisp),
+;;; chips off ice, splinters off wood, a puff off snow, with a sound and a little of the feel of a
+;;; hit, always less than one. The line goes from the eye through that pixel, so the sparks start at
+;;; the tip whatever the window's size (the weapons' art pixels are whole screen pixels, so a fixed
+;;; offset from the crosshair would drift with it).
+
+(defparameter *wall-strikes*
+  '(:sword (:sparks 8 :grit 4 :speed (3.0 7.0) :spread 0.8
+            :sound :blade-hit-stone :wood-sound :blade-hit-wood)
+    :spear (:sparks 8 :grit 3 :speed (3.0 7.5) :spread 0.5
+            :sound :blade-hit-stone :wood-sound :blade-hit-wood)
+    ;; (:CHARGE least full): the least charge's, then the full one's.
+    :maul (:sparks (:charge 8 20) :grit (:charge 8 16) :speed (:charge (3.0 6.0) (3.0 9.0)) :spread 1.0
+           :sound :maul-hit-stone :wood-sound :blade-hit-wood
+           :camera (:charge 0.2 0.4) :hit-stop (:charge 0.02 0.04))
+    :shield (:sparks 3 :grit 5 :speed (2.0 5.0) :spread 0.9
+             :sound :shield-block :wood-sound :shield-block :recoil 1.5)
+    :haft (:sparks 0 :grit 5 :speed (1.5 4.0) :spread 1.0
+           :sound :bone-hit :wood-sound :bone-hit))
+  "Per blow (a weapon's keyword, :SHIELD for the bash, :HAFT for the spear's sweep), what striking a
+wall throws (WALL-SPARKS' counts, speed and spread, before the surface's share), the sound on
+stone or ice and on wood (snow is always a footstep's crunch), and the feel: a :CAMERA kick and
+:HIT-STOP (by the maul's charge), a :RECOIL in m/s.")
+
+(defparameter *weapon-tips*
+  '(:sword (sword 140 167) :spear (spear 165 18) :haft (spear 337 102)
+    :maul (maul 111 117) :shield (shield 182 10))
+  "Per blow, the sprite (a key of *WEAPON-SPRITES*) and the art pixel of its strip's cell, from the
+cell's top-left corner, where the weapon strikes in the blow's hit frame: the sword's blade tip
+(strip frame 8), the spear's point at full extension (8), the spearhead leading the sweep (14),
+the maul head's top (8), the shield's upper rim (5). Measured as the topmost (the sweep's,
+rightmost) opaque pixel of that frame.")
+
+(defun weapon-tip-direction (player blow)
+  "The unit vector from PLAYER's eye through where BLOW's weapon tip is on screen (*WEAPON-TIPS*),
+as three values, or NIL if its sprite isn't there."
+  (destructuring-bind (&optional class (ax 0) (ay 0)) (getf *weapon-tips* blow)
+    (let ((sprite (and class (getf *weapon-sprites* class))))
+      (when (and sprite (slot-boundp sprite 'animation))
+        (let* ((atlas (animation-atlas (sprite-animation sprite)))
+               (cw (float (getf atlas :cell-width) 0f0))
+               (ch (float (getf atlas :cell-height) 0f0))
+               (loc (location sprite))
+               (size (scaling sprite))
+               ;; Window pixels, from the bottom-left (the HUD's quads stand on their corner).
+               (px (+ (vx loc) (* (vx size) (/ (+ ax 0.5) cw))))
+               (py (+ (vy loc) (* (vy size) (/ (- ch ay 0.5) ch))))
+               (context (context +main+))
+               (w (float (width context) 0f0))
+               (h (float (height context) 0f0))
+               (tan-half (tan (* 0.5 (float (fov player) 0f0) (/ (float pi 0f0) 180))))
+               (sx (* (/ (- px (* 0.5 w)) (* 0.5 w)) tan-half (/ w h)))
+               (sy (* (/ (- py (* 0.5 h)) (* 0.5 h)) tan-half))
+               (f (look-direction player))
+               (yaw (vy (rotation player)))
+               ;; Right, and up as right × forward.
+               (rx (cos yaw)) (rz (sin yaw))
+               (ux (- (* 0 (vz f)) (* rz (vy f))))
+               (uy (- (* rz (vx f)) (* rx (vz f))))
+               (uz (- (* rx (vy f)) (* 0 (vx f))))
+               (dx (+ (vx f) (* sx rx) (* sy ux)))
+               (dy (+ (vy f) (* sy uy)))
+               (dz (+ (vz f) (* sx rz) (* sy uz)))
+               (len (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+          (values (/ dx len) (/ dy len) (/ dz len)))))))
+
+(defun wall-strike-value (value charge)
+  "VALUE as *WALL-STRIKES* gives it, at CHARGE (0 to 1) if it is (:CHARGE least full)."
+  (if (and (consp value) (eq :charge (first value)))
+      (destructuring-bind (least full) (rest value)
+        (if (consp least)
+            (mapcar (lambda (l f) (maul-lerp charge l f)) least full)
+            (maul-lerp charge least full)))
+      value))
+
+(defun wall-strike (player blow reach &key (charge 0.0))
+  "BLOW (a key of *WALL-STRIKES*) found no one: if the line from PLAYER's eye through its weapon's
+tip on screen (WEAPON-TIP-DIRECTION; the crosshair without one) meets a solid within REACH metres
+ahead, strike it there. True if it did."
+  (let ((props (getf *wall-strikes* blow))
+        (eye (location player))
+        (ahead (look-direction player)))
+    (when props
+      (multiple-value-bind (dx dy dz) (weapon-tip-direction player blow)
+        (unless dx (setf dx (vx ahead) dy (vy ahead) dz (vz ahead)))
+        ;; REACH is how far ahead, so a line off to the side reaches as deep a wall.
+        (let ((range (/ reach (max 0.6 (+ (* dx (vx ahead)) (* dy (vy ahead)) (* dz (vz ahead)))))))
+          (multiple-value-bind (s x y z nx ny nz)
+              (wall-strike-point (vx eye) (vy eye) (vz eye) dx dy dz range)
+            (when s
+              (flet ((by-charge (key) (wall-strike-value (getf props key) charge)))
+                (let ((strike (solid-strike s))
+                      (at (vec x y z)))
+                  (wall-sparks x y z nx ny nz dx dy dz strike
+                               :sparks (round (by-charge :sparks)) :grit (round (by-charge :grit))
+                               :speed (by-charge :speed) :spread (getf props :spread))
+                  (play-sound (case strike
+                                (:snow :footstep-snow)
+                                (:wood (getf props :wood-sound))
+                                (T (getf props :sound)))
+                              at)
+                  (let ((camera (getf props :camera))
+                        (stop (getf props :hit-stop))
+                        (recoil (getf props :recoil)))
+                    (when camera (kick-camera (by-charge :camera) player))
+                    (when stop (hit-stop (by-charge :hit-stop)))
+                    (when recoil (shove-player player at recoil)))
+                  T)))))))))
 
 (defgeneric swing-strike (player weapon target)
   (:documentation "WEAPON's swing lands on TARGET: hurt, shoved, and the weapon's enchantment.
@@ -300,9 +415,9 @@ The spear's thrust counters a charge instead (spear.lisp).")
 (defun bash-hit (player)
   "Bash the creature in front of PLAYER. Against a shield that covers it, the bash glances
 off and the player reels back; otherwise it hurts and shoves, staggering only a creature
-winding up an attack and not already poised from a bash."
+winding up an attack and not already poised from a bash. With no one there, it strikes the wall."
   (let ((target (swing-target player *bash-reach* *bash-arc*)))
-    (cond ((null target))
+    (cond ((null target) (wall-strike player :shield *bash-reach*))
           ((shielded-p target (feet player))
            (play-sound :bash-glance (location target))
            (block-hit target)
@@ -445,8 +560,13 @@ puts on the screen's middle; or NIL to keep the strip against the bottom-right c
           (+ (swing-first sword) swing)
           (mod (floor (* (age sword) (animation-fps (sprite-animation sword)))) (idle-frames sword))))))
 
+(defun add-weapon-sprite (class container)
+  (let ((sprite (make-instance class)))
+    (setf (getf *weapon-sprites* class) sprite)
+    (enter sprite container)))
+
 (defun add-sword (container)
-  (enter (make-instance 'sword) container))
+  (add-weapon-sprite 'sword container))
 
 (defmethod render :around ((sword sword) (program shader-program))
   (when (and *player* (eq (weapon *player*) (held-weapon sword)))
@@ -538,7 +658,7 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
         (setf (vw glow) 0.0))))
 
 (defun add-shield (container)
-  (enter (make-instance 'shield) container))
+  (add-weapon-sprite 'shield container))
 
 (defun shield-frame (player)
   "Strip frame showing PLAYER's shield: the bash's, else how far it is raised."

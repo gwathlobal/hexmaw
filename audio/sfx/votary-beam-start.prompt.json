@@ -1,0 +1,21 @@
+{
+  "prompt": "A beam of lightning bursting from a caster's hands: a sharp electric crack and a sizzling zap that snaps into a hum. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-votary-beam-start.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 0.6,
+  "output_format": "pcm_44100",
+  "n": 3,
+  "created": 1794888878,
+  "request_ids": [
+    null,
+    null,
+    null
+  ],
+  "seconds": [
+    0.6,
+    0.6,
+    0.6
+  ]
+}

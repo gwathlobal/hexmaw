@@ -1,0 +1,28 @@
+Pixel-art sprite sheet: the pain (flinch) animation of the RIME HAG, a witch of the frozen caves who throws shards of ice, freezes the floor under her foes and bursts into a nova of frost when they come close, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The rime hag's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a stooped, hunched old crone of a little under a man's height, bent at the back, leaning her weight on a staff in her left hand; a long cloak and hood of shaggy GREY FUR stiff and frosted white with hoarfrost at its edges; a MANTLE OF ICICLES hanging from her shoulders over the fur like a short cape of pale blue-white spikes; long thin arms and bony hands with BLUE-WHITE SKIN, a gaunt old face under the hood with pale white eyes, long lank white hair; a STAFF OF BLACK ICE, dark and glassy, taller than she is, topped by a FROZEN LANTERN, a small iron cage around a cold glowing core of pale cyan-white light; ragged hems, bare frostbitten feet. Also the shading style.
+2. The rime hag standing, seen from THIS sheet's camera view. Match its camera angle, the way she faces, her pixel size, outline weight, scale and ground line exactly.
+(A further reference may follow; the game's style anchor sheet is the LAST reference, for the style only.)
+
+She has two arms and two legs, no more. The staff stays in her left hand in every frame. Any frost or cold light is pale blue-white or cyan-white, drawn as solid pixels on or right next to her, never a soft halo on the magenta.
+
+LAYOUT
+- One horizontal row of 3 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 3 the 2 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the hag standing, exactly as tall, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stay on the same ground line in every cell, at the same height as in reference 2.
+- The whole figure, including the staff and its lantern, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, mist, snow or light rays. Only the rime hag.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink, purple or cyan glow bleeding into the background.
+
+HOUSE STYLE (Hexmaw; attach art/style/anchor.png as a style reference, and say which reference it is):
+- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.
+- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.
+- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.
+- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.
+
+THE FLINCH: a sharp, readable reaction to a blow, in the spirit of a Doom pain frame. It plays for a third of a second when she is struck by a sword or a fire bolt. It must read clearly as hurt, not as an attack.
+- Cell 2, JOLT: the instant of the hit. Her head snapped back, the hood falling back from her face, her mouth open in a shriek, the free arm flung up, a few icicles of the mantle snapping off as solid pale pieces right beside her; she clutches the staff to keep her feet.
+- Cell 3, STAGGER: a moment later. She doubles forward over the staff, lower than standing, the free hand clutching her middle, the head bowed, the lantern's light dimmed.

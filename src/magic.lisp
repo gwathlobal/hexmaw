@@ -18,9 +18,12 @@
 (defparameter *slowest* 0.4 "The least fraction of its speed a slow leaves anything.")
 (defparameter *element-resistances*
   '((acolyte :fire 0.5) (skeleton-warrior :frost 0.5) (gale-wraith :shock 0.5)
+    (rime-hag :frost 0.75) (rime-hag :fire -0.5)
+    (arc-votary :shock 0.75)
     ;; The bloodroot (bloodroot.lisp): its drain resisted too, as a pseudo-element.
     (bloodroot :drain 0.5) (bloodroot :frost 0.25) (bloodroot :fire -0.5))
-  "(CLASS ELEMENT FRACTION): CLASS and its subclasses take FRACTION less of ELEMENT's damage.")
+  "(CLASS ELEMENT FRACTION): CLASS and its subclasses take FRACTION less of ELEMENT's damage; a
+negative FRACTION, more (the rime hag and the bloodroot take half again of fire).")
 (defparameter *element-tints*
   '(:fire (1.0 0.45 0.1) :frost (0.45 0.75 1.0) :shock (0.85 0.7 1.0) :arcane (0.8 0.4 1.0))
   "Colour a creature takes on while a status of that element is on it.")
@@ -87,9 +90,12 @@ HUD's time bar (status-icons.lisp); NIL until set, when LEFT stands in.")
       (setf (statuses actor) (delete-if (lambda (status) (<= (status-left status) 0)) (statuses actor))))))
 
 (defun slow-factor (actor)
-  "Fraction of its speed ACTOR's slow leaves it, 1 with none."
-  (let ((slow (status-of actor :slow)))
-    (if slow (max *slowest* (- 1.0 (/ (status-magnitude slow) 100.0))) 1.0)))
+  "Fraction of its speed ACTOR's slow and the winds it is in (WIND-SLOW) leave it, 1 with none."
+  (let ((slow (status-of actor :slow))
+        (wind (wind-slow-factor actor)))
+    (if (or slow (< wind 1.0))
+        (max *slowest* (* wind (if slow (- 1.0 (/ (status-magnitude slow) 100.0)) 1.0)))
+        1.0)))
 
 (defun absorb-ward (actor amount)
   "The part of AMOUNT damage that gets past ACTOR's ward, which loses the rest."
@@ -193,6 +199,7 @@ CASTER and those CASTER spares."
     (if (< 0 (effect-duration effect))
         (afflict target :damage amount (effect-duration effect) :element element :caster (caster source))
         (hurt-player target amount (effect-origin source)
+                     :shove (effect-shove source) :blockable T :block-cost (effect-block-cost source)
                      :unblockable (effect-unblockable-p source) :by (caster source)))
     (element-rider target element)))
 

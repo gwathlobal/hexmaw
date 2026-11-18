@@ -83,7 +83,7 @@ run's first levels had neither.")
   "Gold a generated level's gold pickups hold, per monster in it, at the first depth (GOLD-SCALE).
 Placed after the health and mana, on the spots they leave.")
 (defparameter *kill-gold* '((imp 4) (skeleton-warrior 3) (acolyte 7) (harpy 7) (knight 10) (necromancer 14)
-                            (gale-wraith 12) (ogre 16) (bloodroot 18) (boss 120))
+                            (gale-wraith 12) (ogre 16) (rime-hag 9) (arc-votary 10) (bloodroot 18) (boss 120))
   "Coin a monster the player kills drops straight into the bag, by class (the first that it is
 of), at the first depth (GOLD-SCALE). One that is no class here drops 5.")
 (defparameter *gold-depth-step* 0.3 "How much more gold each depth past the first is worth.")

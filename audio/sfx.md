@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-152 clips; tier 1: 96 clips, 341 s of takes, tier 2: 30 clips, 77 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 489 s, about 4,890 credits for everything.
+155 clips; tier 1: 96 clips, 341 s of takes, tier 2: 33 clips, 82 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 494 s, about 4,940 credits for everything.
 
 ## Player: weapons and shield
 
@@ -48,6 +48,9 @@ First-person, so stereo is fine (`:speech`).
 | maul-crush | 1 | P | 0.8 | 3 | `swing-strike :maul` and `swing-miss :maul` maul.lisp, a kill torn apart or a corpse pulped |
 | maul-guard-break | 1 | P | 0.8 | 3 | `knock-guard-aside` maul.lisp, a full blow on a shield or ward |
 | earthshake | 1 | P | 1.2 | 3 | `earthshake-hit` maul.lisp |
+| blade-hit-stone | 2 | P | 0.5 | 3 | `wall-strike` sword.lisp, a sword slash or spear thrust that finds no one striking stone, rock or ice |
+| maul-hit-stone | 2 | P | 0.7 | 3 | `wall-strike` sword.lisp, a maul blow that finds no one, on stone, rock or ice |
+| blade-hit-wood | 2 | P | 0.5 | 3 | `wall-strike` sword.lisp, a blow that finds no one striking a beam or planks (snow plays `footstep-snow`, a bash on a wall `shield-block`, the haft's sweep `bone-hit`) |
 
 ## Player: spells
 
@@ -159,7 +162,26 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | rift-impact | 1 | P | 0.8 | 3 | `impact` spells.lisp, a rift |
 | rift-blink | 1 | P | 0.8 | 3 | `rift-move` riftwalker.lisp, the teleport, at both ends: a blink, a pull, a push, a swap, a called ally |
 | rift-call | 2 | P | 1.2 | 2 | `begin-call` riftwalker.lisp, where the ally will step out (it steps out 1 s later) |
-| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker |
+| hag-alert | 1 | P | 1.2 | 3 | alert: rime hag |
+| hag-pain | 1 | P | 0.5 | 3 | pain: rime hag |
+| hag-death | 1 | P | 1.8 | 3 | death: rime hag |
+| hag-cast | 1 | P | 0.6 | 3 | wind-up: the rime hag's shard and rime field (`creature-sound` hag.lisp) |
+| hag-gather | 1 | P | 1.0 | 3 | wind-up: the rime hag's frost nova, the gather (its tell) |
+| frost-nova | 1 | P | 1.2 | 3 | `place-nova` spells.lisp, `hag-nova` (the rime hag's burst) |
+| rime-form | 1 | P | 0.8 | 3 | `impact` spells.lisp, `rime-field`, where it lays its rime patch |
+| shard-flight | 1 | P L | 1.5 | 3 | `launch-projectile` spells.lisp, `rime-shard` and `rime-field` |
+| shard-impact | 1 | P | 0.6 | 3 | `impact` spells.lisp, `rime-shard` |
+| blizzard | 1 | P L | 4 | 2 | `light-blizzard` hag.lisp, the rime hag's blizzard, until it dies down; volume by `blizzard-strength` |
+| votary-alert | 1 | P | 1.2 | 3 | alert: arc votary |
+| votary-pain | 1 | P | 0.5 | 3 | pain: arc votary |
+| votary-death | 1 | P | 1.8 | 3 | death: arc votary |
+| votary-charge | 1 | P | 1.0 | 3 | wind-up: the votary's beam, its 0.9 s charge (`start-attack`) |
+| votary-beam-start | 1 | P | 0.6 | 3 | `release-attack` votary.lisp, the beam leaves |
+| votary-beam | 1 | P L | 2 | 2 | `hold-votary-beam` votary.lisp, while the beam is held |
+| arc-zap | 2 | P | 0.5 | 3 | `votary-pulse`, `water-strike` votary.lisp: the beam jumps from an ally, or runs through water |
+| votary-whine | 2 | P L | 3 | 2 | `update-recoil` votary.lisp: its static recoil's stored charge, louder as it fills |
+| votary-recoil | 1 | P | 1.4 | 3 | `place-nova` spells.lisp, `static-recoil` (the arc votary's burst) |
+| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker, arc votary |
 | bloodroot-alert | 1 | P | 1.2 | 2 | alert: bloodroot |
 | bloodroot-pain | 1 | P | 0.6 | 2 | pain: bloodroot |
 | bloodroot-death | 1 | P | 1.8 | 2 | death: bloodroot |

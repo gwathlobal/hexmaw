@@ -91,11 +91,17 @@ their values."
 (defmethod saved-slots append ((necromancer necromancer))
   '(raise-target))
 
+(defmethod saved-slots append ((hag rime-hag))
+  '(wary blizzard blizzard-sense))
+
 (defmethod saved-slots append ((wraith gale-wraith))
   '(tempest-point))
 
 (defmethod saved-slots append ((riftwalker riftwalker))
   '(blink-cooldown blink-timer pounce call-target call-point))
+
+(defmethod saved-slots append ((votary arc-votary))
+  '(pulse-timer lost-timer static-charge recoil charge-idle))
 
 (defmethod saved-slots append ((sign rift-sign))
   '(caster centre))
@@ -117,7 +123,7 @@ their values."
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing homing-target projectile-velocity submerged evade-asked))
+  '(spell caster homing homing-target projectile-velocity submerged evade-asked gust))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))

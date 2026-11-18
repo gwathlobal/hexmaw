@@ -23,7 +23,7 @@ legend
   u door underwater, water
   $ pickup floor
   i spawn any south
-  m spawn any south 30
+  m spawn arc-votary|acolyte south 30
 
 plan 0
 #############~~~~~~#####

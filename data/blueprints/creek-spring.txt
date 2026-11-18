@@ -21,7 +21,7 @@ legend
   C door creek, open                 ; and its open middle, over the water
   & water, pickup reward
   i spawn any east
-  m spawn any east 30
+  m spawn arc-votary|acolyte east 30
 
 plan 0
 ########################

@@ -1,0 +1,25 @@
+Pixel-art sprite sheet: a 4-frame SPELL-CASTING animation of the ARC VOTARY, a blind, fanatical storm-priest who calls lightning down between its hands and holds it on its enemies as a beam, for a Doom/Hexen-style first-person game where monsters are drawn as sprites from several camera angles.
+
+REFERENCE IMAGES, in the order attached:
+1. The votary's turnaround sheet (front, front three-quarter, side, rear three-quarter, back). It is the character design: a tall, gaunt storm-priest of a man's height, upright and slightly stooped, in a long ragged hooded robe of deep saturated STORM TEAL (the hood thrown back) over a black under-robe and a black sash, with orange copper wire stitched in zig-zags down the robe; a riveted BRASS collar plate on the chest with a jagged lightning sigil, brass bands on the forearms; a grey, sunken face with an open snarling mouth, its eyes sewn shut, bright yellow-white light blazing out of them; on its head a CROWN OF IRON LIGHTNING RODS, five tall black spikes with brass tips and yellow-white arcs crackling between their tips; bare grey feet; its two clawed hands held apart in front of the chest with a crackling knot of yellow-white lightning between them. Also the shading style.
+2. The votary standing, seen from THIS sheet's camera view. Match its camera angle, the way it faces, its pixel size, outline weight, scale and ground line exactly.
+
+STYLE: as the reference: a hard near-black outline round the whole figure and its main shapes, saturated colours, strong light-and-dark shading lit from the upper left, crisp pixel art. The robe stays deep storm teal and black, the fittings brass and copper, never brown, beige or tan cloth. The only light is the yellow-white lightning (eyes, crown, hands).
+
+It has two arms and two legs, no more, and no weapon. Its eyes stay sewn shut and glowing. Any lightning is yellow-white with a white core, drawn as solid hard-edged pixels on or right next to the figure, never a soft halo on the magenta.
+
+LAYOUT
+- One horizontal row of 5 equal cells, read left to right, each cell as wide as reference 2: cell 1 the standing copy, cells 2 to 5 the 4 frames.
+- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.
+- The cells are separated by thin vertical lines of pure cyan (#00FFFF), each running the full height of the image.
+- Cell 1 is a plain copy of reference 2: the votary standing, exactly as tall, crown included, in exactly the same pose. It sets the scale for the other frames, which are drawn at the same scale.
+- The feet stay on the same ground line in every cell, at the same height as in reference 2.
+- The whole figure, crown and lightning included, fits inside each cell with a clear magenta margin. Nothing touches a cell edge or a cyan line, and nothing is cropped.
+- No text, labels, numbers, frame borders, speed lines, motion blur, smear trails, dust or light rays. Only the votary.
+- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink, purple or cyan glow bleeding into the background.
+
+THE CAST: it charges a bolt of lightning between its hands and then holds it as a beam on its enemy. The second frame is held for a second as the warning, and the third for three seconds while the beam pours out, so both are big, readable poses.
+- Frame 2 (cell 2), GATHER: the hands drawn wide apart at shoulder height, fingers spread and clawed, a long crackling arc of yellow-white lightning jumping between them, zig-zag and branching; the crown's arcs flaring brighter; the head tipped back, the glowing eyes to the ceiling, the mouth open.
+- Frame 3 (cell 3), CHARGED: the hands brought close together in front of the chest, palms facing, a tight blazing knot of white and yellow lightning between them, as big as its head, small forks of lightning crawling over its forearms and the brass bands; the body braced, leaning a little forward.
+- Frame 4 (cell 4), HOLD: both arms thrust straight forward toward the viewer's side of the room, palms together and out, a short stub of white lightning leaving the palms (the beam itself is drawn by the game, so only the first hand's length of it shows); the body leaning into it, the feet braced apart, the robe pressed back.
+- Frame 5 (cell 5), RECOVER: back near the standing pose of reference 2, the hands parting again, a few sparks left between them.
