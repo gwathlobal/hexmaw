@@ -2447,8 +2447,12 @@ cells round where it grew from, every layer, each empty, rooted or burnt (and a 
 for a while). It grows a ring every `*root-ring-time*` (0.4 s, halved in Glut, faster for a haste
 elite; `root-speed`) while the bulb hunts, from its frontier through `nav-step` at a thin body
 (`*root-body*`), so never through a plugged doorway, over lava or into water, out to `*root-reach*`
-(10 m; the Mother Root's 20). A step pointing at its target or a floor splat within
-`*root-lean-reach*` grows every ring, the rest every other (`leans-p`). A rooted cell beside a wall
+(10 m; the Mother Root's 20). Each ring its edge, a circle round where it grew from
+(`carpet-spread`, saved), moves out `*root-spread*` (0.25 m), and a frontier cell grows only into
+neighbours inside it, so it spreads round rather than in the squares a cell's eight neighbours make;
+toward its target or a floor splat within `*root-lean-reach*` the circle bulges, up to twice as far
+straight toward one (`lean-factor`), and a burst of rings (its first three, a Bloom's surge, a seed's)
+moves it twice as far all round. A rooted cell beside a wall
 notes the wall's face and how high it goes (`find-walls`), and the roots climb it to `*root-climb*`
 (2.5 m) over `*root-climb-time*`, a look only. The arena's gate, a solid the nav grid doesn't know,
 is checked by `solid-at`. `roots-at x y z` is the bulb whose live roots a point stands on.

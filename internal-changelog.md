@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A bloodroot's roots spread in round rings, bulging smoothly toward the player and blood, not in
+  squares: each ring moves a circle out (`carpet-spread`) and cells grow only inside it.
 - Blood a bloodroot drinks now slides to it as itself: the splat, made round and glowing, moves along
   the floor to the bulb and dissolves there (a wall splat sends one from the floor at its foot), and
   the glow on the roots under it is a round drop with two smaller ones trailing, not a square streak.

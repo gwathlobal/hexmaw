@@ -18,9 +18,10 @@
 (defparameter *root-reach* 10.0 "Metres from the bulb its main carpet grows to.")
 (defparameter *root-ring-time* 0.4 "Seconds between rings of growth.")
 (defparameter *root-start-rings* 3 "Rings a bulb's carpet has before it notices anything.")
-(defparameter *root-lean* 0.35
-  "How nearly a step of growth must point at its target or at blood to grow every ring; the rest
-grow every other ring.")
+(defparameter *root-spread* 0.25
+  "Metres a carpet's edge moves out a ring, as a circle round where it grew from; toward its target
+or blood it moves out up to twice as fast (LEAN-FACTOR), and in a burst of rings (a Bloom's surge,
+a seed) twice as fast all round.")
 (defparameter *root-lean-reach* 6.0 "Metres within which blood draws the roots toward it.")
 (defparameter *root-climb* 2.5 "Metres up a wall roots climb.")
 (defparameter *root-climb-time* 3.0 "Seconds roots take to climb a wall that high.")
@@ -231,6 +232,8 @@ shader spreads it and climbs its wall from then.")
    (ring-time :initarg :ring-time :initform *root-ring-time* :reader ring-time)
    (ring-timer :initform 0.0 :accessor ring-timer)
    (ring :initform 0 :accessor carpet-ring)
+   (spread :initform 0.0 :accessor carpet-spread
+           :documentation "Metres out from its centre its roots may have grown by now: a circle.")
    (i0 :reader carpet-i0) (j0 :reader carpet-j0) (n :reader carpet-n) (layers :reader carpet-layers)
    (state :reader carpet-state) (born :reader carpet-born) (hold :reader carpet-hold) (frost :reader carpet-frost)
    (floors :reader carpet-floors :documentation "Each rooted cell's floor height, for drawing.")
@@ -387,23 +390,34 @@ arena's gate (a solid the nav grid doesn't know of)."
                 (vector-push z points)))))))
     points))
 
-(defun leans-p (x z dx dz points)
-  "True if a step DX DZ from X Z points at one of POINTS within *ROOT-LEAN-REACH*."
-  (let ((len (sqrt (+ (* dx dx) (* dz dz)))))
-    (loop for p from 0 below (fill-pointer points) by 2
-          thereis (let* ((tx (- (aref points p) x)) (tz (- (aref points (1+ p)) z))
-                         (tl (sqrt (+ (* tx tx) (* tz tz)))))
-                    (and (< 0.01 tl *root-lean-reach*)
-                         (<= *root-lean* (/ (+ (* tx dx) (* tz dz)) (* tl len))))))))
+(defun lean-factor (carpet x z points)
+  "How much faster than *ROOT-SPREAD* CARPET's edge grows toward X Z: up to 1, for a point straight
+out from its centre toward one of POINTS (its target, or blood) within *ROOT-LEAN-REACH* of X Z, and
+less the further round from it, so the circle bulges smoothly toward them."
+  (let* ((at (carpet-centre carpet))
+         (vx (- x (vx at))) (vz (- z (vz at)))
+         (vl (sqrt (+ (* vx vx) (* vz vz))))
+         (best 0.0))
+    (when (< 0.01 vl)
+      (loop for p from 0 below (fill-pointer points) by 2
+            do (let* ((px (aref points p)) (pz (aref points (1+ p)))
+                      (ux (- px (vx at))) (uz (- pz (vz at)))
+                      (ul (sqrt (+ (* ux ux) (* uz uz)))))
+                 (when (and (< 0.01 ul)
+                            (< (+ (expt (- px x) 2) (expt (- pz z) 2)) (expt *root-lean-reach* 2)))
+                   (setf best (max best (/ (+ (* vx ux) (* vz uz)) (* vl ul))))))))
+    best))
 
 (defun grow-ring (carpet &optional points (all NIL))
-  "Grow CARPET a ring: every frontier cell into the neighbours it may root, those POINTS lean
-toward on every ring, the rest on every other (or all at once, ALL)."
+  "Grow CARPET a ring: its circle (CARPET-SPREAD) moves out *ROOT-SPREAD*, further toward POINTS
+(LEAN-FACTOR), or twice as far all round (ALL), and every frontier cell grows into the neighbours it
+may root that lie inside it."
   (let ((grid *nav-grid*)
         (state (carpet-state carpet))
         (frost (carpet-frost carpet))
         (n (carpet-n carpet))
-        (even (evenp (carpet-ring carpet)))
+        (at (carpet-centre carpet))
+        (spread (incf (carpet-spread carpet) (* (if all 2 1) *root-spread*)))
         (*nav-hazards* :avoid)
         (*nav-bodies* NIL)
         (*nav-body-mask* NIL))
@@ -416,20 +430,23 @@ toward on every ring, the rest on every other (or all at once, ALL)."
                          (more NIL))
                      (if (< 0 (aref frost w))
                          (setf more T)
-                         (multiple-value-bind (x z) (cell-point carpet a b)
-                           (loop for di from -1 to 1
-                                 do (loop for dj from -1 to 1
-                                          unless (and (= di 0) (= dj 0))
-                                            do (let ((na (+ a di)) (nb (+ b dj)))
-                                                 (when (and (< -1 na n) (< -1 nb n))
-                                                   (let ((nk (nav-step i j k (+ i di) (+ j dj) radius height step grid)))
-                                                     (when (and nk (cell-allowed-p carpet na nb nk))
-                                                       (if (or all even (and points (leans-p x z di dj points)))
+                         (loop for di from -1 to 1
+                               do (loop for dj from -1 to 1
+                                        unless (and (= di 0) (= dj 0))
+                                          do (let ((na (+ a di)) (nb (+ b dj)))
+                                               (when (and (< -1 na n) (< -1 nb n))
+                                                 (let ((nk (nav-step i j k (+ i di) (+ j dj) radius height step grid)))
+                                                   (when (and nk (cell-allowed-p carpet na nb nk))
+                                                     (multiple-value-bind (x z) (cell-point carpet na nb)
+                                                       (if (<= (sqrt (+ (expt (- x (vx at)) 2) (expt (- z (vz at)) 2)))
+                                                               (* spread (+ 1 (if (and points (not all))
+                                                                                  (lean-factor carpet x z points)
+                                                                                  0.0))))
                                                            (root-cell carpet na nb nk)
                                                            (setf more T))))))))))
-                     (when more (queue-cell carpet w))))))))
+                     (when more (queue-cell carpet w)))))))
     (incf (carpet-ring carpet))
-    (swap-frontier carpet))
+    (swap-frontier carpet)))
 
 (defun regrow-cells (carpet dt)
   "Count CARPET's burnt cells' and frost's time down; a burnt cell that may grow again is empty,
@@ -556,14 +573,16 @@ them, :TEAR tears them up."
     (let ((at (carpet-centre carpet)))
       (list :kind (carpet-kind carpet) :centre (list (vx at) (vy at) (vz at)) :reach (carpet-reach carpet)
             :life (carpet-life carpet) :wither (carpet-wither carpet) :ring-time (ring-time carpet)
-            :ring (carpet-ring carpet) :cells (nreverse cells)))))
+            :ring (carpet-ring carpet) :spread (carpet-spread carpet) :cells (nreverse cells)))))
 
 (defun restore-carpet (owner record)
-  (destructuring-bind (&key kind centre reach life wither ring-time ring cells) record
+  (destructuring-bind (&key kind centre reach life wither ring-time ring spread cells) record
     (let ((carpet (make-instance 'root-carpet :owner owner :kind kind :centre (apply #'vec centre)
                                               :reach reach :life life :ring-time ring-time)))
       (setf (carpet-wither carpet) wither
-            (carpet-ring carpet) ring)
+            (carpet-ring carpet) ring
+            ;; An older save's: as far as its rings would have spread at the least.
+            (carpet-spread carpet) (float (or spread (* ring *root-spread*)) 0f0))
       (loop for (w state age hold frost) in cells
             do (setf (aref (carpet-state carpet) w) state
                      (aref (carpet-born carpet) w) (float (- *root-clock* age) 0f0)
