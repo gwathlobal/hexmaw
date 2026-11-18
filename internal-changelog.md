@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- While the bloodroot's husk is shut, the heartbeats on its roots run back in to the bulb, dimmer,
+  so it can be seen to be shut from a distance.
 - The bloodroot answers attacks from afar: three blows from beyond 4 m shut its husk for 4 s (a
   quarter of ranged damage gets through, it heals 3 a second; a close blow or a forced flinch cracks it
   open for 1.5 times the blow and a reel), and at a target 9 to 26 m off it sends a root burrowing under

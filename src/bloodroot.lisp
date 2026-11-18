@@ -1080,7 +1080,8 @@ higher of them."
     (incf (husk-count bloodroot))))
 
 (defun close-husk (bloodroot)
-  (setf (husk bloodroot) (float *husk-time* 0f0)
+  (setf *roots-dirty* T
+        (husk bloodroot) (float *husk-time* 0f0)
         (husk-count bloodroot) 0
         (husk-timer bloodroot) 0.0)
   (stop-walking bloodroot *husk-time*)
@@ -1089,7 +1090,8 @@ higher of them."
   (play-sound :seed-impact (location bloodroot)))
 
 (defun open-husk (bloodroot)
-  (setf (husk bloodroot) 0.0
+  (setf *roots-dirty* T
+        (husk bloodroot) 0.0
         (getf (cooldowns bloodroot) :husk) (* *husk-cooldown* (depth-scale :cooldown))))
 
 (defun crack-husk (bloodroot)
@@ -1252,7 +1254,7 @@ higher of them."
 (defmethod creature-died :after ((bloodroot bloodroot) by)
   (declare (ignore by))
   (spill-drinks bloodroot)
-  (setf (husk bloodroot) 0.0 (burrow bloodroot) NIL)
+  (setf (husk bloodroot) 0.0 (burrow bloodroot) NIL *roots-dirty* T)
   (when (and *player* (eq bloodroot (getf (snare *player*) :root)))
     (break-snare *player*)))
 
@@ -1338,6 +1340,15 @@ is from its bulb, for the heartbeat running out along the veins.")
 (defparameter *root-beat-speed* 6.0 "Metres a second a heartbeat runs out along the roots.")
 (defparameter *root-vein-glow* 0.45 "How brightly the roots' veins glow between heartbeats, unlit.")
 (defparameter *root-beat-glow* 1.6 "How much more brightly they glow as a heartbeat passes.")
+(defparameter *husk-beat-glow* 0.4
+  "Share of the veins' glow while its husk is shut, the heartbeats running back in to the bulb.")
+
+(declaim (inline beat-distance))
+(defun beat-distance (dist shut)
+  "What a root vertex carries for the heartbeat: its DIST from its bulb, negative while the bulb's
+husk is SHUT, which runs the beats back in, dimmer (ROOT_BEAT)."
+  (declare (type single-float dist))
+  (if shut (- -0.01 dist) dist))
 
 (defvar *root-floor* NIL "The root floor in the current scene.")
 (defvar *root-tufts* NIL "The root tufts in the current scene.")
@@ -1427,7 +1438,8 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
              (incf k 11)))
       (declare (inline put))
       (do-bloodroots (root)
-       (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0)))
+       (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0))
+             (shut (husked-p root)))
         (declare (type single-float bx bz))
         (do-carpets (carpet root)
           (let* ((state (carpet-state carpet))
@@ -1459,7 +1471,7 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
                            (c01 (* keep (corner-cover state floors n layers a b kk f 0 1)))
                            (c11 (* keep (corner-cover state floors n layers a b kk f 1 1))))
                       (declare (type single-float f born frost y cx cz h xa xb za zb c00 c10 c01 c11))
-                      (setf dist (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))))
+                      (setf dist (beat-distance (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))) shut))
                       (put xa y za 0f0 0f0 1f0 c00 frost 0f0 born) (put xb y zb 0f0 0f0 1f0 c11 frost 0f0 born)
                       (put xb y za 0f0 0f0 1f0 c10 frost 0f0 born)
                       (put xa y za 0f0 0f0 1f0 c00 frost 0f0 born) (put xa y zb 0f0 0f0 1f0 c01 frost 0f0 born)
@@ -1522,6 +1534,7 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
   (setf (uniform program "beat_speed") (float *root-beat-speed* 0f0))
   (setf (uniform program "vein_glow") (float *root-vein-glow* 0f0))
   (setf (uniform program "beat_glow") (float *root-beat-glow* 0f0))
+  (setf (uniform program "husk_glow") (float *husk-beat-glow* 0f0))
   (set-drink-uniforms program))
 
 ;;; A drink's light: once a splat's blood is gone, a short streak of light runs along the roots,
@@ -1598,6 +1611,7 @@ uniform float beat_period;
 uniform float beat_speed;
 uniform float vein_glow;
 uniform float beat_glow;
+uniform float husk_glow;
 uniform int drink_count;
 uniform vec4 drink_lanes[8];
 uniform vec2 drink_runs[8];
@@ -1642,10 +1656,13 @@ float vein_of(vec3 c){ return (c.r > 0.4 && c.g + c.b < 0.45 * c.r) ? 1.0 : 0.0;
 // as the aurora's light is, so it stays on the art's few tones.
 float root_beat(vec3 surface, float dist, float clock){
   float vein = (surface.r > 0.4 && surface.g + surface.b < 0.45 * surface.r) ? 1.0 : 0.0;
-  float p = fract((clock - dist / beat_speed) / beat_period);
+  // A DIST below 0: its husk is shut, and the beats run back in to the bulb, dimmer.
+  float shut = dist < 0.0 ? 1.0 : 0.0;
+  float d = abs(dist);
+  float p = fract((clock - mix(1.0, -1.0, shut) * d / beat_speed) / beat_period);
   float beat = exp(-p * p / 0.002) + exp(-(1.0 - p) * (1.0 - p) / 0.002)
              + 0.6 * exp(-(p - 0.16) * (p - 0.16) / 0.002);
-  return vein * floor((vein_glow + beat_glow * beat) * 4.0) / 4.0;
+  return vein * floor((vein_glow + beat_glow * beat) * mix(1.0, husk_glow, shut) * 4.0) / 4.0;
 }
 
 void main(){
@@ -1766,7 +1783,8 @@ much of its carpet is left, and its distance from its bulb.")
              (incf k 12)))
       (declare (inline put))
       (do-bloodroots (root)
-        (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0)))
+        (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0))
+              (shut (husked-p root)))
           (declare (type single-float bx bz))
           (do-carpets (carpet root)
             (let ((state (carpet-state carpet))
@@ -1794,7 +1812,7 @@ much of its carpet is left, and its distance from its bulb.")
                                  (born (+ (aref borns w) (* stagger (tuft-hash i j kk 5))))
                                  (frost (if (< 0 (aref frosts w)) 1f0 0f0)))
                             (declare (type single-float cx cz y scale tw th frame born frost))
-                            (setf dist (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))))
+                            (setf dist (beat-distance (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))) shut))
                             (put cx y cz -0.5f0 0f0 tw th frame born frost keep)
                             (put cx y cz 0.5f0 0f0 tw th frame born frost keep)
                             (put cx y cz 0.5f0 1f0 tw th frame born frost keep)
@@ -1880,6 +1898,7 @@ uniform float beat_period;
 uniform float beat_speed;
 uniform float vein_glow;
 uniform float beat_glow;
+uniform float husk_glow;
 uniform int drink_count;
 uniform vec4 drink_lanes[8];
 uniform vec2 drink_runs[8];
@@ -1924,10 +1943,13 @@ float vein_of(vec3 c){ return (c.r > 0.4 && c.g + c.b < 0.45 * c.r) ? 1.0 : 0.0;
 // as the aurora's light is, so it stays on the art's few tones.
 float root_beat(vec3 surface, float dist, float clock){
   float vein = (surface.r > 0.4 && surface.g + surface.b < 0.45 * surface.r) ? 1.0 : 0.0;
-  float p = fract((clock - dist / beat_speed) / beat_period);
+  // A DIST below 0: its husk is shut, and the beats run back in to the bulb, dimmer.
+  float shut = dist < 0.0 ? 1.0 : 0.0;
+  float d = abs(dist);
+  float p = fract((clock - mix(1.0, -1.0, shut) * d / beat_speed) / beat_period);
   float beat = exp(-p * p / 0.002) + exp(-(1.0 - p) * (1.0 - p) / 0.002)
              + 0.6 * exp(-(p - 0.16) * (p - 0.16) / 0.002);
-  return vein * floor((vein_glow + beat_glow * beat) * 4.0) / 4.0;
+  return vein * floor((vein_glow + beat_glow * beat) * mix(1.0, husk_glow, shut) * 4.0) / 4.0;
 }
 
 void main(){

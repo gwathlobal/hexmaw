@@ -2514,7 +2514,9 @@ fast, spit twice as often, and the sprite washed red, pulsing 0.35 to 0.5 twice 
 onto its roots. **The husk**: `*husk-hits*` (3) blows from beyond `*husk-reach*` (4 m, `striker-close-p`)
 within `*husk-window*` (3 s), counted in `harmed :after`, shut it for `*husk-time*` (4 s) once it isn't
 mid-ability (`update-husk`, `close-husk`): it holds the Bloom's clench, darkened (`show-own-pose`,
-`own-tint`), does nothing else, lets through `*husk-scale*` (a quarter) of what reaches it from afar
+`own-tint`), and its roots' heartbeats run back in to it at `*husk-beat-glow*` (0.4) of their glow, so
+it shows shut from across a room (a root vertex's distance from its bulb, written negative while its
+husk is shut, `beat-distance`, tells `root_beat`); it does nothing else, lets through `*husk-scale*` (a quarter) of what reaches it from afar
 (`blow-damage`, a generic `hurt` and `burn` ask, creature.lisp) and heals `*husk-regen*` (3) a second.
 A blow from within `*husk-reach*`, or one that always flinches (a full maul blow or overcharge, the
 earthshake, a spear's counter), cracks it (`crack-husk`): that blow `*husk-crack-scale*` (1.5) times as
