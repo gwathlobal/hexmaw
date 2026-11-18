@@ -66,10 +66,20 @@ grow every other ring.")
 (defparameter *glut-pulse* 2.0 "The wash's pulses a second.")
 (defparameter *glut-color* (vec 0.85 0.05 0.08))
 
-(defparameter *drink-time* 1.0 "Seconds roots take to drink a splat they reach.")
+(defparameter *drink-time* 1.0 "Seconds a splat takes to be drunk, before its light leaves for the bulb.")
 (defparameter *drink-per-area* 0.03 "Health a splat's art pixel squared of blood gives.")
 (defparameter *drink-max* 25 "Health one splat gives at most.")
 (defparameter *drink-scan* 0.25 "Seconds between looks for splats to drink.")
+(defparameter *drink-delay* 1.0
+  "Seconds a splat glows on the roots, to be seen, before they drink it.")
+(defparameter *drink-flow-speed* 4.0 "M/s a drink's light runs along the roots to the bulb.")
+(defparameter *drink-flow-tail* 1.6 "Metres of roots behind its head a drink's light lights.")
+(defparameter *drink-flow-width* 0.35 "Metres either side of its lane a drink's light reaches.")
+(defparameter *drink-merge* 1.0 "Metres within which a splat's drink joins one not yet on its way.")
+(defparameter *max-drinks* 8 "Drinks on their way to one bulb at most; more join the nearest.")
+(defparameter *drink-motes* 8 "Blood motes a splat sends up as it is drunk.")
+(defparameter *gulp-time* 0.35 "Seconds the bulb flushes red as a drink reaches it.")
+(defparameter *gulp-tint* 0.55 "How red that flush washes it at its height.")
 
 (defparameter *root-burn-hold* 5.0 "Seconds burnt or torn roots take to start growing back.")
 (defparameter *root-frost-time* 6.0 "Seconds frost holds roots: no growth, no drain, no snare.")
@@ -151,8 +161,11 @@ grow every other ring.")
    (drain-carry :initform 0.0 :accessor drain-carry :documentation "Health drained but not yet taken.")
    (drain-timer :initform 0.0 :accessor drain-timer)
    (stand :initform 0.0 :accessor stand :documentation "Seconds its target has stood on its roots.")
-   (drinking :initform (make-array *max-blood* :element-type 'single-float :initial-element -1f0)
-             :reader drinking :documentation "Seconds each blood pool slot has been drunk, or -1.")
+   (drinks :initform () :accessor drinks
+           :documentation "Blood on its way to it: per drink, a list of the splat's X Y Z, the metres
+to the bulb, how far along the roots its light has run (negative while the splat is still being
+drunk) and the health it brings.")
+   (gulp :initform 0.0 :accessor gulp :documentation "Seconds left of its flush as a drink reaches it.")
    (drink-timer :initform 0.0 :accessor drink-timer)
    (heal-carry :initform 0.0 :accessor heal-carry :documentation "Health drunk but not yet whole.")
    (drunk :initform 0.0 :accessor drunk :documentation "Health drunk in the last second.")
@@ -717,41 +730,86 @@ or on a wall beside one, below the roots' climb."
                                                           *root-climb-time*)))))
                   (return-from splat-on-roots-p T))))))))))
 
+(defun start-drink (bloodroot x y z heal)
+  "Start BLOODROOT drinking HEAL health of blood lying at X Y Z: one drink, or into one near it
+whose blood is still being drunk, or, with too many under way, into the one nearest it."
+  (let ((joined (loop for d in (drinks bloodroot)
+                      when (and (< (fifth d) 0)
+                                (< (+ (expt (- (first d) x) 2) (expt (- (third d) z) 2)) (expt *drink-merge* 2)))
+                        return d)))
+    (when (and (not joined) (<= *max-drinks* (length (drinks bloodroot))))
+      (setf joined (loop with best and best-d = most-positive-single-float
+                         for d in (drinks bloodroot)
+                         for dd = (+ (expt (- (first d) x) 2) (expt (- (third d) z) 2))
+                         when (< dd best-d) do (setf best d best-d dd)
+                         finally (return best))))
+    (if joined
+        (incf (sixth joined) heal)
+        (let* ((loc (location bloodroot))
+               (len (max 0.0 (- (sqrt (+ (expt (- (vx loc) x) 2) (expt (- (vz loc) z) 2)))
+                                (* 0.5 (body-radius bloodroot))))))
+          ;; Its light waits under the splat, at -(*drink-time* x speed), until the blood is gone.
+          (push (list (float x 0f0) (float y 0f0) (float z 0f0) (float len 0f0)
+                      (float (- (* *drink-time* *drink-flow-speed*)) 0f0) (float heal 0f0))
+                (drinks bloodroot))))))
+
+(defun drink-arrives (bloodroot heal)
+  "A drink of HEAL health reaches BLOODROOT: it flushes red and heals."
+  (incf (heal-carry bloodroot) heal)
+  (incf (drunk bloodroot) heal)
+  (setf (drunk-left bloodroot) 1.0
+        (gulp bloodroot) (float *gulp-time* 0f0)))
+
+(defun flow-drinks (bloodroot dt)
+  "Move BLOODROOT's drinks on: blood motes rise off a splat while it is drunk, then its light runs
+along the roots, and it heals as each reaches it."
+  (when (drinks bloodroot)
+    (let ((step (* dt *drink-flow-speed*))
+          (mote-chance (/ (* dt *drink-motes*) (max 0.1 *drink-time*))))
+      (setf (drinks bloodroot)
+            (delete-if (lambda (d)
+                         (let ((run (fifth d)))
+                           (when (and (< run 0) (< (random 1.0) mote-chance))
+                             (spray-sparks (vec (+ (first d) (- (random 0.5) 0.25)) (+ (second d) 0.05)
+                                                (+ (third d) (- (random 0.5) 0.25)))
+                                           NIL 1 :kind :ember :ramp :drain :speed '(0.4 0.9)))
+                           (setf (fifth d) (+ run step))
+                           (when (<= (fourth d) (fifth d))
+                             (drink-arrives bloodroot (sixth d))
+                             T)))
+                       (drinks bloodroot))))))
+
 (defun drink-splats (bloodroot dt)
-  (let ((pool *blood-pool*)
-        (drinking (drinking bloodroot)))
-    (when pool
-      (setf (drunk-left bloodroot) (max 0.0 (- (drunk-left bloodroot) dt)))
-      (when (<= (drunk-left bloodroot) 0) (setf (drunk bloodroot) 0.0))
-      (let ((scan (<= (decf (drink-timer bloodroot) dt) 0)))
-        (when scan (setf (drink-timer bloodroot) *drink-scan*))
-        (dotimes (i (min (length drinking) (pool-size pool)))
-          (let ((time (aref drinking i)))
-            (cond ((not (splat-lying-p pool i))
-                   (setf (aref drinking i) -1f0))
-                  ((<= 0 time)
-                   (if (< (incf (aref drinking i) (float dt 0f0)) *drink-time*)
-                       NIL
-                       (multiple-value-bind (x y z face area) (splat-place pool i)
-                         (declare (ignore face))
-                         (setf (aref drinking i) -1f0)
-                         (dissolve-splat pool i)
-                         (let ((heal (min *drink-max* (* area *drink-per-area*))))
-                           (incf (heal-carry bloodroot) heal)
-                           (incf (drunk bloodroot) heal)
-                           (setf (drunk-left bloodroot) 1.0)
-                           (play-sound :root-drink (vec x y z))))))
-                  (scan
-                   (multiple-value-bind (x y z face) (splat-place pool i)
-                     (when (splat-on-roots-p bloodroot x y z face)
-                       (setf (aref drinking i) 0f0))))))))
-      (let ((whole (floor (heal-carry bloodroot))))
-        (when (< 0 whole)
-          (decf (heal-carry bloodroot) whole)
-          (heal-caster bloodroot whole)))
-      (when (<= *glut-drink* (drunk bloodroot))
-        (setf (drunk bloodroot) 0.0)
-        (start-glut bloodroot)))))
+  "Every *DRINK-SCAN*, start drinking the splats that have lain *DRINK-DELAY* on BLOODROOT's live
+roots: each dissolves
+over *DRINK-TIME*, sending up blood motes, then its light runs along the roots to the bulb, which
+heals as it arrives."
+  (let ((pool *blood-pool*))
+    (setf (drunk-left bloodroot) (max 0.0 (- (drunk-left bloodroot) dt))
+          (gulp bloodroot) (max 0.0 (- (gulp bloodroot) dt)))
+    (when (<= (drunk-left bloodroot) 0) (setf (drunk bloodroot) 0.0))
+    (when (and pool (<= (decf (drink-timer bloodroot) dt) 0))
+      (setf (drink-timer bloodroot) *drink-scan*)
+      (dotimes (i (pool-size pool))
+        ;; Once on the roots, it glows while they drink it; after *DRINK-DELAY* there it goes.
+        (when (splat-lying-p pool i)
+          (multiple-value-bind (x y z face area) (splat-place pool i)
+            (when (or (splat-glows-p pool i) (splat-on-roots-p bloodroot x y z face))
+              (cond ((not (splat-glows-p pool i))
+                     (set-splat-glow pool i)
+                     (setf (aref (pool-ages pool) i) 0f0))
+                    ((<= *drink-delay* (aref (pool-ages pool) i))
+                     (dissolve-splat pool i)
+                     (start-drink bloodroot x y z (min *drink-max* (* area *drink-per-area*)))
+                     (play-sound :root-drink (vec x y z)))))))))
+    (flow-drinks bloodroot dt)
+    (let ((whole (floor (heal-carry bloodroot))))
+      (when (< 0 whole)
+        (decf (heal-carry bloodroot) whole)
+        (heal-caster bloodroot whole)))
+    (when (<= *glut-drink* (drunk bloodroot))
+      (setf (drunk bloodroot) 0.0)
+      (start-glut bloodroot))))
 
 (defun start-glut (bloodroot)
   (setf (glut bloodroot) (float *glut-time* 0f0)))
@@ -923,8 +981,8 @@ higher of them."
 (defmethod creature-revived ((bloodroot bloodroot))
   (setf *roots-dirty* T
         (carpet bloodroot) NIL (patches bloodroot) () (glut bloodroot) 0.0 (stand bloodroot) 0.0
-        (drain-carry bloodroot) 0.0 (heal-carry bloodroot) 0.0 (last-bloom bloodroot) 100.0)
-  (fill (drinking bloodroot) -1f0))
+        (drain-carry bloodroot) 0.0 (heal-carry bloodroot) 0.0 (last-bloom bloodroot) 100.0
+        (drinks bloodroot) () (gulp bloodroot) 0.0))
 
 ;;; Its looks: the idle pulse (quicker in Glut), and the red wash of Glut.
 
@@ -942,6 +1000,12 @@ higher of them."
   *light-clock*)
 
 (defmethod own-tint ((bloodroot bloodroot) tint)
+  ;; A drink reaching it: a red flush, gone in a moment.
+  (when (< 0 (gulp bloodroot))
+    (let ((k (* *gulp-tint* (/ (gulp bloodroot) *gulp-time*))))
+      (when (< (vw tint) k)
+        (setf (vx tint) (vx *glut-color*) (vy tint) (vy *glut-color*) (vz tint) (vz *glut-color*)
+              (vw tint) k))))
   (when (< 0 (glut bloodroot))
     (destructuring-bind (low high) *glut-tint*
       (let ((k (+ low (* (- high low) (+ 0.5 (* 0.5 (sin (* 2 pi *glut-pulse* (glut bloodroot)))))))))
@@ -956,7 +1020,9 @@ higher of them."
 ;;; is drawn rimed, and a withering carpet's cover falls away.
 
 (defparameter *max-root-quads* 6000 "Quads the root floor draws at most, every carpet together.")
-(defparameter *root-floor-lift* 0.014 "Metres above its floor, or off its wall, roots are drawn.")
+(defparameter *root-floor-lift* 0.0025
+  "Metres above its floor, or off its wall, roots are drawn: under the blood splats (gore.lisp's
+*SPLAT-LIFT*), so the blood they drink shows on them.")
 (defparameter *root-vertex-floats* 11
   "Per vertex: position, normal, cover, frost, height up a wall, when its cell rooted, and how far it
 is from its bulb, for the heartbeat running out along the veins.")
@@ -1147,7 +1213,36 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
   (setf (uniform program "beat_period") (float *root-beat-period* 0f0))
   (setf (uniform program "beat_speed") (float *root-beat-speed* 0f0))
   (setf (uniform program "vein_glow") (float *root-vein-glow* 0f0))
-  (setf (uniform program "beat_glow") (float *root-beat-glow* 0f0)))
+  (setf (uniform program "beat_glow") (float *root-beat-glow* 0f0))
+  (set-drink-uniforms program))
+
+;;; A drink's light: once a splat's blood is gone, a short streak of light runs along the roots,
+;;; straight from where it lay to the bulb, so the player sees what its roots drank. Up to
+;;; *MAX-DRINK-LANES* at once, the ones on their way, in uniform arrays (DRINK_GLOW in the shaders).
+
+(defparameter *max-drink-lanes* 8 "Drinks whose light the shaders draw at once; the size of their arrays.")
+(defvar *drink-lanes* (coerce (loop repeat 8 collect (vec4)) 'simple-vector))
+(defvar *drink-runs* (coerce (loop repeat 8 collect (vec2)) 'simple-vector))
+(defvar *drink-lane-names* (coerce (loop for i below 8 collect (format NIL "drink_lanes[~d]" i)) 'simple-vector))
+(defvar *drink-run-names* (coerce (loop for i below 8 collect (format NIL "drink_runs[~d]" i)) 'simple-vector))
+
+(defun set-drink-uniforms (program)
+  (let ((n 0))
+    (block gather
+      (do-bloodroots (root)
+        (let ((loc (location root)))
+          (dolist (d (drinks root))
+            (when (<= 0 (fifth d))
+              (when (<= *max-drink-lanes* n) (return-from gather))
+              (let ((lane (svref *drink-lanes* n)) (run (svref *drink-runs* n)))
+                (setf (vx lane) (first d) (vy lane) (third d) (vz lane) (vx loc) (vw lane) (vz loc)
+                      (vx run) (fifth d) (vy run) (fourth d))
+                (setf (uniform program (svref *drink-lane-names* n)) lane)
+                (setf (uniform program (svref *drink-run-names* n)) run)
+                (incf n)))))))
+    (setf (uniform program "drink_count") n)
+    (setf (uniform program "drink_tail") (float *drink-flow-tail* 0f0))
+    (setf (uniform program "drink_width") (float *drink-flow-width* 0f0))))
 
 
 (define-class-shader (root-floor :vertex-shader)
@@ -1195,6 +1290,39 @@ uniform float beat_period;
 uniform float beat_speed;
 uniform float vein_glow;
 uniform float beat_glow;
+uniform int drink_count;
+uniform vec4 drink_lanes[8];
+uniform vec2 drink_runs[8];
+uniform float drink_tail;
+uniform float drink_width;
+
+// How much a drink's light lights a root at P: a streak DRINK_TAIL long running from the splat
+// (a lane's XY) to the bulb (its ZW), its head DRINK_RUNS.x along, brightest at the head.
+float drink_glow(vec3 p){
+  float g = 0.0;
+  for(int i = 0; i < drink_count; i++){
+    vec2 a = drink_lanes[i].xy;
+    vec2 d = drink_lanes[i].zw - a;
+    float len = length(d);
+    if(len < 0.01) continue;
+    vec2 dir = d / len;
+    vec2 r = p.xz - a;
+    float along = dot(r, dir);
+    float across = abs(r.x * dir.y - r.y * dir.x);
+    float behind = drink_runs[i].x - along;
+    if(across < drink_width && along > -0.2 && behind > -0.1 && behind < drink_tail)
+      g = max(g, 1.0 - max(behind, 0.0) / drink_tail);
+  }
+  return floor(g * 4.0 + 0.5) / 4.0;
+}
+
+// Its colour: blood red down the tail, a pale hot pink at the head, so it stands out on the
+// carpet's own reds.
+vec3 drink_color(float g){
+  return g > 0.7 ? vec3(2.2, 0.55, 0.42) * g : vec3(1.8, 0.16, 0.1) * g;
+}
+
+float vein_of(vec3 c){ return (c.r > 0.4 && c.g + c.b < 0.45 * c.r) ? 1.0 : 0.0; }
 
 // How much a root texel at DIST metres from its bulb glows now: its veins (saturated reds) only,
 // faintly at rest and flaring as each heartbeat, a lub and a dub, runs out from the bulb. Stepped,
@@ -1232,6 +1360,8 @@ void main(){
   vec3 lamp = lamp_part(light);
   // The veins glow on their own, fogged as lamp light is, so the carpet shows across a dark room.
   vec3 glow = surface * lamp + roots.rgb * root_beat(roots.rgb, v_dist, clock) * (1.0 - v_cover.y);
+  float drink = drink_glow(v_world_position) * mix(0.35, 1.0, vein_of(roots.rgb));
+  if(drink > 0.0){ surface *= 1.0 - drink; glow += drink_color(drink); }
   color = vec4(fog_lit(surface * (light - lamp), glow, length(v_view_position)), 1.0);
 }")
 
@@ -1437,6 +1567,39 @@ uniform float beat_period;
 uniform float beat_speed;
 uniform float vein_glow;
 uniform float beat_glow;
+uniform int drink_count;
+uniform vec4 drink_lanes[8];
+uniform vec2 drink_runs[8];
+uniform float drink_tail;
+uniform float drink_width;
+
+// How much a drink's light lights a root at P: a streak DRINK_TAIL long running from the splat
+// (a lane's XY) to the bulb (its ZW), its head DRINK_RUNS.x along, brightest at the head.
+float drink_glow(vec3 p){
+  float g = 0.0;
+  for(int i = 0; i < drink_count; i++){
+    vec2 a = drink_lanes[i].xy;
+    vec2 d = drink_lanes[i].zw - a;
+    float len = length(d);
+    if(len < 0.01) continue;
+    vec2 dir = d / len;
+    vec2 r = p.xz - a;
+    float along = dot(r, dir);
+    float across = abs(r.x * dir.y - r.y * dir.x);
+    float behind = drink_runs[i].x - along;
+    if(across < drink_width && along > -0.2 && behind > -0.1 && behind < drink_tail)
+      g = max(g, 1.0 - max(behind, 0.0) / drink_tail);
+  }
+  return floor(g * 4.0 + 0.5) / 4.0;
+}
+
+// Its colour: blood red down the tail, a pale hot pink at the head, so it stands out on the
+// carpet's own reds.
+vec3 drink_color(float g){
+  return g > 0.7 ? vec3(2.2, 0.55, 0.42) * g : vec3(1.8, 0.16, 0.1) * g;
+}
+
+float vein_of(vec3 c){ return (c.r > 0.4 && c.g + c.b < 0.45 * c.r) ? 1.0 : 0.0; }
 
 // How much a root texel at DIST metres from its bulb glows now: its veins (saturated reds) only,
 // faintly at rest and flaring as each heartbeat, a lub and a dub, runs out from the bulb. Stepped,
@@ -1459,6 +1622,8 @@ void main(){
   vec3 light = band_light(light_at(snap_position(v_world_position), vec3(0), 0.0, v_probe));
   vec3 lamp = lamp_part(light);
   vec3 glow = surface * lamp + tuft.rgb * root_beat(tuft.rgb, v_dist, clock) * (1.0 - v_frost);
+  float drink = drink_glow(v_world_position) * mix(0.35, 1.0, vein_of(tuft.rgb));
+  if(drink > 0.0){ surface *= 1.0 - drink; glow += drink_color(drink); }
   color = vec4(fog_lit(surface * (light - lamp), glow, length(v_view_position)), 1.0);
 }")
 

@@ -2464,11 +2464,21 @@ or a spear's sweep pressed (`break-snare`), the maul's earthshake (which also te
 within its reach, `tear-roots`), fire or frost reaching the cell, or the bulb's death free the player;
 each starts `snare-guard` (`*snare-guard*`, 2.5 s). The status icons don't show it yet.
 
-**Drinking** (`drink-splats`): every `*drink-scan*` the splats lying on its live roots (a floor splat
-over a cell, a wall splat beside one below the roots' climb) start being drunk; after `*drink-time*`
-each dissolves (`dissolve-splat`, gore.lisp) and heals the bulb `*drink-per-area*` of its blood's area,
-at most `*drink-max*`. `*glut-drink*` (15) drunk within a second sets off Glut. Its own wounds spray
-sap (`:drain` embers), not blood (`bleeds` NIL), or it would heal off every hit.
+**Drinking** (`drink-splats`), made to be seen: dark blood on the red carpet was lost even drawn over
+it (the roots lie `*root-floor-lift*`, 2.5 mm, under the splats). Every `*drink-scan*` a splat lying
+on its live roots (a floor splat over a cell, a wall splat beside one below the roots' climb) starts to
+glow (`set-splat-glow`, bit 6 of the splat's side, which the blood shader draws lit from within in
+bright crimson, pulsing `*splat-glow-rate*` a second). After `*drink-delay*` (1 s) glowing it is drunk
+(`start-drink`): it dissolves (`dissolve-splat`, gore.lisp) over `*drink-time*`, sending up
+`*drink-motes*` blood motes and `root-drink`, and then its light runs along the roots and tufts, a
+streak `*drink-flow-tail*` long and `*drink-flow-width*` either side, from where it lay straight to the
+bulb at `*drink-flow-speed*` (4 m/s), hot pink at its head (`drink_glow` in both root shaders, from
+uniform arrays of `*max-drink-lanes*`, `set-drink-uniforms`). As it arrives (`drink-arrives`) the bulb
+flushes red for `*gulp-time*` (`own-tint`) and heals `*drink-per-area*` of the blood's area, at most
+`*drink-max*`. A splat drunk within `*drink-merge*` of one not yet on its way joins it, and a bulb has
+`*max-drinks*` under way. Its `drinks` and `gulp` are saved. `*glut-drink*` (15) arriving within a second
+sets off Glut. Its own wounds spray sap (`:drain` embers), not blood (`bleeds` NIL), or it would heal
+off every hit.
 
 **Spit** (`:spit`, cooldown 3 s, 1.5 in Glut): a `blood-seed` lobbed (`lob-velocity`, `*seed-apex*`
 over the higher end) at the floor under the target, ahead of their walk and a little off. Where it
