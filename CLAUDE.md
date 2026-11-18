@@ -2259,7 +2259,8 @@ Hierophant was 4 of the 60 bosses. A save keeps `pulse-timer`, `lost-timer`, `st
 
 **Static recoil**, from level 3 of a run (`(level-ability-p :static-recoil)`), for the player who has
 learnt to close in on it: the damage it takes, from anyone, is stored (`harmed :after`,
-`static-charge`, bleeding `*recoil-bleed*` a second), and at `*recoil-charge*` (18: a sword blow
+`static-charge`; it holds for `*recoil-hold*`, 3 s, after the last damage stored, `charge-idle`, then
+dissipates at `*recoil-drain*`, 12 a second, its sparks scattering out of it and the whine stopping), and at `*recoil-charge*` (18: a sword blow
 leaves it part of the way, the next sets it off; two or three Fire Bolts) it goes off. The tell is
 that it goes dark, since a brighter glow would be lost in its own lamp and lightning: as the charge
 fills (`recoil-k`) its lamp dims by up to `*recoil-dim*` (`votary-glow`), its idle arcs and the charge's

@@ -92,7 +92,7 @@ their values."
   '(blink-cooldown blink-timer pounce call-target call-point))
 
 (defmethod saved-slots append ((votary arc-votary))
-  '(pulse-timer lost-timer static-charge recoil))
+  '(pulse-timer lost-timer static-charge recoil charge-idle))
 
 (defmethod saved-slots append ((sign rift-sign))
   '(caster centre))

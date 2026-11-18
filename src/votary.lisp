@@ -59,7 +59,9 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
 ;; stored, and full, it goes dark for a beat, bursts in a shock nova and blinks away along a bolt.
 (defparameter *recoil-charge* 18.0
   "Damage it stores before its static recoil goes off: a sword blow (10 to 16) leaves it part dark, the next sets it off.")
-(defparameter *recoil-bleed* 1.0 "Damage a second its stored charge loses.")
+(defparameter *recoil-hold* 3.0 "Seconds its stored charge holds after the last damage stored.")
+(defparameter *recoil-drain* 12.0
+  "Damage a second its stored charge dissipates at once *RECOIL-HOLD* has passed with no more: a full one in 1.5 s.")
 (defparameter *recoil-beat* 0.5 "Seconds of darkness and silence between the charge filling and the burst.")
 (defparameter *recoil-cooldown* 14.0 "Seconds after a static recoil before it stores charge again.")
 (defparameter *recoil-blink* '(6.0 9.0) "Metres it blinks away after the burst, to a spot in sight of its target.")
@@ -167,7 +169,9 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
    (recoil :initform 0.0 :accessor recoil
            :documentation "Seconds left of the dark beat before its static recoil goes off, or 0.")
    (whine-sound :initform NIL :accessor whine-sound :documentation "The stored charge's whine.")
-   (mote-timer :initform 0.0 :accessor mote-timer)))
+   (mote-timer :initform 0.0 :accessor mote-timer)
+   (charge-idle :initform 0.0 :accessor charge-idle
+                :documentation "Seconds since it last stored damage toward its static recoil.")))
 
 (define-creature-sounds arc-votary
   :alert :votary-alert :pain :votary-pain :death :votary-death :windup :votary-charge :step :step-light)
@@ -819,6 +823,7 @@ side."
 (defmethod harmed :after ((votary arc-votary) amount by)
   (declare (ignore by))
   (when (recoil-ready-p votary)
+    (setf (charge-idle votary) 0.0)
     (when (<= *recoil-charge* (incf (static-charge votary) amount))
       (begin-recoil votary))))
 
@@ -902,24 +907,36 @@ what shows of it: the sparks drawn in, and the whine."
            (when (<= (decf (recoil votary) dt) 0.0)
              (discharge-static votary)))
           ((< 0.0 (static-charge votary))
-           (setf (static-charge votary) (max 0.0 (- (static-charge votary) (* *recoil-bleed* dt))))
-           ;; Sparks stream in from round it into its chest, more as it fills.
-           (decf (mote-timer votary) (* dt (+ 0.35 (* 0.65 k))))
-           (loop while (<= (mote-timer votary) 0.0)
-                 do (incf (mote-timer votary) (/ 1.0 *recoil-motes*))
-                    (let* ((loc (location votary))
-                           (a (random (* 2 pi)))
-                           (r (+ (first *recoil-ring*) (random (- (second *recoil-ring*) (first *recoil-ring*)))))
-                           (from (vec (+ (vx loc) (* r (cos a)))
-                                      (+ (vy loc) 0.2 (random (* 0.8 (sprite-height votary))))
-                                      (+ (vz loc) (* r (sin a)))))
-                           (chest (votary-chest votary)))
-                      ;; Aimed a little over its chest: they fall as they fly.
-                      (incf (vy chest) (* 0.14 r r))
-                      (spray-sparks from (v- chest from) 1 :ramp :shock :speed *recoil-mote-speed* :spread 0.04)))))
+           (let ((draining (<= *recoil-hold* (incf (charge-idle votary) dt))))
+             (when draining
+               (setf (static-charge votary) (max 0.0 (- (static-charge votary) (* *recoil-drain* dt)))))
+             ;; Sparks stream in from round it into its chest, more as it fills; dissipating, they
+             ;; scatter out from it instead.
+             (decf (mote-timer votary) (* dt (+ 0.35 (* 0.65 k))))
+             (loop while (<= (mote-timer votary) 0.0)
+                   do (incf (mote-timer votary) (/ 1.0 *recoil-motes*))
+                      (if draining
+                          (spray-sparks (votary-chest votary)
+                                        (vec (- (random 2.0) 1.0) (- (random 1.2) 0.3) (- (random 2.0) 1.0))
+                                        1 :ramp :shock :speed *recoil-mote-speed* :spread 0.3)
+                          (draw-in-spark votary))))))
     (setf (whine-sound votary)
-          (hold-loop (whine-sound votary) (and (not beat) (< 0.1 k) :votary-whine) (location votary)
-                     (+ 0.3 (* 0.7 k))))))
+          (hold-loop (whine-sound votary) (and (not beat) (< 0.1 k) (< (charge-idle votary) *recoil-hold*)
+                                               :votary-whine)
+                     (location votary) (+ 0.3 (* 0.7 k))))))
+
+(defun draw-in-spark (votary)
+  "Throw one spark from round VOTARY in toward its chest."
+  (let* ((loc (location votary))
+         (a (random (* 2 pi)))
+         (r (+ (first *recoil-ring*) (random (- (second *recoil-ring*) (first *recoil-ring*)))))
+         (from (vec (+ (vx loc) (* r (cos a)))
+                    (+ (vy loc) 0.2 (random (* 0.8 (sprite-height votary))))
+                    (+ (vz loc) (* r (sin a)))))
+         (chest (votary-chest votary)))
+    ;; Aimed a little over its chest: they fall as they fly.
+    (incf (vy chest) (* 0.14 r r))
+    (spray-sparks from (v- chest from) 1 :ramp :shock :speed *recoil-mote-speed* :spread 0.04)))
 
 (defun darken-votary (votary)
   "Darken VOTARY's sprite as its charge fills, unless its hit flash is stronger."
