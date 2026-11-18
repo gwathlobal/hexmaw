@@ -47,6 +47,7 @@
                (:file "elite")
                (:file "riftwalker")
                (:file "hag")
+               (:file "votary")
                (:file "settlement")
                (:file "townsfolk")
                (:file "pickups")

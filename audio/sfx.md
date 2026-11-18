@@ -172,7 +172,16 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | shard-flight | 1 | P L | 1.5 | 3 | `launch-projectile` spells.lisp, `rime-shard` and `rime-field` |
 | shard-impact | 1 | P | 0.6 | 3 | `impact` spells.lisp, `rime-shard` |
 | blizzard | 1 | P L | 4 | 2 | `light-blizzard` hag.lisp, the rime hag's blizzard, until it dies down; volume by `blizzard-strength` |
-| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker |
+| votary-alert | 1 | P | 1.2 | 3 | alert: arc votary |
+| votary-pain | 1 | P | 0.5 | 3 | pain: arc votary |
+| votary-death | 1 | P | 1.8 | 3 | death: arc votary |
+| votary-charge | 1 | P | 1.0 | 3 | wind-up: the votary's beam, its 0.9 s charge (`start-attack`) |
+| votary-beam-start | 1 | P | 0.6 | 3 | `release-attack` votary.lisp, the beam leaves |
+| votary-beam | 1 | P L | 2 | 2 | `hold-votary-beam` votary.lisp, while the beam is held |
+| arc-zap | 2 | P | 0.5 | 3 | `votary-pulse`, `water-strike` votary.lisp: the beam jumps from an ally, or runs through water |
+| votary-whine | 2 | P L | 3 | 2 | `update-recoil` votary.lisp: its static recoil's stored charge, louder as it fills |
+| votary-recoil | 1 | P | 1.4 | 3 | `place-nova` spells.lisp, `static-recoil` (the arc votary's burst) |
+| step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker, arc votary |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |
 | step-heavy | 2 | P | 0.6 | 3 | step: ogre |
 | step-bone | 2 | P | 0.5 | 3 | step: skeleton |

@@ -9,7 +9,7 @@ legend
   B door canal
   C door canal, open
   i spawn any north
-  m spawn any north 30
+  m spawn arc-votary|acolyte north 30
 
 plan 0
 #####~~~~~~#####

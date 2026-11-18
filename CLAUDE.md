@@ -480,7 +480,7 @@ real time instead.
   stays as the corpse until revival; without one it collapses into the floor. Every hit
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
-  knight 8, ogre 9, riftwalker 11, skeleton 20, acolyte and harpy 25, imp, wraith and rime hag 30, necromancer 35) plus the weapon's
+  knight 8, ogre 9, riftwalker 11, skeleton and arc votary 20, acolyte and harpy 25, imp, wraith and rime hag 30, necromancer 35) plus the weapon's
   bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
   whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`;
@@ -829,10 +829,14 @@ real time instead.
   `*overcharge-pain-bonus*`). **Seeker**: a projectile that picks the live creature nearest the aim
   (`seeker-mark`, within `*seeker-cone*` and `*seeker-range*`, in sight) and turns after it at
   `*seeker-turn*`. **Beam**: no flight; it strikes the first body or wall along the aim within
-  `*beam-range*` (12 m) at once (`beam-end`, `beam-strike`; a covering shield stops it), its light a
+  `*beam-range*` (12 m) at once (`beam-end`, `beam-strike`; a covering shield stops it; for any
+  caster but the player it reaches the player's body too), its light a
   `beam` (a shared ribbon, `*beam-vao*`, staged by `preload-spells`, texel-stepped, added light). The
   player holds a beam (player.lisp): every `*beam-pulse*` a `pulse-spell` with
-  `beam-pulse-share` of its instant effects, for that share of its price. **Nova**: a sphere growing
+  `beam-pulse-share` of its instant effects, for that share of its price; a creature holds one too
+  (the arc votary, votary.lisp), each strike a `beam-pulse` source: on the player, no shove or hit-stop
+  (`effect-shove`), the shield meeting it anyway (`hurt-player`'s `:blockable`) for its own stamina
+  (`effect-block-cost`, `:block-cost`). **Nova**: a sphere growing
   from the caster's chest out to its `spell-nova-radius` (`:nova-radius`, by default `*nova-radius*`,
   5 m; the rime hag's 5, the Winter Crone's 7) plus its effects' area over `*nova-grow-time*`
   (0.4 s), from `*nova-start-radius*` and slowing as it goes (`spell-nova`, `place-nova`; its camera
@@ -1004,6 +1008,9 @@ real time instead.
   riftwalker)` to hold the others back (`(list :pull 0.0 :swap 100.0 :push 100.0 :call 100.0)`).
 - `src/hag.lisp` (after riftwalker.lisp): the `rime-hag`, the frost caster, with her elite and
   boss (`elite-hag`, `hag-boss`, the Winter Crone). See "The rime hag" under "Creature movement".
+- `src/votary.lisp` (after hag.lisp): the `arc-votary`, a blind storm-priest that holds a shock beam,
+  its elite (`elite-votary`) and its boss (`votary-boss`, the Arc Hierophant). See "The arc votary"
+  under "Creature movement" below.
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
   empowered form of one of the nine monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
@@ -1087,8 +1094,8 @@ real time instead.
   `update-statuses` runs in each actor's tick and allocates nothing. A creature takes on its
   status's element colour (`status-tint`, `*element-tints*`). Elements: frost also chills
   (`*frost-chill*`), shock adds `*shock-pain-bonus*`; `*element-resistances*` takes a share of an element off
-  a class (acolyte fire, skeleton frost, gale wraith shock: half; the rime hag's frost: three
-  quarters), and a negative share adds to it (the rime hag takes half again of fire); the forge
+  a class (acolyte fire, skeleton frost, gale wraith shock: half; the rime hag's frost and the arc votary's
+  shock: three quarters), and a negative share adds to it (the rime hag takes half again of fire); the forge
   says who takes less and who more (`resisters`). Drain heals its caster `*drain-share*` of
   what it took. Statuses are `saved-slots` (`(:status ...)` in a save). A status keeps its
   `duration`, the time it was put on or last renewed for (`afflict` resets it when a re-cast lasts
@@ -1208,7 +1215,7 @@ real time instead.
   `place-block`, draws from `*elite-random*`, a state of its own seeded from the level's, twice for
   every spawn whatever it decides, so elites never move the layout or another spawn. An elite is
   its kind's class with the `elite` mixin first (`elite-imp` .. `elite-wraith`, `elite-riftwalker`
-  in riftwalker.lisp, `elite-hag` in hag.lisp, `*elite-kinds*`):
+  in riftwalker.lisp, `elite-hag` in hag.lisp, `elite-votary` in votary.lisp, `*elite-kinds*`):
   `*elite-health-scale*` (1.75) its health, drawn `*elite-size-scale*` (1.15) bigger but never past
   `*nav-clearance-height*` (the ogre not at all), its body as its kind's, so it goes wherever its
   kind goes, and a rim and lamp (`rim-glow`, boss.lisp) in its trait's colour, `*elite-glow-colors*`,
@@ -1682,7 +1689,7 @@ real time instead.
   fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
   asked by `hurt-player`, so it covers creatures' spells too) does `*block-damage-scale*` of
   its damage and shoves `*block-shove-scale*` as far, for `*block-stamina-scale*` stamina a point
-  of the blow's damage; a blow with `:guard-break` (the knight's,
+  of the blow's damage (a beam pulse's own, `*arc-block-stamina*`, see "The arc votary"); a blow with `:guard-break` (the knight's,
   the ogre's slam) also knocks it aside (`break-guard`: down at once, and `guard-broken`
   keeps it down), a blow with more cost than the stamina left goes through in full and knocks
   it aside for at least `*stamina-guard-break*`,
@@ -2159,6 +2166,130 @@ Debug level, then with the player 4 to 10 m from it
 `(let ((a (aref *creatures* 0))) (setf (getf (cooldowns a) :firestorm) 0.0 (swallowed a) 2 (alert a) 30.0))`.
 `(acolyte-storm a)` is the storm, `(burning storm)` how long it has burnt; `(hurt a 1 :force-pain t)`
 breaks it. With slot 2 in hand, `(setf (block-held *player*) t)` holds Absorb.
+
+### The arc votary
+
+The `arc-votary` (votary.lisp) is a caster, an `ability-user` with one ability, `:arc-beam`, whose
+attack is held rather than thrown (a blind storm-priest in storm teal under a crown of lightning rods): the first monster that makes cover, circling and the shield's
+stamina matter more than a sidestep. It backs off within `keep-away` (4 m) and starts a beam with its
+target within `*votary-range*` (11 m) and in sight. Its frames are `(0.3 0.6 2.0 0.4)` on
+`votary-cast`, hit frame 2:
+
+- **The charge** (`*votary-charge*`, 0.9 s; `charging-arc-p`, so a bash or the earthshake breaks it):
+  an arc crackling between its hands (`crackle`, through `hand-arc` every `*votary-crackle-time*`,
+  closer together and fiercer as it grows), a lamp swelling at them
+  (`votary-glow`, `*votary-light-color*`), the `votary-charge` crackle, and a ranging line: faint lightning
+  (`ranging-bolt`, every `*votary-aim-time*`), one thread an art pixel wide from the knot between its
+  hands to where the beam would stop, broken up and only drawn now and then, firming as the charge
+  grows. It turns at its `turn-speed`, `*votary-turn*`
+  (2.5 rad/s).
+- **The hold** (`holding-beam-p`, up to `*votary-hold*`, 2 s, the release frame held; 3 s, tried first, made a hold
+  that wasn't countered about 42 damage): every
+  `*beam-pulse*` (0.25 s) `votary-pulse` strikes what `beam-end` reaches along `votary-aim` (from
+  its hands, across the way it faces, tipped to its target's chest) with `arc-beam` whole, 3 to 4
+  shock a pulse, about 14 a second, through a `beam-pulse` source (spells.lisp): on the player a
+  flash, no shove or hit-stop, and a raised shield meets it at `*arc-block-stamina*` (12) a pulse,
+  so a full bar lasts about 2.3 s, a whole hold; less, and the pulse goes through and the guard is
+  knocked aside. Absorb does nothing: it isn't a projectile. While it holds, its turn is
+  `*votary-beam-turn*` (0.9 rad/s, `turn-speed :around`), so running round it within about 8 m
+  leaves the beam behind (at 1.2, within 6), and its pain chance is `*votary-pain-bonus*` (20) higher. After
+  `*votary-lost-time*` (0.75 s) of pulses striking nothing hostile (behind a pillar, circled), or
+  with its target dead, it lets go (`end-hold`) and recovers.
+- **What it reaches takes it**, its own allies too, with their flinch and pain: a body in the way
+  blocks the beam (and three of its hits from another kind give an ally a grudge against it,
+  `note-grudge`). **The floor round what it strikes is electrified** (`floor-strike`, `floor-live`,
+  `floor-point`): every other live body standing on that floor (feet within 0.4 m of it, so a jump
+  clears it; not in water, which the water rule has; not the votary) within `floor-reach`
+  (`*arc-floor-reach*` 3.5 m, the Hierophant's 5) of it, in a clear line, is struck with
+  `floor-spell`, the beam at `*arc-floor-scale*` (half, 2 a pulse), through a `floor-pulse` source: it
+  comes up from below, so no shield meets it (`effect-unblockable-p`). The body the beam strikes isn't
+  struck again by its floor, so a shield that takes the beam still covers the player. Shown as the
+  shock nova's bolts with no circle (`floor-bolts`, redrawn with the beam): `*votary-floor-bolts*` a
+  redrawing at random spots thinning out toward its reach, so no edge is drawn, most rising off the
+  floor and the rest crawling over it, none through a wall from the middle or within 0.9 m of the
+  player's eye. Each bolt's foot throws a spark or two (`spray-sparks`, so it stands in the room and
+  not on the screen), and a flash lights the floor: one lamp a votary while its floor is live
+  (`flash-floor`, `floor-lamp`, `*votary-floor-flash*`), jumping to a bolt's foot at a flickering
+  strength each redrawing and put out with the floor (`douse-floor`). A lamp with no source is placed
+  in its room once (`update-lamps`), so a votary's lamps are marked to be placed again
+  (`located` NIL) whenever they move. Half its pulses play `arc-zap` there. A first try, the beam
+  jumping from an ally to the nearest foe and sparing the ally, read as the beam passing through it,
+  however it was drawn.
+- **Water** (`in-water-p`: feet in `:water` or `:shallows`, or afloat): a body struck in water takes
+  `*arc-water-scale*` (1.5) times as much (`wet-spell`, a `scaled-spell` made once), and so does
+  every other body in water within `*arc-water-reach*` (6 m) of it, in a clear line, the votary's
+  allies too (`water-strike`). A beam that stops on a water surface (`water-beyond-p`) strikes the
+  water there, so a swimmer can't duck under it. While it does, the water is electrified as the floor
+  is (`water-live`, `water-point` on the surface, `water-surface-at`), redrawn with the beam
+  (`water-bolts`): `*votary-water-bolts*` bolts skating over the surface at random spots out to
+  `*arc-water-reach*`, thinning toward it, only where there is water under them, none through a wall
+  from the middle or by the player's eye, a few spiking up off it; an arc over the surface to each
+  other body it strikes (`water-bodies`); and a flash jumping between them (`water-lamp`,
+  `*votary-water-flash-radius*`, `flash-lamp`). No sparks: water puts them out.
+
+At rest it crackles, as the shock nova's bolts do (`votary-sparks`, `idle-arcs`, every
+`*votary-arc-time*` while the player is within `*votary-arc-reach*`): an arc between its hands
+(`*votary-hand-arc-chance*`; not while it charges, whose crackle is there) and arcs between the tips
+of its crown's five rods (`*votary-crown-arc-chance*` each pair, the head 8 cm toward its face), sized
+by its `sprite-height` so the Hierophant's are bigger. Both lie in the plane its sprite is drawn in.
+Creature sprites don't hide bolt lines behind them (the lines are added light and write no depth), so an
+arc placed round its body in the world showed through it from behind: the hands' arc, and the charge's
+crackle with it (`hand-arc`), go where the view its sprite shows draws its hands (`billboard-view`,
+`*votary-hand-spots*`, measured on its turnaround: across, either side, height; mirrored with the
+view), and from straight behind, where its body hides them, there is none. Its lamp, at its hands
+(`*votary-hand-height*` of its height, where the beam starts), is lit while it lives: at rest at
+`*votary-idle-glow*` of its strength in its lightning's yellow (`*votary-light-color*`), so its idle
+lightning lights it and what is round it, rising through the charge to full while it holds; dead, it
+goes out (`douse-votary`). The held beam is lightning, not the player's ribbon (`beam-bolts`, every
+`*votary-bolt-time*`): a broad bolt with a white core and a thinner one forking about it, as the shock
+nova's, from its palms where its hold pose draws them (`palm-point`, `*votary-palm-spots*`, as the hand
+arcs' spots) to where the beam stops (`bolt-end`), straying `*votary-bolt-roughness*` of its length. On a
+creature it ends in the middle of its body at the height struck (`aim-bolt-end`), where its sprite is
+drawn: the beam touches a body at the edge of its reach, an imp's 0.55 m and an ogre's 1.2 m short of
+the sprite. A bolt ending at the player's eye has no forks and its jagged part stops
+`*votary-bolt-clearance*` (1.5 m) short of it (near the camera perspective blew its jitter and forks
+up across the whole view); a short, nearly straight stretch carries it on into the bottom of their
+view, where their chest is (`last-stretch`, `*votary-bolt-chest*`). The charge's ranging
+line is lightning too, but faint (`ranging-bolt`), and ends the same ways (`bolt-span`). The beam's
+burst plays where it stops, but not within `*votary-burst-clearance*`
+(2.5 m) of the player's eye (on them, or on the water they swim in), where sparks stand in for it.
+A hold cost about 0.4 ms of GPU a frame with its first, straight ribbon (seen from 7 m); its lightning, about 150 bolt segments alive at once, isn't measured. Over run seeds 1 to
+60 there were 3.3 votaries and 0.6 elite votaries a level from depth 2 on, none on level 1, and the
+Hierophant was 4 of the 60 bosses. A save keeps `pulse-timer`, `lost-timer`, `static-charge` and `recoil`; the light, lamp and loop come back in its tick.
+
+**Static recoil**, from level 3 of a run (`(level-ability-p :static-recoil)`), for the player who has
+learnt to close in on it: the damage it takes, from anyone, is stored (`harmed :after`,
+`static-charge`; it holds for `*recoil-hold*`, 3 s, after the last damage stored, `charge-idle`, then
+dissipates at `*recoil-drain*`, 12 a second, its sparks scattering out of it and the whine stopping), and at `*recoil-charge*` (18: a sword blow
+leaves it part of the way, the next sets it off; two or three Fire Bolts) it goes off. The tell is
+that it goes dark, since a brighter glow would be lost in its own lamp and lightning: as the charge
+fills (`recoil-k`) its lamp dims by up to `*recoil-dim*` (`votary-glow`), its idle arcs and the charge's
+crackle die away, its sprite darkens toward `*recoil-tint*` (`darken-votary`, every tick, even frozen,
+under any stronger hit flash), sparks stream in from `*recoil-ring*` round it into its chest
+(`*recoil-motes*`, 130 a second at full and a third of that from the first blow stored, fast enough to
+draw as streaks, `*recoil-mote-speed*`) and the `votary-whine` loop rises in volume. Full (`begin-recoil`), it
+lets go of its beam and stands `*recoil-beat*` (0.5 s) dark and silent, hands together on a dead knot
+(`show-own-pose`), unflinching (`react-to-hit :after`). Then `discharge-static` bursts the
+`static-recoil` nova round its chest (`:nova-radius` 4 m, 6 to 9 shock and knockback 8; it spares only
+itself), with a `shock-burst` flash, `votary-recoil` and a camera kick, and blinks along a bolt to
+`recoil-spot`, `*recoil-blink*` (6 to 9 m) off, away from its target first, in its sight and beyond its
+`keep-away` (`teleport-actor`, riftwalker.lisp). `*recoil-cooldown*` (14 s, × `:cooldown`) before it stores
+again (`:static-recoil` in its `cooldowns`). The Hierophant's is `hierophant-recoil` (5.5 m, 8 to 12),
+and it stays in its arena. To see it: `(setf (static-charge v) 12.0)` for the tell, `17.9` and a blow for
+the burst.
+It resists shock 0.75 and teaches it (`taught-effect`): killed by a player who doesn't
+know shock, it drops the shock glyph. Kill gold 10. It spawns from level 2 of a run on (weight 1 in
+both pools), and the 30% spawn of the `pool`, `cistern`, `canal-end`, `creek-cavern`,
+`creek-spring`, `creek-sink` and `creek-sink-sump` is `arc-votary|acolyte`, so it stands on their
+ledges and banks from level 2 on (an acolyte on level 1). As a boss it is the Arc Hierophant
+(`votary-boss`: `hierophant-beam`, 4 to 6 a pulse, its floor electrified 5 m round; a power in play stops its beam).
+On the debug level it stands behind the hall's north-west pillar.
+
+To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list
+'arc-votary 'imp) *revive-time* NIL)`, Debug level, then with the player 5 to 11 m off and in its
+sight `(let ((v (find-if (lambda (c) (typep c 'arc-votary)) *creatures*))) (stop-walking v 0.0)
+(setf (alert v) 30.0))`. The debug level's `pool` (deep water, x -15.5 to -8.5, z -34.5 to -27.5)
+has a ledge to stand it on for the water rule.
 
 ### The necromancer
 
@@ -3324,6 +3455,34 @@ python3 tools/slice_frames.py art/hag/death.png data/sprites/hag --pixel 4.32 --
 for s in turnaround walk cast nova hurt death; do tools/restyle.py --house data/sprites/hag/$s.png; done
 ```
 
+The arc votary (a gaunt storm-priest in a ragged robe of deep storm teal over black, copper wire
+stitched down it in zig-zags, a riveted brass collar plate with a lightning sigil, eyes sewn shut and
+blazing yellow-white, a crown of five iron lightning rods with arcs between their tips, a knot of
+lightning between its clawed hands) is `art/votary/turnaround-teal-1.png`
+(`art/prompts/votary-turnaround-teal.txt`: `art/style/anchor.png` and the acolyte's, riftwalker's,
+necromancer's and imp's sheets as references, the acolyte's rendering asked for most closely), sliced
+at `--height 128` for its 2 m, crown included; no view needed mirroring. Its first design, a beige
+linen habit (`../hexmaw-art-attic/art/votary/linen/`), was the dungeon walls' own colour with no hard
+outline, and read as a pilgrim: the prompts now say no brown cloth, a near-black outline round the
+whole figure as the acolyte has, one saturated colour no other monster uses, and light only from the
+lightning. Its walk (slow and measured), cast (four frames: the hands wide with an arc between them;
+brought together on a blazing knot, the charge's held frame; thrust forward, the hold's frame, only a
+stub of the beam drawn, since the game draws the beam; recover) and flinch are made with
+`tools/gen_monster_views.sh votary <anim> ...` after `tools/cut_stands.py
+art/votary/turnaround-teal-1.png art/votary`, and its front-only death (`votary-death.txt`) burns along
+the wire, knocks off the crown and lays it face down beside it. Yellow lightning on magenta comes out
+of the slicers salmon and the palette snaps that to pink, so every strip goes through
+`tools/yellow_sparks.py` (bright, red-led pixels with too much blue for yellow made yellow; white
+cores kept) before `restyle.py`:
+
+```bash
+python3 tools/slice_turnaround.py art/votary/turnaround-teal-1.png data/sprites/votary/turnaround --height 128 --filter box
+V="front front-quarter side back-quarter back"
+for a in walk:20 cast:20 hurt:10; do python3 tools/slice_views.py data/sprites/votary $a $(for v in $V; do echo art/votary/${a%:*}-$v.png; done) --height 1024 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box --violet; done
+python3 tools/slice_frames.py art/votary/death.png data/sprites/votary --pixel 4.1 --anchor bottom --filter box --violet death:8
+for s in turnaround walk cast hurt death; do tools/yellow_sparks.py data/sprites/votary/$s.png; tools/restyle.py --house data/sprites/votary/$s.png; done
+```
+
 The status auras (magic.lisp) are 8-frame loops in `data/sprites/status/`, each a generated 2 × 4
 sheet on magenta of small separate pieces over a body-sized area, the middle left open. Shock came
 first (`art/prompts/status-shock.txt`, the bolt sheet and the torch's flame sheet as references);
@@ -3570,7 +3729,7 @@ those of it in the level's pool, and a block with a named spawn the pool has non
 choice marked `!`, `acolyte|!rime-hag`, is the block's own, placed whatever the pool and never
 barring the block, `native-kind-p`: the ice caves' rime hags), or `any`
 (one of `*spawn-pool*` by weight: imp 3, acolyte, knight, harpy, necromancer, ogre, gale wraith,
-riftwalker and rime hag 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
+riftwalker, rime hag and arc votary 1 each, though each level of a run has its own pool, its `:pool`), or `any-ogre` (the pool without those after the dash, `|` between them: a block too
 tight for them, as the `cavern` and `balcony` are for the ogre), or `boss` (`make-boss`, boss.lisp), picked as the
 block is placed (`spawn-choice`, from `*block-random*`, which the generator binds to its
 own state; one float draw whatever the weights, so changing a pool's weights never changes the layout,
@@ -3917,7 +4076,7 @@ harder going down, by keys in each entry (none are flat stat multipliers):
 
 - built into the level (`level-settings` sets their variables for the generator, so a save keeps
   them, through `*level-setting-keys*`): `:pool`, what `any` picks from (`*spawn-pool*`: no ogre,
-  wraith or riftwalker on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
+  wraith, riftwalker or arc votary on level 1, and more heavy monsters on level 3; leave a kind out rather than give it 0),
   which also limits named spawns: a choice keeps the kinds in the pool, and a block naming only kinds
   outside it isn't used (`block-fits-pool-p`; on level 1 the high quarter's rooms, which spawn ogres,
   and so the whole high quarter; the log says which),
@@ -3929,8 +4088,8 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   acolyte's abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
   `:abilities` names the abilities a level's monsters may use beyond their first (`level-ability-p`):
   none on level 1, the acolyte's `:firestorm`, the pack imp's `:flank-leap` (see "The imp") and the
-  rime hag's `:rime-field` on levels 2 and 3 (and so in the settlement), and her `:blizzard` on
-  level 3 (and in the settlement when it is at depth 3).
+  rime hag's `:rime-field` on levels 2 and 3 (and so in the settlement), and her `:blizzard` and the
+  arc votary's `:static-recoil` on level 3 (and in the settlement when it is at depth 3).
 
 Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
 budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,

@@ -278,6 +278,8 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (debug-spawn (make-instance 'imp :location (vec 1.5 0 -3.5) :facing pi) container)
     ;; A rime hag by the north wall, between the necromancer and the wraith (hag.lisp).
     (debug-spawn (make-instance 'rime-hag :location (vec 0.5 0 -9) :facing pi) container)
+    ;; An arc votary behind the north-west pillar (votary.lisp), for stepping out of its beam.
+    (debug-spawn (make-instance 'arc-votary :location (vec -4.5 0 -7) :facing pi) container)
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2

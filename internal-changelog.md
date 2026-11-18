@@ -7,6 +7,47 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- **The arc votary, a shock monster from level 2 on** (src/votary.lisp). A blind storm-priest that charges
+  for 0.9 s (a crackle between its hands, a swelling lamp, a faint ranging line) and then holds a
+  shock beam up to 2 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 0.9 rad/s: run
+  round it or step behind cover and it lets go after 0.75 s. Each pulse on the player is a blow the
+  shield meets at 12 stamina, with no shove or hit-stop; Absorb does nothing. The beam strikes whatever it
+  reaches, its own allies too (a body in the way blocks it), and electrifies the floor round that body
+  out to 3.5 m: anyone else standing there takes half a pulse, past any shield, unless they jump. In
+  water it strikes 1.5 times as hard and
+  runs to every body in the same water within 6 m, and the water is shown electrified as the floor is
+  (bolts skating over the surface, a flash, an arc to each body struck). +20 pain chance while it holds; resists shock 0.75;
+  teaches shock (the shared `taught-effect`); kill gold 10. In the pools of run levels 2 and 3 and
+  `*spawn-pool*`, and the 30% spawn of the pool, cistern, canal end and creek blocks is
+  `arc-votary|acolyte`. Boss: the Arc Hierophant (4 to 6 a pulse, its floor 5 m round); elite: `elite-votary`.
+  Engine: `beam-end` reaches the player's body for any other caster; a `beam-pulse` strike source,
+  `effect-shove` and `effect-block-cost`, and `hurt-player`'s `:blockable` and `:block-cost`; a beam's
+  `strength`. New boss and pool kinds change which monsters and boss some seeds place, so a save
+  made before starts its level fresh. Sounds: votary-alert, -pain, -death, -charge, -beam-start,
+  -beam (loop), arc-zap. The debug hall has one behind its north-west pillar (index 10, after the hag).
+  Its first design, a beige linen habit, was the walls' own colour with no hard outline; it is now a
+  storm-teal robe over black with brass fittings, blazing sewn-shut eyes and a crown of lightning rods,
+  2 m with the crown, its beam from its hands (`*votary-hand-height*`). `tools/yellow_sparks.py` turns
+  the salmon-pink fringe the slicers leave on yellow lightning back to yellow. At rest it crackles as
+  the shock nova does, arcs between its hands and between its crown's rods (`idle-arcs`), and its lamp
+  stays lit low in the lightning's yellow while it lives, so the lightning lights it and the floor round
+  it.
+  Its held beam is drawn as lightning from its palms to what it strikes, redrawn 25 times a second as
+  the shock nova's bolts, not a straight ribbon; struck head-on, the bolt stops 1.5 m short of the eye
+  and has no forks. The charge's ranging line is lightning too, faint: one broken thread an art pixel
+  wide that firms as the charge grows. The lightning ends in the middle of a creature it strikes, where its
+  sprite is, not at the edge of the beam's reach (0.55 m short of an imp), and on the player runs on
+  from 1.5 m off in a short, nearly straight stretch into the bottom of the view. A first try, the beam jumping
+  off an ally onto the nearest foe and sparing the ally, read as the beam passing through it however it
+  was drawn, and is gone. Each bolt off the electrified floor throws sparks from its foot, and a
+  flickering lamp jumps from foot to foot so the floor flashes under them. Its hands' lamp, moved as it
+  walked, kept the room it was first placed in; moved lamps are now placed again. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
+  view, and none from behind.
+  From level 3 of a run it has **static recoil**: damage it takes is stored, and as it fills (18) the
+  votary goes dark (lamp, idle lightning and sprite dimming, sparks drawn into its chest, a rising
+  whine); 3 s with no more damage and it dissipates in 1.5 s at most, the sparks scattering out; full, it stands dark and silent for 0.5 s, then bursts in a 4 m shock nova (6 to 9, knockback
+  8, its allies too) and blinks 6 to 9 m away along a bolt. 14 s cooldown. Sounds: votary-whine (loop),
+  votary-recoil.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
   a body question 76 against 120 on seed 11, a 10 m `clear-path-p` 23 µs against 30. Same levels and

@@ -8,7 +8,7 @@ weight 1
 legend
   ~ water
   i spawn any south
-  m spawn any south 30
+  m spawn arc-votary|acolyte south 30
   $ pickup floor
   & water, pickup reward
 

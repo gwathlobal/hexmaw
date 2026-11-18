@@ -18,7 +18,8 @@
 (defparameter *slowest* 0.4 "The least fraction of its speed a slow leaves anything.")
 (defparameter *element-resistances*
   '((acolyte :fire 0.5) (skeleton-warrior :frost 0.5) (gale-wraith :shock 0.5)
-    (rime-hag :frost 0.75) (rime-hag :fire -0.5))
+    (rime-hag :frost 0.75) (rime-hag :fire -0.5)
+    (arc-votary :shock 0.75))
   "(CLASS ELEMENT FRACTION): CLASS and its subclasses take FRACTION less of ELEMENT's damage; a
 negative FRACTION, more (the rime hag takes half again of fire).")
 (defparameter *element-tints*
@@ -196,6 +197,7 @@ CASTER and those CASTER spares."
     (if (< 0 (effect-duration effect))
         (afflict target :damage amount (effect-duration effect) :element element :caster (caster source))
         (hurt-player target amount (effect-origin source)
+                     :shove (effect-shove source) :blockable T :block-cost (effect-block-cost source)
                      :unblockable (effect-unblockable-p source) :by (caster source)))
     (element-rider target element)))
 

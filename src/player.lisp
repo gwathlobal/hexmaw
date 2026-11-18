@@ -1256,7 +1256,7 @@ PLAYER falls (FALL-DEAD) and the death screen comes up. Elsewhere the run starts
                (death-time player) 0.0
                (vy (velocity player)) (min 0f0 (vy (velocity player)))))))
 
-(defun hurt-player (player amount from &key (shove T) lift guard-break unblockable by)
+(defun hurt-player (player amount from &key (shove T) lift guard-break unblockable blockable block-cost by)
   "Take AMOUNT health from PLAYER, struck from point FROM: a red flash, a shove away
 from FROM and hit-stop. SHOVE is T for *PLAYER-KNOCKBACK*, a speed in m/s, or NIL (a
 burn: only the flash). LIFT, in m/s, also throws the player up off their feet, where a
@@ -1264,16 +1264,18 @@ shove carries much further than on the ground. A blow the raised shield meets
 (SHIELD-BLOCKS-P; never an UNBLOCKABLE one) costs *BLOCK-STAMINA-SCALE* stamina a point of
 damage, does *BLOCK-DAMAGE-SCALE* of its damage, at least 1, and shoves and lifts
 *BLOCK-SHOVE-SCALE* as far; with GUARD-BREAK it also knocks the shield aside for that many
-seconds (BREAK-GUARD). With too little stamina the blow goes through in full, takes what
+seconds (BREAK-GUARD). BLOCKABLE lets the shield meet a blow with no SHOVE (a creature's held
+beam's pulse), and BLOCK-COST, stamina, replaces what it costs the shield. With too little stamina
+the blow goes through in full, takes what
 stamina is left and knocks the shield aside for at least *STAMINA-GUARD-BREAK*. BY is what
 did it, a creature, :LAVA or :DROWNING, for the death screen. At zero health the player
 dies (PLAYER-DIES). Once the boss is dead (RUN-WON-P, boss.lisp), nothing hurts the player.
 Returns true if the shield took the blow."
   (let ((blocked NIL))
     (when (and (< 0 (health player)) (not (run-won-p)))
-      (setf blocked (and shove (not unblockable) (shield-blocks-p player from)))
+      (setf blocked (and (or shove blockable) (not unblockable) (shield-blocks-p player from)))
       (when blocked
-        (let ((cost (* amount *block-stamina-scale*)))
+        (let ((cost (or block-cost (* amount *block-stamina-scale*))))
           (cond ((<= cost (stamina player))
                  (decf (stamina player) cost)
                  (setf amount (max 1 (round (* amount *block-damage-scale*))))
