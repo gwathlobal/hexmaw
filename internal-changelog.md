@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The bloodroot's snare warns for 1.1 s before it grabs (0.6 before), and its roots spread at 0.25 m/s
+  (0.1 m a ring), not 0.6.
 - A bloodroot's roots spread in round rings, bulging smoothly toward the player and blood, not in
   squares: each ring moves a circle out (`carpet-spread`) and cells grow only inside it.
 - Blood a bloodroot drinks now slides to it as itself: the splat, made round and glowing, moves along

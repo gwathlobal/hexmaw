@@ -2448,7 +2448,7 @@ for a while). It grows a ring every `*root-ring-time*` (0.4 s, halved in Glut, f
 elite; `root-speed`) while the bulb hunts, from its frontier through `nav-step` at a thin body
 (`*root-body*`), so never through a plugged doorway, over lava or into water, out to `*root-reach*`
 (10 m; the Mother Root's 20). Each ring its edge, a circle round where it grew from
-(`carpet-spread`, saved), moves out `*root-spread*` (0.25 m), and a frontier cell grows only into
+(`carpet-spread`, saved), moves out `*root-spread*` (0.1 m, 0.25 m/s), and a frontier cell grows only into
 neighbours inside it, so it spreads round rather than in the squares a cell's eight neighbours make;
 toward its target or a floor splat within `*root-lean-reach*` the circle bulges, up to twice as far
 straight toward one (`lean-factor`), and a burst of rings (its first three, a Bloom's surge, a seed's)
@@ -2461,7 +2461,7 @@ is checked by `solid-at`. `roots-at x y z` is the bulb whose live roots a point 
 player is slowed `*root-slow*` (a `:slow` status) and drained `*root-drain*` (3) a second, taken
 every `*root-drain-tick*` as whole points (`hurt-player ... :shove NIL :unblockable T`), the bulb
 healing what they lost. `*snare-stand*` (1 s) on them, unless `snare-guard` still runs, starts the
-**snare** (the player's `snare`, player.lisp): a `*snare-tell*` (0.6 s) tell, `*snare-sprites*` (6)
+**snare** (the player's `snare`, player.lisp): a `*snare-tell*` (1.1 s) tell, `*snare-sprites*` (6)
 `snare-sprite`s, 1.4 m roots, shooting up out of the floor in `*snare-rise*` and writhing in a ring
 `*snare-sprite-ring*` (1.1 m) round the feet, far enough out that they reach the lower third of the
 view looking straight ahead (closer in, they stood under the view). Off the floor at any moment of

@@ -18,7 +18,7 @@
 (defparameter *root-reach* 10.0 "Metres from the bulb its main carpet grows to.")
 (defparameter *root-ring-time* 0.4 "Seconds between rings of growth.")
 (defparameter *root-start-rings* 3 "Rings a bulb's carpet has before it notices anything.")
-(defparameter *root-spread* 0.25
+(defparameter *root-spread* 0.1
   "Metres a carpet's edge moves out a ring, as a circle round where it grew from; toward its target
 or blood it moves out up to twice as fast (LEAN-FACTOR), and in a burst of rings (a Bloom's surge,
 a seed) twice as fast all round.")
@@ -34,7 +34,7 @@ a seed) twice as fast all round.")
 (defparameter *root-drain-tick* 0.5 "Seconds between the blows of the roots' drain.")
 
 (defparameter *snare-stand* 1.0 "Seconds on roots before they close on the player.")
-(defparameter *snare-tell* 0.6 "Seconds the roots bulge before they grab: a jump or a step off escapes.")
+(defparameter *snare-tell* 1.1 "Seconds the roots bulge before they grab: a jump or a step off escapes.")
 (defparameter *snare-hold* 1.5 "Seconds the roots hold the player.")
 (defparameter *snare-drain* 8.0 "Health a second held roots drain.")
 (defparameter *snare-reach* 0.6 "Metres the player may be from where the roots bulged and still be grabbed.")
