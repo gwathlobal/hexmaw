@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The bloodroot answers attacks from afar: three blows from beyond 4 m shut its husk for 4 s (a
+  quarter of ranged damage gets through, it heals 3 a second; a close blow or a forced flinch cracks it
+  open for 1.5 times the blow and a reel), and at a target 9 to 26 m off it sends a root burrowing under
+  the floor at where they stood, erupting as a root patch that strikes and starts to snare them.
+  `hurt` and `burn` now ask `blow-damage`.
 - The bloodroot's snare warns for 1.1 s before it grabs (0.6 before), and its roots spread at 0.25 m/s
   (0.1 m a ring), not 0.6.
 - A bloodroot's roots spread in round rings, bulging smoothly toward the player and blood, not in

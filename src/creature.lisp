@@ -585,6 +585,13 @@ coin (pickups.lisp), the watch notes a murder (townsfolk.lisp).")
 rest (the riftwalker blinks away, riftwalker.lisp).")
   (:method ((creature creature)) NIL))
 
+(defgeneric blow-damage (creature amount by force-pain)
+  (:documentation "The health CREATURE loses to a blow of AMOUNT by BY (FORCE-PAIN as for HURT), as
+HURT and BURN take it: AMOUNT, unless something of its own turns it (a bloodroot's husk).")
+  (:method ((creature creature) amount by force-pain)
+    (declare (ignore by force-pain))
+    amount))
+
 (defun hurt (creature amount &key from (pain-bonus 0) by force-pain gib-overkill)
   "Take AMOUNT health from CREATURE, struck from point FROM (NIL: from the player), which
 the blood sprays away from, by BY (as for HARMED). It flinches and breaks off what it's
@@ -595,6 +602,7 @@ killing blow that overkills by that fraction of its most, if its own needs more 
     (setf (flash creature) *flash-time*)
     (return-from hurt))
   (unless (dead creature)
+    (setf amount (blow-damage creature amount by force-pain))
     (decf (health creature) amount)
     ;; The blow on the body, whatever struck it: a pain cry is the flinch's.
     (play-sound (if (bleeds creature) :flesh-hit :bone-hit) (location creature))
@@ -661,6 +669,7 @@ blow, an ogre's landing or a grave circle, doesn't set the level fighting.")
   "Take AMOUNT health from CREATURE standing in lava or drowning, or whirled by BY's tornado:
 a flash and it notices, but no flinch, blood or hit-stop, which would freeze the game every burn."
   (unless (or (dead creature) (dormant-p creature))
+    (setf amount (blow-damage creature amount by NIL))
     (decf (health creature) amount)
     (setf (flash creature) *flash-time*
           (alert creature) (alert-time))

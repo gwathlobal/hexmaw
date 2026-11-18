@@ -83,7 +83,8 @@ their values."
 ;; Its roots are ROOT-STATE, an accessor that turns its carpets into plain data and back
 ;; (bloodroot.lisp).
 (defmethod saved-slots append ((bloodroot bloodroot))
-  '(root-state glut drain-carry drain-timer stand heal-carry last-bloom drinks gulp))
+  '(root-state glut drain-carry drain-timer stand heal-carry last-bloom drinks gulp
+    husk husk-count husk-timer burrow))
 
 (defmethod saved-slots append ((seed lobbed-projectile))
   '(gravity))

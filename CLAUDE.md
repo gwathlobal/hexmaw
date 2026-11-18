@@ -2510,6 +2510,23 @@ its roots surge `*bloom-surge*` rings and it gluts. **Glut** (`*glut-time*`, 6 s
 fast, spit twice as often, and the sprite washed red, pulsing 0.35 to 0.5 twice a second
 (`own-tint`, creature.lisp, after the flash and status tint, only where stronger).
 
+**Against attacks from afar**, two answers, so a player standing off with free spells has to come
+onto its roots. **The husk**: `*husk-hits*` (3) blows from beyond `*husk-reach*` (4 m, `striker-close-p`)
+within `*husk-window*` (3 s), counted in `harmed :after`, shut it for `*husk-time*` (4 s) once it isn't
+mid-ability (`update-husk`, `close-husk`): it holds the Bloom's clench, darkened (`show-own-pose`,
+`own-tint`), does nothing else, lets through `*husk-scale*` (a quarter) of what reaches it from afar
+(`blow-damage`, a generic `hurt` and `burn` ask, creature.lisp) and heals `*husk-regen*` (3) a second.
+A blow from within `*husk-reach*`, or one that always flinches (a full maul blow or overcharge, the
+earthshake, a spear's counter), cracks it (`crack-husk`): that blow `*husk-crack-scale*` (1.5) times as
+hard, and it reels `*husk-crack-reel*` (1 s). `*husk-cooldown*` (10 s) after it opens. **The burrowing
+root** (`:burrow`, cooldown `*burrow-cooldown*` 8 s, first after `*burrow-first*`): at a target in sight
+between `*burrow-min*` (9 m) and `*burrow-range*` (26 m), on the spit's strip, a root runs under the
+floor at `*burrow-speed*` (9 m/s) toward where they stood (`start-burrow`, `update-burrow`), throwing up
+grit, sparks and dust as it goes, and erupts there (`end-burrow`): a seed patch grown at once
+(`*burrow-rings*`), `*burrow-damage*` (5 to 8, no shield) to a player within `*burrow-reach*` (1.2 m) on
+the floor, and the snare's tell under them. A sidestep or a jump dodges it; a wall, a gap, a step or a
+liquid stops it. Both are saved (`husk`, `husk-count`, `husk-timer`, `burrow`).
+
 **Fire, frost and the maul.** `touch-roots at radius element`, from `strike-skins` (skins.lisp:
 bursts, novas, a projectile's impact at 1 m at least, a beam's end, the firestorm's pulses): fire
 burns the rooted cells there (burnt, regrowing from their neighbours after `*root-burn-hold*`), frost
