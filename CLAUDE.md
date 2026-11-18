@@ -1403,7 +1403,7 @@ real time instead.
   the player's `blessed` over `*bless-time*`, and a sixth, first in the row, `:snare`, while a
   bloodroot's roots close on or hold the player, from their `snare`; the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
   (`*status-colors*`, by element for damage), its icon (`*status-icon-frames*`, a frame of
-  `data/sprites/icons/statuses`, drawn by `tools/draw_status_icons.py data/sprites/icons/statuses`:
+  `data/sprites/icons/statuses`, drawn by `tools/draw_status_icons.py data/sprites/icons/statuses`, then `tools/restyle.py --house data/sprites/icons/statuses.png`:
   burn, frost, shock, regen, slow, ward, bless, snare), the seconds left (a ward's points instead, which run out
   first) over the bottom-right corner, re-uploaded only when they change, and a bar along the
   bottom for `left` over `duration`. In its last `*status-warn-time*` (3 s) the icon blinks. An
