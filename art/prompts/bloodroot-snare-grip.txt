@@ -1,0 +1,10 @@
+Pixel-art sprite sheet: the BLOODROOT'S SNARE HOLDING ITS PREY, for a Doom/Hexen-style first-person dungeon game: tall thorned red roots risen out of the stone floor round a player who is caught, towering over them. The player is not drawn: only the roots. Seen from the side, upright, standing on the ground line.
+
+The roots are the bloodroot's own (reference 1), as drawn in reference 3, the snare's earlier frames: knotted dark red-brown root bark, wet crimson where it splits, curved bone-coloured thorns, glowing ember-red veins. Here they are much taller and thicker than in reference 3.
+
+THE FRAMES, each the same width, the roots about 2.2 metres tall at their tallest, half again as tall as reference 1's 1.4 metre bulb, so each cell is tall and narrow:
+- Cell 1, SURGE: a thick bundle of four or five thorned roots shooting straight up out of the floor to their full height, a tangle of smaller roots at their foot, flecks of grit flying.
+- Cell 2, ARCH: the roots at full height, their upper thirds bending inward and over like the claws of a closing hand, thorn tips pointing down.
+- Cell 3, GRIP: the roots coiled round each other in a tall twisted column, their tips hooked over at the top, thorns pointing inward, veins glowing.
+- Cell 4, GRIP SQUEEZE: the same, wrung a little tighter, the column a little thinner, the veins brighter.
+- One row of 4 equal tall cells, read left to right.

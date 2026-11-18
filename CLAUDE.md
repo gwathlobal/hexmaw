@@ -2459,9 +2459,11 @@ healing what they lost. `*snare-stand*` (1 s) on them, unless `snare-guard` stil
 **snare** (the player's `snare`, player.lisp): a `*snare-tell*` (0.6 s) tell, `*snare-sprites*` (6)
 `snare-sprite`s, 1.4 m roots, shooting up out of the floor in `*snare-rise*` and writhing in a ring
 `*snare-sprite-ring*` (1.1 m) round the feet, far enough out that they reach the lower third of the
-view looking straight ahead (closer in, they stood under the view); off the floor at any moment of it (a jump) or more than `*snare-reach*` from
-where it started, the roots close on nothing. Otherwise they hold (`snared-p`: no walk, run or jump,
-on ice too; hands and casts work) for `*snare-hold*` (1.5 s) at `*snare-drain*` (8) a second. A bash
+view looking straight ahead (closer in, they stood under the view). Off the floor at any moment of
+the tell (a jump) or more than `*snare-reach*` from where it started, the roots close on nothing.
+Otherwise they hold (`snared-p`: no walk, run or jump, on ice too; hands and casts work) for
+`*snare-hold*` (1.5 s) at `*snare-drain*` (8) a second, taller roots (2.2 m, `snare-grip`) surging up
+in the tell's place, arching over and coiling, over half the view's height. A bash
 or a spear's sweep pressed (`break-snare`), the maul's earthshake (which also tears up the roots
 within its reach, `tear-roots`), fire or frost reaching the cell, or the bulb's death free the player;
 each starts `snare-guard` (`*snare-guard*`, 2.5 s). The status icons don't show it yet.
@@ -3626,8 +3628,9 @@ python3 tools/slice_frames.py art/bloodroot/idle-1.png $D --pixel 4.87 --anchor 
 python3 tools/slice_frames.py art/bloodroot/attacks-2.png $D --pixel 3.6 --anchor bottom --filter box scale:1 spit:4 bloom:4 && rm $D/scale.*
 python3 tools/slice_frames.py art/bloodroot/death-1.png $D --pixel 5.07 --anchor bottom --filter box death:8
 python3 tools/slice_frames.py art/bloodroot/snare-1.png $D --pixel 5.1 --anchor bottom --filter box snare:6
+python3 tools/slice_frames.py art/bloodroot/snare-grip-2.png $D --pixel 5.9 --anchor bottom --filter box snare-grip:4
 python3 tools/slice_frames.py art/bloodroot/tendrils-1.png $D --pixel 13 --anchor bottom --filter box tendrils:8
-tools/restyle.py --house $D/{turnaround,idle,hurt,spit,bloom,death,snare,tendrils}.png
+tools/restyle.py --house $D/{turnaround,idle,hurt,spit,bloom,death,snare,snare-grip,tendrils}.png
 python3 tools/slice_frames.py art/spells/blood-seed-2.png $D --pixel 5 --filter box seed-flight:4 seed-burst:5
 tools/restyle.py --palette art/style/palette.txt $D/seed-flight.png $D/seed-burst.png
 ```

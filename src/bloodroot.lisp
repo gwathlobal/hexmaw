@@ -113,6 +113,7 @@ lower third of the view looking straight ahead.")
 (define-fx-animation bloodroot-hurt "sprites/bloodroot/hurt" :size (/ 90 64.0))
 (define-fx-animation bloodroot-death "sprites/bloodroot/death" :fps 8 :size (/ 90 64.0))
 (define-fx-animation snare-roots "sprites/bloodroot/snare" :fps 10 :loop T :size (/ 89 64.0))
+(define-fx-animation snare-grip "sprites/bloodroot/snare-grip" :fps 10 :loop T :size (/ 141 64.0))
 (define-fx-animation seed-flight "sprites/bloodroot/seed-flight" :fps 10 :loop T :size (/ 46 64.0))
 (define-fx-animation seed-burst "sprites/bloodroot/seed-burst" :fps 14 :size (/ 78 64.0))
 
@@ -698,32 +699,33 @@ snare's state (the player's SNARE) brings them back."))
 (defun ensure-snare-sprites (bloodroot)
   "Show BLOODROOT's snare round the player's feet while it holds or closes on them. In the tell its roots
 shoot up out of the floor in a ring and writhe, tall enough to be seen looking straight ahead; once they
-hold they curl over."
+hold, taller ones surge up in their place, arch over the player and coil."
   (let* ((player *player*)
          (snare (and player (snare player)))
          (mine (and snare (eq bloodroot (getf snare :root)) (container bloodroot))))
     (cond (mine
            (let* ((at (getf snare :at))
-                  (animation (find-fx-animation 'snare-roots))
-                  (fps (animation-fps animation))
-                  (size (animation-size animation))
                   (left (getf snare :left))
                   (tell (eq :tell (getf snare :phase)))
+                  (animation (find-fx-animation (if tell 'snare-roots 'snare-grip)))
+                  (fps (animation-fps animation))
+                  (size (animation-size animation))
                   (since (if tell (- *snare-tell* left) (- *snare-hold* left)))
                   (rise (if tell (min 1.0 (/ since *snare-rise*)) 1.0))
                   (frame (if tell
                              (if (< rise 1.0) 2 (+ 2 (mod (floor (- since *snare-rise*) *snare-lash-time*) 2)))
-                             (cond ((< since 0.1) 3) (T (+ 4 (mod (floor since 0.15) 2))))))
-                  (radius *snare-sprite-ring*))
-             (unless (snare-sprites bloodroot)
+                             (cond ((< since 0.1) 0) ((< since 0.2) 1) (T (+ 2 (mod (floor since 0.15) 2)))))))
+             (unless (and (snare-sprites bloodroot)
+                          (eq animation (sprite-animation (first (snare-sprites bloodroot)))))
+               (mapc #'despawn (snare-sprites bloodroot))
                (setf (snare-sprites bloodroot)
                      (loop repeat *snare-sprites*
-                           collect (spawn-standing-fx 'snare-roots (vx at) (vy at) (vz at) (container bloodroot)
-                                                      :class 'snare-sprite))))
+                           collect (spawn-standing-fx (if tell 'snare-roots 'snare-grip) (vx at) (vy at) (vz at)
+                                                      (container bloodroot) :class 'snare-sprite))))
              (loop for sprite in (snare-sprites bloodroot)
                    for i from 0
                    for angle = (float (* i (/ (* 2 pi) *snare-sprites*)) 0f0)
-                   do (multiple-value-bind (x z) (snare-sprite-spot at angle radius)
+                   do (multiple-value-bind (x z) (snare-sprite-spot at angle *snare-sprite-ring*)
                         (let ((location (location sprite)))
                           ;; Rising, the part still under the floor is hidden by it.
                           (setf (vx location) x
@@ -1694,4 +1696,5 @@ void main(){
   (preload (make-instance 'lobbed-projectile :spell (find-spell 'blood-seed) :animation (find-fx-animation 'seed-flight))
            scene)
   (preload (make-instance 'snare-sprite :animation (find-fx-animation 'snare-roots)) scene)
+  (preload (make-instance 'snare-sprite :animation (find-fx-animation 'snare-grip)) scene)
   (preload (make-instance 'fx-sprite :animation (find-fx-animation 'seed-burst)) scene))
