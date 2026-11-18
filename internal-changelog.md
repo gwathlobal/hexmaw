@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Any attack (a swing, thrust, the maul's charge, a cast or a bash) tears the player free of a
+  bloodroot's snare, and a status icon (`:snare`, a red-bordered pair of twisting roots) shows it:
+  blinking while the roots close, steady with the seconds left while they hold.
 - The bloodroot's snare warns plainly: six 1.4 m roots shoot up in a ring 1.1 m round the player's
   feet and writhe, reaching the lower third of the view looking straight ahead (the four 0.8 m mounds
   at 0.45 m stood under the view). The strip is sliced finer, at the house density.

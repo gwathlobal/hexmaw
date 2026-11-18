@@ -6,7 +6,8 @@ tools/slice_frames.py writes, so the game reads it like any other animation stri
 
 writes statuses.png (frames left to right, 2 px transparent gaps) and statuses.lisp. Frames, in
 order: burn (fire damage over time), frost, shock, regen (healing over time), slow, ward, and
-bless (the priest's blessing, settlement.lisp). Each is
+bless (the priest's blessing, settlement.lisp), and snare (a bloodroot's roots closing on or
+holding the player, bloodroot.lisp). Each is
 SIZE art pixels square like the weapon icons, drawn from a character map in three shades of its
 colour, then outlined in near-black so it reads on any background. The game draws the seconds
 left (a ward's points) over the bottom-right corner, so each picture keeps to the upper left.
@@ -132,6 +133,22 @@ ICONS = [
         ".....LMD.....",
         ".....LMD.....",
         ".....DDD.....",
+    ]),
+    ("snare", ((250, 120, 100), (190, 40, 35), (95, 20, 22)), [
+        "..LD.....LD..",
+        ".LMMD...LMMD.",
+        ".L..MD.LM..D.",
+        ".....MLM.....",
+        "....LMMMD....",
+        "..LLMD.LMDD..",
+        "..LMD...LMD..",
+        "...LMD.LMD...",
+        "....LMMMD....",
+        "..LLMD.LMDD..",
+        "..LMD...LMD..",
+        ".LMD.....LMD.",
+        "LMD.......LMD",
+        "DDDDDDDDDDDDD",
     ]),
 ]
 

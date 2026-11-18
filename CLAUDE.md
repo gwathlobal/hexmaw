@@ -1400,10 +1400,11 @@ real time instead.
   as a row of icons in the top-left corner, under the frame counter while it shows. One cell per
   status in `*status-order*` (damage, slow, heal, ward; one of each kind at most, so four cells,
   and a fifth, `:bless`, for the priest's blessing, which isn't a status but shows as one, from
-  the player's `blessed` over `*bless-time*`; the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
+  the player's `blessed` over `*bless-time*`, and a sixth, first in the row, `:snare`, while a
+  bloodroot's roots close on or hold the player, from their `snare`; the unneeded ones not drawn), like a hotbar slot: its border and time bar in the status's colour
   (`*status-colors*`, by element for damage), its icon (`*status-icon-frames*`, a frame of
   `data/sprites/icons/statuses`, drawn by `tools/draw_status_icons.py data/sprites/icons/statuses`:
-  burn, frost, shock, regen, slow, ward, bless), the seconds left (a ward's points instead, which run out
+  burn, frost, shock, regen, slow, ward, bless, snare), the seconds left (a ward's points instead, which run out
   first) over the bottom-right corner, re-uploaded only when they change, and a bar along the
   bottom for `left` over `duration`. In its last `*status-warn-time*` (3 s) the icon blinks. An
   instant heal or ward-less spell leaves no status and so no icon; its flash is the feedback.
@@ -2463,10 +2464,12 @@ view looking straight ahead (closer in, they stood under the view). Off the floo
 the tell (a jump) or more than `*snare-reach*` from where it started, the roots close on nothing.
 Otherwise they hold (`snared-p`: no walk, run or jump, on ice too; hands and casts work) for
 `*snare-hold*` (1.5 s) at `*snare-drain*` (8) a second, taller roots (2.2 m, `snare-grip`) surging up
-in the tell's place, arching over and coiling, over half the view's height. A bash
-or a spear's sweep pressed (`break-snare`), the maul's earthshake (which also tears up the roots
-within its reach, `tear-roots`), fire or frost reaching the cell, or the bulb's death free the player;
-each starts `snare-guard` (`*snare-guard*`, 2.5 s). The status icons don't show it yet.
+in the tell's place, arching over and coiling, over half the view's height. Any attack
+(`player-attack`: a swing, a thrust, the maul's charge, a cast, a bash; `break-snare`), a spear's sweep,
+the maul's earthshake (which also tears up the roots within its reach, `tear-roots`), fire or frost
+reaching the cell, or the bulb's death free the player; each starts `snare-guard` (`*snare-guard*`,
+2.5 s). The status icons show it (`:snare`, first in the row, a red border): blinking through the tell,
+steady while it holds, with its seconds left.
 
 **Drinking** (`drink-splats`), made to be seen: dark blood on the red carpet was lost even drawn over
 it (the roots lie `*root-floor-lift*`, 2.5 mm, under the splats). Every `*drink-scan*` a splat lying

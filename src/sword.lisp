@@ -156,8 +156,11 @@ it holds something."
 (defun player-attack (player)
   "Attack with the weapon in hand: cast the spell in the hands, swing the sword, thrust the
 spear, raise the maul to charge it (maul.lisp), or, with the shield raised, bash with it.
-Nothing while the shield is on its way up or down, or with nothing in hand."
+Nothing while the shield is on its way up or down, or with nothing in hand. Any attack tears free of
+a bloodroot's roots closing on or holding the player (bloodroot.lisp)."
   (when (weapon-ready-p player)
+    (when (weapon player)
+      (break-snare player))
     (case (weapon player)
       (:hands (when (held-spell player)
                 (player-cast player (held-spell player))))
