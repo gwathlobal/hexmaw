@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Blood a bloodroot drinks now slides to it as itself: the splat, made round and glowing, moves along
+  the floor to the bulb and dissolves there (a wall splat sends one from the floor at its foot), and
+  the glow on the roots under it is a round drop with two smaller ones trailing, not a square streak.
 - Any attack (a swing, thrust, the maul's charge, a cast or a bash) tears the player free of a
   bloodroot's snare, and a status icon (`:snare`, a red-bordered pair of twisting roots) shows it:
   blinking while the roots close, steady with the seconds left while they hold.

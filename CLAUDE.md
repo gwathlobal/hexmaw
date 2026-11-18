@@ -2476,11 +2476,16 @@ it (the roots lie `*root-floor-lift*`, 2.5 mm, under the splats). Every `*drink-
 on its live roots (a floor splat over a cell, a wall splat beside one below the roots' climb) starts to
 glow (`set-splat-glow`, bit 6 of the splat's side, which the blood shader draws lit from within in
 bright crimson, pulsing `*splat-glow-rate*` a second). After `*drink-delay*` (1 s) glowing it is drunk
-(`start-drink`): it dissolves (`dissolve-splat`, gore.lisp) over `*drink-time*`, sending up
-`*drink-motes*` blood motes and `root-drink`, and then its light runs along the roots and tufts, a
-streak `*drink-flow-tail*` long and `*drink-flow-width*` either side, from where it lay straight to the
-bulb at `*drink-flow-speed*` (4 m/s), hot pink at its head (`drink_glow` in both root shaders, from
-uniform arrays of `*max-drink-lanes*`, `set-drink-uniforms`). As it arrives (`drink-arrives`) the bulb
+(`start-splat-drink`, `start-drink`): for `*drink-time*` it sends up `*drink-motes*` blood motes and
+`root-drink` plays, then the splat itself, made round (`flow-splat`, gore.lisp: bit 7 of its side,
+which the roots' scan leaves alone), slides along the floor straight to the bulb at
+`*drink-flow-speed*` (4 m/s; `carry-splat`, `move-splat`), and dissolves as it arrives. A wall splat
+dissolves where it is and a flowing one of its blood sets off from the floor at its foot
+(`spawn-flowing-splat`). Under it the roots and tufts glow: round drops, the leading one
+`*drink-flow-width*` across its radius and two smaller ones trailing it within `*drink-flow-tail*`,
+hot pink at the head, stepped in whole texels (`drink_glow` in both root shaders, from uniform arrays
+of `*max-drink-lanes*`, `set-drink-uniforms`). A bulb dying or reviving dissolves the splats it was
+carrying (`spill-drinks`). As it arrives (`drink-arrives`) the bulb
 flushes red for `*gulp-time*` (`own-tint`) and heals `*drink-per-area*` of the blood's area, at most
 `*drink-max*`. A splat drunk within `*drink-merge*` of one not yet on its way joins it, and a bulb has
 `*max-drinks*` under way. Its `drinks` and `gulp` are saved. `*glut-drink*` (15) arriving within a second

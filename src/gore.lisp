@@ -101,8 +101,9 @@ at least this fraction of its most.")
    (frame :reader pool-frame :documentation "Per particle: its frame in the strip; a gib's unturned one.")
    (side :reader pool-side
          :documentation "Per splat: the face it lies on, 0 to 5 for +X -X +Y -Y +Z -Z, and in
-bits 3 to 5 its turn (quarter turns, then a mirror), and bit 6 if it glows (a bloodroot's
-roots are drinking it: SET-SPLAT-GLOW). Per gib: bit 0 to tumble
+bits 3 to 5 its turn (quarter turns, then a mirror), bit 6 if it glows (a bloodroot's
+roots are drinking it: SET-SPLAT-GLOW) and bit 7 if it flows, carried along the floor to the
+bloodroot (FLOW-SPLAT). Per gib: bit 0 to tumble
 anticlockwise, bit 1 to mirror, bits 2 and 3 the quarter turn it starts at, bit 4 if it
 leaves no blood.")
    (scales :reader pool-scales :documentation "Per gib: the size it is drawn at, 1 as the art is.")
@@ -514,6 +515,41 @@ floor) and its blood, an area in art pixels squared."
 
 (defun splat-glows-p (pool i)
   (logbitp 6 (aref (pool-side pool) i)))
+
+(defun flow-splat (pool i)
+  "Make slot I's splat a flowing one, which a bloodroot's roots carry to it (MOVE-SPLAT): round,
+glowing, and left alone by the roots' scan. Returns I."
+  (let* ((frames (pool-frame pool))
+         (frame (aref frames i))
+         (size (splat-size-for (aref (pool-velocities pool) (* 3 i)))))
+    (setf (aref frames i) (+ 4 (* 8 (if (round-splat-p frame) (floor (- frame 4) 8) 0)) size)
+          ;; On the floor, its turn kept, glowing and flowing.
+          (aref (pool-side pool) i) (logior 2 192 (logand 56 (aref (pool-side pool) i))))
+    i))
+
+(defun splat-flowing-p (pool i)
+  (logbitp 7 (aref (pool-side pool) i)))
+
+(defun spawn-flowing-splat (pool x y z area)
+  "A new flowing splat (FLOW-SPLAT) of AREA art pixels squared, over pi, on the floor at X Y Z.
+Returns its slot."
+  (let ((i (free-slot pool))
+        (p (pool-positions pool)))
+    (setf (aref (pool-state pool) i) 2
+          (aref (pool-ages pool) i) 0f0
+          (aref (pool-frame pool) i) (+ 4 (* 8 (random 3)))
+          (aref (pool-side pool) i) (* 8 (random 8))
+          (aref (pool-velocities pool) (* 3 i)) (float area 0f0)
+          (aref p (* 3 i)) (float x 0f0) (aref p (+ 1 (* 3 i))) (float y 0f0) (aref p (+ 2 (* 3 i))) (float z 0f0))
+    (incf (splat-count pool))
+    (flow-splat pool i)))
+
+(defun move-splat (pool i x y z)
+  "Lay slot I's splat at X Y Z, if it is still a flowing splat; true if it was."
+  (when (and (<= 2 (aref (pool-state pool) i) 3) (splat-flowing-p pool i))
+    (let ((p (pool-positions pool)) (b (* 3 i)))
+      (setf (aref p b) (float x 0f0) (aref p (+ b 1)) (float y 0f0) (aref p (+ b 2)) (float z 0f0))
+      T)))
 
 (defun dissolve-splat (pool i)
   "Start slot I's splat dissolving now, as the oldest does when there are too many."
