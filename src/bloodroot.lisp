@@ -37,7 +37,12 @@ grow every other ring.")
 (defparameter *snare-hold* 1.5 "Seconds the roots hold the player.")
 (defparameter *snare-drain* 8.0 "Health a second held roots drain.")
 (defparameter *snare-reach* 0.6 "Metres the player may be from where the roots bulged and still be grabbed.")
-(defparameter *snare-sprite-ring* 0.45 "Metres out from the snared feet its roots burst up.")
+(defparameter *snare-sprite-ring* 1.1
+  "Metres out from the snared feet its roots shoot up: far enough out that from the eye they reach the
+lower third of the view looking straight ahead.")
+(defparameter *snare-sprites* 6 "Roots in the ring round the feet, so one stands ahead whichever way the player looks.")
+(defparameter *snare-rise* 0.15 "Seconds the tell's roots take to shoot up out of the floor.")
+(defparameter *snare-lash-time* 0.1 "Seconds a frame of the tell's writhing lasts.")
 
 (defparameter *spit-range* 16.0 "Metres its seed reaches.")
 (defparameter *spit-cooldown* 3.0)
@@ -107,7 +112,7 @@ grow every other ring.")
 (define-fx-animation bloodroot-bloom "sprites/bloodroot/bloom" :size (/ 91 64.0))
 (define-fx-animation bloodroot-hurt "sprites/bloodroot/hurt" :size (/ 90 64.0))
 (define-fx-animation bloodroot-death "sprites/bloodroot/death" :fps 8 :size (/ 90 64.0))
-(define-fx-animation snare-roots "sprites/bloodroot/snare" :fps 10 :loop T :size (/ 51 64.0))
+(define-fx-animation snare-roots "sprites/bloodroot/snare" :fps 10 :loop T :size (/ 89 64.0))
 (define-fx-animation seed-flight "sprites/bloodroot/seed-flight" :fps 10 :loop T :size (/ 46 64.0))
 (define-fx-animation seed-burst "sprites/bloodroot/seed-burst" :fps 14 :size (/ 78 64.0))
 
@@ -682,8 +687,18 @@ them, :TEAR tears them up."
   (:documentation "Roots of a bloodroot's snare round the player's feet. A save leaves them out: the
 snare's state (the player's SNARE) brings them back."))
 
+(defun snare-sprite-spot (at angle radius)
+  "Where a snare root stands RADIUS out from AT at ANGLE, pulled in to half that where a wall is."
+  (flet ((spot (r) (values (float (+ (vx at) (* r (cos angle))) 0f0) (float (+ (vz at) (* r (sin angle))) 0f0))))
+    (multiple-value-bind (x z) (spot radius)
+      (if (solid-at x (+ (vy at) 0.7) z)
+          (spot (* 0.5 radius))
+          (values x z)))))
+
 (defun ensure-snare-sprites (bloodroot)
-  "Show BLOODROOT's snare round the player's feet while it holds or closes on them."
+  "Show BLOODROOT's snare round the player's feet while it holds or closes on them. In the tell its roots
+shoot up out of the floor in a ring and writhe, tall enough to be seen looking straight ahead; once they
+hold they curl over."
   (let* ((player *player*)
          (snare (and player (snare player)))
          (mine (and snare (eq bloodroot (getf snare :root)) (container bloodroot))))
@@ -691,20 +706,30 @@ snare's state (the player's SNARE) brings them back."))
            (let* ((at (getf snare :at))
                   (animation (find-fx-animation 'snare-roots))
                   (fps (animation-fps animation))
+                  (size (animation-size animation))
                   (left (getf snare :left))
-                  (frame (if (eq :tell (getf snare :phase))
-                             (min 1 (floor (* 2 (- 1 (/ left *snare-tell*)))))
-                             (let ((held (- *snare-hold* left)))
-                               (cond ((< held 0.1) 2) ((< held 0.2) 3)
-                                     (T (+ 4 (mod (floor held 0.15) 2))))))))
+                  (tell (eq :tell (getf snare :phase)))
+                  (since (if tell (- *snare-tell* left) (- *snare-hold* left)))
+                  (rise (if tell (min 1.0 (/ since *snare-rise*)) 1.0))
+                  (frame (if tell
+                             (if (< rise 1.0) 2 (+ 2 (mod (floor (- since *snare-rise*) *snare-lash-time*) 2)))
+                             (cond ((< since 0.1) 3) (T (+ 4 (mod (floor since 0.15) 2))))))
+                  (radius *snare-sprite-ring*))
              (unless (snare-sprites bloodroot)
                (setf (snare-sprites bloodroot)
-                     (loop for (dx dz) in '((1 0) (-1 0) (0 1) (0 -1))
-                           collect (spawn-standing-fx 'snare-roots (+ (vx at) (* dx *snare-sprite-ring*)) (vy at)
-                                                      (+ (vz at) (* dz *snare-sprite-ring*)) (container bloodroot)
+                     (loop repeat *snare-sprites*
+                           collect (spawn-standing-fx 'snare-roots (vx at) (vy at) (vz at) (container bloodroot)
                                                       :class 'snare-sprite))))
-             (dolist (sprite (snare-sprites bloodroot))
-               (setf (age sprite) (/ (+ frame 0.5) fps)))))
+             (loop for sprite in (snare-sprites bloodroot)
+                   for i from 0
+                   for angle = (float (* i (/ (* 2 pi) *snare-sprites*)) 0f0)
+                   do (multiple-value-bind (x z) (snare-sprite-spot at angle radius)
+                        (let ((location (location sprite)))
+                          ;; Rising, the part still under the floor is hidden by it.
+                          (setf (vx location) x
+                                (vy location) (+ (vy at) (* size (- rise 0.5)))
+                                (vz location) z)))
+                      (setf (age sprite) (/ (+ frame 0.5) fps)))))
           ((snare-sprites bloodroot)
            (mapc #'despawn (snare-sprites bloodroot))
            (setf (snare-sprites bloodroot) ())))))

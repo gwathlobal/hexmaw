@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The bloodroot's snare warns plainly: six 1.4 m roots shoot up in a ring 1.1 m round the player's
+  feet and writhe, reaching the lower third of the view looking straight ahead (the four 0.8 m mounds
+  at 0.45 m stood under the view). The strip is sliced finer, at the house density.
 - The debug level lays puddles of blood round its bloodroot when built and each time it revives
   (`lay-debug-blood`), so its drinking can be watched.
 
