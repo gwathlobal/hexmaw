@@ -66,8 +66,10 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
 (defparameter *recoil-dim* 0.92 "How much of its lamp the full charge puts out.")
 (defparameter *recoil-tint* (vec 0.03 0.03 0.07 0.6)
   "What its sprite darkens toward as the charge fills, and how far at full (W).")
-(defparameter *recoil-motes* 36.0 "Sparks a second drawn in toward its chest at full charge.")
-(defparameter *recoil-ring* '(1.0 2.2) "Metres from it that the drawn-in sparks start.")
+(defparameter *recoil-motes* 130.0
+  "Sparks a second drawn in toward its chest at full charge; a third of that from the first blow stored.")
+(defparameter *recoil-ring* '(1.2 2.6) "Metres from it that the drawn-in sparks start.")
+(defparameter *recoil-mote-speed* '(5.5 7.5) "How fast the drawn-in sparks fly: faster draws longer streaks.")
 (defparameter *recoil-flash* (vec 4.0 3.8 2.6) "The burst's flash.")
 
 ;; Sliced at 128 px tall for its 2 m, crown included, at the monsters' 64 px a metre.
@@ -902,7 +904,7 @@ what shows of it: the sparks drawn in, and the whine."
           ((< 0.0 (static-charge votary))
            (setf (static-charge votary) (max 0.0 (- (static-charge votary) (* *recoil-bleed* dt))))
            ;; Sparks stream in from round it into its chest, more as it fills.
-           (decf (mote-timer votary) (* dt k))
+           (decf (mote-timer votary) (* dt (+ 0.35 (* 0.65 k))))
            (loop while (<= (mote-timer votary) 0.0)
                  do (incf (mote-timer votary) (/ 1.0 *recoil-motes*))
                     (let* ((loc (location votary))
@@ -912,7 +914,9 @@ what shows of it: the sparks drawn in, and the whine."
                                       (+ (vy loc) 0.2 (random (* 0.8 (sprite-height votary))))
                                       (+ (vz loc) (* r (sin a)))))
                            (chest (votary-chest votary)))
-                      (spray-sparks from (v- chest from) 1 :ramp :shock :speed '(3.5 4.5) :spread 0.05)))))
+                      ;; Aimed a little over its chest: they fall as they fly.
+                      (incf (vy chest) (* 0.14 r r))
+                      (spray-sparks from (v- chest from) 1 :ramp :shock :speed *recoil-mote-speed* :spread 0.04)))))
     (setf (whine-sound votary)
           (hold-loop (whine-sound votary) (and (not beat) (< 0.1 k) :votary-whine) (location votary)
                      (+ 0.3 (* 0.7 k))))))

@@ -2265,7 +2265,8 @@ that it goes dark, since a brighter glow would be lost in its own lamp and light
 fills (`recoil-k`) its lamp dims by up to `*recoil-dim*` (`votary-glow`), its idle arcs and the charge's
 crackle die away, its sprite darkens toward `*recoil-tint*` (`darken-votary`, every tick, even frozen,
 under any stronger hit flash), sparks stream in from `*recoil-ring*` round it into its chest
-(`*recoil-motes*` a second at full) and the `votary-whine` loop rises in volume. Full (`begin-recoil`), it
+(`*recoil-motes*`, 130 a second at full and a third of that from the first blow stored, fast enough to
+draw as streaks, `*recoil-mote-speed*`) and the `votary-whine` loop rises in volume. Full (`begin-recoil`), it
 lets go of its beam and stands `*recoil-beat*` (0.5 s) dark and silent, hands together on a dead knot
 (`show-own-pose`), unflinching (`react-to-hit :after`). Then `discharge-static` bursts the
 `static-recoil` nova round its chest (`:nova-radius` 4 m, 6 to 9 shock and knockback 8; it spares only
