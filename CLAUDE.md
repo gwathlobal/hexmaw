@@ -2440,7 +2440,11 @@ body alone cuts a doorway off from the spawn point (`uproot-blockers`, kit.lisp,
 it draws nothing, so the layout stays), and `tools/levelcheck --strict` fails a level where one still
 does. Over run seeds 1 to 60 it was 183 bloodroots on 57 of the 60 last levels before uprooting, 4 of
 them in a way; none on any other level or in the settlement. Its sounds are `bloodroot-*`,
-`seed-impact`, `bloom-swell`, `bloom`, `root-drink`, `snare-*` and `roots-burn` (`audio/sfx.md`).
+`seed-impact`, `bloom-swell`, `bloom`, `root-drink`, `snare-*`, `roots-burn`, `husk-close`, `husk-crack`,
+`burrow-rumble` (a loop at the burrowing root's head, `burrow-sound`) and `burrow-erupt` (`audio/sfx.md`).
+Its lamp (`update-bloodroot-light`) is a red glow, `*bloodroot-light*` out to `*bloodroot-light-radius*`
+(4.5 m), flaring `*bloodroot-light-beat*` with each heartbeat (`heartbeat`, as `root_beat` has it at the
+bulb), swelling to `*bloom-light*` through a Bloom's tell, and out while its husk is shut or it is dead.
 
 **Its roots.** A `root-carpet` (not an entity: the bloodroot owns it) is a window of the nav grid's
 cells round where it grew from, every layer, each empty, rooted or burnt (and a rooted one frosted
@@ -2514,7 +2518,7 @@ fast, spit twice as often, and the sprite washed red, pulsing 0.35 to 0.5 twice 
 onto its roots. **The husk**: `*husk-hits*` (3) blows from beyond `*husk-reach*` (4 m, `striker-close-p`)
 within `*husk-window*` (3 s), counted in `harmed :after`, shut it for `*husk-time*` (4 s) once it isn't
 mid-ability (`update-husk`, `close-husk`): it holds the Bloom's clench, darkened (`show-own-pose`,
-`own-tint`), and its roots' heartbeats run back in to it at `*husk-beat-glow*` (0.4) of their glow, so
+`own-tint`), its lamp goes out, and its roots' heartbeats run back in to it at `*husk-beat-glow*` (0.4) of their glow, so
 it shows shut from across a room (a root vertex's distance from its bulb, written negative while its
 husk is shut, `beat-distance`, tells `root_beat`); it does nothing else, lets through `*husk-scale*` (a quarter) of what reaches it from afar
 (`blow-damage`, a generic `hurt` and `burn` ask, creature.lisp) and heals `*husk-regen*` (3) a second.

@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The bloodroot glows red, pulsing with its heartbeat, and its light goes out while its husk is shut,
+  so it can be seen to be shut across a room. Its husk closing and cracking and its burrowing root
+  (a rumble that follows the root under the floor, and its eruption) have sounds.
 - While the bloodroot's husk is shut, the heartbeats on its roots run back in to the bulb, dimmer,
   so it can be seen to be shut from a distance.
 - The bloodroot answers attacks from afar: three blows from beyond 4 m shut its husk for 4 s (a
