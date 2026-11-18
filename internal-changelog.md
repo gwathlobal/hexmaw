@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The debug level lays puddles of blood round its bloodroot when built and each time it revives
+  (`lay-debug-blood`), so its drinking can be watched.
+
 - The bloodroot's drinking shows: blood on its roots glows crimson and pulses (a splat bit the blood
   shader reads), lies a second, then dissolves with blood motes rising off it, and a streak of light
   runs through the roots and tufts from where it lay to the bulb, which flushes red and heals as it

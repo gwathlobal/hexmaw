@@ -154,6 +154,9 @@ RGBA-ICON would put them. An icon that won't load only logs."
       ;; And the sigils they rise from.
       (preload (make-instance 'summon-sigil :centre (vec 0 0 0) :animation (find-fx-animation 'summon-sigil)) scene)))
   (add-blood-pool scene)
+  ;; Blood for the debug level's bloodroot to drink (bloodroot.lisp).
+  (when (and (eq *level* :test) (not *pending-load*))
+    (lay-debug-blood))
   (add-skin-floors scene)
   (add-root-floor scene)
   (add-spark-pool scene)

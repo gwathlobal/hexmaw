@@ -2533,7 +2533,9 @@ grows its roots faster; never `:warded`, since it always faces the player); the 
 `bloodroot-boss` (traits `:caster :rooted`: no leap, blink, tornado or ward), its roots over the whole
 arena. Kill gold 18; it teaches drain (`taught-effect`).
 
-To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'bloodroot))`,
+The debug level lays puddles of blood round each bloodroot as it is built and whenever one revives
+(`lay-debug-blood`, `*debug-blood-spots*`, 2.5 to 7 m off), which its roots reach and drink one after
+another. To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'bloodroot))`,
 Debug level, then `(setf (alert root) 30.0)` with `root` the bloodroot in `*creatures*`;
 `(rooted-count (carpet root))`, `(patches root)`, `(snare *player*)`; `(start-ability root :bloom)` for a
 Bloom, `(start-glut root)`, and `(strike-skins :fire (vcopy (feet *player*)) 1.5 nil)` to burn.

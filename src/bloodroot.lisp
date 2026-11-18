@@ -982,7 +982,28 @@ higher of them."
   (setf *roots-dirty* T
         (carpet bloodroot) NIL (patches bloodroot) () (glut bloodroot) 0.0 (stand bloodroot) 0.0
         (drain-carry bloodroot) 0.0 (heal-carry bloodroot) 0.0 (last-bloom bloodroot) 100.0
-        (drinks bloodroot) () (gulp bloodroot) 0.0))
+        (drinks bloodroot) () (gulp bloodroot) 0.0)
+  ;; Fresh blood for it on the debug level, so each life shows it feeding.
+  (when (eq *level* :test)
+    (lay-debug-blood bloodroot)))
+
+;;; Blood on the debug level: puddles round each bloodroot at several distances, which its roots
+;;; reach and drink one after another as they spread.
+
+(defparameter *debug-blood-spots* '((0.0 2.5) (3.5 -0.5) (2.0 -3.5) (-2.5 -4.5) (4.5 4.0) (-1.0 7.0))
+  "Puddles laid round a bloodroot on the debug level: X and Z off it, in metres.")
+(defparameter *debug-blood-drops* 40 "Drops in each of those puddles.")
+
+(defun lay-debug-blood (&optional bloodroot)
+  "Lay *DEBUG-BLOOD-SPOTS*' puddles round BLOODROOT, or round every bloodroot of the level."
+  (if bloodroot
+      (when *blood-pool*
+        (let ((loc (location bloodroot)))
+          (loop for (dx dz) in *debug-blood-spots*
+                do (spray-blood (vec (+ (vx loc) dx) (+ (vy loc) 0.3) (+ (vz loc) dz)) 0 0 *debug-blood-drops*
+                                :speed '(0.4 1.4)))))
+      (do-bloodroots (root)
+        (unless (dead root) (lay-debug-blood root)))))
 
 ;;; Its looks: the idle pulse (quicker in Glut), and the red wash of Glut.
 
