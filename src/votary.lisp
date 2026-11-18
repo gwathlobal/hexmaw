@@ -55,6 +55,20 @@ lasts about one hold and less doesn't.")
   "Metres from the player's eye short of which the beam's lightning stops: nearer, perspective blew its
 jitter up across the whole view. The pain flash and the sparks show the strike.")
 (defparameter *votary-aim-time* 0.05 "Seconds between aims of its ranging line and beam at what they reach.")
+;; Static recoil (from level 3 of a run, `:static-recoil' in its abilities): the damage it takes is
+;; stored, and full, it goes dark for a beat, bursts in a shock nova and blinks away along a bolt.
+(defparameter *recoil-charge* 18.0
+  "Damage it stores before its static recoil goes off: a sword blow (10 to 16) leaves it part dark, the next sets it off.")
+(defparameter *recoil-bleed* 1.0 "Damage a second its stored charge loses.")
+(defparameter *recoil-beat* 0.5 "Seconds of darkness and silence between the charge filling and the burst.")
+(defparameter *recoil-cooldown* 14.0 "Seconds after a static recoil before it stores charge again.")
+(defparameter *recoil-blink* '(6.0 9.0) "Metres it blinks away after the burst, to a spot in sight of its target.")
+(defparameter *recoil-dim* 0.92 "How much of its lamp the full charge puts out.")
+(defparameter *recoil-tint* (vec 0.03 0.03 0.07 0.6)
+  "What its sprite darkens toward as the charge fills, and how far at full (W).")
+(defparameter *recoil-motes* 36.0 "Sparks a second drawn in toward its chest at full charge.")
+(defparameter *recoil-ring* '(1.0 2.2) "Metres from it that the drawn-in sparks start.")
+(defparameter *recoil-flash* (vec 4.0 3.8 2.6) "The burst's flash.")
 
 ;; Sliced at 128 px tall for its 2 m, crown included, at the monsters' 64 px a metre.
 (define-asset (hexmaw votary-turnaround) image
@@ -82,6 +96,15 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
 (define-spell hierophant-beam (:delivery :beam :title "Arc Beam" :impact-animation 'shock-burst
                                :light-color (vec 1.6 1.5 0.6) :light-radius 3.0)
   (:damage :magnitude '(4 6) :element :shock))
+
+;; The static recoil's burst: everything round it, its allies too.
+(define-spell static-recoil (:delivery :nova :nova-radius 4.0 :title "Static Recoil")
+  (:damage :magnitude '(6 9) :element :shock)
+  (:knockback :magnitude '(8 8)))
+
+(define-spell hierophant-recoil (:delivery :nova :nova-radius 5.5 :title "Static Recoil")
+  (:damage :magnitude '(8 12) :element :shock)
+  (:knockback :magnitude '(9 9)))
 
 (defun votary-abilities ()
   ;; Gather and charge (the tell), the beam held, recover.
@@ -136,7 +159,13 @@ jitter up across the whole view. The pain flash and the sparks show the strike."
    (water-live :initform NIL :accessor water-live
                :documentation "True while its beam reaches water: the water round there is electrified.")
    (water-bodies :initform () :accessor water-bodies :documentation "What the water struck at the last pulse.")
-   (water-lamp :initform NIL :accessor water-lamp :documentation "The flash on its electrified water.")))
+   (water-lamp :initform NIL :accessor water-lamp :documentation "The flash on its electrified water.")
+   (static-charge :initform 0.0 :accessor static-charge
+                  :documentation "Damage it has stored toward its static recoil (STORE-STATIC).")
+   (recoil :initform 0.0 :accessor recoil
+           :documentation "Seconds left of the dark beat before its static recoil goes off, or 0.")
+   (whine-sound :initform NIL :accessor whine-sound :documentation "The stored charge's whine.")
+   (mote-timer :initform 0.0 :accessor mote-timer)))
 
 (define-creature-sounds arc-votary
   :alert :votary-alert :pain :votary-pain :death :votary-death :windup :votary-charge :step :step-light)
@@ -399,6 +428,8 @@ its reach, an imp's 0.55 m and an ogre's 1.2 m short of the sprite."
     (unless (v= (location lamp) (aim-origin votary))
       (v<- (location lamp) (aim-origin votary))
       (setf (located lamp) NIL))
+    ;; Its stored charge drains its light (static recoil).
+    (setf k (* k (- 1.0 (* *recoil-dim* (recoil-k votary)))))
     (let ((color (color lamp)))
       (setf (vx color) (* k (vx *votary-light-color*))
             (vy color) (* k (vy *votary-light-color*))
@@ -691,9 +722,11 @@ side."
          (fl (max 1f-4 (sqrt (+ (* fx fx) (* fz fz)))))
          ;; The view's right, across the sprite.
          (rx (/ (- fz) fl))
-         (rz (/ fx fl)))
+         (rz (/ fx fl))
+         ;; Its stored charge drains its idle lightning away (static recoil).
+         (live (- 1.0 (recoil-k votary))))
     (unless (or (charging-arc-p votary) (holding-beam-p votary))
-      (when (< (random 1.0) *votary-hand-arc-chance*)
+      (when (< (random 1.0) (* live *votary-hand-arc-chance*))
         (hand-arc votary 1.0 :roughness 0.25 :branch 0.3 :white 0.3 :life (* 1.3 *votary-arc-time*))))
     ;; Five rod tips in a fan, 0.18 m either side of the head, 0.97 to 0.91 of its height; the head
     ;; leans 8 cm toward its face, which shows only from the side.
@@ -703,7 +736,7 @@ side."
                        (+ (vy loc) (* h (- 0.97 (* 0.06 a a))))
                        (- (+ (vz loc) (* rz 0.18 s a)) (* 0.08 s (cos yaw)))))))
       (dotimes (i 4)
-        (when (< (random 1.0) *votary-crown-arc-chance*)
+        (when (< (random 1.0) (* live *votary-crown-arc-chance*))
           (multiple-value-bind (x0 y0 z0) (tip i)
             (multiple-value-bind (x1 y1 z1) (tip (1+ i))
               (bolt-line x0 y0 z0 x1 y1 z1 2 :roughness 0.3 :branch 0.2 :white 0.3
@@ -726,7 +759,8 @@ side."
     (votary-glow votary (+ *votary-idle-glow* (* (- 0.8 *votary-idle-glow*) k)))
     (when (<= (decf (crackle-timer votary) dt) 0.0)
       (setf (crackle-timer votary) *votary-crackle-time*)
-      (crackle votary k))
+      (when (< (recoil-k votary) (random 1.0))
+        (crackle votary k)))
     (when (<= (decf (aim-timer votary) dt) 0.0)
       (setf (aim-timer votary) *votary-aim-time*)
       (multiple-value-call #'aim-bolt-end votary (beam-end (aim-origin votary) (aim-direction votary) votary))
@@ -755,17 +789,165 @@ side."
           (when (<= *votary-lost-time* (lost-timer votary))
             (end-hold votary))))))
 
+;;; Static recoil (from level 3 of a run): what strikes it is stored as charge, which drains its own
+;;; light, *RECOIL-CHARGE* of damage filling it. As it fills it goes dark: its lamp dims toward nothing,
+;;; its idle lightning dies away, its sprite darkens, sparks stream in from round it into its chest and
+;;; a whine rises; in a lit room, the one figure going out. Full, it stands *RECOIL-BEAT* dark and
+;;; silent, unflinching, then bursts in a shock nova round itself (its allies too) and blinks away along
+;;; a bolt to a spot in sight of its target.
+
+(defgeneric recoil-spell (votary)
+  (:documentation "The name of the nova VOTARY's static recoil bursts in.")
+  (:method ((votary arc-votary)) 'static-recoil))
+
+(defun recoil-ready-p (votary)
+  "True if VOTARY stores the damage it takes toward its static recoil."
+  (and (not (dead votary))
+       (not (dormant-p votary))
+       (<= (recoil votary) 0.0)
+       (<= (or (getf (cooldowns votary) :static-recoil) 0.0) 0.0)
+       (level-ability-p :static-recoil)))
+
+(defun recoil-k (votary)
+  "How full VOTARY's stored charge is, 0 to 1; 1 through the dark beat."
+  (if (< 0.0 (recoil votary))
+      1.0
+      (min 1.0 (/ (static-charge votary) *recoil-charge*))))
+
+(defmethod harmed :after ((votary arc-votary) amount by)
+  (declare (ignore by))
+  (when (recoil-ready-p votary)
+    (when (<= *recoil-charge* (incf (static-charge votary) amount))
+      (begin-recoil votary))))
+
+(defun begin-recoil (votary)
+  "VOTARY's charge is full: it lets go of whatever it was doing and stands dark for the beat."
+  (setf (static-charge votary) *recoil-charge*
+        (recoil votary) *recoil-beat*
+        (stagger votary) 0.0)
+  (stop-walking votary (+ *recoil-beat* 0.2))
+  (release-beam votary)
+  (setf (whine-sound votary) (stop-loop (whine-sound votary))))
+
+;; Through the dark beat a blow doesn't make it flinch.
+(defmethod react-to-hit :after ((votary arc-votary))
+  (when (< 0.0 (recoil votary))
+    (setf (stagger votary) 0.0)))
+
+;; Through the beat it stands with its hands brought together, the knot between them gone out.
+(defmethod show-own-pose ((votary arc-votary) squash)
+  (when (and (< 0.0 (recoil votary)) (not (dead votary)))
+    (show-view-frame votary 'votary-cast 1 squash)
+    T))
+
+(defun votary-chest (votary)
+  (let ((loc (location votary)))
+    (vec (vx loc) (+ (vy loc) (* 0.55 (sprite-height votary))) (vz loc))))
+
+(defun recoil-spot (votary)
+  "Where VOTARY blinks after its burst: a free spot *RECOIL-BLINK* metres off, away from its target
+first, in sight of it, with a clear line from where it stands; or NIL."
+  (let* ((loc (location votary))
+         (target (hunt-target votary))
+         (feet (and target (body-feet target)))
+         (away (if feet (+ (bearing feet loc) 0.0) (random (* 2 pi)))))
+    (loop for i in '(0 1 -1 2 -2 3 -3 4)
+          for yaw = (+ away (* i (/ pi 4)) (- (random 0.4) 0.2))
+          for d = (random-between *recoil-blink*)
+          for p = (vec (+ (vx loc) (* d (sin yaw))) (vy loc) (- (vz loc) (* d (cos yaw))))
+          for to = (free-spot p (body-radius votary) (sprite-height votary)
+                              :search 1 :ignore votary :sight-of feet :from loc)
+          when (and to
+                    (clear-path-p loc to 1.2)
+                    (< (abs (- (vy to) (vy loc))) 1.0)
+                    (or (null feet)
+                        (< (+ (keep-away votary) (body-radius votary))
+                           (sqrt (+ (expt (- (vx to) (vx feet)) 2) (expt (- (vz to) (vz feet)) 2))))))
+            return to)))
+
+(defun discharge-static (votary)
+  "The beat is over: VOTARY bursts in its nova, a flash and a kick of the view, and blinks away along
+a bolt (not a boss, which keeps to its place in the arena)."
+  (let ((chest (votary-chest votary))
+        (container (container votary)))
+    (setf (static-charge votary) 0.0
+          (recoil votary) 0.0
+          (getf (cooldowns votary) :static-recoil) (* *recoil-cooldown* (depth-scale :cooldown)))
+    (cast-spell (find-spell (recoil-spell votary)) chest (vec 0 0 -1) container :caster votary)
+    (attach-glow (spawn-fx 'shock-burst chest container) *recoil-flash* 8.0)
+    (spray-sparks chest NIL 24 :ramp :shock :speed '(2.0 6.0))
+    (kick-camera-from chest 0.7 12.0)
+    (let ((to (and (not (typep votary 'boss)) (recoil-spot votary))))
+      (when to
+        (teleport-actor votary to :yaw (and (hunt-target votary) (bearing to (body-feet (hunt-target votary)))))
+        (let ((there (votary-chest votary)))
+          (bolt-line (vx chest) (vy chest) (vz chest) (vx there) (vy there) (vz there) 6
+                     :roughness 0.12 :width 4.0 :white 0.7 :branch 0.3 :life 0.3)
+          (bolt-line (vx chest) (vy chest) (vz chest) (vx there) (vy there) (vz there) 5
+                     :roughness 0.2 :width 1.5 :white 0.3 :branch 0.4 :drop 0.2 :life 0.25)
+          (attach-glow (spawn-fx 'shock-burst there container) *votary-floor-flash* 5.0)
+          (spray-sparks there NIL 10 :ramp :shock :speed '(1.0 4.0))
+          (play-sound :arc-zap there))))
+    (setf (alert votary) (max (alert votary) (alert-time)))))
+
+(defun update-recoil (votary dt)
+  "Run VOTARY's stored charge: the dark beat and its burst, the charge bleeding away otherwise, and
+what shows of it: the sparks drawn in, and the whine."
+  (let ((k (recoil-k votary))
+        (beat (< 0.0 (recoil votary))))
+    (cond (beat
+           (setf (idle-timer votary) (max (idle-timer votary) (+ (recoil votary) 0.2)))
+           (when (<= (decf (recoil votary) dt) 0.0)
+             (discharge-static votary)))
+          ((< 0.0 (static-charge votary))
+           (setf (static-charge votary) (max 0.0 (- (static-charge votary) (* *recoil-bleed* dt))))
+           ;; Sparks stream in from round it into its chest, more as it fills.
+           (decf (mote-timer votary) (* dt k))
+           (loop while (<= (mote-timer votary) 0.0)
+                 do (incf (mote-timer votary) (/ 1.0 *recoil-motes*))
+                    (let* ((loc (location votary))
+                           (a (random (* 2 pi)))
+                           (r (+ (first *recoil-ring*) (random (- (second *recoil-ring*) (first *recoil-ring*)))))
+                           (from (vec (+ (vx loc) (* r (cos a)))
+                                      (+ (vy loc) 0.2 (random (* 0.8 (sprite-height votary))))
+                                      (+ (vz loc) (* r (sin a)))))
+                           (chest (votary-chest votary)))
+                      (spray-sparks from (v- chest from) 1 :ramp :shock :speed '(3.5 4.5) :spread 0.05)))))
+    (setf (whine-sound votary)
+          (hold-loop (whine-sound votary) (and (not beat) (< 0.1 k) :votary-whine) (location votary)
+                     (+ 0.3 (* 0.7 k))))))
+
+(defun darken-votary (votary)
+  "Darken VOTARY's sprite as its charge fills, unless its hit flash is stronger."
+  (let ((k (recoil-k votary)))
+    (when (and (< 0.0 k) (not (dead votary)))
+      (let ((tint (tint votary))
+            (w (* (vw *recoil-tint*) (if (< 0.0 (recoil votary)) 1.3 k))))
+        (when (< (vw tint) w)
+          (setf (vx tint) (vx *recoil-tint*) (vy tint) (vy *recoil-tint*) (vz tint) (vz *recoil-tint*)
+                (vw tint) w))))))
+
 (define-handler (arc-votary tick :after) (dt)
   (unless (frozen-p)
     (run-cooldowns arc-votary dt)
-    (cond ((dead arc-votary) (douse-votary arc-votary))
+    (cond ((dead arc-votary)
+           (setf (static-charge arc-votary) 0.0 (recoil arc-votary) 0.0
+                 (whine-sound arc-votary) (stop-loop (whine-sound arc-votary)))
+           (douse-votary arc-votary))
           (T
-           (cond ((charging-arc-p arc-votary) (charge-votary arc-votary dt))
+           (update-recoil arc-votary dt)
+           (cond ((< 0.0 (recoil arc-votary))
+                  (votary-aim arc-votary)
+                  (votary-glow arc-votary 0.0))
+                 ((charging-arc-p arc-votary) (charge-votary arc-votary dt))
                  ((holding-beam-p arc-votary) (hold-votary-beam arc-votary dt))
                  (T (rest-votary arc-votary)))
-           (votary-sparks arc-votary dt)))))
+           (unless (< 0.0 (recoil arc-votary))
+             (votary-sparks arc-votary dt)))))
+  (darken-votary arc-votary))
 
 (defmethod leave :after ((votary arc-votary) container)
+  (setf (whine-sound votary) (stop-loop (whine-sound votary)))
   (douse-votary votary))
 
 ;;; As a boss (boss.lisp): the Arc Hierophant, its beam stronger and its jump longer. Its powers'
@@ -776,3 +958,4 @@ side."
 
 (defmethod votary-beam-spell ((boss votary-boss)) 'hierophant-beam)
 (defmethod floor-reach ((boss votary-boss)) 5.0)
+(defmethod recoil-spell ((boss votary-boss)) 'hierophant-recoil)

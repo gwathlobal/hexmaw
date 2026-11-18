@@ -43,6 +43,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   flickering lamp jumps from foot to foot so the floor flashes under them. Its hands' lamp, moved as it
   walked, kept the room it was first placed in; moved lamps are now placed again. `beam`'s `strength` slot, added for the old ranging line, is gone. Its hand arcs and the charge's crackle sit where its sprite draws its hands in each
   view, and none from behind.
+  From level 3 of a run it has **static recoil**: damage it takes is stored, and as it fills (18) the
+  votary goes dark (lamp, idle lightning and sprite dimming, sparks drawn into its chest, a rising
+  whine); full, it stands dark and silent for 0.5 s, then bursts in a 4 m shock nova (6 to 9, knockback
+  8, its allies too) and blinks 6 to 9 m away along a bolt. 14 s cooldown. Sounds: votary-whine (loop),
+  votary-recoil.
 - **Faster solid questions.** `do-solids-near` (greybox.lisp) did its column arithmetic generically, on
   untyped specials; now typed (`column-index`), a point question (`solid-at`) takes 56 ns against 120 and
   a body question 76 against 120 on seed 11, a 10 m `clear-path-p` 23 µs against 30. Same levels and

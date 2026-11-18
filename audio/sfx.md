@@ -179,6 +179,8 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | votary-beam-start | 1 | P | 0.6 | 3 | `release-attack` votary.lisp, the beam leaves |
 | votary-beam | 1 | P L | 2 | 2 | `hold-votary-beam` votary.lisp, while the beam is held |
 | arc-zap | 2 | P | 0.5 | 3 | `votary-pulse`, `water-strike` votary.lisp: the beam jumps from an ally, or runs through water |
+| votary-whine | 2 | P L | 3 | 2 | `update-recoil` votary.lisp: its static recoil's stored charge, louder as it fills |
+| votary-recoil | 1 | P | 1.4 | 3 | `place-nova` spells.lisp, `static-recoil` (the arc votary's burst) |
 | step-light | 2 | P | 0.5 | 3 | step: imp, necromancer, riftwalker, arc votary |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |
 | step-heavy | 2 | P | 0.6 | 3 | step: ogre |

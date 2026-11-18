@@ -169,6 +169,8 @@
 (:name "votary-charge" :files ("votary-charge.ogg") :seconds (1.0) :space T :loop NIL)
 (:name "votary-death" :files ("votary-death.ogg") :seconds (1.76) :space T :loop NIL)
 (:name "votary-pain" :files ("votary-pain-1.ogg" "votary-pain-2.ogg") :seconds (0.48 0.48) :space T :loop NIL)
+(:name "votary-recoil" :files ("votary-recoil.ogg") :seconds (1.36) :space T :loop NIL)
+(:name "votary-whine" :files ("votary-whine.ogg") :seconds (3.0) :space T :loop T)
 (:name "ward-hum" :files ("ward-hum.ogg") :seconds (2.25) :space T :loop T)
 (:name "water-lap" :files ("water-lap.ogg") :seconds (4.0) :space T :loop T)
 (:name "waterfall" :files ("waterfall.ogg") :seconds (6.0) :space T :loop T)

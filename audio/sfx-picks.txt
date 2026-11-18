@@ -130,3 +130,5 @@ votary-charge 2          # the even crackle; take 1 rises better but clips
 votary-beam-start 3
 votary-beam 2
 arc-zap 1 3
+votary-whine 2 even      # swells at its end otherwise
+votary-recoil 1          # 2 and 3 clip

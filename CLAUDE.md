@@ -2255,7 +2255,26 @@ burst plays where it stops, but not within `*votary-burst-clearance*`
 (2.5 m) of the player's eye (on them, or on the water they swim in), where sparks stand in for it.
 A hold cost about 0.4 ms of GPU a frame with its first, straight ribbon (seen from 7 m); its lightning, about 150 bolt segments alive at once, isn't measured. Over run seeds 1 to
 60 there were 3.3 votaries and 0.6 elite votaries a level from depth 2 on, none on level 1, and the
-Hierophant was 4 of the 60 bosses. A save keeps `pulse-timer` and `lost-timer`; the light, lamp and loop come back in its tick.
+Hierophant was 4 of the 60 bosses. A save keeps `pulse-timer`, `lost-timer`, `static-charge` and `recoil`; the light, lamp and loop come back in its tick.
+
+**Static recoil**, from level 3 of a run (`(level-ability-p :static-recoil)`), for the player who has
+learnt to close in on it: the damage it takes, from anyone, is stored (`harmed :after`,
+`static-charge`, bleeding `*recoil-bleed*` a second), and at `*recoil-charge*` (18: a sword blow
+leaves it part of the way, the next sets it off; two or three Fire Bolts) it goes off. The tell is
+that it goes dark, since a brighter glow would be lost in its own lamp and lightning: as the charge
+fills (`recoil-k`) its lamp dims by up to `*recoil-dim*` (`votary-glow`), its idle arcs and the charge's
+crackle die away, its sprite darkens toward `*recoil-tint*` (`darken-votary`, every tick, even frozen,
+under any stronger hit flash), sparks stream in from `*recoil-ring*` round it into its chest
+(`*recoil-motes*` a second at full) and the `votary-whine` loop rises in volume. Full (`begin-recoil`), it
+lets go of its beam and stands `*recoil-beat*` (0.5 s) dark and silent, hands together on a dead knot
+(`show-own-pose`), unflinching (`react-to-hit :after`). Then `discharge-static` bursts the
+`static-recoil` nova round its chest (`:nova-radius` 4 m, 6 to 9 shock and knockback 8; it spares only
+itself), with a `shock-burst` flash, `votary-recoil` and a camera kick, and blinks along a bolt to
+`recoil-spot`, `*recoil-blink*` (6 to 9 m) off, away from its target first, in its sight and beyond its
+`keep-away` (`teleport-actor`, riftwalker.lisp). `*recoil-cooldown*` (14 s, × `:cooldown`) before it stores
+again (`:static-recoil` in its `cooldowns`). The Hierophant's is `hierophant-recoil` (5.5 m, 8 to 12),
+and it stays in its arena. To see it: `(setf (static-charge v) 12.0)` for the tell, `17.9` and a blow for
+the burst.
 It resists shock 0.75 and teaches it (`taught-effect`): killed by a player who doesn't
 know shock, it drops the shock glyph. Kill gold 10. It spawns from level 2 of a run on (weight 1 in
 both pools), and the 30% spawn of the `pool`, `cistern`, `canal-end`, `creek-cavern`,
@@ -4067,8 +4086,8 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   acolyte's abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
   `:abilities` names the abilities a level's monsters may use beyond their first (`level-ability-p`):
   none on level 1, the acolyte's `:firestorm`, the pack imp's `:flank-leap` (see "The imp") and the
-  rime hag's `:rime-field` on levels 2 and 3 (and so in the settlement), and her `:blizzard` on
-  level 3 (and in the settlement when it is at depth 3).
+  rime hag's `:rime-field` on levels 2 and 3 (and so in the settlement), and her `:blizzard` and the
+  arc votary's `:static-recoil` on level 3 (and in the settlement when it is at depth 3).
 
 Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
 budgeted per monster, so more monsters bring more, and an elite counts as one. `*run-depth*` is the level the player is on, from 1,

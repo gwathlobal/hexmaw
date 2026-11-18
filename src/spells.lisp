@@ -399,7 +399,9 @@ projectile about to reach it, so each is asked once.")
     rime-shard (:flight :shard-flight :impact :shard-impact)
     rime-field (:flight :shard-flight :impact :rime-form)
     hag-nova (:impact :frost-nova)
-    hag-nova-boss (:impact :frost-nova))
+    hag-nova-boss (:impact :frost-nova)
+    static-recoil (:impact :votary-recoil)
+    hierophant-recoil (:impact :votary-recoil))
   "Each spell's clips (sound.lisp) by event: :CAST where a creature lets it go, :FLIGHT its
 projectile's loop, :IMPACT its burst, :CIRCLE a circle's loop through its wind-up and :STRIKE
 its strike, and the acolyte's firestorm :IGNITE as it comes down and :STORM while it burns. The player's own casts sound from the hands (player.lisp).")
