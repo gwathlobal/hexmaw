@@ -1878,7 +1878,8 @@ real time instead.
   `debug-spawn`, and a second imp beside the first, spawned after the ogre so the others keep their
   places in `*creatures*`: a pack), and has along its south wall one of each pickup and a pile of 60 arcane dust;
   `*debug-level-monsters*` (a list of kinds, NIL for all) keeps only those in the hall and leaves out
-  the annex's imp, the blocks' monsters and the boss.
+  the annex's imp, the blocks' monsters and the boss. On this branch they default to T and
+  `(bloodroot)`, so the debug level holds the bloodroot alone; set both back to NIL for the rest.
   A doorway in the middle of that wall leads down a 12 m corridor to the `arena` (`build-boss-wing`)
   and a boss of a random kind with random powers, a new one at every build (`tools/hd reset`);
   `*boss-override*` fixes them. To try a block with one kind only,
