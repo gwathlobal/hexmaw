@@ -114,6 +114,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 - **`tools/levelcheck` fails a level where a rooted creature cuts a doorway off** (`rooted-blocks`,
   kit.lisp; `blocked_by_rooted`), and `build-level` uproots one that would (`uproot-blockers`), and `make_texture.py --key` keys a texture drawn on magenta to
   see-through.
+- Lightning bolts (the arc votary's arcs and beam, the shock nova's cage) shrink with distance: an art
+  pixel of a bolt is never more than a world texel where it is, so far off they no longer stand out
+  as huge pixels on a small sprite; up close they are as before.
 - **The arc votary, a shock monster from level 2 on** (src/votary.lisp). A blind storm-priest that charges
   for 0.9 s (a crackle between its hands, a swelling lamp, a faint ranging line) and then holds a
   shock beam up to 2 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 0.9 rad/s: run

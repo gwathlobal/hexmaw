@@ -848,7 +848,8 @@ real time instead.
   `:life` seconds, so whatever makes bolts draws them anew to make them crackle. They are plain
   arrays (`*max-bolt-segments*`, 2048) written into one stream-draw buffer and drawn in one call:
   each segment a quad facing the view, its ends snapped to the art's pixel grid on screen (a 240th
-  of the rows), a yellow edge `width` art pixels wide and a white core one wide (`*bolt-edge*`,
+  of the rows, but never more than a world texel at that end's distance, `art_at`, so a far bolt shrinks
+  as the sprites round it do), a yellow edge `width` art pixels wide and a white core one wide (`*bolt-edge*`,
   `*bolt-core*`), added over what is behind it. Only the shock nova uses it so far.
 - `src/spells.lisp`: the composable spell model (`define-spell`, effects, `spell-power`, tiers,
   `spell-cost`), the deliveries (projectile, seeker, beam, nova, circle), the player's `bolt`, `absorb`
