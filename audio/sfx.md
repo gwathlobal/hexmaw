@@ -17,7 +17,7 @@ combat loop, tier 2 the world and the body, tier 3 polish.
 Hooks are `file:line` in `src/` as of this list. "(edge)" means a level the code keeps
 and no event: the sound needs the last tick's value to see the change.
 
-155 clips; tier 1: 96 clips, 341 s of takes, tier 2: 33 clips, 82 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 494 s, about 4,940 credits for everything.
+156 clips; tier 1: 96 clips, 341 s of takes, tier 2: 34 clips, 94 s of takes, tier 3: 26 clips, 71 s of takes. About 10 credits a second: 506 s, about 5,060 credits for everything.
 
 ## Player: weapons and shield
 
@@ -118,6 +118,7 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | knight-pain | 1 | P | 0.6 | 3 | pain: knight |
 | knight-death | 1 | P | 2 | 3 | death: knight (kneels, topples, crashes) |
 | knight-mace | 1 | P | 0.7 | 3 | wind-up: knight (hit at 0.75 s) |
+| shield-scrape | 2 | P L | 2 | 6 | `scrape-shield` knight.lisp, while a charge runs (`run-charge`) |
 | shield-deflect | 1 | P | 0.8 | 3 | `block-hit` creature.lisp:540, from `deflect` spells.lisp:187 |
 | harpy-alert | 1 | P | 1 | 3 | alert: harpy |
 | harpy-pain | 1 | P | 0.5 | 3 | pain: harpy |
@@ -292,12 +293,13 @@ tables above:
   A vortex's burns, which make no flinch, make a creature it holds cry out every `*whirl-cry-gap*`
   (vortex.lisp).
 - The boss's shockwave plays `ogre-land`; its leap is the ogre's.
-- The knight's shield charge (knight.lisp) has no clips of its own yet, the ElevenLabs credits
-  having run out: its tell bellows `knight-alert` (`:windup` while the charge is its ability) and
+- The knight's shield charge (knight.lisp): while it runs, its shield's foot grates along the floor,
+  the `shield-scrape` loop at the foot (`scrape-sound`, held in `scrape-shield`, quieter off stone:
+  ice, snow and wood throw no sparks and grate at `*charge-scrape-soft*`). Its tell bellows `knight-alert` (`:windup` while the charge is its ability) and
   scrapes its feet with `step-armour` at 0.6, its run steps `step-armour` as its walk does, its blow
   on the target (and a creature bowled aside, at 0.7) is `bash-hit` (`:ram`), and its crash into a
   wall `maul-guard-break` (`:crash`). The spear set against it plays `bash-glance` and
-  `maul-guard-break`. Clips worth making when there are credits: `knight-charge-cry` (1.0 s, a
+  `maul-guard-break`. Clips still worth making: `knight-charge-cry` (1.0 s, a
   bellow behind a visor), `knight-charge-hit` (0.6 s, a tower shield slamming a body) and
   `knight-charge-crash` (0.9 s, a steel shield into stone, plate clattering).
 - The imp's pounce crouches to `imp-claw` (`:leap`); its flank leap round the player crouches to

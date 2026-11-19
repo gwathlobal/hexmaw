@@ -147,6 +147,7 @@
 (:name "shield-deflect" :files ("shield-deflect.ogg") :seconds (0.68) :space T :loop NIL)
 (:name "shield-guard-break" :files ("shield-guard-break.ogg") :seconds (0.8) :space NIL :loop NIL)
 (:name "shield-raise" :files ("shield-raise.ogg") :seconds (0.48) :space NIL :loop NIL)
+(:name "shield-scrape" :files ("shield-scrape.ogg") :seconds (2.25) :space T :loop T)
 (:name "skeleton-alert" :files ("skeleton-alert.ogg") :seconds (0.529) :space T :loop NIL)
 (:name "skeleton-chop" :files ("skeleton-chop.ogg") :seconds (0.6) :space T :loop NIL)
 (:name "skeleton-collapse" :files ("skeleton-collapse.ogg") :seconds (1.2) :space T :loop NIL)

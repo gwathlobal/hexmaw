@@ -92,6 +92,8 @@ before its reel shows the flinch's stagger.")
 (defparameter *charge-scrape-ahead* 0.45 "Metres ahead of its centre that its sprite draws the shield's foot, seen from the side.")
 (defparameter *charge-scrape-near* 0.2 "Metres toward the eye the sparks start, so the sprite doesn't hide them.")
 (defparameter *charge-scrape-side* 0.1 "Metres to its left, the shield arm's side, that the shield's foot is.")
+(defparameter *charge-scrape-soft* 0.45
+  "How loud the shield's grating is over a floor that throws no sparks (ice, snow, wood), against stone's.")
 (defparameter *charge-scrape-speed* '(2.0 5.5) "Slowest and fastest m/s the shield's sparks leave at.")
 (defparameter *charge-scrape-carry* 0.7
   "Share of its run's speed the shield's sparks keep: they spray round its foot as it comes on, seen
@@ -160,7 +162,11 @@ come toward the eye whatever the view (thrown back, they went behind the shield 
    (charge-bowled :initform () :accessor charge-bowled :documentation "The creatures it has bowled aside this charge.")
    (charge-paw :initform 0.0 :accessor charge-paw
                :documentation "Seconds until its feet scrape again in the tell, or its shield in the run.")
-   (crash-pose :initform 0.0 :accessor crash-pose :documentation "Seconds it still shows the crash frame.")))
+   (crash-pose :initform 0.0 :accessor crash-pose :documentation "Seconds it still shows the crash frame.")
+   (scrape-sound :initform NIL :accessor scrape-sound
+                 :documentation "Its shield's grating along the floor while its charge runs, or NIL.")
+   (scrape-volume :initform 1.0 :accessor scrape-volume
+                  :documentation "How loud that grating is over the floor it last dragged over.")))
 
 ;; The charge's tell bellows (its alert), the mace's wind-up is the mace's; the charge's blow and
 ;; its crash are a shield bash's and a guard knocked aside.
@@ -387,6 +393,7 @@ trail, though they keep *CHARGE-SCRAPE-CARRY* of its speed): as many as the floo
                                (assoc :stone *wall-strike-kinds*))))
                (sparks (floor (+ (* *charge-scrape-sparks* (getf kind :sparks)) (random 1.0))))
                (grit (floor (+ (* *charge-scrape-grit* (getf kind :grit)) (random 1.0)))))
+          (setf (scrape-volume knight) (if (< 0 (getf kind :sparks)) 1.0 *charge-scrape-soft*))
           (setf (vx *scrape-point*) x (vy *scrape-point*) (+ y 0.03) (vz *scrape-point*) z
                 (vx *scrape-direction*) 0.0 (vy *scrape-direction*) 1.0 (vz *scrape-direction*) 0.0)
           (when (< 0 sparks)
@@ -496,10 +503,18 @@ trail, though they keep *CHARGE-SCRAPE-CARRY* of its speed): as many as the floo
         (progn (show-view-frame knight 'knight-charge frame squash) T)
         (call-next-method))))
 
+(defmethod leave :after ((knight knight) container)
+  (setf (scrape-sound knight) (stop-loop (scrape-sound knight))))
+
 (define-handler (knight tick :after) (dt)
   (unless (frozen-p)
     (run-cooldowns knight dt)
     (setf (crash-pose knight) (max 0.0 (- (crash-pose knight) dt)))
+    ;; Its shield's foot grates along the floor while it runs.
+    (setf (scrape-sound knight)
+          (hold-loop (scrape-sound knight)
+                     (and (eq (charge knight) :running) (not (dead knight)) :shield-scrape)
+                     (location knight) (scrape-volume knight)))
     ;; Back to the mace once an attack is over, so the next blow in reach is one; a charge
     ;; broken off (a flinch, a reel, its death) is forgotten.
     (unless (eq (brain knight) :attacking)
