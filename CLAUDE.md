@@ -659,7 +659,10 @@ real time instead.
   stepped through it) with the strike kind `:glass`, and `pane-of-solid` finds the pane from it.
   Intact, it is a wall to everything, sight included. A design is `hexmaw.blueprint:*glass-designs*`
   (name, width and height: `lancet-flame` and `lancet-frost` 1 × 2.5 m, `rose-maw` 2 × 2,
-  `quarry` 1 × 1.5) and `*glass-looks*` (its texture, its shards' spark ramps, its lamp's colour).
+  `quarry` 1 × 1.5, and one for each faction of the settlement: the Ashen Temple's `lancet-ash` (a
+  censer's smoke and embers under a sun of cinders) and the Deepwardens' `lancet-warden` (a lantern on
+  a staff and a key over a stair into the deep), 1 × 2.5, and the Free Company's `company` (a halved
+  shield, sword and spear, a coin), 1 × 1.5) and `*glass-looks*` (its texture, its shards' spark ramps, its lamp's colour).
   It is drawn by a `glass-pane`, a quad its texture lies on a texel of the 64-a-metre grid at a
   time from its corner (so a window is exactly its design's size), twice, writing no depth: a
   filter (`:zero :src-color`) multiplying what is behind by the glass's hue (`*glass-tint*`,
@@ -2956,7 +2959,14 @@ tools/make_texture.py art/glass/lancet-flame-1.png data/textures/glass-lancet-fl
 tools/make_texture.py art/glass/lancet-frost-2.png data/textures/glass-lancet-frost --metres 1 --glass 1 2.5 --palette art/style/palette.txt
 tools/make_texture.py art/glass/quarry-1.png data/textures/glass-quarry --metres 1 --glass 1 1.5 --palette art/style/palette.txt
 tools/make_texture.py art/glass/rose-maw-1.png data/textures/glass-rose-maw --metres 2 --glass 2 2 --palette art/style/palette.txt
+tools/make_texture.py art/glass/lancet-ash-2.png data/textures/glass-lancet-ash --metres 1 --glass 1 2.5 --palette art/style/palette.txt
+tools/make_texture.py art/glass/lancet-warden-2.png data/textures/glass-lancet-warden --metres 1 --glass 1 2.5 --palette art/style/palette.txt
+tools/make_texture.py art/glass/company-1.png data/textures/glass-company --metres 1 --glass 1 1.5 --palette art/style/palette.txt
 ```
+
+A room's windows mix the designs of their size, no more than two of one in a room: the chapel's
+facade flame, ash, warden and frost; the temple's front ash, flame, frost and warden, and warden and
+ash onto the recess; the barracks and the outpost two quarry and two company windows each.
 
 The `ice` surface (`data/textures/ice.png`, dark clear ice with white crack planes; its sides
 too, stone under it) is the common prompt plus `art/prompts/texture-ice.txt` (ice only, nothing

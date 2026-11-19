@@ -1,6 +1,6 @@
 ; An abandoned chapel. Its front is a room like any other, with the doorways; across it stands
-; a facade of dressed stone, a doorway in its middle and four stained-glass lancets, and behind
-; it the nave is cut into the rock: a dais, an altar stone with something left on it, benches,
+; a facade of dressed stone, a doorway in its middle and four stained-glass lancets, each of
+; another design, and behind it the nave is cut into the rock: a dais, an altar stone with something left on it, benches,
 ; and the torches that light the windows from within. Break a window to see, or shoot, through.
 cells 3 4
 tags room
@@ -17,6 +17,8 @@ legend
   L box 3 top stone                   ; the lintel over the facade's doorway
   g glass lancet-flame 1.2 stone
   h glass lancet-frost 1.2 stone
+  j glass lancet-ash 1.2 stone        ; the Ashen Temple's
+  y glass lancet-warden 1.2 stone     ; the Deepwardens'
   % box 0 0.4 dais
   u box 0 0.4 dais, torch 2.4
   A box 0 1.2 stone, pickup reward    ; the altar stone, 0.8 m over the dais
@@ -37,7 +39,7 @@ plan 0
 #R...bbbb......bbbb...R#
 #R..........MM........R#
 #R...bbbb......bbbb...R#
-#RFggFhhFLLLLLLFhhFggFR#
+#RFggFjjFLLLLLLFyyFhhFR#
 #..$$..............$$..#
 #......................#
 #...........mm.........#

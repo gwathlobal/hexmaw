@@ -46,33 +46,36 @@ legend
   $ pickup floor
   g glass lancet-flame 1.2        ; the temple's windows, onto the plaza and the descent's recess
   h glass lancet-frost 1.2
+  i glass lancet-warden 1.2       ; the Deepwardens', one over the way down
+  j glass lancet-ash 1.2          ; the Ashen Temple's
   y box 0 1.2, box 3.7 top        ; the wall round them, opened
   u glass quarry 1.2              ; the barracks' windows onto the plaza and the market
+  r glass company 1.2             ; the Free Company's
   z box 3 top                     ; a building's doorway, under its lintel
 
 plan 0
 ####T############T#######AAAAAA###########T#############T#######
 #qqq%%%%%%aa%%%%%%qqq####XXXXXX####............................#
-#qqq%%%%%%aa%%%%%%qqqygyyXXXXXX####........QQ...............$$.#
+#qqq%%%%%%aa%%%%%%qqqyiyyXXXXXX####........QQ...............$$.#
 #qqq::::::::::::::qqq####T....T####T.....tttttt....tttttt......#
-#qqqqqqqqqqqqqqqqqppqyhyy......####............................#
+#qqqqqqqqqqqqqqqqqppqyjyy......####............................#
 #qqqqqqqqqvvqqqqqqqqT####......####............................#
 Tqqqqqqqqqqqqqqqqqqqq####.......MM................xx...........T
 #qqqqqqqqqqqqqqqqqqqq####......................................#
-##gg#hh##zzzz##hh#gg#####.............oo......oo......oo..JJ...#
+##jj#gg##zzzz##hh#ii#####.............oo......oo......oo..JJ...#
 w.....................LL.......................................e
 w...GG..........xx........cc...................................e
 w...............................................xx.............e
 #...HH.........................@@.........................KK...#
 #..............................@@...........cc.................#
 T..............................................................T
-#fffffff....ffffffffmmmmmmmmmmmmmmmmmmmmmmm##uu####zzzz####uu###
+#fffffff....ffffffffmmmmmmmmmmmmmmmmmmmmmmm##rr####zzzz####uu###
 #..................fmmmmmmmmmmvvmmmmmmmmmmm#...................#
 #........RR........fmmmmmmmmmmmmmmmmmmccmmm#...................#
 #..................fmmmmmmmmmmmmmmmmmmmmmmmu..bbbb......bbbb...#
 #....dd......dd....fmmmmmmkkkkkkkkkkkkmmmmm#...................#
 #..................fmmmmmmkkmmmSSmmmkkmmmmm#........NN......$$.#
-#........dd.xx.....fmmmmmmkkmmmmmmmmkkmmmmmu...................#
+#........dd.xx.....fmmmmmmkkmmmmmmmmkkmmmmmr...................#
 #.$$...............fmm$$mmmmmmmmmmmmmmmmmmm#...................#
 #..................fmmmmmmmmmmmmmmmmmmmmmmm#..bbbb..bbbb..bbbb.#
 ######T#######T#########T##############T############T###########

@@ -20,7 +20,14 @@
     ("rose-maw" :texture glass-rose-maw :ramps (:glass-violet :glass-violet :glass-red :glass-red :glass-gold)
      :light (0.8 0.3 0.6))
     ("quarry" :texture glass-quarry :ramps (:glass-gold :glass-gold :glass-gold :glass-green)
-     :light (0.9 0.75 0.35)))
+     :light (0.9 0.75 0.35))
+    ;; The settlement's factions' (settlement.lisp).
+    ("lancet-ash" :texture glass-lancet-ash :ramps (:glass-red :glass-red :glass-gold :glass-violet)
+     :light (1.0 0.45 0.3))
+    ("lancet-warden" :texture glass-lancet-warden :ramps (:glass-blue :glass-blue :glass-teal :glass-gold)
+     :light (0.35 0.55 1.0))
+    ("company" :texture glass-company :ramps (:glass-green :glass-green :glass-red :glass-gold)
+     :light (0.9 0.55 0.3)))
   "Per stained-glass design (its size is HEXMAW.BLUEPRINT:*GLASS-DESIGNS*'): its texture, the
 spark ramps its shards are, drawn from at random, and its lamp's colour.")
 
@@ -33,6 +40,13 @@ spark ramps its shards are, drawn from at random, and its lamp's colour.")
 (define-asset (hexmaw glass-quarry) image #p"textures/glass-quarry.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
 
+(define-asset (hexmaw glass-lancet-ash) image #p"textures/glass-lancet-ash.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-lancet-warden) image #p"textures/glass-lancet-warden.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-company) image #p"textures/glass-company.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+
 ;; Each design's pieces (tools/make_texture.py --glass): which shard every texel goes with.
 (define-asset (hexmaw glass-lancet-flame-pieces) image #p"textures/glass/glass-lancet-flame-pieces.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
@@ -41,6 +55,12 @@ spark ramps its shards are, drawn from at random, and its lamp's colour.")
 (define-asset (hexmaw glass-rose-maw-pieces) image #p"textures/glass/glass-rose-maw-pieces.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
 (define-asset (hexmaw glass-quarry-pieces) image #p"textures/glass/glass-quarry-pieces.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-lancet-ash-pieces) image #p"textures/glass/glass-lancet-ash-pieces.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-lancet-warden-pieces) image #p"textures/glass/glass-lancet-warden-pieces.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-company-pieces) image #p"textures/glass/glass-company-pieces.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
 
 (defparameter *glass-tint* 0.85 "How strongly a pane colours what is seen through it, 0 to 1.")

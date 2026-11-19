@@ -50,7 +50,9 @@ place of lava. A creek's is the same doorway in the caves, a network of its own,
 its narrow kind. A frozen river's is a river's with a channel of ice sunk in place of the lava,
 and a slide is its narrow kind: the ice caves' river.")
 (defparameter *glass-designs* '(("lancet-flame" 1.0 2.5) ("lancet-frost" 1.0 2.5) ("rose-maw" 2.0 2.0)
-                                 ("quarry" 1.0 1.5))
+                                 ("quarry" 1.0 1.5)
+                                 ;; The settlement's factions' (settlement.lisp).
+                                 ("lancet-ash" 1.0 2.5) ("lancet-warden" 1.0 2.5) ("company" 1.0 1.5))
   "Each stained-glass design a window may hold (glass.lisp): its name and its pane's width and
 height in metres. Its texture is laid on the pane at 64 texels a metre, so the window drawn for
 it is exactly that wide.")

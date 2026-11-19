@@ -11,6 +11,7 @@ legend
   W wall stone
   L box 2.5 top stone                 ; the lintel over the guardhouse's doorway
   q glass quarry 1.2 stone
+  r glass company 1.2 stone           ; the Free Company's, who held it last
   p box 0 2.4 beam                    ; a palisade post
   x box 0 0.8 platform                ; a crate
   X box 0 1.6 platform                ; crates stacked
@@ -32,10 +33,10 @@ plan 0
 #..................W..........c#
 T..................q....BB.....#
 #..x...............W....BB.....#
-#..xx..............q...........#
+#..xx..............r...........#
 #..................W...........#
 #.......i..........W.....gg....#
-#..................WWqqWLLLWWqq#
+#..................WWrrWLLLWWqq#
 w..............................#
 w.....pp..pp...........ii......#
 w..............................#
