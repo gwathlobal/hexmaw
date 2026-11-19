@@ -436,15 +436,18 @@ short: the ogre's quake, by default.")
         (hit-stop *leap-hit-stop*))
       (kick-dust at (* 0.6 *quake-radius*) *ogre-dust-puffs* (container ogre)))))
 
+;; Off the ground, its leap; else whatever charge its kind has (the knight boss's shield charge).
 (defmethod charging-p ((leaper leaper))
-  (and (airborne leaper) (not (dead leaper)) (hunting-p leaper)))
+  (or (and (airborne leaper) (not (dead leaper)) (hunting-p leaper))
+      (call-next-method)))
 
 (defmethod impale ((leaper leaper))
-  (when (airborne leaper)
-    (setf (airborne leaper) NIL
-          (falling leaper) T
-          (fall-speed leaper) 0.0
-          (impaled leaper) T)))
+  (if (airborne leaper)
+      (setf (airborne leaper) NIL
+            (falling leaper) T
+            (fall-speed leaper) 0.0
+            (impaled leaper) T)
+      (call-next-method)))
 
 (defun land-leap (ogre)
   (setf (airborne ogre) NIL

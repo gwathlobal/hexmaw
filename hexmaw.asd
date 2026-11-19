@@ -44,6 +44,7 @@
                (:file "vortex")
                (:file "wraith")
                (:file "acolyte")
+               (:file "knight")
                (:file "boss")
                (:file "elite")
                (:file "riftwalker")

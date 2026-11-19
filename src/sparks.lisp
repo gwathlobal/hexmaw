@@ -213,10 +213,11 @@ slot, or NIL if AMBIENT and the pool is full."
               (aref v b) (float vx 0f0) (aref v (+ b 1)) (float vy 0f0) (aref v (+ b 2)) (float vz 0f0))
         i))))
 
-(defun spray-sparks (at dir count &key (kind :spark) ramp speed spread)
+(defun spray-sparks (at dir count &key (kind :spark) ramp speed spread (carry-x 0f0) (carry-z 0f0))
   "Throw COUNT particles of KIND (:SPARK, :EMBER or :GRIT) from point AT, fanned SPREAD radians
 about the direction DIR (any length; NIL for up, and by default any way above level). RAMP
-names their colours in *SPARK-RAMPS*, SPEED is the least and most m/s they leave at."
+names their colours in *SPARK-RAMPS*, SPEED is the least and most m/s they leave at. CARRY-X and
+CARRY-Z (m/s) are added to every one's speed: what moves where they come from carries them on."
   (when *spark-pool*
     (let* ((ramp (spark-ramp-index (or ramp (ecase kind (:spark :steel) (:ember :fire) (:grit :dust)))))
            (speed (or speed (ecase kind (:spark *spark-speed*) (:ember *ember-rise*) (:grit *grit-speed*))))
@@ -245,9 +246,9 @@ names their colours in *SPARK-RAMPS*, SPEED is the least and most m/s they leave
                    (s (range-random speed))
                    (c (cos theta)) (r (sin theta))
                    (a (* r (cos phi))) (bb (* r (sin phi)))
-                   (vx (* s (+ (* c dx) (* a ux) (* bb wx))))
+                   (vx (+ (float carry-x 0f0) (* s (+ (* c dx) (* a ux) (* bb wx)))))
                    (vy (* s (+ (* c dy) (* a uy) (* bb wy))))
-                   (vz (* s (+ (* c dz) (* a uz) (* bb wz)))))
+                   (vz (+ (float carry-z 0f0) (* s (+ (* c dz) (* a uz) (* bb wz))))))
               (ecase kind
                 (:spark (spawn-spark 1 ramp (vx at) (vy at) (vz at) vx vy vz (range-random *spark-life*)))
                 (:ember (spawn-spark 3 ramp (vx at) (vy at) (vz at) vx vy vz (range-random *ember-life*)))

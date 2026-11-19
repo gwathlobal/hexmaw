@@ -293,6 +293,14 @@ tables above:
   A vortex's burns, which make no flinch, make a creature it holds cry out every `*whirl-cry-gap*`
   (vortex.lisp).
 - The boss's shockwave plays `ogre-land`; its leap is the ogre's.
+- The knight's shield charge (knight.lisp) has no clips of its own yet, the ElevenLabs credits
+  having run out: its tell bellows `knight-alert` (`:windup` while the charge is its ability) and
+  scrapes its feet with `step-armour` at 0.6, its run steps `step-armour` as its walk does, its blow
+  on the target (and a creature bowled aside, at 0.7) is `bash-hit` (`:ram`), and its crash into a
+  wall `maul-guard-break` (`:crash`). The spear set against it plays `bash-glance` and
+  `maul-guard-break`. Clips worth making when there are credits: `knight-charge-cry` (1.0 s, a
+  bellow behind a visor), `knight-charge-hit` (0.6 s, a tower shield slamming a body) and
+  `knight-charge-crash` (0.9 s, a steel shield into stone, plate clattering).
 - The imp's pounce crouches to `imp-claw` (`:leap`); its flank leap round the player crouches to
   `imp-alert` (`:vault`), so the two sound apart, and lands with a `step-light` at full volume
   (`leap-landed`, imp.lisp), so a player hears it come down behind them.

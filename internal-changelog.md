@@ -29,6 +29,18 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   reports windows a level.
 - The spark ramp for snow struck loose was unreachable (`:snow` twice in `*spark-ramps*`); it is
   `:snow-chips` now.
+- The knight's shield charge, from level 2 of a run (`:shield-charge` in `*run-levels*`' `:abilities`):
+  at a target 3.5 to 10 m off in sight with a straight run, always when their shield faces it, else
+  30% each time it hunts, every 10 s. A 0.8 s tell crouched behind its shield, then a run at 7.5 m/s
+  along the way it faced, still crouched, its shield's foot on the floor throwing sparks, hardly turning, to 3 m past where the target stood: 14 to 20 and a throw
+  down the line on the target (a raised shield knocked aside), other creatures bowled aside, a stop
+  short of lava, water and drops, and a crash into a wall that reels it 1.5 s with its guard down.
+  The spear set against it from the front stops it dead; the earthshake flinches it out of the run.
+  The Black Knight and elite knights charge too. The knight moved to `src/knight.lisp` and became an
+  `ability-user` (`:mace`, `:shield-charge`); `leaper`'s `charging-p` and `impale` call on when it
+  isn't airborne. Its own strip, `knight-charge` (the crouch, two running frames and the crash, five
+  views, crouched with the shield's foot on the ground throughout); reused sounds for now (no
+  ElevenLabs credits); `tools/hd status` shows the charge.
 
 - The bloodroot streamlined: the husk and its red lamp are gone (and `blow-damage` with them), and the
   burrowing root is its one attack in place of the lobbed blood seed (gone, with `lobbed-projectile`,

@@ -939,6 +939,11 @@ its reflection covers, turning with it; K dims it as the rim is dimmed."
 (define-shader-entity ogre-boss (boss ogre) ())
 (define-shader-entity wraith-boss (boss gale-wraith) ())
 
+;; Its shield charge (knight.lisp) hits as hard as its mace does, and a crash shakes it less.
+(defmethod charge-damage ((boss knight-boss)) (round (* *boss-damage-scale* (call-next-method))))
+(defmethod charge-reel-time ((boss knight-boss) cause)
+  (ecase cause (:crash *charge-boss-crash-reel*) (:spear *charge-boss-spear-reel*)))
+
 (defmethod power-animation ((boss harpy-boss)) (flap-animation boss))
 ;; It pounces as an imp does, but doesn't run, spring back or steal.
 (defmethod skittish-p ((boss imp-boss)) NIL)

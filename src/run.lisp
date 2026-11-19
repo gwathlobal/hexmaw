@@ -18,14 +18,14 @@
             ("riftwalker" 1) ("rime-hag" 1) ("arc-votary" 1))
      :loot (:weapons 1 :enchant-chance 0.5 :enchant-cost (2 3) :enchant-effects 1
             :runes 2 :rune-power (16 28) :rune-effects 2 :area-chance 0.3 :authored-chance 0.35)
-     :skip-scale 0.75 :elite-chance 0.12 :abilities (:firestorm :flank-leap :rime-field)
+     :skip-scale 0.75 :elite-chance 0.12 :abilities (:firestorm :flank-leap :rime-field :shield-charge)
      :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
     (:rooms 22 :exit "arena" :altar-chance 0.4
      :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2)
             ("riftwalker" 2) ("arc-votary" 1) ("bloodroot" 1))
      :loot (:weapons 2 :enchant-chance 0.8 :enchant-cost (3 6) :enchant-effects 2
             :runes 2 :rune-power (24 40) :rune-effects 3 :area-chance 0.5 :authored-chance 0.5)
-     :skip-scale 0.5 :elite-chance 0.2 :abilities (:firestorm :flank-leap :rime-field :blizzard :static-recoil)
+     :skip-scale 0.5 :elite-chance 0.2 :abilities (:firestorm :flank-leap :rime-field :shield-charge :blizzard :static-recoil)
      :sight 1.3 :hearing 1.6 :alert 1.6 :pause 0.7 :cooldown 0.8))
   "A run's levels, first to last. :ROOMS is how many rooms the generator aims for, and :EXIT
 the block it puts on the doorway furthest from the start (or a list of them, tried in order):
@@ -49,7 +49,8 @@ of an elite (*ELITE-CHANCE*, elite.lisp). Asked in play (DEPTH-SCALE): :SIGHT an
 how far a creature notices the player, :ALERT how long it hunts after, :PAUSE its pause after an
 attack and :COOLDOWN its abilities' cooldowns, and :ABILITIES names the abilities its monsters
 may use besides their first ones (LEVEL-ABILITY-P: the acolyte's :FIRESTORM, the pack imp's
-:FLANK-LEAP). A key left out keeps the variable, or 1.")
+:FLANK-LEAP, the rime hag's :RIME-FIELD and :BLIZZARD, the knight's :SHIELD-CHARGE, the arc
+votary's :STATIC-RECOIL). A key left out keeps the variable, or 1.")
 
 (defparameter *settlement-level*
   '(:core "town" :rooms 6 :exit NIL :min-wing 3 :altar-chance NIL :loot (:weapons 0 :runes 1)
