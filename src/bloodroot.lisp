@@ -45,19 +45,11 @@ lower third of the view looking straight ahead.")
 (defparameter *snare-rise* 0.15 "Seconds the tell's roots take to shoot up out of the floor.")
 (defparameter *snare-lash-time* 0.1 "Seconds a frame of the tell's writhing lasts.")
 
-(defparameter *spit-range* 16.0 "Metres its seed reaches.")
-(defparameter *spit-cooldown* 3.0)
-(defparameter *glut-spit-cooldown* 1.5)
-(defparameter *seed-apex* 2.5 "Metres above the higher end a seed's arc tops out.")
-(defparameter *seed-gravity* 14.0)
-(defparameter *seed-lead* 0.6 "Seconds of the target's walk a seed is aimed ahead.")
-(defparameter *seed-lead-max* 2.0)
-(defparameter *seed-scatter* 1.0 "Metres a seed lands off its aim at most.")
-(defparameter *seed-patch-radius* 1.25 "Metres a seed's patch of roots spreads.")
-(defparameter *seed-patch-time* 12.0 "Seconds a seed's patch lasts.")
+(defparameter *seed-patch-radius* 1.25 "Metres the patch of roots a burrowing root erupts as spreads.")
+(defparameter *seed-patch-time* 12.0 "Seconds such a patch lasts.")
 (defparameter *seed-ring-time* 0.12)
-(defparameter *max-seed-patches* 4 "Seed patches a bulb keeps; the oldest goes.")
-(defparameter *seed-floor-drop* 2.0 "Metres below a seed's burst its floor may be.")
+(defparameter *max-seed-patches* 4 "Patches a bulb keeps; the oldest goes.")
+(defparameter *seed-floor-drop* 2.0 "Metres below where a root erupts its floor may be.")
 
 (defparameter *bloom-radius* 8.0 "Metres its Bloom reaches.")
 (defparameter *bloom-cooldown* 20.0)
@@ -94,38 +86,30 @@ lower third of the view looking straight ahead.")
 (defparameter *bolt-scorch-radius* 0.75 "Metres a single fire or frost hit with no area touches roots round it.")
 (defparameter *root-touch-height* 1.5 "Metres above or below a hit roots it touches may lie.")
 
-(defparameter *bloodroot-light* (vec 0.9 0.12 0.08)
-  "Its veins' glow while it is open, a red lamp seen across a room; out while its husk is shut.")
-(defparameter *bloodroot-light-radius* 4.5)
-(defparameter *bloodroot-light-beat* 0.35 "How much brighter its lamp flares with each heartbeat.")
+(defparameter *bloodroot-light* (vec 0.16 0.02 0.02) "Its veins' glow at rest: dim, since it stands in it.")
+(defparameter *bloodroot-light-radius* 3.5)
 (defparameter *bloom-light* (vec 2.6 0.35 0.25) "Its glow just before a Bloom bursts.")
 
-;;; Its answers to being shot at from afar: the husk, and the burrowing root.
+;;; Its attack: a root burrowing under the floor at its target (START-BURROW).
 
-(defparameter *husk-reach* 4.0
-  "Metres from the bulb within which a striker is close: its blows crack a husk, and only blows from
-further off close one.")
-(defparameter *husk-hits* 3 "Blows from further off than *HUSK-REACH*, within *HUSK-WINDOW*, that close its husk.")
-(defparameter *husk-window* 3.0)
-(defparameter *husk-time* 4.0 "Seconds its husk stays shut.")
-(defparameter *husk-cooldown* 10.0 "Seconds after its husk opens before it may close again.")
-(defparameter *husk-scale* 0.25 "Share of a blow from afar a shut husk lets through.")
-(defparameter *husk-regen* 3.0 "Health a second its roots feed it while its husk is shut.")
-(defparameter *husk-crack-scale* 1.5 "Times the blow that cracks its husk open strikes.")
-(defparameter *husk-crack-reel* 1.0 "Seconds it reels once its husk is cracked open.")
-(defparameter *husk-tint* (vec 0.16 0.1 0.08) "Its shut husk: its veins gone dark.")
-(defparameter *husk-tint-strength* 0.5)
-
-(defparameter *burrow-min* 9.0 "Metres off its target must be for it to send a root burrowing.")
-(defparameter *burrow-range* 26.0 "Metres a burrowing root reaches.")
-(defparameter *burrow-cooldown* 8.0)
-(defparameter *burrow-first* 4.0 "Seconds after it first notices anything before it may burrow.")
+(defparameter *burrow-min* 2.0 "Metres off its target must be for it to send a root burrowing.")
+(defparameter *burrow-range* 20.0 "Metres a burrowing root reaches.")
+(defparameter *burrow-cooldown* 3.0)
+(defparameter *glut-burrow-cooldown* 1.5)
+(defparameter *burrow-first* 1.0 "Seconds after it first notices anything before it may burrow.")
 (defparameter *burrow-speed* 9.0 "M/s a burrowing root runs under the floor.")
 (defparameter *burrow-reach* 1.2 "Metres from where it erupts a burrowing root strikes and snares.")
 (defparameter *burrow-damage* '(5 8))
 (defparameter *burrow-rings* 8 "Rings its patch grows at once as it erupts.")
 (defparameter *burrow-grit-time* 0.04 "Seconds between the grit a burrowing root throws up.")
 (defparameter *burrow-dust-time* 0.2 "Seconds between its dust puffs.")
+(defparameter *burrow-trail-step* 0.3 "Metres between the tufts that burst up behind a burrowing root.")
+(defparameter *burrow-trail-jitter* 0.3 "Metres either side of its way a tuft may stand.")
+(defparameter *burrow-spike-every* 5 "Every so many tufts, a tall thorned root bursts up instead.")
+(defparameter *burrow-tuft-life* 1.3 "Seconds a tuft of its trail stands.")
+(defparameter *burrow-spike-life* 0.8 "Seconds a tall root of its trail stands.")
+(defparameter *burrow-rise-time* 0.12 "Seconds a root of its trail takes to burst up out of the floor.")
+(defparameter *burrow-sink-time* 0.45 "Seconds it takes to sink back at the end.")
 (defparameter *bloom-light-radius* 9.0)
 
 ;;; Its strips: one view, so each is a single sequence. Sliced so the bulb at rest is 90 px
@@ -145,29 +129,18 @@ further off close one.")
 (define-fx-animation bloodroot-death "sprites/bloodroot/death" :fps 8 :size (/ 90 64.0))
 (define-fx-animation snare-roots "sprites/bloodroot/snare" :fps 10 :loop T :size (/ 89 64.0))
 (define-fx-animation snare-grip "sprites/bloodroot/snare-grip" :fps 10 :loop T :size (/ 141 64.0))
-(define-fx-animation seed-flight "sprites/bloodroot/seed-flight" :fps 10 :loop T :size (/ 46 64.0))
-(define-fx-animation seed-burst "sprites/bloodroot/seed-burst" :fps 14 :size (/ 78 64.0))
 
 ;; The roots, laid over floors and walls in world space (ROOT-FLOOR); magenta between them keyed
 ;; to see-through, so the stone shows.
 (define-asset (hexmaw bloodroot-roots) image #p"textures/bloodroot.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :repeat)
 
-(define-spell blood-seed (:delivery :projectile :projectile-speed 9.0 :title "Blood Seed" :lifetime 4.0
-                          :projectile-animation 'seed-flight :impact-animation 'seed-burst
-                          :light-color (vec 1.4 0.15 0.2) :light-radius 2.5)
-  ;; Damage, so a seed coming at the player can be swallowed by Absorb.
-  (:damage :magnitude '(3 5)))
-
 (define-spell bloom (:delivery :nova :nova-radius *bloom-radius* :title "Bloom")
   ;; Its drain heals the bulb for all of it (DRAIN-SHARE), and it spares no one but the bulb.
   (:drain :magnitude '(10 14)))
 
 (defun bloodroot-abilities ()
-  (list (make-instance 'ability :name :spit :spell 'blood-seed :animation 'bloodroot-spit
-                                :frame-times '(0.25 0.2 0.2 0.3) :hit-frame 2 :pause 0.6
-                                :cooldown *spit-cooldown*)
-        ;; Pushed into the floor: a root goes burrowing at a far attacker (START-BURROW).
+  (list ;; Pushed into the floor: a root goes burrowing at its target (START-BURROW).
         (make-instance 'ability :name :burrow :animation 'bloodroot-spit
                                 :frame-times '(0.3 0.3 0.2 0.3) :hit-frame 2 :pause 0.5
                                 :cooldown *burrow-cooldown*)
@@ -185,12 +158,14 @@ further off close one.")
    (hurt-animation :initform 'bloodroot-hurt)
    (death-animation :initform 'bloodroot-death)
    (abilities :initform (bloodroot-abilities))
-   (cooldowns :initform (list :spit 0.0 :bloom *bloom-first* :burrow *burrow-first* :husk 0.0))
+   (cooldowns :initform (list :bloom *bloom-first* :burrow *burrow-first*))
    (max-health :initform 110)
    (pain-chance :initform 10)
    (walk-speed :initform 0.0)
    (wander-radius :initform 0.0)
-   (attack-range :initform *spit-range*)
+   (attack-range :initform *burrow-range*)
+   ;; Its attack's harm, the burrowing root's (END-BURROW); with it, it hunts.
+   (attack-damage :initform *burrow-damage*)
    (keep-away :initform 0.0)
    (cast-offset :initform 0.0)
    ;; Sap, not blood: its own blood would feed its roots.
@@ -213,13 +188,11 @@ drunk) and the health it brings.")
    (drunk-left :initform 0.0 :accessor drunk-left)
    (last-bloom :initform 100.0 :accessor last-bloom :documentation "Seconds since its last Bloom.")
    (swelled :initform NIL :accessor swelled :documentation "True once this Bloom's tell has sounded.")
-   (husk :initform 0.0 :accessor husk :documentation "Seconds its husk stays shut.")
-   (husk-count :initform 0 :accessor husk-count :documentation "Blows from afar within the window.")
-   (husk-timer :initform 0.0 :accessor husk-timer :documentation "Seconds left of the window they count in.")
    (burrow-sound :initform NIL :accessor burrow-sound :documentation "The burrowing root's rumble.")
    (burrow :initform NIL :accessor burrow
            :documentation "A root burrowing at its target: a list of its head's X Y Z, where it is
-going, X Z, and the seconds to its next grit and dust; or NIL.")
+going, X Z, the seconds to its next grit and dust, and the metres to its trail's next tuft and how
+many tufts it has sent up; or NIL.")
    (lamp :initform NIL :accessor bloodroot-lamp)
    (snare-sprites :initform () :accessor snare-sprites)))
 
@@ -955,10 +928,7 @@ heals as it arrives."
   (let* ((target (hunt-target bloodroot))
          (distance (target-distance bloodroot))
          (seen (clear-path-p (location bloodroot) (body-feet target) (cast-height bloodroot))))
-    (cond ((husked-p bloodroot)
-           ;; Shut: it does nothing but wait it out.
-           (stop-walking bloodroot *chase-replan*))
-          ((and (ready-p bloodroot :bloom)
+    (cond ((and (ready-p bloodroot :bloom)
                 (or (and seen (< distance *bloom-radius*))
                     (and (< *bloom-crowd-gap* (last-bloom bloodroot))
                          (<= *bloom-crowd* (bloom-crowd bloodroot)))))
@@ -966,58 +936,11 @@ heals as it arrives."
            (start-ability bloodroot :bloom))
           ((and seen (burrow-ready-p bloodroot target distance))
            (start-ability bloodroot :burrow))
-          ((and (ready-p bloodroot :spit) seen (< distance *spit-range*)
-                (not (target-swimming-p target)))
-           (start-ability bloodroot :spit))
           (T (stop-walking bloodroot *chase-replan*)))))
 
-(defun lob-velocity (from to apex gravity)
-  "The velocity that throws a body from FROM to TO under GRAVITY, topping out APEX metres over the
-higher of them."
-  (let* ((top (+ (max (vy from) (vy to)) apex))
-         (up (sqrt (* 2 gravity (- top (vy from)))))
-         (time (+ (/ up gravity) (sqrt (/ (* 2 (- top (vy to))) gravity))))
-         (dx (- (vx to) (vx from))) (dz (- (vz to) (vz from))))
-    (vec (/ dx time) up (/ dz time))))
-
-(define-shader-entity lobbed-projectile (spell-projectile)
-  ((gravity :initarg :gravity :initform *seed-gravity* :accessor gravity))
-  (:documentation "A projectile that arcs under its GRAVITY: a bloodroot's seed."))
-
-(define-handler (lobbed-projectile tick :before) (dt)
-  (unless (frozen-p)
-    (decf (vy (projectile-velocity lobbed-projectile)) (* (gravity lobbed-projectile) (float dt 0f0)))))
-
-(defun spit-aim (target)
-  "Where a seed spat at TARGET lands: the floor under TARGET, ahead of its walk, off by a little."
-  (let* ((feet (body-feet target))
-         (v (if (typep target 'player) (velocity target) (vec 0 0 0)))
-         (lead (min *seed-lead-max* (* *seed-lead* (sqrt (+ (expt (vx v) 2) (expt (vz v) 2))))))
-         (speed (max 0.01 (sqrt (+ (expt (vx v) 2) (expt (vz v) 2)))))
-         (angle (* 2 pi (random 1.0 *roll-random*)))
-         (off (* *seed-scatter* (random 1.0 *roll-random*)))
-         (point (vec (+ (vx feet) (* lead (/ (vx v) speed)) (* off (cos angle)))
-                     (vy feet)
-                     (+ (vz feet) (* lead (/ (vz v) speed)) (* off (sin angle))))))
-    (or (floor-under point) feet)))
-
-(defun spit-seed (bloodroot)
-  (let* ((target (hunt-target bloodroot))
-         (to (spit-aim target))
-         (from (v+ (location bloodroot) (vec 0 (* 0.8 (sprite-height bloodroot)) 0)))
-         (spell (find-spell 'blood-seed))
-         (projectile (launch-projectile spell from (vec 0 1 0) (container bloodroot) bloodroot
-                                        :class 'lobbed-projectile)))
-    (v<- (projectile-velocity projectile) (lob-velocity from to *seed-apex* (gravity projectile)))
-    (play-sound (spell-sound spell :cast) from)))
-
-(defmethod spell-impact ((name (eql 'blood-seed)) spell at caster container victim)
-  (declare (ignore spell container victim))
-  (when (and (typep caster 'bloodroot) (not (dead caster)))
-    (plant-seed caster at)))
-
 (defun plant-seed (bloodroot at)
-  "Grow a seed's patch of roots for BLOODROOT on the floor under AT; the patch, or NIL."
+  "Grow a patch of roots for BLOODROOT on the floor under AT, where a burrowing root erupts; the
+patch, or NIL."
   (let ((floor (nav-floor-at (vx at) (+ (vy at) 0.3) (vz at))))
     (when (and floor (< (- (vy at) floor) *seed-floor-drop*)
                (not (liquid-at (vx at) (+ floor 0.05) (vz at))))
@@ -1035,11 +958,8 @@ higher of them."
     (ecase (ability-name ability)
       (:burrow
        (start-burrow bloodroot)
-       (setf (getf (cooldowns bloodroot) :burrow) (* (ability-cooldown ability) (depth-scale :cooldown))))
-      (:spit
-       (spit-seed bloodroot)
-       (setf (getf (cooldowns bloodroot) :spit)
-             (* (if (< 0 (glut bloodroot)) *glut-spit-cooldown* (ability-cooldown ability)) (depth-scale :cooldown))))
+       (setf (getf (cooldowns bloodroot) :burrow)
+             (* (if (< 0 (glut bloodroot)) *glut-burrow-cooldown* (ability-cooldown ability)) (depth-scale :cooldown))))
       (:bloom
        (cast-spell (find-spell (bloom-spell bloodroot)) (bloom-origin bloodroot) (vec 0 0 -1) (container bloodroot)
                    :caster bloodroot)
@@ -1054,79 +974,15 @@ higher of them."
 (defgeneric bloom-spell (bloodroot)
   (:method ((bloodroot bloodroot)) 'bloom))
 
-;;; The husk: shot at from afar, it shuts its bark, letting through a quarter of what reaches it
-;;; from beyond *HUSK-REACH* while its roots feed it; a blow from close by, or one that always
-;;; flinches (a full maul blow or overcharge, the earthshake, a spear's counter), cracks it open, and
-;;; it reels.
-
-(defun husked-p (bloodroot) (< 0 (husk bloodroot)))
-
-(defun striker-close-p (bloodroot by)
-  "True if BY, who struck BLOODROOT, is within *HUSK-REACH* of it, or is nothing that stands off."
-  (or (not (or (typep by 'player) (typep by 'creature)))
-      (let ((feet (body-feet by)) (loc (location bloodroot)))
-        (< (+ (expt (- (vx feet) (vx loc)) 2) (expt (- (vz feet) (vz loc)) 2)) (expt *husk-reach* 2)))))
-
-(defmethod blow-damage ((bloodroot bloodroot) amount by force-pain)
-  (cond ((not (husked-p bloodroot)) amount)
-        ((or force-pain (striker-close-p bloodroot by))
-         (crack-husk bloodroot)
-         (round (* amount *husk-crack-scale*)))
-        (T (max 1 (round (* amount *husk-scale*))))))
-
-(defmethod harmed :after ((bloodroot bloodroot) amount by)
-  (declare (ignore amount))
-  ;; Blows from afar while it is open count toward shutting its husk.
-  (when (and (not (dead bloodroot)) (not (husked-p bloodroot)) (not (striker-close-p bloodroot by)))
-    (when (<= (husk-timer bloodroot) 0) (setf (husk-count bloodroot) 0))
-    (setf (husk-timer bloodroot) (float *husk-window* 0f0))
-    (incf (husk-count bloodroot))))
-
-(defun close-husk (bloodroot)
-  (setf *roots-dirty* T
-        (husk bloodroot) (float *husk-time* 0f0)
-        (husk-count bloodroot) 0
-        (husk-timer bloodroot) 0.0)
-  (stop-walking bloodroot *husk-time*)
-  (spray-sparks (v+ (location bloodroot) (vec 0 (* 0.5 (sprite-height bloodroot)) 0)) NIL 14
-                :kind :grit :ramp :wood)
-  (play-sound :husk-close (location bloodroot)))
-
-(defun open-husk (bloodroot)
-  (setf *roots-dirty* T
-        (husk bloodroot) 0.0
-        (getf (cooldowns bloodroot) :husk) (* *husk-cooldown* (depth-scale :cooldown))))
-
-(defun crack-husk (bloodroot)
-  "A close blow cracks BLOODROOT's husk open: it reels."
-  (open-husk bloodroot)
-  (setf (reel bloodroot) (float *husk-crack-reel* 0f0))
-  (stop-walking bloodroot *husk-crack-reel*)
-  (spray-sparks (v+ (location bloodroot) (vec 0 (* 0.5 (sprite-height bloodroot)) 0)) NIL 20
-                :kind :grit :ramp :wood :speed '(2.0 4.5))
-  (play-sound :husk-crack (location bloodroot)))
-
-(defun update-husk (bloodroot dt)
-  (setf (husk-timer bloodroot) (max 0.0 (- (husk-timer bloodroot) dt)))
-  (cond ((husked-p bloodroot)
-         (incf (heal-carry bloodroot) (* *husk-regen* dt))
-         (when (<= (decf (husk bloodroot) dt) 0)
-           (open-husk bloodroot)))
-        ((and (<= *husk-hits* (husk-count bloodroot))
-              (<= (or (getf (cooldowns bloodroot) :husk) 0) 0)
-              (not (eq (brain bloodroot) :attacking)))
-         (close-husk bloodroot))))
-
-;;; The burrowing root: at a target standing off past *BURROW-MIN*, a root runs under the floor at
-;;; where they stood, throwing up grit and dust along its way, and erupts there as a seed's patch,
-;;; striking and starting to snare them if they are still within *BURROW-REACH*. A sidestep dodges
-;;; it; a wall, a gap or a liquid in its way ends it.
+;;; The burrowing root, its attack: at a target past *BURROW-MIN*, a root runs under the floor at
+;;; where they stood, throwing up grit and dust and a trail of roots bursting up behind it, and
+;;; erupts there as a patch of roots, striking and starting to snare them if they are still within
+;;; *BURROW-REACH*. A sidestep dodges it; a wall, a gap or a liquid in its way ends it.
 
 (defun burrow-ready-p (bloodroot target distance)
   (and (null (burrow bloodroot))
        (<= (or (getf (cooldowns bloodroot) :burrow) 0) 0)
        (< *burrow-min* distance *burrow-range*)
-       (typep target 'player)
        (not (target-swimming-p target))))
 
 (defun start-burrow (bloodroot)
@@ -1135,7 +991,7 @@ higher of them."
          (to (and target (body-feet target))))
     (when to
       (setf (burrow bloodroot) (list (float (vx loc) 0f0) (float (vy loc) 0f0) (float (vz loc) 0f0)
-                                     (float (vx to) 0f0) (float (vz to) 0f0) 0.0 0.0))
+                                     (float (vx to) 0f0) (float (vz to) 0f0) 0.0 0.0 0.0 0))
       (kick-dust loc 0.5 3 (container bloodroot))
       (play-sound :seed-impact loc))))
 
@@ -1155,7 +1011,7 @@ higher of them."
           (when (and (on-floor-p player)
                      (< (+ (expt (- (vx feet) x) 2) (expt (- (vz feet) z) 2)) (expt *burrow-reach* 2))
                      (< (abs (- (vy feet) y)) 0.6))
-            (hurt-player player (roll *burrow-damage*) feet :shove NIL :unblockable T :by bloodroot)
+            (hurt-player player (roll (attack-damage bloodroot)) feet :shove NIL :unblockable T :by bloodroot)
             (when (and (null (snare player)) (<= (snare-guard player) 0)
                        (eq bloodroot (roots-at (vx feet) (vy feet) (vz feet))))
               (setf (snare player) (list :root bloodroot :phase :tell :left *snare-tell* :at (vcopy feet)))
@@ -1164,7 +1020,7 @@ higher of them."
 (defun update-burrow (bloodroot dt)
   (let ((b (burrow bloodroot)))
     (when b
-      (destructuring-bind (x y z gx gz grit dust) b
+      (destructuring-bind (x y z gx gz grit dust trail tufts) b
         (let* ((dx (- gx x)) (dz (- gz z))
                (d (sqrt (+ (* dx dx) (* dz dz))))
                (step (* *burrow-speed* dt)))
@@ -1184,13 +1040,50 @@ higher of them."
                         (setf dust *burrow-dust-time*)
                         (floor-sparks nx floor nz 2)
                         (kick-dust (vec nx floor nz) 0.15 1 (container bloodroot)))
-                      (setf (burrow bloodroot) (list nx floor nz gx gz grit dust)))))))))))
+                      (when (<= (decf trail step) 0)
+                        (setf trail *burrow-trail-step*)
+                        (sprout-trail bloodroot nx floor nz (/ dx d) (/ dz d) (incf tufts)))
+                      (setf (burrow bloodroot) (list nx floor nz gx gz grit dust trail tufts)))))))))))
 
-(defun heartbeat (phase)
-  "The heartbeat's flare at PHASE through a beat, 0 to about 1: a lub and a dub, as ROOT_BEAT has it."
-  (let ((p (- phase (ffloor phase))))
-    (flet ((pulse (x) (exp (/ (- (* x x)) 0.002))))
-      (min 1.0 (+ (pulse p) (pulse (- 1.0 p)) (* 0.6 (pulse (- p 0.16))))))))
+(define-shader-entity burrow-root (upright-fx)
+  ((frame :initarg :frame :initform 0 :reader trail-frame)
+   (life :initarg :life :initform 1.0 :reader trail-life)
+   (left :initarg :life :accessor trail-left)
+   (base :initarg :base :initform 0.0 :reader trail-base))
+  (:documentation "A root of a burrowing root's trail, bursting up out of the floor behind it, standing
+a moment and sinking back. A save leaves it out."))
+
+(define-handler (burrow-root tick :after) (dt)
+  (let* ((animation (sprite-animation burrow-root))
+         (size (animation-size animation))
+         (life (trail-life burrow-root)))
+    (unless (frozen-p)
+      (decf (trail-left burrow-root) dt))
+    (let* ((left (trail-left burrow-root))
+           (since (- life left))
+           (up (min 1.0 (/ since *burrow-rise-time*) (/ (max 0.0 left) *burrow-sink-time*))))
+      ;; Held on its frame; rising, the part still under the floor is hidden by it.
+      (setf (age burrow-root) (/ (+ (trail-frame burrow-root) 0.5) (animation-fps animation))
+            (vy (location burrow-root)) (+ (trail-base burrow-root) (* size (- up 0.5))))
+      (when (<= left 0)
+        (despawn burrow-root)))))
+
+(defun sprout-trail (bloodroot x y z dx dz n)
+  "Send up the Nth root of BLOODROOT's burrowing trail at X Y Z, the root heading DX DZ: a tuft a
+little to one side, or every *BURROW-SPIKE-EVERY*th a tall thorned root on its line."
+  (let* ((spike (zerop (mod n *burrow-spike-every*)))
+         (side (if spike 0.0 (- (random (* 2 *burrow-trail-jitter*)) *burrow-trail-jitter*)))
+         (animation (find-fx-animation (if spike 'snare-roots 'root-tendrils)))
+         (frames (getf (animation-atlas animation) :frames))
+         (sprite (make-instance 'burrow-root :animation animation
+                                             :frame (if spike (+ 2 (random 2)) (random frames))
+                                             :life (if spike *burrow-spike-life* *burrow-tuft-life*)
+                                             :base (float y 0f0)
+                                             :location (vec (- x (* side dz)) (- y (* 0.5 (animation-size animation)))
+                                                            (+ z (* side dx))))))
+    (enter sprite (container bloodroot))
+    (when spike (kick-grit x y z 6))
+    sprite))
 
 (defun update-bloodroot-light (bloodroot)
   (let ((lamp (bloodroot-lamp bloodroot)))
@@ -1204,10 +1097,7 @@ higher of them."
                     (tell (+ 0.2 (* 0.8 tell tell)))
                     ((< 0 (glut bloodroot)) (+ 0.06 (* 0.04 (sin (* 2 pi *glut-pulse* (glut bloodroot))))))
                     (T 0.0)))
-           ;; At rest it beats with its roots (ROOT_BEAT at the bulb); dead or shut, it is out.
-           (rest (if (or (dead bloodroot) (husked-p bloodroot))
-                     0.0
-                     (+ 1.0 (* *bloodroot-light-beat* (heartbeat (/ *root-clock* *root-beat-period*))))))
+           (rest (if (dead bloodroot) 0.0 1.0))
            (color (color lamp)))
       (setf (vx color) (+ (* (- 1 k) rest (vx *bloodroot-light*)) (* k (vx *bloom-light*)))
             (vy color) (+ (* (- 1 k) rest (vy *bloodroot-light*)) (* k (vy *bloom-light*)))
@@ -1249,7 +1139,6 @@ higher of them."
              (grow-carpets bloodroot dt)
              (feed-on bloodroot dt)
              (drink-splats bloodroot dt)
-             (update-husk bloodroot dt)
              (update-burrow bloodroot dt)))))
   (ensure-snare-sprites bloodroot)
   (update-bloodroot-light bloodroot)
@@ -1284,7 +1173,7 @@ higher of them."
 (defmethod creature-died :after ((bloodroot bloodroot) by)
   (declare (ignore by))
   (spill-drinks bloodroot)
-  (setf (husk bloodroot) 0.0 (burrow bloodroot) NIL *roots-dirty* T)
+  (setf (burrow bloodroot) NIL)
   (when (and *player* (eq bloodroot (getf (snare *player*) :root)))
     (break-snare *player*)))
 
@@ -1292,7 +1181,7 @@ higher of them."
   (setf *roots-dirty* T
         (carpet bloodroot) NIL (patches bloodroot) () (glut bloodroot) 0.0 (stand bloodroot) 0.0
         (drain-carry bloodroot) 0.0 (heal-carry bloodroot) 0.0 (last-bloom bloodroot) 100.0
-        (gulp bloodroot) 0.0 (husk bloodroot) 0.0 (husk-count bloodroot) 0 (burrow bloodroot) NIL)
+        (gulp bloodroot) 0.0 (burrow bloodroot) NIL)
   (spill-drinks bloodroot)
   ;; Fresh blood for it on the debug level, so each life shows it feeding.
   (when (eq *level* :test)
@@ -1319,10 +1208,6 @@ higher of them."
 ;;; Its looks: the idle pulse (quicker in Glut), and the red wash of Glut.
 
 (defmethod show-own-pose ((bloodroot bloodroot) squash)
-  (when (and (husked-p bloodroot) (not (dead bloodroot)))
-    ;; Shut: the Bloom's clench, held.
-    (show-view-frame bloodroot 'bloodroot-bloom 1 squash)
-    (return-from show-own-pose T))
   (unless (dead bloodroot)
     (let* ((animation (find-fx-animation 'bloodroot-idle))
            (frames (getf (animation-atlas animation) :frames))
@@ -1336,10 +1221,6 @@ higher of them."
   *light-clock*)
 
 (defmethod own-tint ((bloodroot bloodroot) tint)
-  ;; Its husk shut: dark.
-  (when (and (husked-p bloodroot) (< (vw tint) *husk-tint-strength*))
-    (setf (vx tint) (vx *husk-tint*) (vy tint) (vy *husk-tint*) (vz tint) (vz *husk-tint*)
-          (vw tint) *husk-tint-strength*))
   ;; A drink reaching it: a red flush, gone in a moment.
   (when (< 0 (gulp bloodroot))
     (let ((k (* *gulp-tint* (/ (gulp bloodroot) *gulp-time*))))
@@ -1370,16 +1251,6 @@ is from its bulb, for the heartbeat running out along the veins.")
 (defparameter *root-beat-speed* 6.0 "Metres a second a heartbeat runs out along the roots.")
 (defparameter *root-vein-glow* 0.45 "How brightly the roots' veins glow between heartbeats, unlit.")
 (defparameter *root-beat-glow* 1.6 "How much more brightly they glow as a heartbeat passes.")
-(defparameter *husk-beat-glow* 0.4
-  "Share of the veins' glow while its husk is shut, the heartbeats running back in to the bulb.")
-
-(declaim (inline beat-distance))
-(defun beat-distance (dist shut)
-  "What a root vertex carries for the heartbeat: its DIST from its bulb, negative while the bulb's
-husk is SHUT, which runs the beats back in, dimmer (ROOT_BEAT)."
-  (declare (type single-float dist))
-  (if shut (- -0.01 dist) dist))
-
 (defvar *root-floor* NIL "The root floor in the current scene.")
 (defvar *root-tufts* NIL "The root tufts in the current scene.")
 
@@ -1468,8 +1339,7 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
              (incf k 11)))
       (declare (inline put))
       (do-bloodroots (root)
-       (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0))
-             (shut (husked-p root)))
+       (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0)))
         (declare (type single-float bx bz))
         (do-carpets (carpet root)
           (let* ((state (carpet-state carpet))
@@ -1501,7 +1371,7 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
                            (c01 (* keep (corner-cover state floors n layers a b kk f 0 1)))
                            (c11 (* keep (corner-cover state floors n layers a b kk f 1 1))))
                       (declare (type single-float f born frost y cx cz h xa xb za zb c00 c10 c01 c11))
-                      (setf dist (beat-distance (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))) shut))
+                      (setf dist (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))))
                       (put xa y za 0f0 0f0 1f0 c00 frost 0f0 born) (put xb y zb 0f0 0f0 1f0 c11 frost 0f0 born)
                       (put xb y za 0f0 0f0 1f0 c10 frost 0f0 born)
                       (put xa y za 0f0 0f0 1f0 c00 frost 0f0 born) (put xa y zb 0f0 0f0 1f0 c01 frost 0f0 born)
@@ -1564,7 +1434,6 @@ cell spreads over its floor and climbs its wall runs in the shader, from when it
   (setf (uniform program "beat_speed") (float *root-beat-speed* 0f0))
   (setf (uniform program "vein_glow") (float *root-vein-glow* 0f0))
   (setf (uniform program "beat_glow") (float *root-beat-glow* 0f0))
-  (setf (uniform program "husk_glow") (float *husk-beat-glow* 0f0))
   (set-drink-uniforms program))
 
 ;;; A drink's light: once a splat's blood is gone, a short streak of light runs along the roots,
@@ -1641,7 +1510,6 @@ uniform float beat_period;
 uniform float beat_speed;
 uniform float vein_glow;
 uniform float beat_glow;
-uniform float husk_glow;
 uniform int drink_count;
 uniform vec4 drink_lanes[8];
 uniform vec2 drink_runs[8];
@@ -1686,13 +1554,10 @@ float vein_of(vec3 c){ return (c.r > 0.4 && c.g + c.b < 0.45 * c.r) ? 1.0 : 0.0;
 // as the aurora's light is, so it stays on the art's few tones.
 float root_beat(vec3 surface, float dist, float clock){
   float vein = (surface.r > 0.4 && surface.g + surface.b < 0.45 * surface.r) ? 1.0 : 0.0;
-  // A DIST below 0: its husk is shut, and the beats run back in to the bulb, dimmer.
-  float shut = dist < 0.0 ? 1.0 : 0.0;
-  float d = abs(dist);
-  float p = fract((clock - mix(1.0, -1.0, shut) * d / beat_speed) / beat_period);
+  float p = fract((clock - dist / beat_speed) / beat_period);
   float beat = exp(-p * p / 0.002) + exp(-(1.0 - p) * (1.0 - p) / 0.002)
              + 0.6 * exp(-(p - 0.16) * (p - 0.16) / 0.002);
-  return vein * floor((vein_glow + beat_glow * beat) * mix(1.0, husk_glow, shut) * 4.0) / 4.0;
+  return vein * floor((vein_glow + beat_glow * beat) * 4.0) / 4.0;
 }
 
 void main(){
@@ -1813,8 +1678,7 @@ much of its carpet is left, and its distance from its bulb.")
              (incf k 12)))
       (declare (inline put))
       (do-bloodroots (root)
-        (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0))
-              (shut (husked-p root)))
+        (let ((bx (float (vx (location root)) 0f0)) (bz (float (vz (location root)) 0f0)))
           (declare (type single-float bx bz))
           (do-carpets (carpet root)
             (let ((state (carpet-state carpet))
@@ -1842,7 +1706,7 @@ much of its carpet is left, and its distance from its bulb.")
                                  (born (+ (aref borns w) (* stagger (tuft-hash i j kk 5))))
                                  (frost (if (< 0 (aref frosts w)) 1f0 0f0)))
                             (declare (type single-float cx cz y scale tw th frame born frost))
-                            (setf dist (beat-distance (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))) shut))
+                            (setf dist (sqrt (+ (expt (- cx bx) 2) (expt (- cz bz) 2))))
                             (put cx y cz -0.5f0 0f0 tw th frame born frost keep)
                             (put cx y cz 0.5f0 0f0 tw th frame born frost keep)
                             (put cx y cz 0.5f0 1f0 tw th frame born frost keep)
@@ -1928,7 +1792,6 @@ uniform float beat_period;
 uniform float beat_speed;
 uniform float vein_glow;
 uniform float beat_glow;
-uniform float husk_glow;
 uniform int drink_count;
 uniform vec4 drink_lanes[8];
 uniform vec2 drink_runs[8];
@@ -1973,13 +1836,10 @@ float vein_of(vec3 c){ return (c.r > 0.4 && c.g + c.b < 0.45 * c.r) ? 1.0 : 0.0;
 // as the aurora's light is, so it stays on the art's few tones.
 float root_beat(vec3 surface, float dist, float clock){
   float vein = (surface.r > 0.4 && surface.g + surface.b < 0.45 * surface.r) ? 1.0 : 0.0;
-  // A DIST below 0: its husk is shut, and the beats run back in to the bulb, dimmer.
-  float shut = dist < 0.0 ? 1.0 : 0.0;
-  float d = abs(dist);
-  float p = fract((clock - mix(1.0, -1.0, shut) * d / beat_speed) / beat_period);
+  float p = fract((clock - dist / beat_speed) / beat_period);
   float beat = exp(-p * p / 0.002) + exp(-(1.0 - p) * (1.0 - p) / 0.002)
              + 0.6 * exp(-(p - 0.16) * (p - 0.16) / 0.002);
-  return vein * floor((vein_glow + beat_glow * beat) * mix(1.0, husk_glow, shut) * 4.0) / 4.0;
+  return vein * floor((vein_glow + beat_glow * beat) * 4.0) / 4.0;
 }
 
 void main(){
@@ -2014,9 +1874,8 @@ void main(){
 ;;; Preloading what appears mid-game.
 
 (defun preload-bloodroot (scene)
-  "Load what a bloodroot spawns mid-game: its seeds, their bursts and its snare, and the root floor."
-  (preload (make-instance 'lobbed-projectile :spell (find-spell 'blood-seed) :animation (find-fx-animation 'seed-flight))
-           scene)
+  "Load what a bloodroot spawns mid-game: its snare and its burrowing root's trail."
   (preload (make-instance 'snare-sprite :animation (find-fx-animation 'snare-roots)) scene)
   (preload (make-instance 'snare-sprite :animation (find-fx-animation 'snare-grip)) scene)
-  (preload (make-instance 'fx-sprite :animation (find-fx-animation 'seed-burst)) scene))
+  (preload (make-instance 'burrow-root :animation (find-fx-animation 'snare-roots)) scene)
+  (preload (make-instance 'burrow-root :animation (find-fx-animation 'root-tendrils)) scene))

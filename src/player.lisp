@@ -494,7 +494,8 @@ aim; or let it go."
                      (first (= 0 (channel-count player)))
                      (end (beam-strike pulse origin dir (container player) player :quiet (not first))))
                 (when first
-                  (play-sound :beam-cast))
+                  (play-sound :beam-cast)
+                  (break-snare player))
                 (pay player resource cost)
                 (incf (channel-timer player) *beam-pulse*)
                 (incf (channel-count player))
@@ -526,6 +527,8 @@ overcharged), or a nova bursts round the player."
   (let ((spell (overcharged-spell (pending-spell player) (overcharge player))))
     (setf (pending-spell player) NIL
           (overcharge player) 0.0)
+    ;; As it leaves the hands, it tears free of roots holding the player (bloodroot.lisp).
+    (break-snare player)
     (play-sound (if (eq (spell-name spell) 'tempest) :tempest-cast :bolt-cast))
     (apply-self-effects spell player player)
     (case (spell-delivery spell)

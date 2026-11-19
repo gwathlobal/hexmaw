@@ -83,11 +83,8 @@ their values."
 ;; Its roots are ROOT-STATE, an accessor that turns its carpets into plain data and back
 ;; (bloodroot.lisp).
 (defmethod saved-slots append ((bloodroot bloodroot))
-  '(root-state glut drain-carry drain-timer stand heal-carry last-bloom drinks gulp
-    husk husk-count husk-timer burrow))
+  '(root-state glut drain-carry drain-timer stand heal-carry last-bloom drinks gulp burrow))
 
-(defmethod saved-slots append ((seed lobbed-projectile))
-  '(gravity))
 
 (defmethod saved-slots append ((necromancer necromancer))
   '(raise-target))
@@ -257,7 +254,7 @@ status auras, which come back from their statuses."
     (when (and +main+ (scene +main+))
       (for:for ((entity over (scene +main+)))
         (when (and (typep entity 'fx-sprite) (not (typep entity '(or hud-element torch pickup status-aura carried-loot
-                                                                       storm-flame falling-cinder snare-sprite)))
+                                                                       storm-flame falling-cinder snare-sprite burrow-root)))
                    (container entity))
           (push entity effects))))
     (nreverse effects)))

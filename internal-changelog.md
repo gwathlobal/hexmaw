@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The bloodroot streamlined: the husk and its red lamp are gone (and `blow-damage` with them), and the
+  burrowing root is its one attack in place of the lobbed blood seed (gone, with `lobbed-projectile`,
+  the seed's art and the `bloodroot-spit` sound): 2 to 20 m, every 3 s (1.5 in Glut), erupting as a
+  patch of roots. It leaves a trail of tufts and tall thorned roots bursting up behind it
+  (`burrow-root`). A blow frees the player from its roots as it lands, not as it is pressed.
 - The bloodroot glows red, pulsing with its heartbeat, and its light goes out while its husk is shut,
   so it can be seen to be shut across a room. Its husk closing and cracking and its burrowing root
   (a rumble that follows the root under the floor, and its eruption) have sounds.

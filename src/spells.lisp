@@ -409,7 +409,6 @@ projectile about to reach it, so each is asked once.")
     hag-nova-boss (:impact :frost-nova)
     static-recoil (:impact :votary-recoil)
     hierophant-recoil (:impact :votary-recoil)
-    blood-seed (:cast :bloodroot-spit :impact :seed-impact)
     bloom (:impact :bloom))
   "Each spell's clips (sound.lisp) by event: :CAST where a creature lets it go, :FLIGHT its
 projectile's loop, :IMPACT its burst, :CIRCLE a circle's loop through its wind-up and :STRIKE

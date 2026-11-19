@@ -185,8 +185,7 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | bloodroot-alert | 1 | P | 1.2 | 2 | alert: bloodroot |
 | bloodroot-pain | 1 | P | 0.6 | 2 | pain: bloodroot |
 | bloodroot-death | 1 | P | 1.8 | 2 | death: bloodroot |
-| bloodroot-spit | 1 | P | 0.6 | 2 | `spit-seed` bloodroot.lisp: `blood-seed`'s :cast |
-| seed-impact | 1 | P | 0.7 | 2 | `impact` spells.lisp, a blood seed bursting and planting its roots |
+| seed-impact | 1 | P | 0.7 | 2 | `start-burrow` bloodroot.lisp: its root dives into the floor |
 | bloom-swell | 1 | P | 1.2 | 2 | `update-bloodroot-light` bloodroot.lisp: the Bloom's tell, once, a third of the way in |
 | bloom | 1 | P | 1.2 | 2 | `place-nova` spells.lisp, `bloom`'s :impact |
 | root-drink | 2 | P | 0.8 | 2 | `drink-splats` bloodroot.lisp, a splat drunk |
@@ -194,10 +193,8 @@ All positional. Generic hooks, one per event with a sound slot per class: **aler
 | snare-grab | 1 | 1P | 0.6 | 2 | `update-snare` bloodroot.lisp: they grab |
 | snare-break | 1 | 1P | 0.6 | 2 | `break-snare` player.lisp: torn free, burnt, let go |
 | roots-burn | 2 | P | 0.8 | 2 | `touch-roots` bloodroot.lisp: fire on roots |
-| husk-close | 1 | P | 0.8 | 2 | `close-husk` bloodroot.lisp: its husk shuts under fire from afar |
-| husk-crack | 1 | P | 0.8 | 2 | `crack-husk` bloodroot.lisp: a close blow cracks it open |
 | burrow-rumble | 1 | P L | 2.0 | 2 | `update-burrow` bloodroot.lisp: a root tunnelling under the floor, at its head |
-| burrow-erupt | 1 | P | 0.8 | 2 | `end-burrow` bloodroot.lisp: it bursts up where it was going |
+| burrow-erupt | 1 | P | 0.8 | 2 | `end-burrow` bloodroot.lisp: it bursts up where it was going, a patch of roots |
 | step-armour | 2 | P | 0.5 | 3 | step: knight |
 | step-heavy | 2 | P | 0.6 | 3 | step: ogre |
 | step-bone | 2 | P | 0.5 | 3 | step: skeleton |

@@ -156,11 +156,10 @@ it holds something."
 (defun player-attack (player)
   "Attack with the weapon in hand: cast the spell in the hands, swing the sword, thrust the
 spear, raise the maul to charge it (maul.lisp), or, with the shield raised, bash with it.
-Nothing while the shield is on its way up or down, or with nothing in hand. Any attack tears free of
-a bloodroot's roots closing on or holding the player (bloodroot.lisp)."
+Nothing while the shield is on its way up or down, or with nothing in hand. Its blow, as it lands,
+tears free of a bloodroot's roots closing on or holding the player (bloodroot.lisp): SWING-HIT and
+BASH-STRIKE's moment in UPDATE-WEAPONS, a spell's release."
   (when (weapon-ready-p player)
-    (when (weapon player)
-      (break-snare player))
     (case (weapon player)
       (:hands (when (held-spell player)
                 (player-cast player (held-spell player))))
@@ -194,8 +193,6 @@ the sword's shield.")
 
 (defun player-bash (player)
   (unless (bash-time player)
-    ;; Driven down at the feet, it tears roots that hold them (bloodroot.lisp).
-    (break-snare player)
     (play-sound :shield-bash)
     (setf (bash-time player) 0.0
           (bash-pending player) T)))
@@ -480,6 +477,8 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
     (incf (swing-time player) dt)
     (when (and (swing-pending player) (<= (swing-hit-time (weapon player)) (swing-time player)))
       (setf (swing-pending player) NIL)
+      ;; As the blow lands, it tears free of roots holding the player (bloodroot.lisp).
+      (break-snare player)
       (swing-hit player))
     (unless (swing-frame (swing-time player) (weapon player))
       (setf (swing-time player) NIL)))
@@ -487,6 +486,7 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
     (incf (bash-time player) dt)
     (when (and (bash-pending player) (<= (bash-hit-time (weapon player)) (bash-time player)))
       (setf (bash-pending player) NIL)
+      (break-snare player)
       (bash-strike player (weapon player)))
     ;; A bash that glanced off a knight's shield knocked the guard aside (BREAK-GUARD), ending it.
     (unless (and (bash-time player) (frame-at (bash-time player) (bash-frame-times (weapon player))))

@@ -8,7 +8,6 @@ for anim in idle attacks death snare; do
   tools/gen_image.py art/bloodroot/$anim.png --prompt "$(cat $P/bloodroot-$anim.txt $P/bloodroot-common.txt $P/style-common.txt)" \
       --ref $D --ref $A --size 1536x1024 -n 2
 done
-tools/gen_image.py art/spells/blood-seed.png --prompt "$(cat $P/blood-seed.txt $P/style-common.txt)" --ref $D --ref $A --size 1536x1024 -n 2
 tools/gen_image.py art/textures/bloodroot.png --prompt "$(cat $P/texture-bloodroot.txt)" --ref $D --ref $A --size 1024x1024 -n 2
 tools/gen_image.py art/bloodroot/tendrils.png --prompt "$(cat $P/bloodroot-tendrils.txt $P/style-common.txt)" --ref $D --ref $A --ref art/bloodroot/snare-1.png --size 1536x1024 -n 2
 tools/gen_image.py art/bloodroot/snare-grip.png --prompt "$(cat $P/bloodroot-snare-grip.txt $P/bloodroot-common.txt $P/style-common.txt)" --ref $D --ref $A --ref art/bloodroot/snare-1.png --size 1536x1024 -n 2

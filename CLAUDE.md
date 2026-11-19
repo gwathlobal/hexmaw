@@ -1013,8 +1013,7 @@ real time instead.
   under "Creature movement" below.
 - `src/bloodroot.lisp` (after votary.lisp): the `bloodroot`, the last level's new monster, a
   rooted heart-bulb whose roots spread over the floor and walls; see "The bloodroot" under "Creature
-  movement" below. Also `lobbed-projectile` (a `spell-projectile` under gravity, `lob-velocity`;
-  `launch-projectile`'s `:class`), the `root-floor` that draws every carpet, and its elite and boss.
+  movement" below. Also the `root-floor` that draws every carpet, and its elite and boss.
 - `src/boss.lisp`: the boss at the end of a run, in the `arena` block the run's last level ends in. It is an
   empowered form of one of the nine monsters (`*boss-kinds*`: kind, class such as `imp-boss`
   `(boss leaper imp)`, base class, title such as "Imp Overlord", scale, traits), every kind as
@@ -2440,11 +2439,10 @@ body alone cuts a doorway off from the spawn point (`uproot-blockers`, kit.lisp,
 it draws nothing, so the layout stays), and `tools/levelcheck --strict` fails a level where one still
 does. Over run seeds 1 to 60 it was 183 bloodroots on 57 of the 60 last levels before uprooting, 4 of
 them in a way; none on any other level or in the settlement. Its sounds are `bloodroot-*`,
-`seed-impact`, `bloom-swell`, `bloom`, `root-drink`, `snare-*`, `roots-burn`, `husk-close`, `husk-crack`,
-`burrow-rumble` (a loop at the burrowing root's head, `burrow-sound`) and `burrow-erupt` (`audio/sfx.md`).
-Its lamp (`update-bloodroot-light`) is a red glow, `*bloodroot-light*` out to `*bloodroot-light-radius*`
-(4.5 m), flaring `*bloodroot-light-beat*` with each heartbeat (`heartbeat`, as `root_beat` has it at the
-bulb), swelling to `*bloom-light*` through a Bloom's tell, and out while its husk is shut or it is dead.
+`seed-impact` (its root diving into the floor), `bloom-swell`, `bloom`, `root-drink`, `snare-*`,
+`roots-burn`, `burrow-rumble` (a loop at the burrowing root's head, `burrow-sound`) and `burrow-erupt`
+(`audio/sfx.md`). Its lamp (`update-bloodroot-light`) is a dim red glow at rest, swelling to
+`*bloom-light*` through a Bloom's tell, and out once it is dead.
 
 **Its roots.** A `root-carpet` (not an entity: the bloodroot owns it) is a window of the nav grid's
 cells round where it grew from, every layer, each empty, rooted or burnt (and a rooted one frosted
@@ -2472,10 +2470,12 @@ view looking straight ahead (closer in, they stood under the view). Off the floo
 the tell (a jump) or more than `*snare-reach*` from where it started, the roots close on nothing.
 Otherwise they hold (`snared-p`: no walk, run or jump, on ice too; hands and casts work) for
 `*snare-hold*` (1.5 s) at `*snare-drain*` (8) a second, taller roots (2.2 m, `snare-grip`) surging up
-in the tell's place, arching over and coiling, over half the view's height. Any attack
-(`player-attack`: a swing, a thrust, the maul's charge, a cast, a bash; `break-snare`), a spear's sweep,
-the maul's earthshake (which also tears up the roots within its reach, `tear-roots`), fire or frost
-reaching the cell, or the bulb's death free the player; each starts `snare-guard` (`*snare-guard*`,
+in the tell's place, arching over and coiling, over half the view's height. Any blow of the player's
+as it lands, not as it is pressed (`break-snare`: the swing's hit frame, `swing-hit` in
+`update-weapons`, so a slash, a thrust and the maul's blow; a bash's, a sweep's and the earthshake's,
+`bash-strike`; a spell's release, `release-spell`, and a beam's first strike), the earthshake also
+tearing up the roots within its reach (`tear-roots`), fire or frost reaching the cell, or the bulb's
+death free the player; each starts `snare-guard` (`*snare-guard*`,
 2.5 s). The status icons show it (`:snare`, first in the row, a red border): blinking through the tell,
 steady while it holds, with its seconds left.
 
@@ -2500,38 +2500,28 @@ flushes red for `*gulp-time*` (`own-tint`) and heals `*drink-per-area*` of the b
 sets off Glut. Its own wounds spray sap (`:drain` embers), not blood (`bleeds` NIL), or it would heal
 off every hit.
 
-**Spit** (`:spit`, cooldown 3 s, 1.5 in Glut): a `blood-seed` lobbed (`lob-velocity`, `*seed-apex*`
-over the higher end) at the floor under the target, ahead of their walk and a little off. Where it
-bursts (`spell-impact` on `blood-seed`) it plants a seed carpet, `*seed-patch-radius*` (1.25 m) grown
-at once, that drains and snares as the main one and lasts `*seed-patch-time*` (12 s), shrinking over
-its last second; a bulb keeps `*max-seed-patches*` (4). It carries damage, so Absorb takes one coming
-at the player. **Bloom** (`:bloom`, cooldown 20 s, first after `*bloom-first*`): with the target within
+**The burrowing root**, its attack (`:burrow`, cooldown `*burrow-cooldown*` 3 s, 1.5 in Glut, first
+after `*burrow-first*`; `attack-damage` its harm, so it hunts): at a target in sight between
+`*burrow-min*` (2 m) and `*burrow-range*` (20 m), on the spit strip's frames, a root runs under the
+floor at `*burrow-speed*` (9 m/s) toward where they stood (`start-burrow`, `update-burrow`), throwing up
+grit, sparks and dust as it goes and leaving a trail of roots bursting up behind it (`sprout-trail`,
+`burrow-root`: every `*burrow-trail-step*` a tuft of the `root-tendrils` strip within
+`*burrow-trail-jitter*` of its line, every `*burrow-spike-every*`th a tall thorned root of the snare's
+strip, each rising over `*burrow-rise-time*`, standing and sinking back over `*burrow-sink-time*`;
+a save leaves them out). It erupts there (`end-burrow`, `burrow-erupt`): a patch of roots grown at once
+(`plant-seed`, `*burrow-rings*`, `*seed-patch-radius*` 1.25 m) that drains and snares as the main
+carpet does and lasts `*seed-patch-time*` (12 s), shrinking over its last second (a bulb keeps
+`*max-seed-patches*`, 4); its harm (5 to 8, no shield) to a player within `*burrow-reach*` (1.2 m) on
+the floor, and the snare's tell under them. A sidestep or a jump dodges it; a wall, a gap, a step or a
+liquid stops it. It is saved (`burrow`). So it fights at every range with one attack, and its patches
+are how its roots reach a player who stands off. **Bloom** (`:bloom`, cooldown 20 s, first after `*bloom-first*`): with the target within
 8 m in sight, or `*bloom-crowd*` (4) bodies in reach past `*bloom-crowd-gap*`, a 1.2 s tell (the
 clench held, its lamp swelling red, motes drawn in, `bloom-swell`; a flinch breaks it), then `bloom`,
 a drain nova of `:nova-radius` 8 m (`*bloom-radius*`) that spares only the bulb and no shield stops
 (`*unblockable-spells*`). It heals the bulb all it drains (`drain-share` 1), its own side's too; then
 its roots surge `*bloom-surge*` rings and it gluts. **Glut** (`*glut-time*`, 6 s): roots twice as
-fast, spit twice as often, and the sprite washed red, pulsing 0.35 to 0.5 twice a second
+fast, burrowing twice as often, and the sprite washed red, pulsing 0.35 to 0.5 twice a second
 (`own-tint`, creature.lisp, after the flash and status tint, only where stronger).
-
-**Against attacks from afar**, two answers, so a player standing off with free spells has to come
-onto its roots. **The husk**: `*husk-hits*` (3) blows from beyond `*husk-reach*` (4 m, `striker-close-p`)
-within `*husk-window*` (3 s), counted in `harmed :after`, shut it for `*husk-time*` (4 s) once it isn't
-mid-ability (`update-husk`, `close-husk`): it holds the Bloom's clench, darkened (`show-own-pose`,
-`own-tint`), its lamp goes out, and its roots' heartbeats run back in to it at `*husk-beat-glow*` (0.4) of their glow, so
-it shows shut from across a room (a root vertex's distance from its bulb, written negative while its
-husk is shut, `beat-distance`, tells `root_beat`); it does nothing else, lets through `*husk-scale*` (a quarter) of what reaches it from afar
-(`blow-damage`, a generic `hurt` and `burn` ask, creature.lisp) and heals `*husk-regen*` (3) a second.
-A blow from within `*husk-reach*`, or one that always flinches (a full maul blow or overcharge, the
-earthshake, a spear's counter), cracks it (`crack-husk`): that blow `*husk-crack-scale*` (1.5) times as
-hard, and it reels `*husk-crack-reel*` (1 s). `*husk-cooldown*` (10 s) after it opens. **The burrowing
-root** (`:burrow`, cooldown `*burrow-cooldown*` 8 s, first after `*burrow-first*`): at a target in sight
-between `*burrow-min*` (9 m) and `*burrow-range*` (26 m), on the spit's strip, a root runs under the
-floor at `*burrow-speed*` (9 m/s) toward where they stood (`start-burrow`, `update-burrow`), throwing up
-grit, sparks and dust as it goes, and erupts there (`end-burrow`): a seed patch grown at once
-(`*burrow-rings*`), `*burrow-damage*` (5 to 8, no shield) to a player within `*burrow-reach*` (1.2 m) on
-the floor, and the snare's tell under them. A sidestep or a jump dodges it; a wall, a gap, a step or a
-liquid stops it. Both are saved (`husk`, `husk-count`, `husk-timer`, `burrow`).
 
 **Fire, frost and the maul.** `touch-roots at radius element`, from `strike-skins` (skins.lisp:
 bursts, novas, a projectile's impact at 1 m at least, a beam's end, the firestorm's pulses): fire
@@ -3655,7 +3645,7 @@ necromancer's turnarounds as references), and every sheet is drawn from it
 the bulb at rest, which is its turnaround frame; the attacks sheet opens with one too, sliced as a
 throwaway `scale` animation. `--pixel` is that frame's height in the sheet over 90 (1.4 m at 64 px a
 metre). The tufts standing on its roots (`art/prompts/bloodroot-tendrils.txt`, the snare sheet as a
-third reference) are sliced at `--pixel 13`, the tallest about half a metre. The snare's roots and the seed take their own scale; the seed, an effect, keeps its outline:
+third reference) are sliced at `--pixel 13`, the tallest about half a metre. The snare's roots take their own scale:
 
 ```bash
 D=data/sprites/bloodroot
@@ -3666,8 +3656,6 @@ python3 tools/slice_frames.py art/bloodroot/snare-1.png $D --pixel 5.1 --anchor 
 python3 tools/slice_frames.py art/bloodroot/snare-grip-2.png $D --pixel 5.9 --anchor bottom --filter box snare-grip:4
 python3 tools/slice_frames.py art/bloodroot/tendrils-1.png $D --pixel 13 --anchor bottom --filter box tendrils:8
 tools/restyle.py --house $D/{turnaround,idle,hurt,spit,bloom,death,snare,snare-grip,tendrils}.png
-python3 tools/slice_frames.py art/spells/blood-seed-2.png $D --pixel 5 --filter box seed-flight:4 seed-burst:5
-tools/restyle.py --palette art/style/palette.txt $D/seed-flight.png $D/seed-burst.png
 ```
 
 Its roots are a texture with see-through gaps, `data/textures/bloodroot.png` (`art/prompts/texture-bloodroot.txt`:

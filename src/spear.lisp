@@ -92,7 +92,6 @@ broken (IMPALE)."
 (defun player-sweep (player)
   (when (and (weapon-ready-p player) (not (attacking-p player)) (<= *sweep-stamina* (stamina player)))
     (decf (stamina player) *sweep-stamina*)
-    (break-snare player)
     (play-sound :haft-sweep)
     (setf (bash-time player) 0.0
           (bash-pending player) T)))
