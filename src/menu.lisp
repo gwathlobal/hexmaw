@@ -778,6 +778,7 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
   (setf *hit-stop* 0.0)
   (clear-blood)
   (clear-sparks)
+  (clear-shards)
   (clear-skins)
   ;; A new run explores the level afresh.
   (clear-map-reveals)

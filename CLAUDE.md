@@ -673,10 +673,25 @@ real time instead.
   its colour (`*pane-light-strength*`, NIL for none), windows within `*pane-light-merge*` sharing
   one (`light-pane`, `douse-pane`). **Breaking** (`break-pane`): the solid out of `*solids*` and
   `index-solids` (`remove-solid`, as `unseal-arena`), its lamp doused, the blood on it dissolving
-  (`dissolve-splats-in`, gore.lisp), `*shards-per-m2*` shards (spark-pool grit, `:rest`
-  `*shard-rest*`, mostly 2 × 2 chips, the `:glass-*` ramps, flying along the blow) and
-  `glass-shatter`; broken, the same quad draws only jagged teeth of glass round the frame
-  (`*glass-teeth*` texels). What breaks one: a melee blow (`wall-strike`, its solid a pane), a
+  (`dissolve-splats-in`, gore.lisp), its shards and `glass-shatter`; broken, the same quad draws only
+  what stays in the frame, piece 0 of its piece map: the outer lead, jagged teeth of glass and lead
+  too thick to go with a piece (a lancet's corners outside its arch). **Shards** are pieces of the
+  pane itself: `make_texture.py --glass` cuts each design along its lead, cracks pieces bigger than
+  about 70 texels, gives each the lead within two texels of it, and writes the piece map
+  (`data/textures/glass/glass-<design>-pieces.png`, a texel's piece in red + 256 × green) and the
+  pieces' boxes (`glass-<design>.lisp`, `glass-pieces`): 125 to 207 a pane. Each design has a
+  `shard-pool` (`*shard-pools*`, `add-shard-pools` in `setup-scene`, `*max-glass-shards*` slots,
+  `clear-shards` on a reset; not saved): plain arrays, written each frame into one stream-draw
+  buffer and drawn in one call, every shard a quad of its piece's box in the pane's texture, the
+  other pieces' texels cut away by the piece map, lit as it faces, its glass glinting
+  (`*shard-glint*`). `spawn-shards` throws every piece from where it was, along the blow, fastest
+  nearest where it struck (`*shard-burst*`), `*shard-back-share*` falling back toward it, each
+  tumbling about an axis of its own (`*shard-spin*`, `turn-axis` on its two axes); they fall,
+  bounce (`bounce-spark`, sparks.lisp, which takes any pool with `pool-positions` and
+  `pool-velocities`), lie flat on a floor for `*shard-lie*`, then dissolve texel by texel. A pane
+  also throws `*glitter-per-m2*` specks of spark-pool grit (the `:glass-*` ramps). All four windows
+  broken at once is 744 shards: 0.36 ms of CPU a frame to step and write them, nothing allocated,
+  and 0.25 ms of GPU with them all in view. What breaks one: a melee blow (`wall-strike`, its solid a pane), a
   projectile or a beam reaching its solid (spells.lisp), a burst (`burst-spell`, any element) and a
   nova as its sphere arrives (`strike-panes`, in a clear line to the glass through its opening,
   `pane-reached-p`), the earthshake and an ogre's quake (`quake`) within their radius whatever is
@@ -2931,7 +2946,9 @@ reference (and the title's maw for the rose), and made by `make_texture.py --gla
 scales it to W × H × 64, takes near-black (every channel) and the magenta inside the panel as
 lead, averages each texel's glass over its glass alone, palettes it, and writes alpha 255 for lead
 and 128 for glass (allowed in `tools/art_audit_allow.txt`); it prints the glass's commonest
-colours, for the shards' ramps in `*glass-looks*`:
+colours, for the glitter's ramps in `*glass-looks*`. It also cuts the pane into its shards' pieces,
+into `data/textures/glass/` (`--piece` texels a shard, `--teeth` the most a side keeps, `--seed`
+the cracks'), which the art audit doesn't look at:
 
 ```bash
 P=art/prompts; tools/gen_image.py art/glass/lancet-flame.png --prompt "$(cat $P/glass-common.txt $P/glass-lancet-flame.txt)" --ref art/style/anchor.png --size 1024x1536 -n 2

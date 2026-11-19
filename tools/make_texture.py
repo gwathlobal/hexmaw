@@ -41,6 +41,14 @@ dark opaque colour, alpha 255, and its glass each texel's average over its glass
 lead doesn't darken the pieces' edges, on the --palette, alpha 128: the shader tells lead from
 glass by it. It prints the glass's commonest colours, for the shards' ramps (*GLASS-LOOKS*).
 
+It also cuts the pane into the pieces it shatters into (glass.lisp's shards): each piece of glass
+between the lead, the big ones cracked into pieces of about --piece texels, each taking the lead
+within a texel or two of it, so a shard has lead on its edges. What stays in the frame when the
+pane breaks is piece 0: the outer lead, jagged teeth of glass along each side (up to --teeth
+texels) and lead too thick to go with any piece (a lancet's corners outside its arch). Written as
+<out dir>/glass/<name>-pieces.png, each texel's piece in red + 256 x green, rows as the texture's,
+and <name>.lisp, the pieces' boxes in texels from the bottom left, (X0 Y0 X1 Y1) inclusive.
+
 --brightness scales every colour first, for a generated surface that came
 out too light or dark beside the rest of the level. Writes <out>.png and, beside the source, <source stem>-tiled.png: the
 texture 3 x 3 at 4x zoom, to check the seams by eye. It prints how far the wrapped
@@ -149,6 +157,122 @@ def make_panel(src, args):
     return tex
 
 
+def cut_pieces(lead, args):
+    """Cut a pane of H x W texels, LEAD true where it is lead, into the pieces it shatters into,
+    and write their map and boxes (see --glass)."""
+    import random
+    from collections import deque
+    rnd = random.Random(args.seed)
+    h, w = lead.shape
+    piece = np.full((h, w), -1, dtype=np.int64)
+    # The frame's teeth: per column and row, how deep the glass stays along each side.
+    teeth = np.zeros((h, w), dtype=bool)
+    def side(n):
+        # A jagged walk: runs of a few texels climbing or falling a texel or two at a time.
+        depths, d, step, run = [], rnd.randint(1, args.teeth), 0, 0
+        for _ in range(n):
+            if run <= 0:
+                step, run = rnd.choice((-2, -1, 1, 1, 2)), rnd.randint(2, 4)
+            d = max(1, min(args.teeth, d + step))
+            if d in (1, args.teeth):
+                step = -step
+            run -= 1
+            depths.append(d)
+        return depths
+    top, bottom, left, right = side(w), side(w), side(h), side(h)
+    for y in range(h):
+        for x in range(w):
+            teeth[y, x] = y < top[x] or h - 1 - y < bottom[x] or x < left[y] or w - 1 - x < right[y]
+    def neighbours(y, x):
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if 0 <= y + dy < h and 0 <= x + dx < w:
+                yield y + dy, x + dx
+    def components(mask):
+        seen = np.zeros_like(mask)
+        out = []
+        for y in range(h):
+            for x in range(w):
+                if mask[y, x] and not seen[y, x]:
+                    cells, todo = [], deque([(y, x)])
+                    seen[y, x] = True
+                    while todo:
+                        c = todo.popleft()
+                        cells.append(c)
+                        for n in neighbours(*c):
+                            if mask[n] and not seen[n]:
+                                seen[n] = True
+                                todo.append(n)
+                    out.append(cells)
+        return out
+    pieces = []
+    for cells in components(~lead & ~teeth):
+        k = max(1, round(len(cells) / args.piece))
+        if k == 1:
+            pieces.append(cells)
+            continue
+        # Cracked: each texel to the nearest of K points scattered over it, a little jittered so
+        # the cracks run crooked, then each part's own connected parts.
+        seeds = rnd.sample(cells, k)
+        part = {}
+        for (y, x) in cells:
+            part[(y, x)] = min(range(k), key=lambda i: (seeds[i][0] - y) ** 2 + (seeds[i][1] - x) ** 2
+                               + rnd.uniform(0, 6))
+        for i in range(k):
+            mask = np.zeros((h, w), dtype=bool)
+            for c, j in part.items():
+                if j == i:
+                    mask[c] = True
+            pieces.extend(components(mask))
+    # Crumbs of a texel or two join a neighbouring piece, or fly on their own.
+    for i, cells in enumerate(pieces):
+        for c in cells:
+            piece[c] = i
+    for i, cells in enumerate(pieces):
+        if len(cells) <= 2:
+            for c in cells:
+                near = [piece[n] for n in neighbours(*c) if piece[n] >= 0 and piece[n] != i]
+                piece[c] = near[0] if near else i
+    # Each piece takes the lead within two texels of it, so its edges are leaded.
+    for _ in range(2):
+        grow = piece.copy()
+        for y in range(h):
+            for x in range(w):
+                if piece[y, x] < 0 and lead[y, x] and not teeth[y, x]:
+                    near = [piece[n] for n in neighbours(y, x) if piece[n] >= 0]
+                    if near:
+                        grow[y, x] = near[0]
+        piece = grow
+    # Number them from 1, 0 being what stays in the frame.
+    ids = sorted({int(i) for i in piece.ravel() if i >= 0})
+    renumber = {old: new + 1 for new, old in enumerate(ids)}
+    final = np.zeros((h, w), dtype=np.int64)
+    boxes = {}
+    for y in range(h):
+        for x in range(w):
+            if piece[y, x] >= 0:
+                n = renumber[int(piece[y, x])]
+                final[y, x] = n
+                by = h - 1 - y  # From the bottom, as the texture's rows are read.
+                b = boxes.setdefault(n, [x, by, x, by])
+                b[0], b[1], b[2], b[3] = min(b[0], x), min(b[1], by), max(b[2], x), max(b[3], by)
+    out = Path(args.out)
+    folder = out.parent / "glass"
+    folder.mkdir(parents=True, exist_ok=True)
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    rgba[..., 0] = final & 255
+    rgba[..., 1] = final >> 8
+    rgba[..., 3] = 255
+    Image.fromarray(rgba, "RGBA").save(folder / f"{out.name}-pieces.png")
+    with open(folder / f"{out.name}.lisp", "w") as f:
+        f.write(";; Written by tools/make_texture.py --glass: the pane's pieces, (X0 Y0 X1 Y1) in texels\n")
+        f.write(";; from the bottom left, inclusive, piece 1 first.\n")
+        f.write(f"(:width {w} :height {h} :pieces (\n")
+        for n in range(1, len(ids) + 1):
+            f.write(" (%d %d %d %d)\n" % tuple(boxes[n]))
+        f.write("))\n")
+    print(f"{len(ids)} pieces; {round(100 * (final == 0).mean())}% stays in the frame")
+
+
 def make_glass(src, args):
     """The pane texture of SRC, a window drawn on magenta, as --glass describes."""
     rgb = np.asarray(src.convert("RGB")).astype(np.float64)
@@ -177,6 +301,7 @@ def make_glass(src, args):
     out[is_lead, :3] = args.lead_colour
     out[..., 3] = np.where(is_lead, 255, 128)
     tex = Image.fromarray(out, "RGBA")
+    cut_pieces(is_lead, args)
     counts = {}
     for c in out[~is_lead][:, :3]:
         key = "%02x%02x%02x" % tuple(c)
@@ -219,6 +344,9 @@ def main():
     ap.add_argument("--palette", help="map onto this palette file (art/style/palette.txt) instead of --colors")
     ap.add_argument("--glass", type=float, nargs=2, metavar=("W", "H"),
                     help="metres wide and tall: the source is a stained-glass window on magenta")
+    ap.add_argument("--piece", type=int, default=70, help="texels a glass shard is, about (default 70)")
+    ap.add_argument("--teeth", type=int, default=5, help="most texels of glass a broken pane keeps along a side (default 5)")
+    ap.add_argument("--seed", type=int, default=1, help="the cracks' random seed (default 1)")
     ap.add_argument("--lead", type=float, default=48.0, help="brightest channel under which a source pixel is lead (default 48)")
     ap.add_argument("--key", action="store_true",
                     help="the source is drawn on magenta, which becomes see-through (a bloodroot's roots)")

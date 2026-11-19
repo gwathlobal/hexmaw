@@ -9,8 +9,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 - Stained glass (src/glass.lisp): coloured windows over a sill at least 1 m high, a wall to
   everything until a blow, a projectile or beam, a burst or nova, the earthshake, an ogre's quake or a
-  body flung into one shatters it into shards of its colours, leaving teeth of glass in an empty frame
-  that the player can jump through. Drawn as a filter over what is behind and its own light, the lamps
+  body flung into one shatters it into its pieces, leaving teeth of glass in an empty frame that the
+  player can jump through. The shards are the pane's own glass cut along its lead (big pieces
+  cracked), tumbling, bouncing, lying on the floor and dissolving: `make_texture.py --glass` writes
+  each design's piece map, and a shard pool a design draws them. Drawn as a filter over what is behind and its own light, the lamps
   behind it shining through; a window lit from one side hangs a dim lamp of its colour on the other,
   near windows sharing one. Four designs (two lancets, a rose window round the maw, a guardhouse's
   diamond quarries), a blueprint `glass DESIGN Y0` action, `make_texture.py --glass`, the

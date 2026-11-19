@@ -33,11 +33,20 @@ spark ramps its shards are, drawn from at random, and its lamp's colour.")
 (define-asset (hexmaw glass-quarry) image #p"textures/glass-quarry.png"
   :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
 
+;; Each design's pieces (tools/make_texture.py --glass): which shard every texel goes with.
+(define-asset (hexmaw glass-lancet-flame-pieces) image #p"textures/glass/glass-lancet-flame-pieces.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-lancet-frost-pieces) image #p"textures/glass/glass-lancet-frost-pieces.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-rose-maw-pieces) image #p"textures/glass/glass-rose-maw-pieces.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+(define-asset (hexmaw glass-quarry-pieces) image #p"textures/glass/glass-quarry-pieces.png"
+  :min-filter :nearest :mag-filter :nearest :wrapping :clamp-to-edge)
+
 (defparameter *glass-tint* 0.85 "How strongly a pane colours what is seen through it, 0 to 1.")
 (defparameter *glass-filter* 0.75 "How much of the light behind a pane comes through its glass.")
 (defparameter *glass-reflect* 0.35 "How much of the light on its near face a pane's glass gives back.")
 (defparameter *glass-transmit* 1.6 "How much of the lamps' light on its far face shines through a pane.")
-(defparameter *glass-teeth* 6.0 "Most texels of glass a broken pane keeps in its frame.")
 
 (defparameter *pane-light-strength* 0.35
   "How bright the lamp a pane hangs on its darker side is, by its design's colour; NIL for none.")
@@ -48,11 +57,23 @@ spark ramps its shards are, drawn from at random, and its lamp's colour.")
   "Metres within which windows share one lamp, its colour their colours added: every lamp sent
 costs every lit pixel, and the chapel's four came to 0.9 ms of GPU a frame.")
 
-(defparameter *shards-per-m2* 42 "Shards a pane breaks into, a square metre.")
-(defparameter *shard-speed* '(1.0 3.6) "M/s shards fly from a pane at, the way the blow went.")
-(defparameter *shard-back-share* 0.25 "Share of the shards that fall back toward the blow, slowly.")
-(defparameter *shard-rest* '(4.0 8.0) "Seconds a shard lies on the floor before it dissolves.")
-(defparameter *shard-big-chance* 0.6 "Chance a shard is a 2 x 2 chip, not one texel.")
+(defparameter *glitter-per-m2* 10 "Specks of glass dust (spark-pool grit) a pane throws besides its shards, a square metre.")
+(defparameter *glitter-rest* '(1.5 3.0) "Seconds a speck lies before it dissolves.")
+
+(defparameter *max-glass-shards* 640 "Shards a design's pool holds; past that a new one takes the oldest's slot.")
+(defparameter *shard-speed* '(0.6 2.6) "M/s shards fly from a pane at, the way the blow went.")
+(defparameter *shard-burst* 2.0 "How much faster the shards nearest where a blow struck fly, at most.")
+(defparameter *shard-back-share* 0.2 "Share of the shards that fall back toward the blow, slowly.")
+(defparameter *shard-spin* '(3.0 14.0) "Radians a second a shard tumbles at.")
+(defparameter *shard-gravity* 9.8)
+(defparameter *shard-drag* 0.4 "Fraction of its speed a shard loses a second to the air.")
+(defparameter *shard-bounce* 0.25 "Fraction of its speed into a surface a shard bounces back with.")
+(defparameter *shard-friction* 0.45 "Fraction of its speed along the floor a shard keeps when it bounces.")
+(defparameter *shard-rest-speed* 1.5 "A shard striking the floor slower than this, in m/s, lies there.")
+(defparameter *shard-lie* '(5.0 9.0) "Seconds a shard lies on the floor before it dissolves.")
+(defparameter *shard-dissolve* 1.0 "Seconds a shard takes to dissolve, a texel at a time.")
+(defparameter *shard-flight* 5.0 "Seconds a shard flies before it goes, if it lands nowhere.")
+(defparameter *shard-glint* 0.3 "Of its own colour a shard's glass shows lit by nothing, so it glints in the dark.")
 
 (defvar *panes* (make-array 0 :adjustable T :fill-pointer T)
   "Every pane of the level, in the order placed: a save names the broken ones by index. CLEAR-LEVEL
@@ -89,6 +110,8 @@ empties it.")
 (define-shader-entity glass-pane (lit-entity vertex-entity transformed-entity listener)
   ((vertex-array :initform (// 'hexmaw 'centered-quad))
    (texture :initarg :texture :reader glass-texture)
+   (piece-map :initarg :piece-map :reader piece-map
+              :documentation "Which shard each texel flies off as; piece 0 stays in the frame.")
    (axis :initarg :axis :reader pane-axis :documentation "Its direction across, in XZ.")
    (origin :initarg :origin :reader pane-origin
            :documentation "Where its texture starts: along its axis, and its bottom's height.")
@@ -98,10 +121,12 @@ empties it.")
   (:documentation "A pane of stained glass: a quad standing in its window."))
 
 (defmethod stage :after ((sheet glass-pane) (area staging-area))
-  (stage (glass-texture sheet) area))
+  (stage (glass-texture sheet) area)
+  (stage (piece-map sheet) area))
 
 (defmethod bind-textures :after ((sheet glass-pane))
-  (bind (glass-texture sheet) :texture0))
+  (bind (glass-texture sheet) :texture0)
+  (bind (piece-map sheet) :texture1))
 
 (defmethod late-rank ((sheet glass-pane)) (pane-rank sheet))
 
@@ -122,7 +147,7 @@ empties it.")
           (uniform program "glass_filter") (float *glass-filter* 0f0)
           (uniform program "glass_reflect") (float *glass-reflect* 0f0)
           (uniform program "glass_transmit") (float *glass-transmit* 0f0)
-          (uniform program "glass_teeth") (float *glass-teeth* 0f0)))
+          (uniform program "piece_map") 1))
   (setf (uniform program "pane_axis") (pane-axis sheet)
         (uniform program "pane_origin") (pane-origin sheet)
         (uniform program "pane_size") (pane-size sheet)
@@ -147,6 +172,7 @@ empties it.")
   "in vec3 v_world_position;
 in vec3 v_view_position;
 uniform sampler2D glass_texture;
+uniform sampler2D piece_map;
 uniform float texels_per_metre;
 uniform vec2 pane_axis;
 uniform vec2 pane_origin;
@@ -157,12 +183,7 @@ uniform float glass_tint;
 uniform float glass_filter;
 uniform float glass_reflect;
 uniform float glass_transmit;
-uniform float glass_teeth;
 out vec4 color;
-
-float glass_hash(vec2 p){
-  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-}
 
 void main(){
   // Laid on the pane a texel of the 64-a-metre grid at a time, its bottom row at the sill.
@@ -171,15 +192,9 @@ void main(){
   vec2 t = clamp(floor(uv * texels_per_metre), vec2(0.0), texels - 1.0);
   vec4 c = texture(glass_texture, (t + 0.5) / texels);
   if(pane_broken != 0){
-    // An empty frame: teeth of glass a few texels deep, jagged along each side.
-    vec2 from_low = t;
-    vec2 from_high = texels - 1.0 - t;
-    float keep = 0.0;
-    if(from_low.x < glass_teeth) keep = max(keep, step(from_low.x, floor(glass_hash(vec2(t.y, 1.0)) * glass_teeth)));
-    if(from_high.x < glass_teeth) keep = max(keep, step(from_high.x, floor(glass_hash(vec2(t.y, 2.0)) * glass_teeth)));
-    if(from_low.y < glass_teeth) keep = max(keep, step(from_low.y, floor(glass_hash(vec2(t.x, 3.0)) * glass_teeth)));
-    if(from_high.y < glass_teeth) keep = max(keep, step(from_high.y, floor(glass_hash(vec2(t.x, 4.0)) * glass_teeth)));
-    if(keep < 0.5) discard;
+    // An empty frame: only what its shards left, its lead and teeth of glass (piece 0).
+    vec4 m = texelFetch(piece_map, ivec2(t), 0);
+    if(0.5 < m.r * 255.0 + m.g * 255.0 * 256.0) discard;
   }
   bool came = 0.75 < c.a;
   float dist = length(v_view_position);
@@ -226,6 +241,7 @@ with a torch near, its lamp. While a level is built: INDEX-SOLIDS runs after."
          (width (second size)) (height (third size))
          (sheet (make-instance 'glass-pane
                                :texture (// 'hexmaw (glass-look design :texture))
+                               :piece-map (// 'hexmaw (intern (format NIL "~a-PIECES" (glass-look design :texture)) '#:hexmaw))
                                :axis (if along-x (vec2 1 0) (vec2 0 1))
                                :origin (vec2 (if along-x (vx low) (vz low)) (vy low))
                                :size (vec2 width height)
@@ -286,7 +302,7 @@ with a torch near, its lamp. While a level is built: INDEX-SOLIDS runs after."
       (index-solids))))
 
 (defun shatter-pane (pane from)
-  "Throw PANE's glass as shards, away from point FROM (both ways if NIL)."
+  "Throw PANE's glass as its shards and a little glitter, away from point FROM (both ways if NIL)."
   (let* ((low (pane-low pane)) (high (pane-high pane))
          (along-x (pane-along-x pane))
          (n (pane-normal pane))
@@ -294,24 +310,17 @@ with a torch near, its lamp. While a level is built: INDEX-SOLIDS runs after."
          (side (if (and from (< 0 (v. n (v- centre from)))) 1.0 -1.0))
          (width (if along-x (- (vx high) (vx low)) (- (vz high) (vz low))))
          (height (- (vy high) (vy low)))
-         (ramps (mapcar #'spark-ramp-index (glass-look (pane-design pane) :ramps)))
-         (count (round (* *shards-per-m2* width height))))
-    (dotimes (k count)
+         (ramps (mapcar #'spark-ramp-index (glass-look (pane-design pane) :ramps))))
+    (spawn-shards pane from side)
+    (dotimes (k (round (* *glitter-per-m2* width height)))
       (let* ((u (+ 0.04 (random (max 0.01 (- width 0.08)))))
              (y (+ (vy low) 0.04 (random (max 0.01 (- height 0.08)))))
-             (x (if along-x (+ (vx low) u) (vx centre)))
-             (z (if along-x (vz centre) (+ (vz low) u)))
-             (back (< (random 1f0) *shard-back-share*))
-             (out (* (if (or back (null from)) (if (< (random 1f0) 0.5) side (- side)) side)
-                     (if back 0.4 1.0) (range-random *shard-speed*)))
-             (across (- (random 1.2) 0.6))
-             (vx (+ (* out (vx n)) (if along-x across 0.0)))
-             (vz (+ (* out (vz n)) (if along-x 0.0 across)))
-             (vy (- (random 1.4) 0.3)))
-        (spawn-spark 4 (nth (random (length ramps)) ramps) x y z vx vy vz *grit-flight*
-                     :chip (if (< (random 1f0) *shard-big-chance*) 2 1)
-                     :tone (+ 1 (random 2))
-                     :rest (range-random *shard-rest*))))))
+             (out (* side (range-random *shard-speed*)))
+             (across (- (random 1.2) 0.6)))
+        (spawn-spark 4 (nth (random (length ramps)) ramps)
+                     (if along-x (+ (vx low) u) (vx centre)) y (if along-x (vz centre) (+ (vz low) u))
+                     (+ (* out (vx n)) (if along-x across 0.0)) (- (random 1.4) 0.3) (+ (* out (vz n)) (if along-x 0.0 across))
+                     *grit-flight* :tone (+ 1 (random 2)) :rest (range-random *glitter-rest*))))))
 
 (defun break-pane (pane &key from quiet)
   "Shatter PANE, from point FROM (where the blow came from, or NIL): its solid gone, its lamp out,
@@ -389,6 +398,362 @@ the panes it was flung into."
                                 (pane-reached-p pane point))
                        (break-pane pane :from feet)
                        (return)))))))))
+
+;;; Shards: the pieces a pane breaks into, each a piece of its own glass between the lead (and the
+;;; big ones cracked), as tools/make_texture.py --glass cut it, tumbling as it flies, bouncing, lying
+;;; flat on the floor a while, then dissolving a texel at a time. One pool a design, drawn in one
+;;; call: each shard a quad of its piece's box in its pane's texture, the texels of other pieces cut
+;;; away by the piece map, lit as it faces. Plain arrays, nothing allocated a frame, not saved.
+
+(defvar *shard-pools* () "Each design's SHARD-POOL in the scene, as (design . pool).")
+
+(defparameter *shard-vertex-floats* 10 "Position (3), texel (2), piece (1), normal (3), dissolve (1).")
+
+(defun glass-pieces (design)
+  "DESIGN's pieces' boxes, (X0 Y0 X1 Y1) in texels from the bottom left, as a simple-vector."
+  (with-open-file (in (data-path (format NIL "textures/glass/glass-~a.lisp" design)))
+    (coerce (getf (let ((*read-eval* NIL)) (read in)) :pieces) 'simple-vector)))
+
+(define-shader-entity shard-pool (lit-entity renderable listener)
+  ((design :initarg :design :reader pool-design)
+   (texture :initarg :texture :reader glass-texture)
+   (piece-map :initarg :piece-map :reader piece-map)
+   (pieces :initarg :pieces :reader pool-pieces)
+   (size :reader pool-size)
+   (cursor :initform 0 :accessor pool-cursor)
+   (state :reader pool-state :documentation "Per shard: 0 free, 1 flying, 2 lying, 3 dissolving.")
+   (piece :reader pool-piece :documentation "Per shard: its piece, from 1.")
+   (bounces :reader pool-bounces)
+   (positions :reader pool-positions :documentation "Per shard: its middle.")
+   (velocities :reader pool-velocities)
+   (axes :reader pool-axes :documentation "Per shard: its texture's across and up in the world, 6 floats.")
+   (spins :reader pool-spins :documentation "Per shard: the axis it tumbles about, times radians a second.")
+   (ages :reader pool-ages)
+   (lives :reader pool-lives)
+   (data :reader pool-data)
+   (vbo :reader pool-vbo)
+   (vao :reader pool-vao)))
+
+(defmethod initialize-instance :after ((pool shard-pool) &key)
+  (let* ((n *max-glass-shards*)
+         (data (make-array (* n 6 *shard-vertex-floats*) :element-type 'single-float :initial-element 0f0))
+         (vbo (make-instance 'vertex-buffer :buffer-data data :data-usage :stream-draw))
+         (stride (* 4 *shard-vertex-floats*)))
+    (flet ((floats (k) (make-array (* k n) :element-type 'single-float :initial-element 0f0)))
+      (setf (slot-value pool 'size) n
+            (slot-value pool 'state) (make-array n :element-type '(unsigned-byte 8) :initial-element 0)
+            (slot-value pool 'piece) (make-array n :element-type '(unsigned-byte 16) :initial-element 0)
+            (slot-value pool 'bounces) (make-array n :element-type '(unsigned-byte 8) :initial-element 0)
+            (slot-value pool 'positions) (floats 3)
+            (slot-value pool 'velocities) (floats 3)
+            (slot-value pool 'axes) (floats 6)
+            (slot-value pool 'spins) (floats 3)
+            (slot-value pool 'ages) (floats 1)
+            (slot-value pool 'lives) (floats 1)))
+    (setf (slot-value pool 'data) data
+          (slot-value pool 'vbo) vbo
+          (slot-value pool 'vao) (make-instance 'vertex-array
+                                                :vertex-form :triangles
+                                                :bindings `((,vbo :size 3 :offset 0 :stride ,stride :index 0)
+                                                            (,vbo :size 2 :offset 12 :stride ,stride :index 1)
+                                                            (,vbo :size 1 :offset 20 :stride ,stride :index 2)
+                                                            (,vbo :size 3 :offset 24 :stride ,stride :index 3)
+                                                            (,vbo :size 1 :offset 36 :stride ,stride :index 4))))))
+
+(defmethod stage :after ((pool shard-pool) (area staging-area))
+  (stage (pool-vao pool) area)
+  (stage (glass-texture pool) area)
+  (stage (piece-map pool) area))
+
+(defmethod bind-textures :after ((pool shard-pool))
+  (bind (glass-texture pool) :texture0)
+  (bind (piece-map pool) :texture1))
+
+(defun add-shard-pools (scene)
+  "A shard pool for each design, entered into SCENE (SETUP-SCENE)."
+  (setf *shard-pools*
+        (loop for (design . look) in *glass-looks*
+              collect (let ((pool (make-instance 'shard-pool
+                                                 :design design
+                                                 :texture (// 'hexmaw (getf look :texture))
+                                                 :piece-map (// 'hexmaw (intern (format NIL "~a-PIECES" (getf look :texture)) '#:hexmaw))
+                                                 :pieces (glass-pieces design))))
+                        (enter pool scene)
+                        (cons design pool)))))
+
+(defun clear-shards ()
+  (loop for (nil . pool) in *shard-pools*
+        do (fill (pool-state pool) 0)))
+
+(defun shard-slot (pool)
+  "The next free slot of POOL, or the next one whatever it holds."
+  (let* ((state (pool-state pool))
+         (n (pool-size pool))
+         (start (pool-cursor pool))
+         (i (or (loop for k from 0 below n
+                      for j = (mod (+ start k) n)
+                      when (= 0 (aref state j)) return j)
+                start)))
+    (setf (pool-cursor pool) (mod (1+ i) n))
+    i))
+
+(defun spawn-shards (pane from side)
+  "Throw every piece of PANE from where it is in the pane, SIDE (1 or -1) along its normal, the
+nearest to where the blow from FROM struck the fastest."
+  (let ((pool (cdr (assoc (pane-design pane) *shard-pools* :test #'string=))))
+    (when pool
+      (let* ((along-x (pane-along-x pane))
+             (low (pane-low pane))
+             (centre (pane-centre pane))
+             (n (pane-normal pane))
+             (tpm (float *texels-per-metre* 0f0))
+             ;; The pane's texture runs along +X or +Z from its low corner, and up from its sill.
+             (ox (if along-x (vx low) (vx centre)))
+             (oz (if along-x (vz centre) (vz low)))
+             (oy (vy low))
+             (ux (if along-x 1f0 0f0)) (uz (if along-x 0f0 1f0))
+             ;; Where the blow struck, in the pane's metres, if it came from a point.
+             (hit-u (and from (- (if along-x (vx from) (vz from)) (if along-x ox oz))))
+             (hit-v (and from (- (vy from) oy))))
+        (loop for box across (pool-pieces pool)
+              for piece from 1
+              do (destructuring-bind (x0 y0 x1 y1) box
+                   (let* ((u (/ (+ x0 x1 1) 2 tpm))
+                          (v (/ (+ y0 y1 1) 2 tpm))
+                          (i (shard-slot pool))
+                          (b (* 3 i))
+                          (near (if hit-u
+                                    (exp (- (/ (+ (expt (- u hit-u) 2) (expt (- v (max 0.3 (min hit-v 2.0))) 2)) 0.4)))
+                                    0.5))
+                          (back (< (random 1f0) *shard-back-share*))
+                          (out (* (if back (* -0.35 side) side)
+                                  (range-random *shard-speed*) (+ 1.0 (* *shard-burst* near))))
+                          (across (- (random 1.0) 0.5))
+                          (p (pool-positions pool)) (vel (pool-velocities pool))
+                          (axes (pool-axes pool)) (spins (pool-spins pool)))
+                     (setf (aref (pool-state pool) i) 1
+                           (aref (pool-piece pool) i) piece
+                           (aref (pool-bounces pool) i) 0
+                           (aref (pool-ages pool) i) 0f0
+                           (aref (pool-lives pool) i) (float *shard-flight* 0f0)
+                           (aref p b) (float (+ ox (* ux u)) 0f0)
+                           (aref p (+ b 1)) (float (+ oy v) 0f0)
+                           (aref p (+ b 2)) (float (+ oz (* uz u)) 0f0)
+                           (aref vel b) (float (+ (* out (vx n)) (* across ux)) 0f0)
+                           (aref vel (+ b 1)) (float (- (random 1.2) 0.2) 0f0)
+                           (aref vel (+ b 2)) (float (+ (* out (vz n)) (* across uz)) 0f0))
+                     ;; Its texture across and up, as the pane's.
+                     (let ((a (* 6 i)))
+                       (setf (aref axes a) ux (aref axes (+ a 1)) 0f0 (aref axes (+ a 2)) uz
+                             (aref axes (+ a 3)) 0f0 (aref axes (+ a 4)) 1f0 (aref axes (+ a 5)) 0f0))
+                     ;; Tumbling about a random axis.
+                     (let* ((ax (- (random 2f0) 1f0)) (ay (- (random 2f0) 1f0)) (az (- (random 2f0) 1f0))
+                            (len (max 1f-3 (sqrt (+ (* ax ax) (* ay ay) (* az az)))))
+                            (rate (/ (float (range-random *shard-spin*) 0f0) len)))
+                       (setf (aref spins b) (* ax rate) (aref spins (+ b 1)) (* ay rate) (aref spins (+ b 2)) (* az rate))))))))))
+
+(declaim (inline turn-axis))
+(defun turn-axis (axes a wx wy wz)
+  "Turn the vector at AXES[A..A+2] by the small rotation W (axis times angle), keeping its length."
+  (declare (type (simple-array single-float (*)) axes) (type fixnum a) (type single-float wx wy wz))
+  (let* ((x (aref axes a)) (y (aref axes (+ a 1))) (z (aref axes (+ a 2)))
+         (cx (- (* wy z) (* wz y))) (cy (- (* wz x) (* wx z))) (cz (- (* wx y) (* wy x)))
+         (nx (+ x cx)) (ny (+ y cy)) (nz (+ z cz))
+         (k (/ (sqrt (+ (* x x) (* y y) (* z z))) (max 1f-6 (sqrt (+ (* nx nx) (* ny ny) (* nz nz)))))))
+    (setf (aref axes a) (* k nx) (aref axes (+ a 1)) (* k ny) (aref axes (+ a 2)) (* k nz))))
+
+(defun lay-shard (pool i)
+  "Shard I of POOL lies flat on the floor, turned at random."
+  (let* ((axes (pool-axes pool)) (a (* 6 i))
+         (yaw (random #.(float (* 2 pi) 0f0)))
+         (c (cos yaw)) (s (sin yaw)))
+    (setf (aref axes a) c (aref axes (+ a 1)) 0f0 (aref axes (+ a 2)) s
+          (aref axes (+ a 3)) (- s) (aref axes (+ a 4)) 0f0 (aref axes (+ a 5)) c)))
+
+(defun step-shards (pool dt)
+  (declare (type single-float dt))
+  (let ((state (pool-state pool))
+        (bounces (pool-bounces pool))
+        (p (pool-positions pool))
+        (v (pool-velocities pool))
+        (axes (pool-axes pool))
+        (spins (pool-spins pool))
+        (ages (pool-ages pool))
+        (lives (pool-lives pool))
+        (keep (max 0f0 (- 1f0 (* (float *shard-drag* 0f0) dt))))
+        (fall (* (float *shard-gravity* 0f0) dt))
+        (bounce (float *shard-bounce* 0f0))
+        (friction (float *shard-friction* 0f0))
+        (rest (float *shard-rest-speed* 0f0))
+        (dissolve (float *shard-dissolve* 0f0)))
+    (declare (type (simple-array (unsigned-byte 8) (*)) state bounces)
+             (type (simple-array single-float (*)) p v axes spins ages lives)
+             (type single-float keep fall bounce friction rest dissolve))
+    (dotimes (i (pool-size pool))
+      (let ((st (aref state i)) (b (* 3 i)))
+        (unless (= 0 st)
+          (let ((age (incf (aref ages i) dt)))
+            (declare (type single-float age))
+            (case st
+              (1
+               (decf (aref v (+ b 1)) fall)
+               (dotimes (k 3) (setf (aref v (+ b k)) (* keep (aref v (+ b k)))))
+               (let ((wx (* dt (aref spins b))) (wy (* dt (aref spins (+ b 1)))) (wz (* dt (aref spins (+ b 2)))))
+                 (turn-axis axes (* 6 i) wx wy wz)
+                 (turn-axis axes (+ 3 (* 6 i)) wx wy wz))
+               (let* ((nx (+ (aref p b) (* dt (aref v b))))
+                      (ny (+ (aref p (+ b 1)) (* dt (aref v (+ b 1)))))
+                      (nz (+ (aref p (+ b 2)) (* dt (aref v (+ b 2)))))
+                      (s (solid-at nx ny nz)))
+                 (cond ((< (aref lives i) age) (setf (aref state i) 0))
+                       ((liquid-at nx ny nz) (setf (aref state i) 0))
+                       ((null s) (setf (aref p b) nx (aref p (+ b 1)) ny (aref p (+ b 2)) nz))
+                       (T
+                        (case (bounce-spark pool i s nx ny nz bounce friction
+                                            (if (< 1 (aref bounces i)) 1f6 rest))
+                          (:gone (setf (aref state i) 0))
+                          (:rest (setf (aref state i) 2 (aref ages i) 0f0
+                                       (aref lives i) (float (range-random *shard-lie*) 0f0))
+                           (incf (aref p (+ b 1)) 0.003)
+                           (lay-shard pool i))
+                          (T (setf (aref bounces i) (min 255 (1+ (aref bounces i))))
+                           ;; A bounce takes most of its spin.
+                           (dotimes (k 3) (setf (aref spins (+ b k)) (* 0.5 (aref spins (+ b k)))))))))))
+              (2 (when (< (aref lives i) age) (setf (aref state i) 3 (aref ages i) 0f0)))
+              (3 (when (< dissolve age) (setf (aref state i) 0))))))))))
+
+(define-handler (shard-pool tick) (dt)
+  (unless (frozen-p)
+    (step-shards shard-pool (float (min dt 0.05) 0f0))))
+
+(defun write-shard-vertices (pool)
+  "Write every shard's quad into POOL's vertex data. Returns the vertex count."
+  (let* ((state (pool-state pool))
+         (pieces (pool-pieces pool))
+         (piece (pool-piece pool))
+         (p (pool-positions pool))
+         (axes (pool-axes pool))
+         (ages (pool-ages pool))
+         (data (pool-data pool))
+         (stride *shard-vertex-floats*)
+         (tpm (float *texels-per-metre* 0f0))
+         (dissolve (float *shard-dissolve* 0f0))
+         (corners *spark-corners*)
+         (k 0))
+    (declare (type (simple-array (unsigned-byte 8) (*)) state corners)
+             (type (simple-array (unsigned-byte 16) (*)) piece)
+             (type (simple-array single-float (*)) p axes ages data)
+             (type simple-vector pieces)
+             (type single-float tpm dissolve)
+             (type fixnum k stride))
+    (dotimes (i (pool-size pool))
+      (let ((st (aref state i)))
+        (unless (= 0 st)
+          (let* ((id (aref piece i))
+                 (box (svref pieces (1- id)))
+                 (x0 (float (the fixnum (first box)) 0f0)) (y0 (float (the fixnum (second box)) 0f0))
+                 (x1 (+ 1f0 (the fixnum (third box)))) (y1 (+ 1f0 (the fixnum (fourth box))))
+                 (cx (* 0.5 (+ x0 x1))) (cy (* 0.5 (+ y0 y1)))
+                 (b (* 3 i)) (a (* 6 i))
+                 (ux (aref axes a)) (uy (aref axes (+ a 1))) (uz (aref axes (+ a 2)))
+                 (vx (aref axes (+ a 3))) (vy (aref axes (+ a 4))) (vz (aref axes (+ a 5)))
+                 (nx (- (* uy vz) (* uz vy))) (ny (- (* uz vx) (* ux vz))) (nz (- (* ux vy) (* uy vx)))
+                 (fade (if (= st 3) (min 1f0 (/ (aref ages i) dissolve)) 0f0)))
+            (declare (type single-float x0 y0 x1 y1 cx cy fade))
+            (loop for c from 0 below 12 by 2
+                  for tx = (if (= 0 (aref corners c)) x0 x1)
+                  for ty = (if (= 0 (aref corners (1+ c))) y0 y1)
+                  for du = (/ (- tx cx) tpm)
+                  for dv = (/ (- ty cy) tpm)
+                  for o = (* k stride)
+                  do (setf (aref data o) (+ (aref p b) (* du ux) (* dv vx))
+                           (aref data (+ o 1)) (+ (aref p (+ b 1)) (* du uy) (* dv vy))
+                           (aref data (+ o 2)) (+ (aref p (+ b 2)) (* du uz) (* dv vz))
+                           (aref data (+ o 3)) tx
+                           (aref data (+ o 4)) ty
+                           (aref data (+ o 5)) (float id 0f0)
+                           (aref data (+ o 6)) nx
+                           (aref data (+ o 7)) ny
+                           (aref data (+ o 8)) nz
+                           (aref data (+ o 9)) fade)
+                     (incf k))))))
+    k))
+
+(defmethod render ((pool shard-pool) (program shader-program))
+  (let ((count (write-shard-vertices pool)))
+    (when (< 0 count)
+      (update-buffer-data (pool-vbo pool) (pool-data pool) :count (* count *shard-vertex-floats* 4))
+      (setf (uniform program "view_matrix") (view-matrix))
+      (setf (uniform program "projection_matrix") (projection-matrix))
+      (set-fog-uniforms program)
+      (setf (uniform program "light_snap") (float *sprite-light-snap* 0f0))
+      (setf (uniform program "light_bands") (float *sprite-light-bands* 0f0))
+      (setf (uniform program "glass_texture") 0
+            (uniform program "piece_map") 1
+            (uniform program "glint") (float *shard-glint* 0f0)
+            (uniform program "eye") (location (camera (scene +main+))))
+      (gl:disable :cull-face)
+      (render-array (pool-vao pool) :vertex-count count)
+      (gl:enable :cull-face))))
+
+(define-class-shader (shard-pool :vertex-shader)
+  "layout (location = 0) in vec3 position;
+layout (location = 1) in vec2 in_texel;
+layout (location = 2) in float in_piece;
+layout (location = 3) in vec3 in_normal;
+layout (location = 4) in float in_fade;
+uniform mat4 view_matrix;
+uniform mat4 projection_matrix;
+out vec2 v_texel;
+flat out float v_piece;
+out vec3 v_world_position;
+out vec3 v_view_position;
+flat out vec3 v_normal;
+flat out float v_fade;
+
+void main(){
+  vec4 view_position = view_matrix * vec4(position, 1.0);
+  gl_Position = projection_matrix * view_position;
+  v_texel = in_texel;
+  v_piece = in_piece;
+  v_world_position = position;
+  v_view_position = view_position.xyz;
+  v_normal = in_normal;
+  v_fade = in_fade;
+}")
+
+(define-class-shader (shard-pool :fragment-shader)
+  "in vec2 v_texel;
+flat in float v_piece;
+in vec3 v_world_position;
+in vec3 v_view_position;
+flat in vec3 v_normal;
+flat in float v_fade;
+uniform sampler2D glass_texture;
+uniform sampler2D piece_map;
+uniform float glint;
+uniform vec3 eye;
+out vec4 color;
+
+void main(){
+  ivec2 size = textureSize(piece_map, 0);
+  ivec2 t = clamp(ivec2(floor(v_texel)), ivec2(0), size - 1);
+  vec4 m = texelFetch(piece_map, t, 0);
+  float id = floor(m.r * 255.0 + 0.5) + 256.0 * floor(m.g * 255.0 + 0.5);
+  if(abs(id - v_piece) > 0.5) discard;
+  // Dissolving: its texels drop out in a fixed random order.
+  if(v_fade > 0.0 && fract(sin(dot(vec2(t) + v_piece, vec2(12.9898, 78.233))) * 43758.5453) < v_fade) discard;
+  vec4 c = texelFetch(glass_texture, t, 0);
+  bool came = 0.75 < c.a;
+  vec3 n = normalize(v_normal);
+  if(dot(n, eye - v_world_position) < 0.0) n = -n;
+  vec3 light = band_light(light_at(snap_position(v_world_position), n, 0.6, v_world_position + n * 0.05));
+  vec3 lamp = lamp_part(light);
+  // Not a ternary inside a sum: Trial's shader printer drops its brackets.
+  float shine = came ? 0.0 : glint;
+  vec3 glow = c.rgb * (lamp + shine);
+  color = vec4(fog_lit(c.rgb * (light - lamp), glow, length(v_view_position)), 1.0);
+}")
 
 ;;; Saving and resetting.
 
