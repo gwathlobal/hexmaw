@@ -489,7 +489,7 @@ real time instead.
   (`src/acolyte.lisp`) is the ranged one, with a cast, flinch and death but no walk: it glides
   in the standing pose, its robe hiding its feet. Its death burns, so it has a `death-glow`:
   a lamp that rises and fades with the fire on `death-glow-times`, then leaves `*lamps*`.
-  The `knight` is slow and heavy (`knockback-scale`), behind a tower shield: `shield-views`
+  The `knight` (`src/knight.lisp`) is slow and heavy (`knockback-scale`), behind a tower shield: `shield-views`
   is the last billboard view (0 front .. 4 back) the shield covers, so what the player sees
   decides it. A spell whose flight comes from a covered view (`shielded-p`, the same
   `billboard-view` that picks the sprite) is deflected in the projectile's tick
@@ -973,6 +973,9 @@ real time instead.
   the `acolyte`, an `ability-user` with the cinder (`:cinder`, its first) and the firestorm
   (`:firestorm`), the `firestorm` entity (a `spell-circle`) and its `falling-cinder`s. See "The
   acolyte" under "Creature movement" below.
+- `src/knight.lisp` (after acolyte.lisp, before boss.lisp): the `knight`, an `ability-user` with the
+  mace (`:mace`, its first) and the shield charge (`:shield-charge`). See "The knight" under
+  "Creature movement" below.
 - `src/riftwalker.lisp` (after boss.lisp, whose `free-spot` and `same-arena-side-p` it uses): the
   `riftwalker`, a masked assassin, an `ability-user` and a melee hunter (`ranged-p` is true only
   while a cast of its runs, so the cast turns after the player as a caster's does) that flanks.
@@ -2296,6 +2299,73 @@ To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monste
 sight `(let ((v (find-if (lambda (c) (typep c 'arc-votary)) *creatures*))) (stop-walking v 0.0)
 (setf (alert v) 30.0))`. The debug level's `pool` (deep water, x -15.5 to -8.5, z -34.5 to -27.5)
 has a ledge to stand it on for the water rule.
+
+### The knight
+
+The `knight` (knight.lisp) is an `ability-user` with two abilities: `:mace`, its blow, and from
+level 2 of a run on (`(level-ability-p :shield-charge)`) the **shield charge**, its answer to a
+player who turtles behind a raised shield or stands off. Its `ranged-p` is NIL (an ability-user's
+default is a caster's), and its tick puts the mace back once an attack is over. `special-attack`
+starts a charge (`charge-ready-p`) with the cooldown ready (`*charge-cooldown*` 10 s ×
+`(depth-scale :cooldown)` from setting off, `*charge-first*` 3 s from its making, `*charge-retry*`
+3 s after a tell broken off), its target `*charge-min*` to `*charge-max*` (3.5 to 10 m) off, within
+`*charge-rise*` (1 m) of its height, not swimming, in sight, and a straight run on the nav grid
+(`nav-line-clear-p`, `:avoid`) to where the two bodies would meet: always at a target whose shield
+faces it (`target-guarding-p`), else on a `*charge-chance*` (30 percent) roll on `*roll-random*` each
+time `hunt` asks.
+
+- **The tell** (`*charge-windup*`, 0.8 s; `winding-up-p` holds, so a bash or the earthshake breaks
+  it): crouched behind its shield (`show-own-pose`: the block strip's brace in the views it has, the
+  walk's first frame pressed down by `*charge-crouch*` from the side or back), scraping grit
+  (`kick-grit`) every `*charge-paw-interval*`, the bellow (`knight-alert`, its `:windup` while the
+  charge is its ability). It turns to its target at its `turn-speed` (3 rad/s).
+- **The run** (`charge-step`, `run-charge`): along the way it faced as the tell ended, at
+  `*charge-speed*` (7.5 m/s), turning at most `*charge-turn*` (0.3 rad/s), to `*charge-overshoot*`
+  (3 m) past where its target stood, at most `*charge-max-run*` (14 m); the walk strip at
+  `*charge-stride*` (0.75 m a frame), its steps quickening with it. A sidestep of a metre makes it
+  miss. Its shield stays up in front (`shielded-p`, and `block-hit` doesn't brace mid-attack), so
+  frontal spells still reflect. Each tick it looks ahead:
+  - **its target** within `*charge-reach*` between the bodies and `*charge-hit-arc*` (0.7 rad) of
+    its heading, or the body in its way: `charge-strike`, `*charge-damage*` (14 to 20), thrown down
+    the line at `*charge-shove*` (11 m/s) and up at `*charge-lift*` (3), a raised shield knocked
+    aside for `*charge-guard-break*` (1.2 s; blocked, a quarter of the damage and the stamina); then
+    it stands `*charge-recover*` (0.7 s) and the mace follows. Thrown into a wall, the player takes
+    the impact as well ("Impacts" under `src/creature.lisp`): 16 from the charge and 6 from the wall
+    behind, in the test hall;
+  - **lava, water or a drop** deeper than it steps (`charge-edge-ahead-p`; no floor inside a wall
+    is the wall): it stops short;
+  - **another creature**: bowled aside once a charge (`bowl-aside`, `charge-bowled`),
+    `*charge-bowl-damage*` (3 to 5) and `*charge-bowl-speed*` (8 m/s) off the line, mostly sideways,
+    and the run goes on; one too heavy to move holds it up, and after `*charge-stall-time*` the run
+    ends;
+  - **a wall**: it crashes (`crash-charge`): sparks and grit off the face (`wall-sparks`), dust, a
+    camera kick (`*charge-camera-shake*` within `*charge-shake-reach*`), `maul-guard-break`, and it
+    reels (`reel-from-charge`, `reel`) `*charge-crash-reel*` (1.5 s), its guard down so spells reach
+    its front: the punish window.
+  On ice the run's speed goes on as its `momentum` (`end-charge`), so it skids.
+- **Answers.** The spear's thrust: `charging-p` is true for the run, so from behind or the side the
+  counter works as on any charge (`impale` ends it); from the front, where the shield covers it, the
+  thrust **sets the spear against the charge** (`brace-against-charge`, spear.lisp): no harm to it,
+  the run stops dead and it reels `*charge-spear-reel*` (1 s). The maul's earthshake flinches it out
+  of the run, a full blow knocks the guard aside. A bash or sweep from the front glances as ever.
+  A flinch, a reel, a vortex (`break-flight :after`) or its death ends a charge.
+- **Boss and elites.** The Black Knight (`knight-boss`, `(boss leaper knight)`) charges too: its
+  powers come first in `special-attack`, then the charge; its damage is × `*boss-damage-scale*`
+  (`charge-damage`), its reels shorter (`charge-reel-time`: `*charge-boss-crash-reel*` 0.6 s,
+  `*charge-boss-spear-reel*` 0.5), and Haste and enrage speed it through the scaled `dt`, as an
+  elite's haste does. `leaper`'s `charging-p` and `impale` call on when it isn't airborne.
+- **Saving**: `charge`, `charge-yaw`, `charge-left`, `charge-stall` and `charge-bowled`, besides
+  the ability-user's `ability` and `cooldowns`; a save mid-run loads mid-run. `tools/hd status`
+  shows `charge:windup` or `charge:running` beside a knight's brain. `*charge-debug*` logs every
+  charge, refusal and stop. No clips of its own yet (see `audio/sfx.md`), nor art: a
+  `knight-charge` strip (a crouched tell, a shoulder-down run, the crash) could replace the reused
+  frames, made the knight's way (`tools/gen_monster_views.sh knight charge`).
+
+To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'knight)
+*charge-debug* t)`, Debug level, then stand 6 m in front of it, in the hall's east (the west has
+the lava pit, which it won't run across), and `(let ((k (aref *creatures* 0))) (setf (alert k)
+30.0 (getf (cooldowns k) :shield-charge) 0.0 *charge-chance* 100))`. `(charge k)` is `:running`
+during the run: move the player 2 m aside then for a miss into the south wall.
 
 ### The necromancer
 
@@ -4269,10 +4339,11 @@ harder going down, by keys in each entry (none are flat stat multipliers):
 - asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
   `*sight-range*` and `*hearing-range*` in `sees-target-p`, `:alert` the hunt's `alert-time`,
   `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's, riftwalker's and
-  acolyte's abilities and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
+  acolyte's abilities, the knight's charge and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.
   `:abilities` names the abilities a level's monsters may use beyond their first (`level-ability-p`):
   none on level 1, the acolyte's `:firestorm`, the pack imp's `:flank-leap` (see "The imp") and the
-  rime hag's `:rime-field` on levels 2 and 3 (and so in the settlement), and her `:blizzard` and the
+  rime hag's `:rime-field` and the knight's `:shield-charge` (see "The knight") on levels 2 and 3
+  (and so in the settlement), and her `:blizzard` and the
   arc votary's `:static-recoil` on level 3 (and in the settlement when it is at depth 3).
 
 Each level's `:loot` says what weapons and runes it hands out (see `src/loot.lisp`). Pickups stay
@@ -4365,7 +4436,8 @@ attack frame (the blow lands 0.5 s in), and `(setf (alert imp) 6.0)` sets an imp
 `tools/hd status` shows mana, stamina and each creature's health. On a generated level,
 `(game (hurt-player *player* 1000 (feet *player*) :by (aref *creatures* 0)))` kills the player, and the death screen follows. The knight stands by the west
 pillars; a bolt at its front comes back at the player, one at its back hurts it, and
-`(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame.
+`(setf (brace knight) 0.25)` (impact) or `0.1` (brace) under hit-stop shows a block frame;
+"The knight" says how to see its shield charge.
 The harpy hovers over the hall's south-east, by the east doorway: `(setf (alert harpy) 6.0)`
 sets it hunting, and `(dive-left harpy)` is non-NIL while it dives (hurt it then to down it).
 The ogre stands in the hall's east: `(setf *leap-debug* t)` and `(setf (alert ogre) 30.0)` with

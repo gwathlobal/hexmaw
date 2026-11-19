@@ -419,6 +419,12 @@ frame rate.")
                                   (boss-kind boss) (boss-title boss) (max 0 (health boss)) (max-health boss)
                                   (dormant boss) (enraged boss) (boss-powers boss) (boss-power boss))))))))
 
+(defgeneric brain-label (creature)
+  (:documentation "What STATUS shows CREATURE doing: its BRAIN, and a knight's charge.")
+  (:method ((creature creature)) (brain creature))
+  (:method ((knight knight))
+    (if (charge knight) (format NIL "~(~a~) charge:~(~a~)" (brain knight) (charge knight)) (brain knight))))
+
 (defun status ()
   "One-line summary of the running game, for agents and the REPL."
   (if (game-running-p)
@@ -454,7 +460,7 @@ frame rate.")
                 (map 'list (lambda (c)
                              (format NIL "~(~a~)~@[ elite:~(~a~)~] ~:[~d/~d hp ~(~a~)~;dead~*~*~*~] at (~,2f ~,2f)~@[ on ~(~a~)~]"
                                      (type-of c) (and (typep c 'elite) (elite-trait c))
-                                     (dead c) (health c) (max-health c) (brain c)
+                                     (dead c) (health c) (max-health c) (brain-label c)
                                      (vx (location c)) (vz (location c)) (footing c)))
                      *creatures*)
                 active (length *runtime-errors*)))

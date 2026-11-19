@@ -69,11 +69,28 @@ follow-through, back. It is over after the last.")
 (defmethod bash-hit-frame ((weapon (eql :spear))) *sweep-hit-frame*)
 (defmethod bash-strike (player (weapon (eql :spear))) (sweep-hit player))
 
-;; A thrust's blow is a counter on a creature charging at the player.
+;; A thrust's blow is a counter on a creature charging at the player; from the front, where its
+;; shield covers it, it stops a knight's shield charge instead (BRACE-AGAINST-CHARGE).
 (defmethod swing-strike (player (weapon (eql :spear)) target)
-  (if (and (charging-p target) (not (shielded-p target (feet player))))
-      (spear-counter player target)
-      (call-next-method)))
+  (cond ((and (charging-p target) (not (shielded-p target (feet player))))
+         (spear-counter player target))
+        ((and (shield-charging-p target) (shielded-p target (feet player)))
+         (brace-against-charge player target))
+        (T (call-next-method))))
+
+(defparameter *brace-recoil* 2.5 "Speed in m/s the spear set against a shield charge pushes the player back.")
+(defparameter *brace-hit-stop* 0.08)
+
+(defun brace-against-charge (player knight)
+  "PLAYER's thrust met KNIGHT's shield charge head-on: the point takes the shield, and the charge
+stops dead, the knight reeling with its guard down (knight.lisp). No harm to it."
+  (setf (spear-jolt player) *spear-jolt-time*)
+  (play-sound :bash-glance (location knight))
+  (play-sound :maul-guard-break (location knight))
+  (shield-sparks knight 16)
+  (reel-from-charge knight :spear)
+  (shove-player player (location knight) *brace-recoil*)
+  (hit-stop *brace-hit-stop*))
 
 (defun spear-counter (player target)
   "TARGET charged onto PLAYER's thrust: skewered, flinching whatever the roll, and its charge
