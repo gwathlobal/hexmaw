@@ -2321,8 +2321,9 @@ time `hunt` asks.
   charge is its ability). It turns to its target at its `turn-speed` (3 rad/s).
 - **The run** (`charge-step`, `run-charge`): along the way it faced as the tell ended, at
   `*charge-speed*` (7.5 m/s), turning at most `*charge-turn*` (0.3 rad/s), to `*charge-overshoot*`
-  (3 m) past where its target stood, at most `*charge-max-run*` (14 m); the walk strip at
-  `*charge-stride*` (0.75 m a frame), its steps quickening with it. A sidestep of a metre makes it
+  (3 m) past where its target stood, at most `*charge-max-run*` (14 m), still crouched as in the
+  tell, bobbing down `*charge-bob*` more once a stride (`show-charge-crouch`), its steps (the walk's
+  distance at `*charge-stride*`, 0.75 m a step's worth) quickening with it. A sidestep of a metre makes it
   miss. Its shield stays up in front (`shielded-p`, and `block-hit` doesn't brace mid-attack), so
   frontal spells still reflect. Each tick it looks ahead:
   - **its target** within `*charge-reach*` between the bodies and `*charge-hit-arc*` (0.7 rad) of

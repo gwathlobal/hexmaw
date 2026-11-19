@@ -77,7 +77,8 @@ shield isn't raised at it; one whose is, it always charges.")
 (defparameter *charge-boss-spear-reel* 0.5)
 (defparameter *charge-stall-time* 0.2 "Seconds it may be held up (a body that won't move) before the run ends.")
 (defparameter *charge-stride* 0.75 "Metres per walk frame while it runs (the walk's STRIDE is 0.3).")
-(defparameter *charge-crouch* 1.5 "How squashed its tell is drawn seen from the side or back, as a flinch's squash.")
+(defparameter *charge-crouch* 1.5 "How squashed its tell and run are drawn seen from the side or back, as a flinch's squash.")
+(defparameter *charge-bob* 0.25 "How much more squashed the run is drawn at the bottom of each stride.")
 (defparameter *charge-paw-interval* 0.25 "Seconds between the scrapes of grit its feet kick up in the tell.")
 (defparameter *charge-camera-shake* 0.5 "Strength of the camera kick of its crash, full within 2 m (KICK-CAMERA-FROM).")
 (defparameter *charge-shake-reach* 10.0)
@@ -402,19 +403,24 @@ body in its way."
   (setf (charge knight) NIL
         (charge-bowled knight) ()))
 
+(defun show-charge-crouch (knight squash)
+  "Show KNIGHT crouched behind its shield, SQUASH (a flinch's, 0 to 1) at least: the block's brace
+where it has the view, else the walk's first frame pressed down."
+  (if (<= (view-index knight) (shield-views knight))
+      (show-view-frame knight (block-animation knight) 1 (max squash 0.5) (1+ (shield-views knight)))
+      (show-view-frame knight (walk-animation knight) 0 (max squash *charge-crouch*))))
+
 (defmethod show-own-pose ((knight knight) squash)
   (case (and (not (dead knight)) (eq (brain knight) :attacking)
              (eq :shield-charge (ability-name (current-ability knight)))
              (charge knight))
     (:windup
-     ;; Crouched behind its shield: the block's brace where it has the view, else the walk's
-     ;; first frame pressed down.
-     (if (<= (view-index knight) (shield-views knight))
-         (show-view-frame knight (block-animation knight) 1 (max squash 0.5) (1+ (shield-views knight)))
-         (show-view-frame knight (walk-animation knight) 0 (max squash *charge-crouch*)))
+     (show-charge-crouch knight squash)
      T)
     (:running
-     (show-view-frame knight (walk-animation knight) (floor (walk-distance knight) (stride-length knight)) squash)
+     ;; Still crouched, bobbing down once a stride, so it reads as a run behind the shield.
+     (let ((phase (/ (walk-distance knight) (stride-length knight))))
+       (show-charge-crouch knight (+ squash (* *charge-bob* (abs (sin (* pi phase)))))))
      T)
     (T (call-next-method))))
 
