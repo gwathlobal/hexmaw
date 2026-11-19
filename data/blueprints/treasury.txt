@@ -20,9 +20,9 @@ legend
   J glass lancet-ash 1.0
   y glass lancet-warden 1.0        ; the Deepwardens'
   Y glass lancet-warden 1.0
-  n box 0 1.0 stone, deco 3.5 top stone               ; a niche: floor at the sill, roof at the windows' top
-  t box 0 1.0 stone, deco 3.5 top stone, torch 2.8
-  & box 0 1.0 stone, deco 3.5 top stone, pickup reward
+  n box 0 1.0 wall, deco 3.5 top wall               ; a niche: floor at the sill, roof at the windows' top
+  t box 0 1.0 wall, deco 3.5 top wall, torch 2.8
+  & box 0 1.0 wall, deco 3.5 top wall, pickup reward
   P box 0 top pillar                                  ; a pilaster between the pairs
   S box 0 0.9 stone                                   ; the plinth
   % box 0 0.4 dais
