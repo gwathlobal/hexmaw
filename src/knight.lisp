@@ -41,6 +41,11 @@
 ;; The flinch: jolt, then stagger, two frames per view over *STAGGER-TIME*. Its cells
 ;; are 124 px tall, at the turnaround's scale.
 (define-fx-animation knight-hurt "sprites/knight/hurt" :size (* *knight-height* 124/125))
+;; The shield charge: the crouch (the tell), the run on the left foot and on the right, crouched and
+;; the shield's foot on the floor throughout, and the crash into a wall, four frames per view. Shown
+;; by the charge's state, not a clock (SHOW-OWN-POSE). Its cells are 117 px tall, at the
+;; turnaround's scale.
+(define-fx-animation knight-charge "sprites/knight/charge" :size (* *knight-height* 117/125))
 ;; It kneels, topples onto its hands and crashes down, its eyes and runes going dark;
 ;; the heap of armour is the corpse. Front view only, the jolted knight in frame 1
 ;; 125 px tall.
@@ -76,16 +81,17 @@ shield isn't raised at it; one whose is, it always charges.")
 (defparameter *charge-spear-reel* 1.0 "Seconds it reels after the spear set against it stopped its charge.")
 (defparameter *charge-boss-spear-reel* 0.5)
 (defparameter *charge-stall-time* 0.2 "Seconds it may be held up (a body that won't move) before the run ends.")
-(defparameter *charge-stride* 0.75 "Metres per walk frame while it runs (the walk's STRIDE is 0.3).")
-(defparameter *charge-crouch* 1.5 "How squashed its tell and run are drawn seen from the side or back, as a flinch's squash.")
-(defparameter *charge-bob* 0.25 "How much more squashed the run is drawn at the bottom of each stride.")
+(defparameter *charge-stride* 0.9 "Metres per frame of the run, the charge strip's two (the walk's STRIDE is 0.3).")
+(defparameter *charge-crash-pose* 0.45
+  "Seconds it shows the charge strip's crash frame after running into a wall or onto a set spear,
+before its reel shows the flinch's stagger.")
 (defparameter *charge-paw-interval* 0.25 "Seconds between the scrapes of grit its feet kick up in the tell.")
 (defparameter *charge-scrape-interval* 0.04 "Seconds between the sprays its shield's foot throws off the floor as it runs.")
 (defparameter *charge-scrape-sparks* 3 "Sparks a spray throws off stone (others by *WALL-STRIKE-KINDS*' share).")
 (defparameter *charge-scrape-grit* 1 "Grit a spray throws, by the same shares.")
-(defparameter *charge-scrape-ahead* 0.55 "Metres ahead of its centre that its sprite draws the shield's foot, seen from the side.")
+(defparameter *charge-scrape-ahead* 0.45 "Metres ahead of its centre that its sprite draws the shield's foot, seen from the side.")
 (defparameter *charge-scrape-near* 0.2 "Metres toward the eye the sparks start, so the sprite doesn't hide them.")
-(defparameter *charge-scrape-side* 0.15 "Metres to its left, the shield arm's side, that the shield's foot is.")
+(defparameter *charge-scrape-side* 0.1 "Metres to its left, the shield arm's side, that the shield's foot is.")
 (defparameter *charge-scrape-speed* '(2.0 5.5) "Slowest and fastest m/s the shield's sparks leave at.")
 (defparameter *charge-scrape-carry* 0.7
   "Share of its run's speed the shield's sparks keep: they spray round its foot as it comes on, seen
@@ -153,7 +159,8 @@ come toward the eye whatever the view (thrown back, they went behind the shield 
    (charge-stall :initform 0.0 :accessor charge-stall :documentation "Seconds it has been held up.")
    (charge-bowled :initform () :accessor charge-bowled :documentation "The creatures it has bowled aside this charge.")
    (charge-paw :initform 0.0 :accessor charge-paw
-               :documentation "Seconds until its feet scrape again in the tell, or its shield in the run.")))
+               :documentation "Seconds until its feet scrape again in the tell, or its shield in the run.")
+   (crash-pose :initform 0.0 :accessor crash-pose :documentation "Seconds it still shows the crash frame.")))
 
 ;; The charge's tell bellows (its alert), the mace's wind-up is the mace's; the charge's blow and
 ;; its crash are a shield bash's and a guard knocked aside.
@@ -245,6 +252,7 @@ carries on as its momentum, so it skids."
   (let ((time (charge-reel-time knight cause)))
     (end-charge knight 0.0)
     (setf (reel knight) (float time 0f0)
+          (crash-pose knight) (float (min time *charge-crash-pose*) 0f0)
           (brace knight) 0.0)
     (stop-walking knight time)))
 
@@ -463,32 +471,35 @@ trail, though they keep *CHARGE-SCRAPE-CARRY* of its speed): as many as the floo
   (setf (charge knight) NIL
         (charge-bowled knight) ()))
 
-(defun show-charge-crouch (knight squash)
-  "Show KNIGHT crouched behind its shield, SQUASH (a flinch's, 0 to 1) at least: the block's brace
-seen from the front, else the walk's first frame pressed down. The block's front-quarter frames are
-drawn nearly face on (the generator turned them only a little), so in that view the charge looked
-straight at the player until it was nearly past: the walk's front-quarter is turned."
-  (if (= (view-index knight) 0)
-      (show-view-frame knight (block-animation knight) 1 (max squash 0.5) (1+ (shield-views knight)))
-      (show-view-frame knight (walk-animation knight) 0 (max squash *charge-crouch*))))
+;; Only the current animation's texture is staged with the scene; the charge strip is shown
+;; without being one.
+(defmethod stage :after ((knight knight) (area staging-area))
+  (stage (animation-texture (find-fx-animation 'knight-charge)) area))
+
+;; The crash frame holds while it shows (CRASH-POSE), its reel's stagger after.
+(defmethod flinch-p ((knight knight))
+  (and (<= (crash-pose knight) 0) (call-next-method)))
+
+(defun charge-frame (knight)
+  "The charge strip's frame KNIGHT shows now, or NIL: 0 the crouch, 1 and 2 the run, 3 the crash."
+  (cond ((dead knight) NIL)
+        ((< 0 (crash-pose knight)) 3)
+        ((not (and (eq (brain knight) :attacking)
+                   (eq :shield-charge (ability-name (current-ability knight)))))
+         NIL)
+        ((eq (charge knight) :windup) 0)
+        ((eq (charge knight) :running) (+ 1 (mod (floor (walk-distance knight) (stride-length knight)) 2)))))
 
 (defmethod show-own-pose ((knight knight) squash)
-  (case (and (not (dead knight)) (eq (brain knight) :attacking)
-             (eq :shield-charge (ability-name (current-ability knight)))
-             (charge knight))
-    (:windup
-     (show-charge-crouch knight squash)
-     T)
-    (:running
-     ;; Still crouched, bobbing down once a stride, so it reads as a run behind the shield.
-     (let ((phase (/ (walk-distance knight) (stride-length knight))))
-       (show-charge-crouch knight (+ squash (* *charge-bob* (abs (sin (* pi phase)))))))
-     T)
-    (T (call-next-method))))
+  (let ((frame (charge-frame knight)))
+    (if frame
+        (progn (show-view-frame knight 'knight-charge frame squash) T)
+        (call-next-method))))
 
 (define-handler (knight tick :after) (dt)
   (unless (frozen-p)
     (run-cooldowns knight dt)
+    (setf (crash-pose knight) (max 0.0 (- (crash-pose knight) dt)))
     ;; Back to the mace once an attack is over, so the next blow in reach is one; a charge
     ;; broken off (a flinch, a reel, its death) is forgotten.
     (unless (eq (brain knight) :attacking)

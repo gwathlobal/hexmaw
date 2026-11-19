@@ -2315,16 +2315,16 @@ faces it (`target-guarding-p`), else on a `*charge-chance*` (30 percent) roll on
 time `hunt` asks.
 
 - **The tell** (`*charge-windup*`, 0.8 s; `winding-up-p` holds, so a bash or the earthshake breaks
-  it): crouched behind its shield (`show-own-pose`, `show-charge-crouch`: the block strip's brace
-  head on, else the walk's first frame pressed down by `*charge-crouch*`; the block's front-quarter
-  is drawn nearly face on, so it made the charge seem to face the player until it was nearly past), scraping grit
+  it): crouched behind its shield, the shield's foot on the floor and only its horns and eyes over
+  the rim (`show-own-pose`, `charge-frame`: the `knight-charge` strip's frame 0; see "Monster
+  sprites"), scraping grit
   (`kick-grit`) every `*charge-paw-interval*`, the bellow (`knight-alert`, its `:windup` while the
   charge is its ability). It turns to its target at its `turn-speed` (3 rad/s).
 - **The run** (`charge-step`, `run-charge`): along the way it faced as the tell ended, at
   `*charge-speed*` (7.5 m/s), turning at most `*charge-turn*` (0.3 rad/s), to `*charge-overshoot*`
-  (3 m) past where its target stood, at most `*charge-max-run*` (14 m), still crouched as in the
-  tell, bobbing down `*charge-bob*` more once a stride (`show-charge-crouch`), its steps (the walk's
-  distance at `*charge-stride*`, 0.75 m a step's worth) quickening with it, and its shield's foot
+  (3 m) past where its target stood, at most `*charge-max-run*` (14 m), still crouched, pushing
+  the grounded shield along the floor: the strip's two running frames, one each `*charge-stride*`
+  (0.9 m), its steps quickening with it, and its shield's foot
   dragging sparks and grit off the floor (`scrape-shield`, every `*charge-scrape-interval*`, by the
   floor's `*wall-strike-kinds*`: only grit off ice, snow or wood). They start where the sprite draws
   the shield's foot: `*charge-scrape-ahead*` in front and a little to its left, with the part of
@@ -2350,12 +2350,13 @@ time `hunt` asks.
   - **a wall**: it crashes (`crash-charge`): sparks and grit off the face (`wall-sparks`), dust, a
     camera kick (`*charge-camera-shake*` within `*charge-shake-reach*`), `maul-guard-break`, and it
     reels (`reel-from-charge`, `reel`) `*charge-crash-reel*` (1.5 s), its guard down so spells reach
-    its front: the punish window.
+    its front: the punish window. It shows the strip's crash frame for `*charge-crash-pose*`
+    (0.45 s; `crash-pose`, with `flinch-p` NIL meanwhile), then the flinch's stagger.
   On ice the run's speed goes on as its `momentum` (`end-charge`), so it skids.
 - **Answers.** The spear's thrust: `charging-p` is true for the run, so from behind or the side the
   counter works as on any charge (`impale` ends it); from the front, where the shield covers it, the
   thrust **sets the spear against the charge** (`brace-against-charge`, spear.lisp): no harm to it,
-  the run stops dead and it reels `*charge-spear-reel*` (1 s). The maul's earthshake flinches it out
+  the run stops dead and it reels `*charge-spear-reel*` (1 s), the crash frame first. The maul's earthshake flinches it out
   of the run, a full blow knocks the guard aside. A bash or sweep from the front glances as ever.
   A flinch, a reel, a vortex (`break-flight :after`) or its death ends a charge.
 - **Boss and elites.** The Black Knight (`knight-boss`, `(boss leaper knight)`) charges too: its
@@ -2363,12 +2364,10 @@ time `hunt` asks.
   (`charge-damage`), its reels shorter (`charge-reel-time`: `*charge-boss-crash-reel*` 0.6 s,
   `*charge-boss-spear-reel*` 0.5), and Haste and enrage speed it through the scaled `dt`, as an
   elite's haste does. `leaper`'s `charging-p` and `impale` call on when it isn't airborne.
-- **Saving**: `charge`, `charge-yaw`, `charge-left`, `charge-stall` and `charge-bowled`, besides
+- **Saving**: `charge`, `charge-yaw`, `charge-left`, `charge-stall`, `charge-bowled` and `crash-pose`, besides
   the ability-user's `ability` and `cooldowns`; a save mid-run loads mid-run. `tools/hd status`
   shows `charge:windup` or `charge:running` beside a knight's brain. `*charge-debug*` logs every
-  charge, refusal and stop. No clips of its own yet (see `audio/sfx.md`), nor art: a
-  `knight-charge` strip (a crouched tell, a shoulder-down run, the crash) could replace the reused
-  frames, made the knight's way (`tools/gen_monster_views.sh knight charge`).
+  charge, refusal and stop. No clips of its own yet (see `audio/sfx.md`).
 
 To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'knight)
 *charge-debug* t)`, Debug level, then stand 6 m in front of it, in the hall's east (the west has
@@ -3546,6 +3545,20 @@ sheets are big: `--filter box` takes a minute or two each.
 ```bash
 K=art/knight; for a in walk:20 attack:20 hurt:10; do n=${a%:*}; python3 tools/slice_views.py data/sprites/knight $a $K/runic-$n-front-1.png $K/runic-$n-front-quarter-b-1.png $K/runic-$n-side.png $K/runic-$n-back-quarter.png $K/runic-$n-back.png --height 1000 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box; done
 python3 tools/slice_frames.py art/knight/runic-death-b-2.png data/sprites/knight --pixel 3.27 --anchor bottom --filter box death:8
+```
+
+Its shield charge (knight.lisp) is a strip of its own, `knight-charge`: the crouch, two running
+frames and the crash, the knight crouched and the shield's bottom edge on the ground line in every
+frame but the crash, which the prompt says before anything else (`knight-charge-common.txt`). Each
+view adds its `knight-view-<view>.txt` and `knight-charge-views.txt`; the front-quarter adds
+`knight-view-front-quarter-strict.txt` with only the turnaround and its standing cell; the side,
+back-quarter and back add `knight-follow.txt` with `runic-charge-front-2.png` as the third
+reference, and the back-quarter `knight-charge-back-quarter-strict.txt` too, since without it the
+knight looked back over its shoulder at the viewer. Its cells are 117 px tall:
+
+```bash
+K=art/knight; python3 tools/slice_views.py data/sprites/knight charge:20 $K/runic-charge-front-2.png $K/runic-charge-front-quarter-1.png $K/runic-charge-side.png $K/runic-charge-back-quarter-1.png $K/runic-charge-back.png --height 1000 --frame 1 --blank 1 --pixel 8 --anchor bottom --filter box
+tools/restyle.py --house data/sprites/knight/charge.png
 ```
 
 The necromancer (gaunt, bald, a long white beard, ragged robes in black and moss green, a

@@ -87,7 +87,7 @@ their values."
 
 
 (defmethod saved-slots append ((knight knight))
-  '(charge charge-yaw charge-left charge-stall charge-bowled))
+  '(charge charge-yaw charge-left charge-stall charge-bowled crash-pose))
 
 (defmethod saved-slots append ((necromancer necromancer))
   '(raise-target))
