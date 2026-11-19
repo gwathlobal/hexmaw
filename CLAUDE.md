@@ -4082,12 +4082,16 @@ Rooms built round stained glass (`glass`): `chapel` (3 × 4: a front room with t
 dressed-stone facade with a doorway and four lancets, and behind it a nave cut into the rock,
 torches lighting the windows from within, a reward on the altar stone) and `outpost` (4 × 4: a
 yard behind a broken palisade, crates and a watch platform, a stone guardhouse with four leaded
-quarry windows onto the yard and a reward on its table); the `reliquary`'s screen has a rose
+quarry windows onto the yard and a reward on its table) and `treasury` (3 × 4: an antechamber with
+the doorways, then a hall whose long walls each hold two sealed niches behind a pair of lancets, a
+torch in each niche and a reward on its floor, reached only by breaking the glass and jumping the
+1 m sill; drawn turned, so the windows stand in 0.5 m walls and the rewards lie within the 2 m a
+reward spot may be from walkable floor, `spot-reached-p`); the `reliquary`'s screen has a rose
 window, and in the town the temple and the barracks are buildings, walled to their 5 m flat roofs
 (a plan-1 slab over them, under the 9 m vault) with a 2 m doorway each: the temple has four lancets
 in its front onto the plaza and two in its east wall onto the descent's recess, the barracks four
-quarry windows onto the plaza and the market. Over run seeds 1 to 30 a level had 2.6 to 3.5
-windows on average (up to 13), and every settlement 10 (`tools/levelcheck`'s "windows"). The settlement's `town` (8 × 6 cells, two storeys; tagged `town`, never grown into; see "The
+quarry windows onto the plaza and the market. Over run seeds 1 to 30 a level had 3.8 (level
+1) to 9.8 windows on average (up to 40), and every settlement 10 (`tools/levelcheck`'s "windows"). The settlement's `town` (8 × 6 cells, two storeys; tagged `town`, never grown into; see "The
 settlement"). The run's ends, tagged so growth never picks them: `descent` (the way down) and `arena` (4 × 4
 cells, 9 m tall, one doorway on the south, four full-height pillars, the boss, `spawn boss`, at
 the north end, and a reward spot on a 0.8 m block in each corner by the door; see `src/boss.lisp`).

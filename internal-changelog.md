@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A new room, the `treasury`: an antechamber, then a hall with four sealed niches behind paired
+  stained-glass lancets, a torch and a reward in each, reached only through the glass. Adding a
+  tagged block changes every seed's layout.
 - Stained glass (src/glass.lisp): coloured windows over a sill at least 1 m high, a wall to
   everything until a blow, a projectile or beam, a burst or nova, the earthshake, an ogre's quake or a
   body flung into one shatters it into its pieces, leaving teeth of glass in an empty frame that the

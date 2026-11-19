@@ -1,0 +1,42 @@
+; A treasury: an antechamber with the doorways, then through a doorway in its back wall a hall
+; whose two long walls each hold two sealed niches behind paired stained-glass lancets, a torch in
+; each niche lighting its glass from behind and something left on the niche's floor. The niches
+; have no way in but the windows: break the glass and jump the 1 m sill. Drawn turned, so the
+; windows stand in the thin west and east walls and the niches' loot is within reach of the hall.
+cells 3 4
+tags room
+weight 1
+legend
+  g glass lancet-flame 1.0
+  G glass lancet-flame 1.0
+  h glass lancet-frost 1.0
+  H glass lancet-frost 1.0
+  j glass lancet-ash 1.0           ; the Ashen Temple's
+  J glass lancet-ash 1.0
+  y glass lancet-warden 1.0        ; the Deepwardens'
+  Y glass lancet-warden 1.0
+  & pickup reward
+  $ pickup floor
+  a spawn acolyte|necromancer north
+  k spawn imp|knight north
+  m spawn imp|knight north 30
+  M spawn imp|knight south 30
+
+plan 0
+#####T############T#####
+w......................e
+w..$$..............$$..e
+w..........MM..........e
+#......................#
+#########......#########
+######............######
+######............######
+T...&g............h&...T
+#...&G............H&...#
+######.....kk.....######
+######............######
+#...&j.....mm.....y&...#
+T...&J............Y&...T
+######.....aa.....######
+######............######
+###########T############
