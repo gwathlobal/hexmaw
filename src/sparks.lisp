@@ -726,6 +726,10 @@ void main(){
                                                              (,vbo :size 3 :offset 12 :stride ,stride :index 1)
                                                              (,vbo :size 4 :offset 24 :stride ,stride :index 2))))))
 
+;; Added light that writes no depth: drawn in hash order, a sprite drawn after it covered it (the
+;; arc votary's own beam). After the glass, before the funnel.
+(defmethod late-rank ((lines bolt-lines)) 0.45)
+
 (defmethod stage :after ((bolts bolt-lines) (area staging-area))
   (stage (bolt-vao bolts) area))
 

@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Lightning draws after the sprites (`late-rank` 0.45 on `bolt-lines`): drawn in hash order, a
+  sprite drawn after it covered it, so the arc votary's own sprite hid its beam.
 - Death can be undone by a save: the death screen offers Quickload (while a quicksave exists)
   and Load game (while any slot holds a save, the load panel over the death screen), and F9
   quickloads from the moment of death, the fall included; F5 and Esc still do nothing there.
