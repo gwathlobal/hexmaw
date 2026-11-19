@@ -7,6 +7,12 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Death can be undone by a save: the death screen offers Quickload (while a quicksave exists)
+  and Load game (while any slot holds a save, the load panel over the death screen), and F9
+  quickloads from the moment of death, the fall included; F5 and Esc still do nothing there.
+  With no save the screen is as before and death ends the run. The load panels are wider
+  (600), so the quicksave's label fits its row.
+
 - A new room, the `treasury`: an antechamber, then a hall with four sealed niches behind paired
   stained-glass lancets, raised to the sill as Hexen's are, a torch and a reward in each, reached
   only through the glass; pilasters, a plinth and an altar dais in the hall. Adding a

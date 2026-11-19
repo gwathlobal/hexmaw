@@ -506,12 +506,19 @@ victory screens share."
            (run-stat-lines "Time"))))
 
 (defclass death-screen (menu-panel) ()
-  (:documentation "Up after the player dies on a generated level (:DEAD): how the run went, and the way out."))
+  (:documentation "Up after the player dies on a generated level (:DEAD): how the run went, a way
+back into a saved run, and the way out."))
 (defmethod panel-title ((panel death-screen)) "YOU DIED")
 (defmethod panel-splash ((panel death-screen)) "death")
 (defmethod panel-width ((panel death-screen)) 440)
 (defmethod panel-lines ((panel death-screen)) (death-stats))
-(defmethod panel-buttons ((panel death-screen)) '(("Return to main menu" exit-to-title)))
+(defmethod panel-buttons ((panel death-screen))
+  ;; A save can take the player back before the death: the quicksave at once, any slot through
+  ;; the load panel. With none, death ends the run and the screen says only how it went.
+  `(,@(when (slot-used-p :quick)
+        `((,(format NIL "Quickload (~a)" (action-key :quickload)) quickload)))
+    ,@(when (some #'slot-used-p *save-slots*) '(("Load game" open-load-menu)))
+    ("Return to main menu" exit-to-title)))
 
 (defclass victory-screen (menu-panel) ()
   (:documentation "Up once the boss is dead (:VICTORY, boss.lisp): the run is won. How it went, and the way out."))
@@ -550,11 +557,14 @@ victory screens share."
 
 (defclass slot-menu (menu-panel) ()
   (:documentation "A row per save slot (save.lisp), labelled with what it holds, then Back."))
-;; Over the main menu it keeps the main menu's picture, as settings does.
-(defmethod panel-splash ((panel slot-menu)) (when (eq *game-state* :title) "title"))
+;; Over the main menu it keeps the main menu's picture, as settings does, and over the death
+;; screen the death screen's.
+(defmethod panel-splash ((panel slot-menu))
+  (case *game-state* (:title "title") (:dead "death")))
 (defmethod panel-top ((panel slot-menu)) (if (eq *game-state* :title) *title-menu-top* T))
-;; Wide enough for a slot's label.
-(defmethod panel-width ((panel slot-menu)) 440)
+;; Wide enough for a slot's label: "Quicksave: level 3, 46/60 slain, 19 Nov 19:00" is about 580 px
+;; in Jersey 15.
+(defmethod panel-width ((panel slot-menu)) 600)
 
 (defclass save-menu (slot-menu) ())
 (defmethod panel-title ((panel save-menu)) "Save game")
@@ -582,7 +592,8 @@ victory screens share."
     (:loading 'loading-screen)
     (:forge 'forge-panel)
     ;; After the fall (FALL-DEAD).
-    (:dead (when (<= *death-panel-delay* (death-time *player*)) 'death-screen))
+    (:dead (when (<= *death-panel-delay* (death-time *player*))
+             (if (eq *slot-menu* :load) 'load-menu 'death-screen)))
     (:victory 'victory-screen)
     ;; Talking to one of the townsfolk (dialogue.lisp).
     (:talk (when *talk-target* 'dialogue-panel))
@@ -750,7 +761,7 @@ boss out of the level: a test of the boss, not of the level's last rooms."
     (setf *slot-menu* :save)))
 
 (defun open-load-menu ()
-  (when (member *game-state* '(:title :paused))
+  (when (member *game-state* '(:title :paused :dead))
     (setf *slot-menu* :load)))
 
 (defun close-slot-menu ()
@@ -766,7 +777,9 @@ boss out of the level: a test of the boss, not of the level's last rooms."
   (play-sound (if (and (member *game-state* '(:playing :paused)) (save-game :quick)) :game-saved :refused)))
 
 (defun quickload ()
-  (if (and (member *game-state* '(:title :playing :paused)) (slot-used-p :quick))
+  ;; From :DEAD too, during the fall as well as on the death screen: a save undoes the death.
+  ;; LOAD-GAME rebuilds the scene with a fresh player, so nothing of the death comes along.
+  (if (and (member *game-state* '(:title :playing :paused :dead)) (slot-used-p :quick))
       (load-game :quick)
       (play-sound :refused)))
 
