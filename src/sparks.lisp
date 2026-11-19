@@ -803,7 +803,8 @@ chance a finished segment is left out, a bolt breaking up. It lasts LIFE seconds
         (setf (uniform program "view_matrix") (view-matrix)
               (uniform program "projection_matrix") (projection-matrix)
               (uniform program "view_rows") (float (render-size (height *context*)) 0f0)
-              (uniform program "view_cols") (float (render-size (width *context*)) 0f0))
+              (uniform program "view_cols") (float (render-size (width *context*)) 0f0)
+              (uniform program "texels_per_metre") (float *texels-per-metre* 0f0))
         (gl:depth-mask NIL)
         (gl:blend-func :one :one)
         (render-array (bolt-vao bolts) :vertex-count k)
@@ -818,13 +819,21 @@ uniform mat4 view_matrix;
 uniform mat4 projection_matrix;
 uniform float view_rows;
 uniform float view_cols;
+uniform float texels_per_metre;
 out vec3 v_color;
 
 vec2 to_px(vec4 c, vec2 size){ return (c.xy / c.w * 0.5 + 0.5) * size; }
 
+// The art pixel at a point W in front of the eye: the screen's (a 240th of its rows) up close, but
+// never more than a world texel there (64 a metre), so a far bolt shrinks as the sprites round it
+// do; whole screen pixels, at least one.
+float art_at(float w){
+  float texel = projection_matrix[1][1] * 0.5 * view_rows / max(0.001, w) / texels_per_metre;
+  return max(1.0, floor(min(view_rows / 240.0, texel)));
+}
+
 void main(){
   vec2 size = vec2(view_cols, view_rows);
-  float art = max(1.0, floor(view_rows / 240.0));
   // The corner packed in the colour's fourth: 4 for the far end, 2 for the left side, plus
   // an eighth of the width.
   float corner = in_color.w;
@@ -835,9 +844,13 @@ void main(){
   vec4 cb = projection_matrix * (view_matrix * vec4(b, 1.0));
   v_color = in_color.rgb;
   if(ca.w < 0.05 || cb.w < 0.05){ gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
-  // Both ends on the art's pixel grid, so a bolt steps as pixel art does.
-  vec2 pa = (floor(to_px(ca, size) / art) + 0.5) * art;
-  vec2 pb = (floor(to_px(cb, size) / art) + 0.5) * art;
+  // Both ends on the art's pixel grid at their own distance, so a bolt steps as pixel art does and
+  // the segments meeting at a point snap it alike.
+  float art_a = art_at(ca.w);
+  float art_b = art_at(cb.w);
+  float art = mix(art_a, art_b, end);
+  vec2 pa = (floor(to_px(ca, size) / art_a) + 0.5) * art_a;
+  vec2 pb = (floor(to_px(cb, size) / art_b) + 0.5) * art_b;
   vec2 dir = pb - pa;
   dir = dir / max(length(dir), 0.001);
   vec2 n = vec2(-dir.y, dir.x);
