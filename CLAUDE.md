@@ -4083,9 +4083,10 @@ dressed-stone facade with a doorway and four lancets, and behind it a nave cut i
 torches lighting the windows from within, a reward on the altar stone) and `outpost` (4 × 4: a
 yard behind a broken palisade, crates and a watch platform, a stone guardhouse with four leaded
 quarry windows onto the yard and a reward on its table) and `treasury` (3 × 4: an antechamber with
-the doorways, then a hall whose long walls each hold two sealed niches behind a pair of lancets, a
-torch in each niche and a reward on its floor, reached only by breaking the glass and jumping the
-1 m sill; drawn turned, so the windows stand in 0.5 m walls and the rewards lie within the 2 m a
+the doorways, then a hall whose long walls each hold two sealed niches behind a pair of lancets,
+up in the wall as Hexen's are (the niche's floor is the 1 m sill, its roof the windows' top), a
+torch in each niche and a reward on its floor, reached only by breaking the glass and jumping onto
+the sill; pilasters between the pairs, a stone plinth, an altar stone on a dais; drawn turned, so the windows stand in 0.5 m walls and the rewards lie within the 2 m a
 reward spot may be from walkable floor, `spot-reached-p`); the `reliquary`'s screen has a rose
 window, and in the town the temple and the barracks are buildings, walled to their 5 m flat roofs
 (a plan-1 slab over them, under the 9 m vault) with a 2 m doorway each: the temple has four lancets
