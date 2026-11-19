@@ -61,7 +61,8 @@ Click the window to take the mouse. Esc pauses and lets the mouse go; Esc again 
   F12                screenshot
 
 In water, W swims where you look, Space goes up and C or Ctrl down; swim into a ledge at
-the surface to climb out. When you die, the run is over.
+the surface to climb out. When you die, the run is over, unless you saved: the death
+screen offers Quickload (F9 works there too) and Load game to take you back to a save.
 
 Settings, on the main menu and the pause menu, has fullscreen, mouse sensitivity and the
 volumes, and Controls, where any of the keys above can be changed.

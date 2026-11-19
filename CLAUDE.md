@@ -1525,8 +1525,13 @@ real time instead.
   eye to `*death-eye-height*`, rolls the view (`*death-roll*`, the player's `project-view`) and
   sinks the weapons. After `*death-panel-delay*` the `death-screen` comes up with the mouse
   released: `death-stats` (killed by, time survived, monsters slain, areas explored, damage
-  taken, the seed) and a button back to the main menu. Esc, F5 and F9 do nothing there: death
-  ends the run, with no quickload back into it. `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
+  taken, the seed), then Quickload (F9) while a quicksave exists, Load game while any slot holds a
+  save (the load panel over the death screen, its splash `death`, Back or Esc returning to it), and
+  a button back to the main menu; with no save, only that button: death ends the run. F9
+  quickloads from the moment of death, the fall too; F5 and Esc do nothing. A load rebuilds the
+  scene with a fresh player (`load-game`, `setup-scene`), so the roll, the sunk weapons, the pain,
+  `killed-by` and `death-time` go with the dead one, and it ends paused as any load does.
+  `hurt-player`'s `:by` says what killed the player (a creature, `:lava`,
   `:drowning`, `:tornado`): a new source of damage passes it. `run-time` and `damage-taken` are saved.
   Killing the boss sets `:victory` (`win-run`, boss.lisp) and the `victory-screen` comes up:
   `victory-stats` (the boss slain, then `run-stat-lines`, the rows it shares with the death
@@ -1574,7 +1579,7 @@ real time instead.
   `setting-changed` with its variable after each change (Fullscreen's method switches the
   window), and a slider row's optional fourth element is a function writing its value
   (`describe`; a percentage without). The main menu's Debug level and Boss fight are also debug-version only.
-  Load game (both menus) and Save game (the pause menu, on a generated level only) cover it
+  Load game (both menus, and the death screen) and Save game (the pause menu, on a generated level only) cover it
   the same way while `*slot-menu*` is `:load` or `:save`: a row per slot in `*save-slots*`
   (1 to 3, then the quicksave), labelled by `slot-info`, and Back (`close-slot-menu`). After
   a save the pause menu's title says where it went (`*save-note*`). F5 quicksaves and F9
@@ -4545,7 +4550,7 @@ with the haft (the spear's thrust counters a leap or dive it meets) or, with the
 shake the floor (its left button held charges the blow, let go strikes), Q to drink from the
 quickslot, I for the inventory (everything lives in the bag; drag a weapon or rune onto 1-9, a rune onto
 a rune slot's corner for its off hand, or a potion onto Q, to bind a key; see `src/inventory.lisp`), M for the automap (see `src/map-view.lisp`), F5 to
-quicksave and F9 to quickload (generated levels only), F12 for a screenshot, and E to talk to the
+quicksave and F9 to quickload (generated levels only; F9 also after death), F12 for a screenshot, and E to talk to the
 townsperson looked at (see "The settlement") or, at an altar, to open the spellforge (see
 `src/forge.lisp`).
 
