@@ -2324,9 +2324,13 @@ time `hunt` asks.
   (3 m) past where its target stood, at most `*charge-max-run*` (14 m), still crouched as in the
   tell, bobbing down `*charge-bob*` more once a stride (`show-charge-crouch`), its steps (the walk's
   distance at `*charge-stride*`, 0.75 m a step's worth) quickening with it, and its shield's foot
-  dragging sparks and grit off the floor in front of it, a little to its left
-  (`scrape-shield`, every `*charge-scrape-interval*`, up and back, by the floor's
-  `*wall-strike-kinds*`: only grit off ice, snow or wood). A sidestep of a metre makes it
+  dragging sparks and grit off the floor (`scrape-shield`, every `*charge-scrape-interval*`, by the
+  floor's `*wall-strike-kinds*`: only grit off ice, snow or wood). They start where the sprite draws
+  the shield's foot: `*charge-scrape-ahead*` in front and a little to its left, with the part of
+  that along the line of sight dropped (the sprite is flat) and `*charge-scrape-near*` toward the
+  eye; they fan up and out and keep `*charge-scrape-carry*` of its speed (spray-sparks' `:carry-x`
+  and `:carry-z`), so seen from the front they spray round its foot rather than fall behind the
+  sprite, and from the side they trail it. A sidestep of a metre makes it
   miss. Its shield stays up in front (`shielded-p`, and `block-hit` doesn't brace mid-attack), so
   frontal spells still reflect. Each tick it looks ahead:
   - **its target** within `*charge-reach*` between the bodies and `*charge-hit-arc*` (0.7 rad) of

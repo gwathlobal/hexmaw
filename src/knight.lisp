@@ -83,10 +83,15 @@ shield isn't raised at it; one whose is, it always charges.")
 (defparameter *charge-scrape-interval* 0.04 "Seconds between the sprays its shield's foot throws off the floor as it runs.")
 (defparameter *charge-scrape-sparks* 3 "Sparks a spray throws off stone (others by *WALL-STRIKE-KINDS*' share).")
 (defparameter *charge-scrape-grit* 1 "Grit a spray throws, by the same shares.")
-(defparameter *charge-scrape-ahead* 0.2 "Metres past its body's edge that the shield's foot meets the floor.")
+(defparameter *charge-scrape-ahead* 0.55 "Metres ahead of its centre that its sprite draws the shield's foot, seen from the side.")
+(defparameter *charge-scrape-near* 0.2 "Metres toward the eye the sparks start, so the sprite doesn't hide them.")
 (defparameter *charge-scrape-side* 0.15 "Metres to its left, the shield arm's side, that the shield's foot is.")
 (defparameter *charge-scrape-speed* '(2.0 5.5) "Slowest and fastest m/s the shield's sparks leave at.")
-(defparameter *charge-scrape-spread* 0.9 "Radians either side of up-and-back that the shield's sparks fan.")
+(defparameter *charge-scrape-carry* 0.7
+  "Share of its run's speed the shield's sparks keep: they spray round its foot as it comes on, seen
+from the front (left behind at once, the knight's sprite hid them), and trail it a little from the side.")
+(defparameter *charge-scrape-spread* 1.2 "Radians either side of straight up that the shield's sparks fan: any way, so some
+come toward the eye whatever the view (thrown back, they went behind the shield seen from the front).")
 (defparameter *charge-camera-shake* 0.5 "Strength of the camera kick of its crash, full within 2 m (KICK-CAMERA-FROM).")
 (defparameter *charge-shake-reach* 10.0)
 (defparameter *charge-crash-hit-stop* 0.05)
@@ -344,16 +349,29 @@ body in its way."
 (defvar *scrape-direction* (vec 0 0 0))
 
 (defun scrape-shield (knight fx fz dt)
-  "Every *CHARGE-SCRAPE-INTERVAL* of the run, sparks and grit off the floor where KNIGHT's shield
-drags along it, in front of it a little to its left, up and back from the way FX FZ it runs: as
-many as the floor's surface throws (*WALL-STRIKE-KINDS*: none off ice, snow or wood, only grit)."
+  "Every *CHARGE-SCRAPE-INTERVAL* of the run, sparks and grit off the floor where KNIGHT's sprite
+shows its shield dragging along it, in front of it a little to its left, fanned up and out (the run leaves them behind as a
+trail, though they keep *CHARGE-SCRAPE-CARRY* of its speed): as many as the floor's surface throws (*WALL-STRIKE-KINDS*: none off ice, snow or wood, only grit)."
   (when (<= (decf (charge-paw knight) dt) 0)
     (setf (charge-paw knight) *charge-scrape-interval*)
+    ;; The sprite is flat, facing the eye: the shield's foot is drawn where its offset from the
+    ;; knight's centre lands in that plane, so the part of the offset along the line of sight is
+    ;; dropped, and the sparks start a little in front of the plane.
     (let* ((loc (location knight))
-           (ahead (+ (body-radius knight) *charge-scrape-ahead*))
-           (side (* *charge-scrape-side* (size-scale knight)))
-           (x (float (+ (vx loc) (* ahead fx) (* side fz)) 0f0))
-           (z (float (+ (vz loc) (* ahead fz) (- (* side fx))) 0f0))
+           (eye (location *player*))
+           (scale (size-scale knight))
+           (ahead (* *charge-scrape-ahead* scale))
+           (side (* *charge-scrape-side* scale))
+           (ox (+ (* ahead fx) (* side fz)))
+           (oz (- (* ahead fz) (* side fx)))
+           (lx (- (vx eye) (vx loc)))
+           (lz (- (vz eye) (vz loc)))
+           (ll (max 1e-3 (sqrt (+ (* lx lx) (* lz lz)))))
+           (lx (/ lx ll))
+           (lz (/ lz ll))
+           (along (- *charge-scrape-near* (+ (* ox lx) (* oz lz))))
+           (x (float (+ (vx loc) ox (* along lx)) 0f0))
+           (z (float (+ (vz loc) oz (* along lz)) 0f0))
            (y (float (vy loc) 0f0))
            (floor (solid-at x (- y 0.05) z)))
       (when floor
@@ -362,10 +380,12 @@ many as the floor's surface throws (*WALL-STRIKE-KINDS*: none off ice, snow or w
                (sparks (floor (+ (* *charge-scrape-sparks* (getf kind :sparks)) (random 1.0))))
                (grit (floor (+ (* *charge-scrape-grit* (getf kind :grit)) (random 1.0)))))
           (setf (vx *scrape-point*) x (vy *scrape-point*) (+ y 0.03) (vz *scrape-point*) z
-                (vx *scrape-direction*) (* -0.5 fx) (vy *scrape-direction*) 1.0 (vz *scrape-direction*) (* -0.5 fz))
+                (vx *scrape-direction*) 0.0 (vy *scrape-direction*) 1.0 (vz *scrape-direction*) 0.0)
           (when (< 0 sparks)
-            (spray-sparks *scrape-point* *scrape-direction* sparks
-                          :speed *charge-scrape-speed* :spread *charge-scrape-spread*))
+            (let ((carry (* *charge-scrape-carry* *charge-speed*)))
+              (spray-sparks *scrape-point* *scrape-direction* sparks
+                            :speed *charge-scrape-speed* :spread *charge-scrape-spread*
+                            :carry-x (* carry fx) :carry-z (* carry fz))))
           (when (< 0 grit)
             (spray-sparks *scrape-point* *scrape-direction* grit
                           :kind :grit :ramp (getf kind :grit-ramp))))))))
