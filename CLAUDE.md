@@ -2432,7 +2432,9 @@ time `hunt` asks.
 - **Saving**: `charge`, `charge-yaw`, `charge-left`, `charge-stall`, `charge-bowled` and `crash-pose`, besides
   the ability-user's `ability` and `cooldowns`; a save mid-run loads mid-run. `tools/hd status`
   shows `charge:windup` or `charge:running` beside a knight's brain. `*charge-debug*` logs every
-  charge, refusal and stop. No clips of its own yet (see `audio/sfx.md`).
+  charge, refusal and stop. Its run holds the `shield-scrape` loop at its feet (`scrape-sound`,
+  `*charge-scrape-soft*` as loud off a floor that throws no sparks); its other sounds are reused
+  (see `audio/sfx.md`).
 
 To try it on the debug level: `(setf *debug-hall-monsters* t *debug-level-monsters* (list 'knight)
 *charge-debug* t)`, Debug level, then stand 6 m in front of it, in the hall's east (the west has

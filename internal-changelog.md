@@ -49,8 +49,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   The Black Knight and elite knights charge too. The knight moved to `src/knight.lisp` and became an
   `ability-user` (`:mace`, `:shield-charge`); `leaper`'s `charging-p` and `impale` call on when it
   isn't airborne. Its own strip, `knight-charge` (the crouch, two running frames and the crash, five
-  views, crouched with the shield's foot on the ground throughout); reused sounds for now (no
-  ElevenLabs credits); `tools/hd status` shows the charge.
+  views, crouched with the shield's foot on the ground throughout); its run grates its shield along
+  the floor (`shield-scrape`, a loop, quieter off stone), the rest reused sounds; `tools/hd status`
+  shows the charge.
 
 - The bloodroot streamlined: the husk and its red lamp are gone (and `blow-damage` with them), and the
   burrowing root is its one attack in place of the lobbed blood seed (gone, with `lobbed-projectile`,
