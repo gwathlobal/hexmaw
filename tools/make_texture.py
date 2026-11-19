@@ -172,6 +172,8 @@ def main():
                     help="move the mean colour to this CIE a* b*, keeping each texel's difference from it")
     ap.add_argument("--chroma", type=float, default=1.0, help="every colour's saturation, times this")
     ap.add_argument("--palette", help="map onto this palette file (art/style/palette.txt) instead of --colors")
+    ap.add_argument("--key", action="store_true",
+                    help="the source is drawn on magenta, which becomes see-through (a bloodroot's roots)")
     args = ap.parse_args()
 
     src = Image.open(args.source).convert("RGB")
@@ -189,21 +191,40 @@ def main():
     img = wrap_blend(img, args.blend)
 
     size = round(args.metres * PIXELS_PER_METRE)
+    solid = None
+    if args.key:
+        # Where at least half a texel's source isn't magenta, it is solid; the magenta under the
+        # solid texels' edges is filled with a dark tone of the roots, an outline, not a pink fringe.
+        px = img.load()
+        mask = Image.new("L", img.size)
+        mpx = mask.load()
+        for x in range(img.width):
+            for y in range(img.height):
+                r, g, b = px[x, y]
+                if r > 150 and b > 150 and g < 120:
+                    mpx[x, y] = 0
+                    px[x, y] = (52, 18, 14)
+                else:
+                    mpx[x, y] = 255
+        solid = mask.resize((size, size), Image.BOX).point(lambda a: 255 if a >= 128 else 0)
     tex = img.resize((size, size), Image.BOX)
     if args.brightness != 1.0:
         tex = tex.point(lambda v: min(255, round(v * args.brightness)))
     if args.colors and not args.palette:
         tex = tex.quantize(args.colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
     tex = finish(tex, args)
+    if solid is not None:
+        tex = tex.convert("RGBA")
+        tex.putalpha(solid)
 
     out = Path(args.out).with_suffix(".png")
     out.parent.mkdir(parents=True, exist_ok=True)
     tex.save(out)
 
-    tiled = Image.new("RGB", (size * 3, size * 3))
+    tiled = Image.new("RGB", (size * 3, size * 3), (128, 120, 110))
     for i in range(3):
         for j in range(3):
-            tiled.paste(tex, (i * size, j * size))
+            tiled.paste(tex, (i * size, j * size), tex if tex.mode == "RGBA" else None)
     source = Path(args.source)
     preview = source.with_name(source.stem + "-tiled.png")
     tiled.resize((size * 12, size * 12), Image.NEAREST).save(preview)

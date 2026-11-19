@@ -1,0 +1,29 @@
+{
+  "prompt": "A seamless tileable texture, seen flat-on from straight above, for a pixel-art dungeon game: a CARPET OF RED ROOTS creeping over a stone floor, drawn ON PURE MAGENTA (#FF00FF) so the stone can show through.\n\nREFERENCE IMAGES, in the order attached:\n1. The bloodroot, the monstrous plant these roots grow from: match the knotted dark red-brown root bark, the wet crimson flesh where a root splits, the small curved bone-coloured thorns and the glowing ember-red veins.\n2. The house style anchor: the pixel size (about 64 pixels per metre: the whole image is 2 metres across), lighting from the upper left, and the palette.\n\n- A tangled net of roots of many thicknesses, from thick knotted roots about 8 centimetres across down to thin hairs, crossing and branching over each other in every direction, with a few small thorns, some roots split showing wet red flesh, and thin glowing red veins running along the thicker roots.\n- Between the roots, gaps of flat pure magenta: about a third to half of the image is magenta, in irregular holes of many sizes. The magenta is replaced by the floor in the game.\n- It tiles seamlessly on all four sides: roots leaving one edge come in at the opposite edge.\n- Flat lighting, no shadows cast onto the magenta, no perspective, no vignette, no border.\n- Crisp pixel art with hard edges, no anti-aliasing against the magenta, no semi-transparent pixels, no pink glow.",
+  "prompt_file": null,
+  "refs": [
+    "art/bloodroot/design-2.png",
+    "art/style/anchor.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1794889826,
+  "size_request": "1024x1024",
+  "background": "auto",
+  "codex_prompt": "A seamless tileable texture, seen flat-on from straight above, for a pixel-art dungeon game: a CARPET OF RED ROOTS creeping over a stone floor, drawn ON PURE MAGENTA (#FF00FF) so the stone can show through.\n\nREFERENCE IMAGES, in the order attached:\n1. The bloodroot, the monstrous plant these roots grow from: match the knotted dark red-brown root bark, the wet crimson flesh where a root splits, the small curved bone-coloured thorns and the glowing ember-red veins.\n2. The house style anchor: the pixel size (about 64 pixels per metre: the whole image is 2 metres across), lighting from the upper left, and the palette.\n\n- A tangled net of roots of many thicknesses, from thick knotted roots about 8 centimetres across down to thin hairs, crossing and branching over each other in every direction, with a few small thorns, some roots split showing wet red flesh, and thin glowing red veins running along the thicker roots.\n- Between the roots, gaps of flat pure magenta: about a third to half of the image is magenta, in irregular holes of many sizes. The magenta is replaced by the floor in the game.\n- It tiles seamlessly on all four sides: roots leaving one edge come in at the opposite edge.\n- Flat lighting, no shadows cast onto the magenta, no perspective, no vignette, no border.\n- Crisp pixel art with hard edges, no anti-aliasing against the magenta, no semi-transparent pixels, no pink glow.\nImage size: 1024x1024 pixels (square).",
+  "codex_threads": [
+    "01a1e7c3-5c21-7bb0-8d6d-7278957d1b74",
+    "01a1e7c4-655e-7be1-8030-473f069a171b"
+  ],
+  "sizes": [
+    [
+      1254,
+      1254
+    ],
+    [
+      1254,
+      1254
+    ]
+  ]
+}

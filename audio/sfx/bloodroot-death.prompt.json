@@ -1,0 +1,19 @@
+{
+  "prompt": "A monstrous flesh plant dies: a long wet tearing split, a gurgling deflating hiss, roots and fibrous wood creaking and snapping as it withers and collapses into a heap. Retro 1990s first-person fantasy game sound effect, dry, punchy, no music.",
+  "prompt_file": "audio/prompts/sfx-bloodroot-death.txt",
+  "model_id": "eleven_text_to_sound_v2",
+  "prompt_influence": 0.3,
+  "loop": false,
+  "duration_seconds": 1.8,
+  "output_format": "pcm_44100",
+  "n": 2,
+  "created": 1794890911,
+  "request_ids": [
+    null,
+    null
+  ],
+  "seconds": [
+    1.76,
+    1.76
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "prompt": "Pixel-art monster sprite: the BLOODROOT, for a Doom/Hexen-style first-person dungeon game where monsters are drawn as sprites. One picture, seen from the front.\n\nREFERENCE IMAGES, in the order attached:\n1. The house style anchor (art/style/anchor.png): an imp, a knight, a stone wall, a floor, a flask and a sword drawn together. Match its pixel size, outline weight, lighting and palette.\n2. The imp's turnaround sheet: the pixel size and shading for a monster.\n3. The necromancer's turnaround sheet: the same, for a dark caster.\n\nTHE BLOODROOT is not a person and not an animal. It is a monstrous plant: a HEART-BULB about 1.4 metres tall, rooted in the stone floor, which never moves.\n- Its body is a swollen pod, wider at the bottom than the top like a bulb or an onion, made of knotted dark red root and raw flesh twisted together, the root bark dark brown-red and the flesh between the knots a deep wet crimson.\n- Down its front the pod is split open by a vertical MAW, an eye-shaped slit from about a third of the way up to near the top, ringed with curved pale bone-coloured THORNS like teeth, its inside a dark red throat.\n- Veins under its skin, branching over the whole pod, GLOW a dull ember red, the brightest colour on it.\n- At its foot thick roots splay out from the base in every direction and dig into the floor, a few curling up. The roots reach out a little to the sides; they stay inside the picture.\n- A few thin thorned tendrils sprout from the top of the pod and curl.\n- It is symmetrical enough that it looks the same from every side: no face but the maw, no eyes, no arms, no legs.\n- It looks dangerous and hungry: something that feeds on blood.\n\nLAYOUT\n- One bloodroot, centred, standing on a ground line near the bottom of the image, filling about two thirds of the image's height.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- No text, labels, frame borders, blood pools, effects or other objects. Only the bloodroot.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nHOUSE STYLE (Hexmaw; attach art/style/anchor.png as a style reference, and say which reference it is):\n- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.\n- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.\n- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.\n- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.\n",
+  "prompt_file": "art/prompts/bloodroot-design.txt",
+  "refs": [
+    "art/style/anchor.png",
+    "art/imp/turnaround.png",
+    "art/necromancer/turnaround-3.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 3,
+  "created": 1794888874,
+  "size_request": "1024x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art monster sprite: the BLOODROOT, for a Doom/Hexen-style first-person dungeon game where monsters are drawn as sprites. One picture, seen from the front.\n\nREFERENCE IMAGES, in the order attached:\n1. The house style anchor (art/style/anchor.png): an imp, a knight, a stone wall, a floor, a flask and a sword drawn together. Match its pixel size, outline weight, lighting and palette.\n2. The imp's turnaround sheet: the pixel size and shading for a monster.\n3. The necromancer's turnaround sheet: the same, for a dark caster.\n\nTHE BLOODROOT is not a person and not an animal. It is a monstrous plant: a HEART-BULB about 1.4 metres tall, rooted in the stone floor, which never moves.\n- Its body is a swollen pod, wider at the bottom than the top like a bulb or an onion, made of knotted dark red root and raw flesh twisted together, the root bark dark brown-red and the flesh between the knots a deep wet crimson.\n- Down its front the pod is split open by a vertical MAW, an eye-shaped slit from about a third of the way up to near the top, ringed with curved pale bone-coloured THORNS like teeth, its inside a dark red throat.\n- Veins under its skin, branching over the whole pod, GLOW a dull ember red, the brightest colour on it.\n- At its foot thick roots splay out from the base in every direction and dig into the floor, a few curling up. The roots reach out a little to the sides; they stay inside the picture.\n- A few thin thorned tendrils sprout from the top of the pod and curl.\n- It is symmetrical enough that it looks the same from every side: no face but the maw, no eyes, no arms, no legs.\n- It looks dangerous and hungry: something that feeds on blood.\n\nLAYOUT\n- One bloodroot, centred, standing on a ground line near the bottom of the image, filling about two thirds of the image's height.\n- Background: flat pure magenta (#FF00FF) everywhere, with no gradient, texture, vignette, glow, cast shadow or floor.\n- No text, labels, frame borders, blood pools, effects or other objects. Only the bloodroot.\n- Crisp pixel art with hard edges and no anti-aliasing against the magenta. No semi-transparent pixels, and no pink or purple glow bleeding into the background.\nHOUSE STYLE (Hexmaw; attach art/style/anchor.png as a style reference, and say which reference it is):\n- Crisp pixel art at the same pixel size as the reference sheet: about 64 pixels per metre for anything in the world, every pixel square and hard-edged, no anti-aliasing, no blur, no soft glow, no semi-transparent pixels, no dithering gradients.\n- Lit from the upper left: lighter top-left faces, darker bottom-right ones, a few hard-edged tones per material, the same contrast as the imp and the knight on the reference.\n- Colours from the reference's palette: warm grey-brown stone, dark iron, muted earth tones, and bright saturated colour only for fire, magic and blood.\n- Outlines as on the reference: the shape's edge a dark tone of what it encloses, not a uniform black line.\nImage size: 1024x1024 pixels (square).",
+  "codex_threads": [
+    "01a1e7b3-cb08-7460-b917-718ba79fd958",
+    "01a1e7b4-b94f-7bb2-a12b-8c3399994490",
+    "01a1e7b5-b17b-7da2-835f-61cf44cde8e0"
+  ],
+  "sizes": [
+    [
+      1254,
+      1254
+    ],
+    [
+      1254,
+      1254
+    ],
+    [
+      1254,
+      1254
+    ]
+  ]
+}

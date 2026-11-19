@@ -1,0 +1,7 @@
+Pixel-art sprite sheet: the BLOODROOT's two attacks, for a Doom/Hexen-style first-person dungeon game where monsters are drawn as sprites. Seen from the front only.
+
+THE FRAMES:
+- Cell 1, AT REST: a plain copy of reference 1, exactly as tall, exactly the same. It sets the scale for the other frames.
+- Cells 2 to 5, THE SPIT: it spits a blood seed. Cell 2 GATHER: the pod draws back and in, the maw shut, a bulge rising up inside it toward the maw. Cell 3 SWELL: the bulge at the top of the maw, the maw starting to part, the pod tipped back a little. Cell 4 SPIT: the maw thrown wide open and the pod lunging forward and up, a round dark-red seed pod the size of a fist flying out of the maw upward, a splash of blood with it. Cell 5 RECOVER: settling back to rest, the maw closing.
+- Cells 6 to 9, THE BLOOM: it bursts with blood-magic. Cell 6 SWELL: the pod swollen much bigger and rounder than at rest, the veins glowing bright red-orange all over it. Cell 7 CLENCH (the warning, held a long moment): the whole pod clenched tight and trembling, every vein blazing bright red and orange-yellow, the maw clamped shut, the tendrils rigid and pointing up, a dull red glow on the pod. Cell 8 BURST: the maw and the pod burst wide open like a flower, the thorns splayed out, the tendrils flung outward, the veins at their brightest, the inside of the pod wet and red. Cell 9 RECOVER: closing back up toward rest, the veins dimming.
+- A grid of 3 rows of 3 equal cells: cells 1 to 3 in the top row, 4 to 6 in the middle row, 7 to 9 in the bottom row, read left to right.

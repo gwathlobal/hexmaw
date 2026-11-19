@@ -132,3 +132,16 @@ votary-beam 2
 arc-zap 1 3
 votary-whine 2 even      # swells at its end otherwise
 votary-recoil 1          # 2 and 3 clip
+bloodroot-alert 1        # take 2 clips
+bloodroot-pain 1         # take 2 clips
+bloodroot-death 1        # both clip; take 1 less
+seed-impact 1           # take 1 is faint
+bloom-swell 2            # both clip; take 2 far less
+bloom 2
+root-drink 2
+snare-tell 2
+snare-grab 2
+snare-break 2
+burrow-rumble 1           # take 2 clips
+burrow-erupt 2            # take 1 clips
+roots-burn 1

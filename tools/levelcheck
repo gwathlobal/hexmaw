@@ -15,8 +15,8 @@ game with `*level-seed*` 5 plays, and its levels are those that game builds. The
 line per level, its warnings under it, then a summary per depth and the warnings by class.
 `--json` prints the workers' records instead, one JSON object a line. `--strict` exits 1 on a
 worker error, a kit problem, a doorway the player can't walk to, a stranded creature other
-than an ogre, an ice gate joined wrong, a doorway opening onto nothing, or a level with no
-way off after every seed it may try. Stranded ogres are expected (CLAUDE.md, "The ogre").
+than an ogre, an ice gate joined wrong, a doorway opening onto nothing, a doorway a rooted
+creature (a bloodroot) cuts off, or a level with no way off after every seed it may try. Stranded ogres are expected (CLAUDE.md, "The ogre").
 
 Stale blueprints are built first (tools/blueprint --stale), so the workers never write blocks.
 """
@@ -38,7 +38,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Warnings the structured checks already cover (or that only say a seed was retried).
 KNOWN = re.compile(r"can't walk to the spawn point|Can't walk to .* from the spawn point|"
-                   r"Ice gate joined|trying another seed|No level that will do|opens onto nothing")
+                   r"Ice gate joined|trying another seed|No level that will do|opens onto nothing|"
+                   r"A rooted creature cuts")
 EXPECTED_STRANDED = {'ogre', 'elite-ogre'}
 
 
@@ -155,6 +156,8 @@ def classify(record):
         found.append(('stranded ogre' if c in EXPECTED_STRANDED else 'stranded creature!', c))
     if record['ice_joins']:
         found.append(('ice join!', '%d joins' % record['ice_joins']))
+    if record.get('blocked_by_rooted'):
+        found.append(('blocked by a rooted creature!', '%d doorways' % record['blocked_by_rooted']))
     for w in record['warnings']:
         if 'opens onto nothing' in w:
             found.append(('doorway onto nothing!', w))

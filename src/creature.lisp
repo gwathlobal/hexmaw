@@ -1813,6 +1813,17 @@ after the flinch, block and attack.")
 1, more for a deeper crouch): an imp crouches lower to leap round the player (imp.lisp).")
   (:method ((creature creature) squash) squash))
 
+(defgeneric rooted-p (creature)
+  (:documentation "True if CREATURE never leaves its spot (a bloodroot, bloodroot.lisp): a body that
+may stand in a way, which a riftwalker never calls and the level check makes sure blocks none.")
+  (:method (creature) NIL))
+
+(defgeneric own-tint (creature tint)
+  (:documentation "Tint CREATURE's sprite as its own state shows (a bloodroot's Glut, a red wash),
+in TINT, the vec4 its hit flash and status set this tick: only where it is stronger. Every tick,
+frozen too.")
+  (:method (creature tint) NIL))
+
 (defun update-creature-look (creature)
   "Set texture, frame, tint and scaling from walking, attacking, flash, stagger and death."
   (let ((tint (tint creature))
@@ -1823,7 +1834,8 @@ after the flinch, block and attack.")
     (setf (vx tint) (vx *flash-color*) (vy tint) (vy *flash-color*) (vz tint) (vz *flash-color*)
           (vw tint) (* f (vw *flash-color*)))
     (unless (dead creature)
-      (status-tint creature tint))
+      (status-tint creature tint)
+      (own-tint creature tint))
     (setf (texture creature) (body-texture creature))
     (setf (vx scale) (* (vx base) (+ 1 (* s *stagger-squash* 0.7)))
           (vy scale) (* (vy base) (- 1 (* s *stagger-squash*)))

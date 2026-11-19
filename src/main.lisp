@@ -154,7 +154,11 @@ RGBA-ICON would put them. An icon that won't load only logs."
       ;; And the sigils they rise from.
       (preload (make-instance 'summon-sigil :centre (vec 0 0 0) :animation (find-fx-animation 'summon-sigil)) scene)))
   (add-blood-pool scene)
+  ;; Blood for the debug level's bloodroot to drink (bloodroot.lisp).
+  (when (and (eq *level* :test) (not *pending-load*))
+    (lay-debug-blood))
   (add-skin-floors scene)
+  (add-root-floor scene)
   (add-spark-pool scene)
   (add-bolt-lines scene)
   (add-settlement-director scene)
@@ -175,6 +179,8 @@ RGBA-ICON would put them. An icon that won't load only logs."
   (preload-hag scene)
   ;; And an acolyte's firestorm.
   (preload-firestorm scene)
+  ;; And a bloodroot's seeds and snare.
+  (preload-bloodroot scene)
   ;; So are raised skeletons.
   (preload (make-instance 'skeleton-warrior) scene)
   ;; And on the test level the guards STAGE-FIGHT (level.lisp) sets against monsters.

@@ -22,7 +22,7 @@
      :sight 1.15 :hearing 1.3 :alert 1.3 :pause 0.85 :cooldown 0.9)
     (:rooms 22 :exit "arena" :altar-chance 0.4
      :pool (("imp" 2) ("acolyte" 1) ("knight" 2) ("harpy" 1) ("necromancer" 2) ("ogre" 2) ("gale-wraith" 2)
-            ("riftwalker" 2) ("arc-votary" 1))
+            ("riftwalker" 2) ("arc-votary" 1) ("bloodroot" 1))
      :loot (:weapons 2 :enchant-chance 0.8 :enchant-cost (3 6) :enchant-effects 2
             :runes 2 :rune-power (24 40) :rune-effects 3 :area-chance 0.5 :authored-chance 0.5)
      :skip-scale 0.5 :elite-chance 0.2 :abilities (:firestorm :flank-leap :rime-field :blizzard :static-recoil)
@@ -106,12 +106,25 @@ stay as they were. *SETTLEMENT-OVERRIDE*'s :DEPTH fixes it (settlement.lisp)."
       (let ((random (sb-ext:seed-random-state (logxor run-seed #x5E771E))))
         (nth (random (length *settlement-depths*) random) *settlement-depths*))))
 
+(defparameter *last-level-kinds* '("bloodroot")
+  "Kinds that debut on the last level of *RUN-LEVELS* and no earlier: a settlement that comes before
+it borrows its :POOL without them.")
+
+(defun settlement-keys (borrowed)
+  "BORROWED, a level's keys the settlement takes, with its :POOL kept from *LAST-LEVEL-KINDS*."
+  (let ((pool (getf borrowed :pool)))
+    (if pool
+        (list* :pool (remove-if (lambda (entry) (member (first entry) *last-level-kinds* :test #'string-equal)) pool)
+               borrowed)
+        borrowed)))
+
 (defun run-levels ()
   "The run's levels, first to last: *RUN-LEVELS* with *SETTLEMENT-LEVEL* at its depth, as hard as
-the level after it (or the last), whose keys it doesn't give itself."
+the level after it (or the last), whose keys it doesn't give itself, but the kinds that debut on
+the last level (*LAST-LEVEL-KINDS*)."
   (let ((at (min (1- (settlement-depth (current-run-seed))) (length *run-levels*))))
     (append (subseq *run-levels* 0 at)
-            (list (append *settlement-level* (nth (min at (1- (length *run-levels*))) *run-levels*)))
+            (list (append *settlement-level* (settlement-keys (nth (min at (1- (length *run-levels*))) *run-levels*))))
             (nthcdr at *run-levels*))))
 
 (defun run-length () (length (run-levels)))

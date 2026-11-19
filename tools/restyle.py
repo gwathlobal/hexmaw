@@ -28,7 +28,7 @@ from pixelart import adjust_tone, quantize_to_palette, read_palette, selout
 
 ROOT = Path(__file__).resolve().parent.parent
 PALETTE = ROOT / "art/style/palette.txt"
-OUTLINED = ["acolyte", "gate", "grave/spikes", "guard", "hands", "harpy", "imp", "knight", "maul",
+OUTLINED = ["acolyte", "bloodroot", "gate", "grave/spikes", "guard", "hands", "harpy", "imp", "knight", "maul",
             "necromancer", "ogre", "pickups", "rift/sign", "riftwalker", "skeleton", "spear",
             "sword", "torch", "townsfolk", "townsman", "townswoman", "wraith"]
 

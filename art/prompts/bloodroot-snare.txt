@@ -1,0 +1,13 @@
+Pixel-art sprite sheet: the BLOODROOT'S SNARE, for a Doom/Hexen-style first-person dungeon game: thorned red roots bursting up out of the stone floor to grab a player's legs. The player is not drawn: only the roots. Seen from the side, upright, standing on the ground line.
+
+The roots are the bloodroot's own (reference 1): knotted dark red-brown root bark, wet crimson where it splits, curved bone-coloured thorns, glowing ember-red veins.
+
+THE FRAMES, each the same width, the roots about 60 centimetres tall at their tallest, in proportion to reference 1's 1.4 metre bulb:
+- Cell 1, BULGE: a low mound of roots heaving up just above the ground line, a few root tips poking out.
+- Cell 2, BULGE HIGHER: the mound higher, cracks in it glowing red, thorn tips showing.
+- Cell 3, ERUPT: three or four thick thorned roots shooting straight up out of the floor, tall and straight, flecks of grit flying.
+- Cell 4, LASH: the roots at their tallest, starting to curl inward at their tips like grasping fingers.
+- Cell 5, GRIP: the roots curled tightly round an empty space in the middle, as if wrapped round a leg, thorns pointing in, veins glowing.
+- Cell 6, GRIP SQUEEZE: the same, squeezed a little tighter, the veins brighter.
+- Cells 7 and 8: empty, plain magenta.
+- A grid of 2 rows of 4 equal cells: cells 1 to 4 in the top row, 5 to 8 in the bottom row, read left to right.

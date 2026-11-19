@@ -632,7 +632,9 @@ victory screens share."
         (max-health player) *player-max-health*
         (max-mana player) *max-mana*
         (max-stamina player) *max-stamina*
-        (blessed player) 0.0)
+        (blessed player) 0.0
+        (snare player) NIL
+        (snare-guard player) 0.0)
   ;; A fresh bag: the starting kit, bound to its keys.
   (give-starting-kit player)
   (let ((rot (rotation player))) (setf (vx rot) 0f0 (vy rot) 0f0 (vz rot) 0f0))

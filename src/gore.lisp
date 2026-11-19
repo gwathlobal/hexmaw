@@ -55,6 +55,7 @@ so overlapping ones don't flicker.")
 (defparameter *max-splats* 400 "Splats a level keeps; past that the oldest dissolve.")
 (defparameter *splat-lifetime* NIL "Seconds before a splat dissolves of its own accord; NIL to keep it.")
 (defparameter *splat-dissolve-time* 1.0 "Seconds a splat takes to dissolve.")
+(defparameter *splat-glow-rate* 3.0 "Pulses a second of a glowing splat (one a bloodroot drinks).")
 (defparameter *splat-radii* '(2.1 2.8 3.6 4.6 6.0 7.5 9.0 10.5)
   "Radius in art pixels of each round splat size, as tools/draw_blood.py draws them
 (ROUND_RADII). The first four are the splats the four drop sizes leave.")
@@ -100,7 +101,9 @@ at least this fraction of its most.")
    (frame :reader pool-frame :documentation "Per particle: its frame in the strip; a gib's unturned one.")
    (side :reader pool-side
          :documentation "Per splat: the face it lies on, 0 to 5 for +X -X +Y -Y +Z -Z, and in
-bits 3 to 5 its turn (quarter turns, then a mirror). Per gib: bit 0 to tumble
+bits 3 to 5 its turn (quarter turns, then a mirror), bit 6 if it glows (a bloodroot's
+roots are drinking it: SET-SPLAT-GLOW) and bit 7 if it flows, carried along the floor to the
+bloodroot (FLOW-SPLAT). Per gib: bit 0 to tumble
 anticlockwise, bit 1 to mirror, bits 2 and 3 the quarter turn it starts at, bit 4 if it
 leaves no blood.")
    (scales :reader pool-scales :documentation "Per gib: the size it is drawn at, 1 as the art is.")
@@ -491,6 +494,70 @@ the drop isn't needed."
             (aref ages oldest) 0f0)
       (decf (splat-count pool)))))
 
+;;; Other code reads splats only through these, so the pool's layout stays this file's: a
+;;; bloodroot's roots drink them (bloodroot.lisp).
+
+(defun splat-lying-p (pool i)
+  "True if slot I of POOL is a splat, not dissolving."
+  (= 2 (aref (pool-state pool) i)))
+
+(defun splat-place (pool i)
+  "Slot I's splat: values its X Y Z, the face it lies on (0 to 5 for +X -X +Y -Y +Z -Z, 2 a
+floor) and its blood, an area in art pixels squared."
+  (let ((p (pool-positions pool)) (b (* 3 i)))
+    (values (aref p b) (aref p (+ b 1)) (aref p (+ b 2))
+            (logand 7 (aref (pool-side pool) i))
+            (aref (pool-velocities pool) b))))
+
+(defun set-splat-glow (pool i)
+  "Make slot I's splat glow, as a bloodroot's roots drink it, until it is gone."
+  (setf (aref (pool-side pool) i) (logior 64 (aref (pool-side pool) i))))
+
+(defun splat-glows-p (pool i)
+  (logbitp 6 (aref (pool-side pool) i)))
+
+(defun flow-splat (pool i)
+  "Make slot I's splat a flowing one, which a bloodroot's roots carry to it (MOVE-SPLAT): round,
+glowing, and left alone by the roots' scan. Returns I."
+  (let* ((frames (pool-frame pool))
+         (frame (aref frames i))
+         (size (splat-size-for (aref (pool-velocities pool) (* 3 i)))))
+    (setf (aref frames i) (+ 4 (* 8 (if (round-splat-p frame) (floor (- frame 4) 8) 0)) size)
+          ;; On the floor, its turn kept, glowing and flowing.
+          (aref (pool-side pool) i) (logior 2 192 (logand 56 (aref (pool-side pool) i))))
+    i))
+
+(defun splat-flowing-p (pool i)
+  (logbitp 7 (aref (pool-side pool) i)))
+
+(defun spawn-flowing-splat (pool x y z area)
+  "A new flowing splat (FLOW-SPLAT) of AREA art pixels squared, over pi, on the floor at X Y Z.
+Returns its slot."
+  (let ((i (free-slot pool))
+        (p (pool-positions pool)))
+    (setf (aref (pool-state pool) i) 2
+          (aref (pool-ages pool) i) 0f0
+          (aref (pool-frame pool) i) (+ 4 (* 8 (random 3)))
+          (aref (pool-side pool) i) (* 8 (random 8))
+          (aref (pool-velocities pool) (* 3 i)) (float area 0f0)
+          (aref p (* 3 i)) (float x 0f0) (aref p (+ 1 (* 3 i))) (float y 0f0) (aref p (+ 2 (* 3 i))) (float z 0f0))
+    (incf (splat-count pool))
+    (flow-splat pool i)))
+
+(defun move-splat (pool i x y z)
+  "Lay slot I's splat at X Y Z, if it is still a flowing splat; true if it was."
+  (when (and (<= 2 (aref (pool-state pool) i) 3) (splat-flowing-p pool i))
+    (let ((p (pool-positions pool)) (b (* 3 i)))
+      (setf (aref p b) (float x 0f0) (aref p (+ b 1)) (float y 0f0) (aref p (+ b 2)) (float z 0f0))
+      T)))
+
+(defun dissolve-splat (pool i)
+  "Start slot I's splat dissolving now, as the oldest does when there are too many."
+  (when (splat-lying-p pool i)
+    (setf (aref (pool-state pool) i) 3
+          (aref (pool-ages pool) i) 0f0)
+    (decf (splat-count pool))))
+
 (defun lay-splat (pool i face)
   "Turn drop I of POOL, which has landed on FACE (0 to 5 for +X -X +Y -Y +Z -Z), into a
 splat, or into a bigger one already there. A fast drop smears into a streak on the floor,
@@ -846,7 +913,9 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
                          ;; Off the surface, a different height for neighbours in the pool.
                          (off (* lift (+ 1 (mod i 3))))
                          (cx (+ x (* nx off))) (cy (+ y (* ny off))) (cz (+ z (* nz off)))
-                         (fade (if (= 3 s) (min 1f0 (/ (aref ages i) dissolve-time)) 0f0)))
+                         (fade (+ (if (= 3 s) (min 1f0 (/ (aref ages i) dissolve-time)) 0f0)
+                                  ;; Glowing: the shader reads 2 over its fade.
+                                  (if (logbitp 6 (aref sides i)) 2f0 0f0))))
                     (loop for c from 0 below 12 by 2
                           for a = (aref corners c)
                           for bb = (aref corners (1+ c))
@@ -872,6 +941,8 @@ bounces off what it hits, leaving a splat, and rests on the floor once slow enou
       (set-fog-uniforms program)
       (setf (uniform program "light_snap") (float *sprite-light-snap* 0f0))
       (setf (uniform program "light_bands") (float *sprite-light-bands* 0f0))
+      (setf (uniform program "clock") (float *light-clock* 0f0))
+      (setf (uniform program "glow_rate") (float *splat-glow-rate* 0f0))
       (render-array (pool-vao pool) :vertex-count count))))
 
 (define-class-shader (blood-pool :vertex-shader)
@@ -906,15 +977,20 @@ in vec3 v_view_position;
 in vec3 v_normal;
 in float v_fade;
 uniform sampler2D texture_image;
+uniform float clock;
+uniform float glow_rate;
 out vec4 color;
 
 void main(){
   color = texture(texture_image, uv);
   if(color.a < 0.5) discard;
-  // Dissolving: art pixels drop out in a fixed random order as V_FADE rises.
-  if(v_fade > 0.0){
+  // A fade of 2 or more glows (a bloodroot drinking it), the rest of it the fade.
+  float glowing = v_fade > 1.5 ? 1.0 : 0.0;
+  float fade = v_fade - 2.0 * glowing;
+  // Dissolving: art pixels drop out in a fixed random order as the fade rises.
+  if(fade > 0.0){
     vec2 texel = floor(uv * vec2(textureSize(texture_image, 0)));
-    if(fract(sin(dot(texel, vec2(12.9898, 78.233))) * 43758.5453) < v_fade) discard;
+    if(fract(sin(dot(texel, vec2(12.9898, 78.233))) * 43758.5453) < fade) discard;
   }
   // A splat is lit and shaded like the face it lies on; a drop like a sprite.
   float splat = dot(v_normal, v_normal);
@@ -923,5 +999,12 @@ void main(){
   vec3 surface = color.rgb * shade;
   vec3 light = band_light(light_at(snap_position(v_world_position), v_normal, splat, v_world_position + v_normal * 0.05));
   vec3 lamp = lamp_part(light);
-  color.rgb = fog_lit(surface * (light - lamp), surface * lamp, length(v_view_position));
+  // Glowing: lit from within, bright crimson pulsing in two steps, so it shows on the roots' reds.
+  vec3 glow = surface * lamp;
+  if(glowing > 0.5){
+    float pulse = sin(clock * 6.2832 * glow_rate) > 0.0 ? 1.0 : 0.0;
+    glow += vec3(1.5, 0.22, 0.2) * (0.75 + 0.45 * pulse) + color.rgb * 0.8;
+    surface *= 0.25;
+  }
+  color.rgb = fog_lit(surface * (light - lamp), glow, length(v_view_position));
 }")

@@ -26,7 +26,9 @@
     ("gale-wraith" wraith-boss gale-wraith "Storm Wraith" 1.7 (:flyer :caster))
     ("riftwalker" riftwalker-boss riftwalker "Rift Lord" 1.6 ())
     ("rime-hag" hag-boss rime-hag "Winter Crone" 1.7 (:caster))
-    ("arc-votary" votary-boss arc-votary "Arc Hierophant" 1.6 (:caster)))
+    ("arc-votary" votary-boss arc-votary "Arc Hierophant" 1.6 (:caster))
+    ;; Rooted: no power that moves it (bloodroot.lisp); it hunts from range as a caster does.
+    ("bloodroot" bloodroot-boss bloodroot "Mother Root" 1.7 (:caster :rooted)))
   "What a boss can be: the kind as a spawn names it, the boss's class, the class it is an
 empowered form of, its title, how much bigger it is drawn, and its traits, which deny it
 powers. Every kind is as likely.")
@@ -550,7 +552,7 @@ melee kind right behind it. A cell its body fits in the arena, in sight of the t
 ;; The wraith's tornado: the sign is drawn under the player when the cast begins, and the
 ;; tornado forms on it at the release (wraith.lisp). Only one of its own up at a time.
 (define-boss-power :tornado
-  :label "Tornado" :cooldown 16.0 :frame-times '(0.3 1.2 0.25 0.35) :pause 1.0 :deny '("gale-wraith")
+  :label "Tornado" :cooldown 16.0 :frame-times '(0.3 1.2 0.25 0.35) :pause 1.0 :deny '("gale-wraith" :rooted)
   :usable (lambda (boss)
             (and (boss-sees-target-p boss 14.0) (not (own-vortex boss))
                  (not (target-swimming-p (hunt-target boss))) (not (whirl (hunt-target boss)))))
@@ -572,7 +574,7 @@ melee kind right behind it. A cell its body fits in the arena, in sight of the t
   :release #'summon-minions)
 
 (define-boss-power :blink
-  :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4 :deny '("riftwalker")
+  :label "Blink" :cooldown 10.0 :frame-times '(0.35 0.1 0.15 0.25) :hit-frame 1 :pause 0.4 :deny '("riftwalker" :rooted)
   :usable (lambda (boss)
             (if (ranged-p boss)
                 (< (target-distance boss) 4.0)
@@ -580,7 +582,7 @@ melee kind right behind it. A cell its body fits in the arena, in sight of the t
   :release #'boss-blink)
 
 (define-boss-power :warded
-  :label "Warded" :passive T :deny '("knight"))
+  :label "Warded" :passive T :deny '("knight" :rooted))
 
 (define-boss-power :haste
   :label "Haste" :passive T)
@@ -695,7 +697,7 @@ void main(){
     (let ((k (float scale 0f0)))
       ;; The billboard and the creature have already sized it from its kind's height.
       (setf (sprite-height boss) (* k (sprite-height boss))
-            (slot-value boss 'size-scale) k)
+            (slot-value boss 'size-scale) (* k (size-scale boss)))
       (nv* (scaling boss) k)
       (nv* (base-scaling boss) k)
       (setf (body-radius boss) (min *boss-max-radius* (* k (body-radius boss)))

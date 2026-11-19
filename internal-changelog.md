@@ -7,6 +7,74 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The bloodroot streamlined: the husk and its red lamp are gone (and `blow-damage` with them), and the
+  burrowing root is its one attack in place of the lobbed blood seed (gone, with `lobbed-projectile`,
+  the seed's art and the `bloodroot-spit` sound): 2 to 20 m, every 3 s (1.5 in Glut), erupting as a
+  patch of roots. It leaves a trail of tufts and tall thorned roots bursting up behind it
+  (`burrow-root`). A blow frees the player from its roots as it lands, not as it is pressed.
+- The bloodroot glows red, pulsing with its heartbeat, and its light goes out while its husk is shut,
+  so it can be seen to be shut across a room. Its husk closing and cracking and its burrowing root
+  (a rumble that follows the root under the floor, and its eruption) have sounds.
+- While the bloodroot's husk is shut, the heartbeats on its roots run back in to the bulb, dimmer,
+  so it can be seen to be shut from a distance.
+- The bloodroot answers attacks from afar: three blows from beyond 4 m shut its husk for 4 s (a
+  quarter of ranged damage gets through, it heals 3 a second; a close blow or a forced flinch cracks it
+  open for 1.5 times the blow and a reel), and at a target 9 to 26 m off it sends a root burrowing under
+  the floor at where they stood, erupting as a root patch that strikes and starts to snare them.
+  `hurt` and `burn` now ask `blow-damage`.
+- The bloodroot's snare warns for 1.1 s before it grabs (0.6 before), and its roots spread at 0.25 m/s
+  (0.1 m a ring), not 0.6.
+- A bloodroot's roots spread in round rings, bulging smoothly toward the player and blood, not in
+  squares: each ring moves a circle out (`carpet-spread`) and cells grow only inside it.
+- Blood a bloodroot drinks now slides to it as itself: the splat, made round and glowing, moves along
+  the floor to the bulb and dissolves there (a wall splat sends one from the floor at its foot), and
+  the glow on the roots under it is a round drop with two smaller ones trailing, not a square streak.
+- Any attack (a swing, thrust, the maul's charge, a cast or a bash) tears the player free of a
+  bloodroot's snare, and a status icon (`:snare`, a red-bordered pair of twisting roots) shows it:
+  blinking while the roots close, steady with the seconds left while they hold.
+- The bloodroot's snare warns plainly: six 1.4 m roots shoot up in a ring 1.1 m round the player's
+  feet and writhe, reaching the lower third of the view looking straight ahead (the four 0.8 m mounds
+  at 0.45 m stood under the view). The strip is sliced finer, at the house density.
+- Once the bloodroot's snare holds, taller roots (2.2 m, `snare-grip`, a new strip) surge up in place
+  of the tell's, arch over the player and coil, reaching over half the view's height.
+- The debug level lays puddles of blood round its bloodroot when built and each time it revives
+  (`lay-debug-blood`), so its drinking can be watched.
+
+- The bloodroot's drinking shows: blood on its roots glows crimson and pulses (a splat bit the blood
+  shader reads), lies a second, then dissolves with blood motes rising off it, and a streak of light
+  runs through the roots and tufts from where it lay to the bulb, which flushes red and heals as it
+  arrives. The roots are drawn under the splats now (2.5 mm off the floor, was 14). Before, the
+  splats were drunk unseen: dark red on the red carpet, gone the moment they landed.
+
+- The bloodroot's roots stand up and glow: tufts of thorned roots (a new generated strip, eight
+  tufts) rise out of most rooted cells, facing the camera, and the veins of the floor roots and the
+  tufts glow, flaring with a heartbeat that runs out from the bulb, so the carpet shows across a
+  dark room. About 0.7 ms of GPU a frame with a full carpet in view.
+
+- **The bloodroot, the last level's new monster** (src/bloodroot.lisp): a heart-bulb rooted in the
+  floor that never moves, on the third `*run-levels*` entry only (its pool, and the hall's and the
+  crypt's named spawns; a settlement before it borrows the pool without it, `*last-level-kinds*`).
+  Its roots (`root-carpet`) spread over the nav grid's cells a ring at a time, leaning toward its
+  target and spilt blood, and climb the walls as a look; standing on them drains the player (3 a
+  second, the bulb healing what they lose) and slows them, and a second on them snares (a 0.6 s
+  tell a jump or a step off escapes, then 1.5 s held at 8 a second; a bash, a sweep, the earthshake,
+  fire or frost under the feet frees). They drink blood splats. It spits seeds (`lobbed-projectile`,
+  the first arcing projectile) that plant 2.5 m patches, and its Bloom is an 8 m drain nova that
+  feeds on its own side too; after a Bloom or a big drink it gluts (twice as fast, washed red,
+  `own-tint`). Fire burns roots back and any frost holds them, through the shared engine's
+  `strike-skins`; a rime patch over them holds them too. Resists drain and frost, takes half again
+  from fire, teaches drain. Elite (never warded) and boss, the Mother Root (no leap, blink, tornado
+  or ward; roots over the whole arena). Drawn by its own `root-floor`, cells cut ragged from each
+  corner's cover and spread and climbed in the shader, rewritten only when a carpet changes: 1.3
+  ms of GPU with a full carpet filling the view. Saved with its carpets (`root-state`), and the
+  player's snare.
+- **A creature's drain strikes the player and heals any caster** (`apply-effect :drain` on the
+  player, `heal-caster`, `drain-share`), for what the target lost; drain is resisted as an element.
+- **`*unblockable-spells*`**, `launch-projectile`'s `:class`, gore.lisp's splat readers
+  (`splat-lying-p`, `splat-place`, `dissolve-splat`), `rooted-p`, `own-tint`.
+- **`tools/levelcheck` fails a level where a rooted creature cuts a doorway off** (`rooted-blocks`,
+  kit.lisp; `blocked_by_rooted`), and `build-level` uproots one that would (`uproot-blockers`), and `make_texture.py --key` keys a texture drawn on magenta to
+  see-through.
 - **The arc votary, a shock monster from level 2 on** (src/votary.lisp). A blind storm-priest that charges
   for 0.9 s (a crackle between its hands, a swelling lamp, a faint ranging line) and then holds a
   shock beam up to 2 s, 3 to 4 a pulse every 0.25 s, turning after its target at only 0.9 rad/s: run

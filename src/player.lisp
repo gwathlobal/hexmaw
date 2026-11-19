@@ -105,6 +105,11 @@ projectile, a mana beam and a stamina nova, to try them.")
    (feet :initform (vcopy *spawn-point*) :accessor feet)
    (velocity :initform (vec 0 0 0) :accessor velocity)
    (grounded :initform NIL :accessor grounded)
+   (snare :initform NIL :accessor snare
+          :documentation "NIL, or a bloodroot's roots closing on or holding the player (bloodroot.lisp): a
+plist :ROOT (the bloodroot), :PHASE (:TELL, then :HELD), :LEFT (seconds of it) and :AT (its point).")
+   (snare-guard :initform 0.0 :accessor snare-guard
+                :documentation "Seconds until roots may close on the player again, after a snare.")
    (footing :initform NIL :accessor footing
             :documentation "The footing (*FOOTINGS*) of the floor it stood on last tick, or NIL.")
    (eye :initform *eye-height* :accessor eye)
@@ -489,7 +494,8 @@ aim; or let it go."
                      (first (= 0 (channel-count player)))
                      (end (beam-strike pulse origin dir (container player) player :quiet (not first))))
                 (when first
-                  (play-sound :beam-cast))
+                  (play-sound :beam-cast)
+                  (break-snare player))
                 (pay player resource cost)
                 (incf (channel-timer player) *beam-pulse*)
                 (incf (channel-count player))
@@ -521,6 +527,8 @@ overcharged), or a nova bursts round the player."
   (let ((spell (overcharged-spell (pending-spell player) (overcharge player))))
     (setf (pending-spell player) NIL
           (overcharge player) 0.0)
+    ;; As it leaves the hands, it tears free of roots holding the player (bloodroot.lisp).
+    (break-snare player)
     (play-sound (if (eq (spell-name spell) 'tempest) :tempest-cast :bolt-cast))
     (apply-self-effects spell player player)
     (case (spell-delivery spell)
@@ -989,7 +997,12 @@ and not the last step of the stair.")
   (setf (cast-timer player) (max 0.0 (- (cast-timer player) dt))
         (pain player) (max 0.0 (- (pain player) dt))
         (restore-flash player) (max 0.0 (- (restore-flash player) dt))
-        (guard-broken player) (max 0.0 (- (guard-broken player) dt)))
+        (guard-broken player) (max 0.0 (- (guard-broken player) dt))
+        (snare-guard player) (max 0.0 (- (snare-guard player) dt)))
+  ;; Roots let go of a player whose bloodroot is dead or gone (a reset, a rebuild).
+  (let ((root (getf (snare player) :root)))
+    (when (and root (or (dead root) (not (find root *creatures* :test #'eq))))
+      (break-snare player NIL)))
   (when (statuses player)
     (update-statuses player dt))
   (when (cast-time player)
@@ -1034,7 +1047,9 @@ and not the last step of the stair.")
                          (T 1.0))
                    (if (< iz 0.0) *backpedal-scale* 1.0)
                    (if kind (liquid-property kind :speed) 1.0)
-                   (slow-factor player))))
+                   (slow-factor player)
+                   ;; Held by a bloodroot's roots: no walk, though the hands still work.
+                   (if (snared-p player) 0.0 1.0))))
     (when (< 1.0 wlen)
       (setf wx (/ wx wlen) wz (/ wz wlen)))
     (whirl-transitions player dt)
@@ -1143,6 +1158,19 @@ while they slide on ice, nor a floor under water, and their own falls only from 
     (when (and (flung player) (or (grounded player) (swimming player)))
       (setf (flung player) NIL))))
 
+(defun snared-p (player)
+  "True while a bloodroot's roots hold PLAYER (bloodroot.lisp): no walk, run or jump."
+  (eq :held (getf (snare player) :phase)))
+
+(defparameter *snare-guard* 2.5 "Seconds after a snare ends before roots may close on the player again.")
+
+(defun break-snare (player &optional (sound :snare-break))
+  "End the roots' snare on PLAYER, closing or holding: torn free, burnt, or let go."
+  (when (snare player)
+    (setf (snare player) NIL
+          (snare-guard player) (float *snare-guard* 0f0))
+    (when sound (play-sound sound))))
+
 (defun walk (player dt wx wz wlen speed kind crouching)
   "Move PLAYER on foot or through the air for DT seconds, wishing along WX WZ (WLEN long)
 at SPEED, out of liquid KIND if any."
@@ -1169,7 +1197,11 @@ at SPEED, out of liquid KIND if any."
                (setf dvx (* dvx (/ max-dv dlen)) dvz (* dvz (/ max-dv dlen))))
              (incf (vx vel) dvx)
              (incf (vz vel) dvz))))
+    ;; Roots hold the feet, on ice too.
+    (when (snared-p player)
+      (setf (vx vel) 0f0 (vz vel) 0f0))
     (when (and (grounded player) (held-p :jump) (not crouching) (not (maul-heaving-p player)) (not (overcharging-p player))
+               (not (snared-p player))
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
       (play-sound :jump)

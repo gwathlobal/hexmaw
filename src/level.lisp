@@ -198,9 +198,11 @@ creatures (CHECK-REACHABLE), :ICE-JOINS (CHECK-ICE-JOINS). Level sweeps read it 
                     (return))))
     ;; Before the checks, which count the packs too.
     (spread-packs container *last-level-seed*)
-    (multiple-value-bind (lost stranded) (check-reachable)
+    ;; A rooted creature never moves out of a way it stands in (kit.lisp).
+    (uproot-blockers)
+    (multiple-value-bind (lost stranded blocked) (check-reachable)
       (setf *last-level-checks* (list :attempts attempts :problem last-problem
-                                      :unreachable lost :stranded stranded
+                                      :unreachable lost :stranded stranded :blocked-by-rooted blocked
                                       :ice-joins (when (eq *level* :generated) (check-ice-joins))))
       (place-pickups container :guards (remove-if-not #'hoard-guard-p stranded)))
     (setf *built-pickups* (length *pickups*))))
@@ -280,6 +282,9 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
     (debug-spawn (make-instance 'rime-hag :location (vec 0.5 0 -9) :facing pi) container)
     ;; An arc votary behind the north-west pillar (votary.lisp), for stepping out of its beam.
     (debug-spawn (make-instance 'arc-votary :location (vec -4.5 0 -7) :facing pi) container)
+    ;; A bloodroot west of the middle, its roots to spread to the lava pit, the pillars and the
+    ;; west wall (bloodroot.lisp).
+    (debug-spawn (make-instance 'bloodroot :location (vec -3 0 2) :facing pi) container)
     ;; One of each kind of pickup, behind the spawn point.
     (loop for kind in '(:herbs :health-potion :shard :mana-potion)
           for x from -3 by 2
