@@ -17,7 +17,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   near windows sharing one. Seven designs (lancets of flame and frost, a rose window round the maw, a
   guardhouse's diamond quarries, and one for each faction: the Ashen Temple's censer lancet, the
   Deepwardens' lantern-and-key lancet, the Free Company's shield pane), mixed so no room has more
-  than two of one, a blueprint `glass DESIGN Y0` action, `make_texture.py --glass`, the
+  than two of one; the rose window's round frame thickened so it reads as the frame, and every
+  broken window keeps teeth of glass along its frame, round an arch or a circle, a blueprint `glass DESIGN Y0` action, `make_texture.py --glass`, the
   `glass-shatter` sound. Two new rooms built round them, the `chapel` (a facade of lancets before a
   nave cut into the rock) and the `outpost` (a yard and a guardhouse with leaded windows); the
   reliquary's screen has a rose window. In the town the temple and the barracks are now buildings,

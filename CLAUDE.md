@@ -677,12 +677,13 @@ real time instead.
   one (`light-pane`, `douse-pane`). **Breaking** (`break-pane`): the solid out of `*solids*` and
   `index-solids` (`remove-solid`, as `unseal-arena`), its lamp doused, the blood on it dissolving
   (`dissolve-splats-in`, gore.lisp), its shards and `glass-shatter`; broken, the same quad draws only
-  what stays in the frame, piece 0 of its piece map: the outer lead, jagged teeth of glass and lead
-  too thick to go with a piece (a lancet's corners outside its arch). **Shards** are pieces of the
+  what stays in the frame, piece 0 of its piece map: its frame (the thick lead joined to its edge:
+  the border, a lancet's corners outside its arch, a rose's round its circle; thin lead lines don't
+  count) and jagged teeth of glass along it, round an arch or a circle as along a side. **Shards** are pieces of the
   pane itself: `make_texture.py --glass` cuts each design along its lead, cracks pieces bigger than
   about 70 texels, gives each the lead within two texels of it, and writes the piece map
   (`data/textures/glass/glass-<design>-pieces.png`, a texel's piece in red + 256 × green) and the
-  pieces' boxes (`glass-<design>.lisp`, `glass-pieces`): 125 to 207 a pane. Each design has a
+  pieces' boxes (`glass-<design>.lisp`, `glass-pieces`): 100 to 180 a pane. Each design has a
   `shard-pool` (`*shard-pools*`, `add-shard-pools` in `setup-scene`, `*max-glass-shards*` slots,
   `clear-shards` on a reset; not saved): plain arrays, written each frame into one stream-draw
   buffer and drawn in one call, every shard a quad of its piece's box in the pane's texture, the
@@ -2950,15 +2951,17 @@ scales it to W × H × 64, takes near-black (every channel) and the magenta insi
 lead, averages each texel's glass over its glass alone, palettes it, and writes alpha 255 for lead
 and 128 for glass (allowed in `tools/art_audit_allow.txt`); it prints the glass's commonest
 colours, for the glitter's ramps in `*glass-looks*`. It also cuts the pane into its shards' pieces,
-into `data/textures/glass/` (`--piece` texels a shard, `--teeth` the most a side keeps, `--seed`
-the cracks'), which the art audit doesn't look at:
+into `data/textures/glass/` (`--piece` texels a shard, `--teeth` the most texels of glass the frame
+keeps, `--seed` the cracks'), which the art audit doesn't look at. `--frame N` first turns the glass
+within N texels of the frame into lead, so a frame that would read as part of the picture reads as
+the frame: the rose's round rim, 5 texels thicker:
 
 ```bash
 P=art/prompts; tools/gen_image.py art/glass/lancet-flame.png --prompt "$(cat $P/glass-common.txt $P/glass-lancet-flame.txt)" --ref art/style/anchor.png --size 1024x1536 -n 2
 tools/make_texture.py art/glass/lancet-flame-1.png data/textures/glass-lancet-flame --metres 1 --glass 1 2.5 --palette art/style/palette.txt
 tools/make_texture.py art/glass/lancet-frost-2.png data/textures/glass-lancet-frost --metres 1 --glass 1 2.5 --palette art/style/palette.txt
 tools/make_texture.py art/glass/quarry-1.png data/textures/glass-quarry --metres 1 --glass 1 1.5 --palette art/style/palette.txt
-tools/make_texture.py art/glass/rose-maw-1.png data/textures/glass-rose-maw --metres 2 --glass 2 2 --palette art/style/palette.txt
+tools/make_texture.py art/glass/rose-maw-1.png data/textures/glass-rose-maw --metres 2 --glass 2 2 --frame 5 --palette art/style/palette.txt
 tools/make_texture.py art/glass/lancet-ash-2.png data/textures/glass-lancet-ash --metres 1 --glass 1 2.5 --palette art/style/palette.txt
 tools/make_texture.py art/glass/lancet-warden-2.png data/textures/glass-lancet-warden --metres 1 --glass 1 2.5 --palette art/style/palette.txt
 tools/make_texture.py art/glass/company-1.png data/textures/glass-company --metres 1 --glass 1 1.5 --palette art/style/palette.txt
