@@ -54,12 +54,11 @@ upstairs."
     (unless *debug-level-monsters*
       (spawn-creature (make-instance 'imp :location (vec 14.5 upper 5) :facing (/ pi 2)) container))))
 
-(defparameter *debug-level-monsters* (list 'bloodroot)
-  "The kinds of monster the debug level's hall keeps, or NIL for all of them (the bloodroot only,
-for now). With a list, the
+(defparameter *debug-level-monsters* NIL
+  "The kinds of monster the debug level's hall keeps, or NIL for all of them. With a list, the
 annex's imp, the blocks' monsters and the arena's boss stay out too.")
 
-(defparameter *debug-hall-monsters* T
+(defparameter *debug-hall-monsters* NIL
   "True to put one of each monster in the debug level's hall (DEBUG-SPAWN); NIL leaves the hall
 empty. The annex's imp, the blocks' monsters and the arena's boss don't ask it.")
 
