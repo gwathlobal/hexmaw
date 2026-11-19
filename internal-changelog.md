@@ -18,7 +18,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
   diamond quarries), a blueprint `glass DESIGN Y0` action, `make_texture.py --glass`, the
   `glass-shatter` sound. Two new rooms built round them, the `chapel` (a facade of lancets before a
   nave cut into the rock) and the `outpost` (a yard and a guardhouse with leaded windows); the
-  reliquary's screen has a rose window and the town temple two lancets. A save keeps the broken
+  reliquary's screen has a rose window. In the town the temple and the barracks are now buildings,
+  walled to flat roofs with a doorway each, the temple with six lancets and the barracks with four
+  leaded windows; the temple's front pillars, two of its guards and one of the plaza's move out. A save keeps the broken
   windows, a reset mends them. The debug level's shrine has the chapel off its east doorway. The new
   rooms change every seed's layout, so a save from before starts its level fresh. `tools/levelcheck`
   reports windows a level.
