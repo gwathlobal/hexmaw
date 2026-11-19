@@ -10,7 +10,7 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 - The knight's shield charge, from level 2 of a run (`:shield-charge` in `*run-levels*`' `:abilities`):
   at a target 3.5 to 10 m off in sight with a straight run, always when their shield faces it, else
   30% each time it hunts, every 10 s. A 0.8 s tell crouched behind its shield, then a run at 7.5 m/s
-  along the way it faced, still crouched, hardly turning, to 3 m past where the target stood: 14 to 20 and a throw
+  along the way it faced, still crouched, its shield's foot throwing sparks off the floor, hardly turning, to 3 m past where the target stood: 14 to 20 and a throw
   down the line on the target (a raised shield knocked aside), other creatures bowled aside, a stop
   short of lava, water and drops, and a crash into a wall that reels it 1.5 s with its guard down.
   The spear set against it from the front stops it dead; the earthshake flinches it out of the run.

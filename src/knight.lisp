@@ -80,6 +80,13 @@ shield isn't raised at it; one whose is, it always charges.")
 (defparameter *charge-crouch* 1.5 "How squashed its tell and run are drawn seen from the side or back, as a flinch's squash.")
 (defparameter *charge-bob* 0.25 "How much more squashed the run is drawn at the bottom of each stride.")
 (defparameter *charge-paw-interval* 0.25 "Seconds between the scrapes of grit its feet kick up in the tell.")
+(defparameter *charge-scrape-interval* 0.04 "Seconds between the sprays its shield's foot throws off the floor as it runs.")
+(defparameter *charge-scrape-sparks* 3 "Sparks a spray throws off stone (others by *WALL-STRIKE-KINDS*' share).")
+(defparameter *charge-scrape-grit* 1 "Grit a spray throws, by the same shares.")
+(defparameter *charge-scrape-ahead* 0.2 "Metres past its body's edge that the shield's foot meets the floor.")
+(defparameter *charge-scrape-side* 0.15 "Metres to its left, the shield arm's side, that the shield's foot is.")
+(defparameter *charge-scrape-speed* '(2.0 5.5) "Slowest and fastest m/s the shield's sparks leave at.")
+(defparameter *charge-scrape-spread* 0.9 "Radians either side of up-and-back that the shield's sparks fan.")
 (defparameter *charge-camera-shake* 0.5 "Strength of the camera kick of its crash, full within 2 m (KICK-CAMERA-FROM).")
 (defparameter *charge-shake-reach* 10.0)
 (defparameter *charge-crash-hit-stop* 0.05)
@@ -140,7 +147,8 @@ shield isn't raised at it; one whose is, it always charges.")
    (charge-left :initform 0.0 :accessor charge-left :documentation "Metres it has still to run.")
    (charge-stall :initform 0.0 :accessor charge-stall :documentation "Seconds it has been held up.")
    (charge-bowled :initform () :accessor charge-bowled :documentation "The creatures it has bowled aside this charge.")
-   (charge-paw :initform 0.0 :accessor charge-paw :documentation "Seconds until its feet scrape again in the tell.")))
+   (charge-paw :initform 0.0 :accessor charge-paw
+               :documentation "Seconds until its feet scrape again in the tell, or its shield in the run.")))
 
 ;; The charge's tell bellows (its alert), the mace's wind-up is the mace's; the charge's blow and
 ;; its crash are a shield bash's and a guard knocked aside.
@@ -247,6 +255,7 @@ carries on as its momentum, so it skids."
     (setf (charge knight) :running
           (attack-pending knight) NIL
           (charge-yaw knight) yaw
+          (charge-paw knight) 0.0
           (charge-left knight) (float (min *charge-max-run* (+ (max 0.0 along) *charge-overshoot*)) 0f0)
           (getf (cooldowns knight) :shield-charge) (* *charge-cooldown* (depth-scale :cooldown)))
     (charge-log knight "charges, ~,1f m to run" (charge-left knight))))
@@ -331,6 +340,36 @@ body in its way."
              (or (< d 1f-3)
                  (< (acos (max -1.0 (min 1.0 (/ (+ (* dx fx) (* dz fz)) d)))) *charge-hit-arc*))))))
 
+(defvar *scrape-point* (vec 0 0 0))
+(defvar *scrape-direction* (vec 0 0 0))
+
+(defun scrape-shield (knight fx fz dt)
+  "Every *CHARGE-SCRAPE-INTERVAL* of the run, sparks and grit off the floor where KNIGHT's shield
+drags along it, in front of it a little to its left, up and back from the way FX FZ it runs: as
+many as the floor's surface throws (*WALL-STRIKE-KINDS*: none off ice, snow or wood, only grit)."
+  (when (<= (decf (charge-paw knight) dt) 0)
+    (setf (charge-paw knight) *charge-scrape-interval*)
+    (let* ((loc (location knight))
+           (ahead (+ (body-radius knight) *charge-scrape-ahead*))
+           (side (* *charge-scrape-side* (size-scale knight)))
+           (x (float (+ (vx loc) (* ahead fx) (* side fz)) 0f0))
+           (z (float (+ (vz loc) (* ahead fz) (- (* side fx))) 0f0))
+           (y (float (vy loc) 0f0))
+           (floor (solid-at x (- y 0.05) z)))
+      (when floor
+        (let* ((kind (rest (or (assoc (solid-strike floor) *wall-strike-kinds*)
+                               (assoc :stone *wall-strike-kinds*))))
+               (sparks (floor (+ (* *charge-scrape-sparks* (getf kind :sparks)) (random 1.0))))
+               (grit (floor (+ (* *charge-scrape-grit* (getf kind :grit)) (random 1.0)))))
+          (setf (vx *scrape-point*) x (vy *scrape-point*) (+ y 0.03) (vz *scrape-point*) z
+                (vx *scrape-direction*) (* -0.5 fx) (vy *scrape-direction*) 1.0 (vz *scrape-direction*) (* -0.5 fz))
+          (when (< 0 sparks)
+            (spray-sparks *scrape-point* *scrape-direction* sparks
+                          :speed *charge-scrape-speed* :spread *charge-scrape-spread*))
+          (when (< 0 grit)
+            (spray-sparks *scrape-point* *scrape-direction* grit
+                          :kind :grit :ramp (getf kind :grit-ramp))))))))
+
 (defun run-charge (knight dt)
   (let* ((target (hunt-target knight))
          (target (and target (target-live-p target) target)))
@@ -367,7 +406,8 @@ body in its way."
                         (when (< *charge-stall-time* (incf (charge-stall knight) dt))
                           (charge-log knight "held up")
                           (end-charge knight *charge-recover*)))
-                       (T (setf (charge-stall knight) 0.0)))
+                       (T (setf (charge-stall knight) 0.0)
+                          (scrape-shield knight fx fz dt)))
                  (when (and (eq (charge knight) :running) (<= (charge-left knight) 0))
                    (charge-log knight "runs out")
                    (end-charge knight *charge-recover*)))))))))

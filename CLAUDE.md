@@ -2323,7 +2323,10 @@ time `hunt` asks.
   `*charge-speed*` (7.5 m/s), turning at most `*charge-turn*` (0.3 rad/s), to `*charge-overshoot*`
   (3 m) past where its target stood, at most `*charge-max-run*` (14 m), still crouched as in the
   tell, bobbing down `*charge-bob*` more once a stride (`show-charge-crouch`), its steps (the walk's
-  distance at `*charge-stride*`, 0.75 m a step's worth) quickening with it. A sidestep of a metre makes it
+  distance at `*charge-stride*`, 0.75 m a step's worth) quickening with it, and its shield's foot
+  dragging sparks and grit off the floor in front of it, a little to its left
+  (`scrape-shield`, every `*charge-scrape-interval*`, up and back, by the floor's
+  `*wall-strike-kinds*`: only grit off ice, snow or wood). A sidestep of a metre makes it
   miss. Its shield stays up in front (`shielded-p`, and `block-hit` doesn't brace mid-attack), so
   frontal spells still reflect. Each tick it looks ahead:
   - **its target** within `*charge-reach*` between the bodies and `*charge-hit-arc*` (0.7 rad) of
