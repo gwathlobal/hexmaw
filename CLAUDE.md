@@ -2315,8 +2315,9 @@ faces it (`target-guarding-p`), else on a `*charge-chance*` (30 percent) roll on
 time `hunt` asks.
 
 - **The tell** (`*charge-windup*`, 0.8 s; `winding-up-p` holds, so a bash or the earthshake breaks
-  it): crouched behind its shield (`show-own-pose`: the block strip's brace in the views it has, the
-  walk's first frame pressed down by `*charge-crouch*` from the side or back), scraping grit
+  it): crouched behind its shield (`show-own-pose`, `show-charge-crouch`: the block strip's brace
+  head on, else the walk's first frame pressed down by `*charge-crouch*`; the block's front-quarter
+  is drawn nearly face on, so it made the charge seem to face the player until it was nearly past), scraping grit
   (`kick-grit`) every `*charge-paw-interval*`, the bellow (`knight-alert`, its `:windup` while the
   charge is its ability). It turns to its target at its `turn-speed` (3 rad/s).
 - **The run** (`charge-step`, `run-charge`): along the way it faced as the tell ended, at

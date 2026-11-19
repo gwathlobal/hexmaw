@@ -465,8 +465,10 @@ trail, though they keep *CHARGE-SCRAPE-CARRY* of its speed): as many as the floo
 
 (defun show-charge-crouch (knight squash)
   "Show KNIGHT crouched behind its shield, SQUASH (a flinch's, 0 to 1) at least: the block's brace
-where it has the view, else the walk's first frame pressed down."
-  (if (<= (view-index knight) (shield-views knight))
+seen from the front, else the walk's first frame pressed down. The block's front-quarter frames are
+drawn nearly face on (the generator turned them only a little), so in that view the charge looked
+straight at the player until it was nearly past: the walk's front-quarter is turned."
+  (if (= (view-index knight) 0)
       (show-view-frame knight (block-animation knight) 1 (max squash 0.5) (1+ (shield-views knight)))
       (show-view-frame knight (walk-animation knight) 0 (max squash *charge-crouch*))))
 
