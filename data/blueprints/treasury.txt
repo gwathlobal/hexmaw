@@ -1,0 +1,53 @@
+; A treasury: an antechamber with the doorways, then through a doorway in its back wall a hall
+; whose two long walls each hold two sealed niches up in the wall, behind paired stained-glass
+; lancets, as in Hexen: the niche's floor is the windows' sill, 1 m up, its roof their top, a torch
+; in each lighting its glass from behind and something left on its floor. The niches have no way in
+; but the windows: break the glass and jump onto the sill. Pilasters part the pairs, a stone plinth
+; stands in the middle, and an altar stone on a dais closes the far end. Drawn turned, so the
+; windows stand in the thin west and east walls and the niches' loot is within reach of the hall.
+cells 3 4
+tags room
+weight 1
+material stone 0.6 0.58 0.55
+material dais 0.58 0.47 0.30
+material pillar 0.62 0.36 0.30
+legend
+  g glass lancet-flame 1.0
+  G glass lancet-flame 1.0
+  h glass lancet-frost 1.0
+  H glass lancet-frost 1.0
+  j glass lancet-ash 1.0           ; the Ashen Temple's
+  J glass lancet-ash 1.0
+  y glass lancet-warden 1.0        ; the Deepwardens'
+  Y glass lancet-warden 1.0
+  n box 0 1.0 wall, deco 3.5 top wall               ; a niche: floor at the sill, roof at the windows' top
+  t box 0 1.0 wall, deco 3.5 top wall, torch 2.8
+  & box 0 1.0 wall, deco 3.5 top wall, pickup reward
+  P box 0 top pillar                                  ; a pilaster between the pairs
+  S box 0 0.9 stone                                   ; the plinth
+  % box 0 0.4 dais
+  A box 0 0.4 dais, box 0 1.1 stone, pickup reward    ; the altar stone, 0.7 m over the dais
+  $ pickup floor
+  a box 0 0.4 dais, spawn acolyte|necromancer north
+  k spawn imp|knight north
+  m spawn imp|knight north 30
+  M spawn imp|knight south 30
+
+plan 0
+#####T############T#####
+w......................e
+w..$$..............$$..e
+w..........MM..........e
+#......................#
+#########......#########
+######............######
+######............######
+#tnn&g.....kk.....h&nnt#
+#nnn&G............H&nnn#
+######P....SS....P######
+######P....SS....P######
+#nnn&j.....mm.....y&nnn#
+#tnn&J............Y&nnt#
+######..%%%aa%%%..######
+######..%%%AA%%%..######
+###########T############
