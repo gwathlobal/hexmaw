@@ -7,6 +7,29 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Stained glass (src/glass.lisp): coloured windows over a sill at least 1 m high, a wall to
+  everything until a blow, a projectile or beam, a burst or nova, the earthshake, an ogre's quake or a
+  body flung into one shatters it into its pieces, leaving teeth of glass in an empty frame that the
+  player can jump through. The shards are the pane's own glass cut along its lead (big pieces
+  cracked), tumbling, bouncing, lying on the floor and dissolving: `make_texture.py --glass` writes
+  each design's piece map, and a shard pool a design draws them. Drawn as a filter over what is behind and its own light, the lamps
+  behind it shining through; a window lit from one side hangs a dim lamp of its colour on the other,
+  near windows sharing one. Seven designs (lancets of flame and frost, a rose window round the maw, a
+  guardhouse's diamond quarries, and one for each faction: the Ashen Temple's censer lancet, the
+  Deepwardens' lantern-and-key lancet, the Free Company's shield pane), mixed so no room has more
+  than two of one; the rose window's round frame thickened so it reads as the frame, and every
+  broken window keeps teeth of glass along its frame, round an arch or a circle, a blueprint `glass DESIGN Y0` action, `make_texture.py --glass`, the
+  `glass-shatter` sound. Two new rooms built round them, the `chapel` (a facade of lancets before a
+  nave cut into the rock) and the `outpost` (a yard and a guardhouse with leaded windows); the
+  reliquary's screen has a rose window. In the town the temple and the barracks are now buildings,
+  walled to flat roofs with a doorway each, the temple with six lancets and the barracks with four
+  leaded windows; the temple's front pillars, two of its guards and one of the plaza's move out. A save keeps the broken
+  windows, a reset mends them. The debug level's shrine has the chapel off its east doorway. The new
+  rooms change every seed's layout, so a save from before starts its level fresh. `tools/levelcheck`
+  reports windows a level.
+- The spark ramp for snow struck loose was unreachable (`:snow` twice in `*spark-ramps*`); it is
+  `:snow-chips` now.
+
 - The bloodroot streamlined: the husk and its red lamp are gone (and `blow-damage` with them), and the
   burrowing root is its one attack in place of the lobbed blood seed (gone, with `lobbed-projectile`,
   the seed's art and the `bloodroot-spit` sound): 2 to 20 m, every 3 s (1.5 in Glut), erupting as a

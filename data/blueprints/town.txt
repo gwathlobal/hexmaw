@@ -1,8 +1,9 @@
 ; The settlement: once a run, a town in a 9 m vault that a level is grown from (settlement.lisp).
-; A plaza ringed by open-fronted quarters: the temple (a dais, the Spellforge's altar on it), the
-; descent's recess between it and the hall, the market's counter, the training yard and the
-; barracks. Gates west and east, which the level's wing grows from. Who is here depends on the
-; settlement's condition (npc and spawn conditions). No tag the generator grows from: the run
+; A plaza ringed by quarters: the temple, a roofed building with a dais, the Spellforge's altar on
+; it and stained-glass lancets onto the plaza and the recess; the descent's recess between it and
+; the hall; the market's counter; the training yard; and the barracks, a roofed building with leaded
+; windows onto the plaza and the market. Gates west and east, which the level's wing grows from.
+; Who is here depends on the settlement's condition (npc and spawn conditions). No tag the generator grows from: the run
 ; places it itself, first (*SETTLEMENT-LEVEL*).
 cells 8 6
 storeys 2
@@ -43,57 +44,65 @@ legend
   v npc commoner south sacked
   x spawn any-ogre south 30 when:sacked
   $ pickup floor
+  g glass lancet-flame 1.2        ; the temple's windows, onto the plaza and the descent's recess
+  h glass lancet-frost 1.2
+  i glass lancet-warden 1.2       ; the Deepwardens', one over the way down
+  j glass lancet-ash 1.2          ; the Ashen Temple's
+  y box 0 1.2, box 3.7 top        ; the wall round them, opened
+  u glass quarry 1.2              ; the barracks' windows onto the plaza and the market
+  r glass company 1.2             ; the Free Company's
+  z box 3 top                     ; a building's doorway, under its lintel
 
 plan 0
 ####T############T#######AAAAAA###########T#############T#######
 #qqq%%%%%%aa%%%%%%qqq####XXXXXX####............................#
-#qqq%%%%%%aa%%%%%%qqq####XXXXXX####........QQ...............$$.#
+#qqq%%%%%%aa%%%%%%qqqyiyyXXXXXX####........QQ...............$$.#
 #qqq::::::::::::::qqq####T....T####T.....tttttt....tttttt......#
-#qqqqqqqqqqqqqqqqqppq####......####............................#
+#qqqqqqqqqqqqqqqqqppqyjyy......####............................#
 #qqqqqqqqqvvqqqqqqqqT####......####............................#
-Tqqqqqqqqqqqqqqqqqqqq.LL........MM................xx...........T
-#qqqqqqqqqqqqqqqqqqqq..........................................#
-#.ooGG....oo......oo..................oo......oo......oo..JJ...#
-w..............................................................e
-w...............xx........cc...................................e
+Tqqqqqqqqqqqqqqqqqqqq####.......MM................xx...........T
+#qqqqqqqqqqqqqqqqqqqq####......................................#
+##jj#gg##zzzz##hh#ii#####.............oo......oo......oo..JJ...#
+w.....................LL.......................................e
+w...GG..........xx........cc...................................e
 w...............................................xx.............e
 #...HH.........................@@.........................KK...#
 #..............................@@...........cc.................#
 T..............................................................T
-#fffffff....ffffffffmmmmmmmmmmmmmmmmmmmmmmm#######......########
+#fffffff....ffffffffmmmmmmmmmmmmmmmmmmmmmmm##rr####zzzz####uu###
 #..................fmmmmmmmmmmvvmmmmmmmmmmm#...................#
 #........RR........fmmmmmmmmmmmmmmmmmmccmmm#...................#
-#..................fmmmmmmmmmmmmmmmmmmmmmmm#..bbbb......bbbb...#
+#..................fmmmmmmmmmmmmmmmmmmmmmmmu..bbbb......bbbb...#
 #....dd......dd....fmmmmmmkkkkkkkkkkkkmmmmm#...................#
 #..................fmmmmmmkkmmmSSmmmkkmmmmm#........NN......$$.#
-#........dd.xx.....fmmmmmmkkmmmmmmmmkkmmmmm#...................#
+#........dd.xx.....fmmmmmmkkmmmmmmmmkkmmmmmr...................#
 #.$$...............fmm$$mmmmmmmmmmmmmmmmmmm#...................#
 #..................fmmmmmmmmmmmmmmmmmmmmmmm#..bbbb..bbbb..bbbb.#
 ######T#######T#########T##############T############T###########
 
 plan 1
 ################################################################
+#........................                                      #
+#........................                                      #
+#........................                                      #
+#........................                                      #
+#........................                                      #
+#........................                                      #
+#........................                                      #
+#........................             PP      PP      PP       #
 #                                                              #
 #                                                              #
 #                                                              #
 #                                                              #
 #                                                              #
 #                                                              #
-#                                                              #
-# PP      PP      PP                  PP      PP      PP       #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
-#                                                              #
+#                                          ....................#
+#                                          ....................#
+#                                          ....................#
+#                                          ....................#
+#                                          ....................#
+#                                          ....................#
+#                                          ....................#
+#                                          ....................#
+#                                          ....................#
 ################################################################

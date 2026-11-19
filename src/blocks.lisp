@@ -173,7 +173,7 @@ to, in what follows an empty's \"spawn_\": \"any\", \"skip30_any\" or \"when-sac
 :BOUNDS), :BOUNDS (min and max corners of its pieces), :TAGS and :WEIGHT. A connector is a plist
 of :NAME :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it."
   (let ((pieces ()) (plugs ()) (connectors ()) (spawns ()) (torches ()) (pickups ()) (exits ()) (altars ()) (liquids ()) (tags ()) (weight 1.0)
-        (arrivals ()) (npcs ()) (zone-corners ()) (falls-corners ())
+        (arrivals ()) (npcs ()) (zone-corners ()) (falls-corners ()) (glass-corners ())
         (low (vec most-positive-single-float most-positive-single-float most-positive-single-float))
         (high (vec most-negative-single-float most-negative-single-float most-negative-single-float)))
     (org.shirakumo.fraf.gltf:with-gltf (gltf path)
@@ -238,6 +238,11 @@ of :NAME :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it.
                       ;; falls_<n>_lo and _hi, the corners of the box a waterfall pours through.
                       (let ((parts (uiop:split-string name :separator "_")))
                         (push (list (second parts) (third parts) (vcopy (tlocation transform))) falls-corners)))
+                     ((prefixp "glass_" name)
+                      ;; glass_<n>_<design>_lo and _hi, the corners of a window's pane (glass.lisp).
+                      (let ((parts (uiop:split-string name :separator "_")))
+                        (push (list (second parts) (third parts) (fourth parts) (vcopy (tlocation transform)))
+                              glass-corners)))
                      ((prefixp "zone_" name)
                       ;; zone_<name>_<n>_lo and _hi, the corners of one box of the zone.
                       (let* ((parts (uiop:split-string name :separator "_")))
@@ -267,6 +272,13 @@ of :NAME :KIND :POSITION :DIRECTION :STOREY and :PLUGS, the pieces that shut it.
                        when (string= corner "lo")
                          collect (list lo (third (find-if (lambda (c) (and (string= (first c) n) (string= (second c) "hi")))
                                                           falls-corners))))
+          :panes (sort (loop for (n design corner lo) in glass-corners
+                             when (string= corner "lo")
+                               collect (list :n (parse-integer n) :design design
+                                             :bounds (list lo (fourth (find-if (lambda (c) (and (string= (first c) n)
+                                                                                                   (string= (third c) "hi")))
+                                                                                  glass-corners)))))
+                       #'< :key (lambda (p) (getf p :n)))
           :zones (loop for (zone n corner lo) in zone-corners
                        when (string= corner "lo")
                          collect (let ((hi (fourth (find-if (lambda (c) (and (string= (first c) zone) (string= (second c) n)
@@ -626,6 +638,11 @@ doorways stay open: returns them as CONNECTORs, for the next block or SEAL-CONNE
         (dolist (p (getf def :torches))
           (let ((w (world p)))
             (add-torch container (vx w) (vy w) (vz w))))
+        ;; After the torches: no torch stands off glass, and a pane's lamp knows where they are.
+        (dolist (pane (getf def :panes))
+          (destructuring-bind (lo hi) (getf pane :bounds)
+            (let ((a (world lo)) (b (world hi)))
+              (add-pane container (getf pane :design) (vmin a b) (vmax a b)))))
         (dolist (spot (getf def :pickups))
           (vector-push-extend (list :tier (getf spot :tier) :position (world (getf spot :position)) :block map-block)
                               *pickup-spots*))

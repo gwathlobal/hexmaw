@@ -1,0 +1,47 @@
+; An abandoned outpost: a yard behind a broken timber palisade, crates and a watch platform, and
+; in its north-east corner a stone guardhouse whose small leaded windows look out over the yard.
+; Its doorway is narrow; a torch still burns inside, and what the garrison left is on the table.
+cells 4 4
+tags room
+weight 1
+material beam 0.35 0.25 0.18
+material platform 0.45 0.35 0.25
+material stone 0.6 0.58 0.55
+legend
+  W wall stone
+  L box 2.5 top stone                 ; the lintel over the guardhouse's doorway
+  q glass quarry 1.2 stone
+  r glass company 1.2 stone           ; the Free Company's, who held it last
+  p box 0 2.4 beam                    ; a palisade post
+  x box 0 0.8 platform                ; a crate
+  X box 0 1.6 platform                ; crates stacked
+  P box 0 1.2 platform                ; the watch platform
+  S box 0 0.8 platform                ; its upper step
+  Z box 0 0.4 platform
+  c box 0 0.5 beam                    ; a cot
+  B box 0 0.9 beam, pickup reward     ; the table, with what was left on it
+  u torch 2.2
+  i spawn imp|knight south
+  I spawn imp|knight south 30
+  o spawn any-ogre south 30
+  g spawn imp|acolyte west
+  $ pickup floor
+
+plan 0
+####T####nnnnnn#################
+#.$$...............Wu.........c#
+#..................W..........c#
+T..................q....BB.....#
+#..x...............W....BB.....#
+#..xx..............r...........#
+#..................W...........#
+#.......i..........W.....gg....#
+#..................WWrrWLLLWWqq#
+w..............................#
+w.....pp..pp...........ii......#
+w..............................#
+#.......o......................#
+#..PPPP....pp.pp...pp...xX.....e
+T..PPPP.................xx.....e
+#..ZZ.......I..............$$..e
+#####T###########ssssss#########

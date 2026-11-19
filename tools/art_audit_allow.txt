@@ -3,3 +3,4 @@
 sprites/torch/ density   # twice the density, on purpose: coarser, its collar and wrapping turn to mush
 sprites/grave/flight density  # a small fast projectile; 100 px/m, the bolt's flight is 90
 splash/ palette  # full-screen pictures keep every colour: a 64-colour palette turned the knight's runes yellow
+textures/glass- semi   # stained glass: alpha 128 marks glass and 255 lead for glass.lisp's shader, which draws no alpha

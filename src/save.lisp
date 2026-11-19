@@ -307,6 +307,10 @@ status auras, which come back from their statuses."
         ;; What those indices name, so a save from before the pickups were scattered another
         ;; way doesn't mark the wrong ones taken (SAVE-MATCHES-LEVEL-P).
         :pickup-kinds (built-pickup-kinds)
+        ;; The windows broken (glass.lisp), by index, and how many the level has, so a level
+        ;; built with other windows breaks none.
+        :panes (broken-pane-indices)
+        :pane-count (length *panes*)
         ;; What imps dropped (imp.lisp), which the seed doesn't place.
         :drops (dropped-pickups)
         ;; Whether the gate has dropped behind the player (boss.lisp).
@@ -479,6 +483,8 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
     (when (and settlement *settlement*)
       (restore-state *settlement* settlement)))
   (take-pickups-at (getf save :pickups))
+  (when (eql (getf save :pane-count) (length *panes*))
+    (break-panes-at (getf save :panes)))
   (restore-dropped-pickups scene (getf save :drops))
   (let ((globals (getf save :globals)))
     (setf *hit-stop* (getf globals :hit-stop)

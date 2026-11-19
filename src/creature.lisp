@@ -196,6 +196,8 @@ REACH metres that way, it takes the impact too, the other way."
 this DT-second tick: a wall or body it hit fast enough hurts it, and the body too."
   (let ((speed (sqrt (+ (* hit-x hit-x) (* hit-z hit-z)))))
     (when (< *impact-speed* speed)
+      ;; Thrown into a window, it goes through (glass.lisp).
+      (strike-panes-by-body (body-feet actor) (body-radius actor) (body-height actor) hit-x hit-z)
       (hit-surface actor speed hit-x 0.0 hit-z :by by)
       (strike-body actor speed hit-x hit-z (* speed dt) :by by))))
 

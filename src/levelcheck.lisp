@@ -132,6 +132,7 @@ same in any process and thread."
      "rune_tiers" (rune-tiers)
      "exits" (length *level-exits*)
      "altars" (length *level-altars*)
+     "windows" (length *panes*)
      "unreachable" (length (getf checks :unreachable))
      "stranded" (coerce (mapcar #'class-label (getf checks :stranded)) 'vector)
      "blocked_by_rooted" (length (getf checks :blocked-by-rooted))

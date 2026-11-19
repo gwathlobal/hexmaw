@@ -1,0 +1,28 @@
+{
+  "prompt": "Pixel-art STAINED-GLASS WINDOW PANEL for a Doom/Hexen-style first-person dark-fantasy dungeon game. It is drawn as a texture: the game lays it flat in a window opening and lights it, and a player can smash it.\n\nREFERENCE IMAGES: the first is the game's style anchor sheet (an imp, a knight, a stone wall, a floor, a flask and a sword together). Use it ONLY for the art style: the pixel size, the hard-edged shading with a few tones, the palette's mood. Do not draw anything from it.\n\nTHE IMAGE\n- One flat window panel seen perfectly dead-on: no perspective, no frame of stone, no wall around it, no shadow, no background scene through it. Outside the panel the image is pure flat magenta (#FF00FF), nothing else.\n- The panel is a rectangle exactly the proportions given below, centred in the image, filling it as far as those proportions allow.\n- LEAD CAME: every piece of glass is outlined by lead strips drawn in PURE BLACK (#000000), all the same width, about a fortieth of the panel's width, crisp and unbroken. A black lead border runs round the whole rectangle. Larger shapes are held by thicker black bars. Nothing else in the image is pure black.\n- GLASS: flat pieces of saturated coloured glass, each piece one main colour with at most two or three hard-edged tones of it (a lighter streak, a darker edge), like pieces of real cathedral glass. Rich, jewel-like colours: ruby red, amber gold, cobalt and deep blue, emerald, violet. No piece is grey, brown or pure white, and no piece is near black.\n- Even lighting: no light source, no glow, no gradient across the panel, no lens flare, no reflections. The game lights it.\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients, no semi-transparent pixels.\n- No text, letters, numbers, signatures or watermark.\n\nTHIS PANEL: a small plain WINDOW of an old guardhouse, exactly 1.5 times as tall as it is wide, a plain rectangle with a flat top.\n- The design: a lattice of DIAMOND-SHAPED panes (quarries) set in thin black lead running diagonally both ways, about four diamonds across and six down, the diamonds at the edges cut off by the outer border.\n- The glass is plain and old: most diamonds pale amber and honey yellow, some a pale bottle green, a few a deeper green, each diamond with one lighter streak.\n- A border band of narrow amber pieces runs round all four sides inside the outer lead.\n- Simpler and humbler than a church window: no figures, no symbols.",
+  "prompt_file": null,
+  "refs": [
+    "art/style/anchor.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1795057826,
+  "size_request": "1024x1536",
+  "background": "auto",
+  "codex_prompt": "Pixel-art STAINED-GLASS WINDOW PANEL for a Doom/Hexen-style first-person dark-fantasy dungeon game. It is drawn as a texture: the game lays it flat in a window opening and lights it, and a player can smash it.\n\nREFERENCE IMAGES: the first is the game's style anchor sheet (an imp, a knight, a stone wall, a floor, a flask and a sword together). Use it ONLY for the art style: the pixel size, the hard-edged shading with a few tones, the palette's mood. Do not draw anything from it.\n\nTHE IMAGE\n- One flat window panel seen perfectly dead-on: no perspective, no frame of stone, no wall around it, no shadow, no background scene through it. Outside the panel the image is pure flat magenta (#FF00FF), nothing else.\n- The panel is a rectangle exactly the proportions given below, centred in the image, filling it as far as those proportions allow.\n- LEAD CAME: every piece of glass is outlined by lead strips drawn in PURE BLACK (#000000), all the same width, about a fortieth of the panel's width, crisp and unbroken. A black lead border runs round the whole rectangle. Larger shapes are held by thicker black bars. Nothing else in the image is pure black.\n- GLASS: flat pieces of saturated coloured glass, each piece one main colour with at most two or three hard-edged tones of it (a lighter streak, a darker edge), like pieces of real cathedral glass. Rich, jewel-like colours: ruby red, amber gold, cobalt and deep blue, emerald, violet. No piece is grey, brown or pure white, and no piece is near black.\n- Even lighting: no light source, no glow, no gradient across the panel, no lens flare, no reflections. The game lights it.\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients, no semi-transparent pixels.\n- No text, letters, numbers, signatures or watermark.\n\nTHIS PANEL: a small plain WINDOW of an old guardhouse, exactly 1.5 times as tall as it is wide, a plain rectangle with a flat top.\n- The design: a lattice of DIAMOND-SHAPED panes (quarries) set in thin black lead running diagonally both ways, about four diamonds across and six down, the diamonds at the edges cut off by the outer border.\n- The glass is plain and old: most diamonds pale amber and honey yellow, some a pale bottle green, a few a deeper green, each diamond with one lighter streak.\n- A border band of narrow amber pieces runs round all four sides inside the outer lead.\n- Simpler and humbler than a church window: no figures, no symbols.\nImage size: 1024x1536 pixels (portrait).",
+  "codex_threads": [
+    "01a1f1c7-358e-75e0-a930-d9d0c3a60291",
+    "01a1f1c8-1f90-74b2-bacc-efa6487aa877"
+  ],
+  "sizes": [
+    [
+      1024,
+      1536
+    ],
+    [
+      1024,
+      1536
+    ]
+  ]
+}

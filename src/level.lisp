@@ -123,6 +123,7 @@ grudge. Returns them."
         (fill-pointer *level-exits*) 0
         (fill-pointer *level-zones*) 0
         (fill-pointer *level-altars*) 0
+        (fill-pointer *panes*) 0
         *level-doorways* ()
         *arena* NIL
         *settlement* NIL
@@ -313,13 +314,20 @@ Killed, it stays dead and the gate goes up again; a reset brings another."
       (add-torch container -1.0 2.2 -18)
       ;; The shrine block (data/blueprints/shrine.txt) at the corridor's end, attached by
       ;; its south doorway. West of it the pool (pool.txt), deep water under a ledge,
-      ;; through its east doorway; their other doorways are plugged.
+      ;; through its east doorway, and east of it the chapel (chapel.txt), its stained-glass
+      ;; windows to break (glass.lisp), with no monsters; their other doorways are plugged.
       (let* ((shrine (attach-block 'shrine container "connector_south" :at (vec 0 0 z1) :facing :south
                                                 :spawns (null *debug-level-monsters*)))
-             (west (find "connector_west" shrine :key #'connector-name :test #'string-equal)))
+             (west (find "connector_west" shrine :key #'connector-name :test #'string-equal))
+             (east (find "connector_east" shrine :key #'connector-name :test #'string-equal)))
         (dolist (c shrine)
-          (unless (member (connector-name c) '("connector_south" "connector_west") :test #'string-equal)
+          (unless (member (connector-name c) '("connector_south" "connector_west" "connector_east") :test #'string-equal)
             (seal-connector container c)))
+        (dolist (c (attach-block 'chapel container "connector_west" :at (connector-location east) :facing :west
+                                         :spawns NIL))
+          (if (string-equal (connector-name c) "connector_west")
+              (drop-portal c)
+              (seal-connector container c)))
         (dolist (c (attach-block 'pool container "connector_east" :at (connector-location west) :facing :east
                                       :spawns (null *debug-level-monsters*)))
           (if (string-equal (connector-name c) "connector_east")

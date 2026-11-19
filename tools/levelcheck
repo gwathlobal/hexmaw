@@ -207,6 +207,7 @@ def summary(levels, out):
                            ('mana', lambda r: r['resources'].get('mana', 0)),
                            ('gold', lambda r: r['resources'].get('gold', 0)),
                            ('dust', lambda r: r['resources'].get('dust', 0)),
+                           ('windows', lambda r: r.get('windows', 0)),
                            ('seeds tried', lambda r: r['attempts']),
                            ('seconds', lambda r: r['seconds'])]:
             print('  %-12s %s' % (label, spread([key(r) for r in rs])), file=out)

@@ -75,7 +75,14 @@ seconds: (values DX DZ T), or NIL where it doesn't reach. Allocates nothing.")
     (:drain "f98497" "f52a5a" "7e2225")   ; A drain nova's motes.
     ;; Grit takes the second and third colours: fresh splinters are paler than the timber.
     (:wood "e0a16f" "c39e76" "8c6d54")    ; Splinters off a beam or planks.
-    (:snow "f9f9f3" "deebfd" "b5c3cc"))   ; Snow struck loose.
+    (:snow-chips "f9f9f3" "deebfd" "b5c3cc") ; Snow struck loose.
+    ;; A broken pane's shards (glass.lisp), by its glass's colours.
+    (:glass-red "f98497" "f52a5a" "ce326c")
+    (:glass-gold "f8ec3b" "fcb918" "d8aa38")
+    (:glass-blue "94bdfe" "45b1f5" "0a3be1")
+    (:glass-green "b4ee93" "3caa3b" "317918")
+    (:glass-violet "d860f5" "ba23f4" "6f23b4")
+    (:glass-teal "73daea" "52979d" "204550"))
   "Per ramp: its name and three hex colours from the house palette.")
 
 (defun spark-ramp-colors ()
@@ -118,6 +125,7 @@ seconds: (values DX DZ T), or NIL where it doesn't reach. Allocates nothing.")
    (lives :reader pool-lives :documentation "Per particle: seconds it lasts, or settled grit lies.")
    (seeds :reader pool-seeds :documentation "Per particle: a random number, 0 to 2 pi, for its wander and blink.")
    (rises :reader pool-rises :documentation "Per ember: the m/s it climbs toward; per flake, its own speed in the wind.")
+   (rests :reader pool-rests :documentation "Per grit: seconds it lies once settled, or 0 for *GRIT-REST*'s.")
    (data :reader pool-data :documentation "Vertex data, 6 vertices per particle.")
    (vbo :reader pool-vbo)
    (vao :reader pool-vao)))
@@ -140,7 +148,8 @@ seconds: (values DX DZ T), or NIL where it doesn't reach. Allocates nothing.")
             (slot-value pool 'ages) (floats)
             (slot-value pool 'lives) (floats)
             (slot-value pool 'seeds) (floats)
-            (slot-value pool 'rises) (floats)))
+            (slot-value pool 'rises) (floats)
+            (slot-value pool 'rests) (floats)))
     (setf (slot-value pool 'data) data
           (slot-value pool 'vbo) vbo
           (slot-value pool 'vao) (make-instance 'vertex-array
@@ -180,9 +189,10 @@ whatever it holds, unless AMBIENT (an ember from a torch), when NIL: a blow's sp
     (setf (pool-cursor pool) (mod (1+ i) n))
     i))
 
-(defun spawn-spark (state ramp x y z vx vy vz life &key (chip 1) (tone 1) ambient)
+(defun spawn-spark (state ramp x y z vx vy vz life &key (chip 1) (tone 1) ambient (rest 0.0))
   "Put a particle in state STATE (see SPARK-POOL) of ramp index RAMP at X Y Z, moving at VX VY
-VZ m/s, for LIFE seconds. Returns its slot, or NIL if AMBIENT and the pool is full."
+VZ m/s, for LIFE seconds; grit lies REST seconds once settled (0 for *GRIT-REST*'s). Returns its
+slot, or NIL if AMBIENT and the pool is full."
   (let* ((pool *spark-pool*)
          (i (and pool (spark-slot pool ambient))))
     (when i
@@ -198,6 +208,7 @@ VZ m/s, for LIFE seconds. Returns its slot, or NIL if AMBIENT and the pool is fu
               (aref (pool-lives pool) i) (float life 0f0)
               (aref (pool-seeds pool) i) (random #.(float (* 2 pi) 0f0))
               (aref (pool-rises pool) i) (float vy 0f0)
+              (aref (pool-rests pool) i) (float rest 0f0)
               (aref p b) (float x 0f0) (aref p (+ b 1)) (float y 0f0) (aref p (+ b 2)) (float z 0f0)
               (aref v b) (float vx 0f0) (aref v (+ b 1)) (float vy 0f0) (aref v (+ b 2)) (float vz 0f0))
         i))))
@@ -286,7 +297,7 @@ at the height a wound bleeds, back toward FROM and up."
   '((:stone :sparks 1.0 :grit 1.0 :grit-ramp :dust)
     (:ice-rock :sparks 0.6 :grit 1.3 :grit-ramp :frost)
     (:ice :sparks 0.0 :grit 1.5 :grit-ramp :frost)
-    (:snow :sparks 0.0 :grit 2.0 :grit-ramp :snow)
+    (:snow :sparks 0.0 :grit 2.0 :grit-ramp :snow-chips)
     (:wood :sparks 0.0 :grit 2.0 :grit-ramp :wood))
   "Per strike kind (SOLID-STRIKE, greybox.lisp): how many of a blow's sparks and grit it throws, as
 a share of the weapon's, and the grit's ramp.")
@@ -477,7 +488,8 @@ REST-SPEED (and so stays on it), :GONE if it was inside already, else NIL."
                                             (if (< 0 (aref bounces i)) 1f6 0.8))
                           (:gone (setf (aref state i) 0))
                           (:rest (setf (aref state i) 5 (aref ages i) 0f0
-                                       (aref lives i) (float (range-random *grit-rest*) 0f0)))
+                                       (aref lives i) (let ((rest (aref (pool-rests pool) i)))
+                                                        (if (< 0f0 rest) rest (float (range-random *grit-rest*) 0f0)))))
                           (T (setf (aref bounces i) 1)))))))
               (2 (when (< (aref lives i) age) (setf (aref state i) 0)))
               (5 (when (< (aref lives i) age) (setf (aref state i) 6 (aref ages i) 0f0)))

@@ -160,6 +160,7 @@ RGBA-ICON would put them. An icon that won't load only logs."
   (add-skin-floors scene)
   (add-root-floor scene)
   (add-spark-pool scene)
+  (add-shard-pools scene)
   (add-bolt-lines scene)
   (add-settlement-director scene)
   (add-hud scene)

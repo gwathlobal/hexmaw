@@ -368,7 +368,9 @@ event sounds as it crouches."
   "Shake the floor at CENTRE out to RADIUS: everything but OGRE (and SPARE) with its feet on that
 floor takes DAMAGE (a roll, NIL for none) and is thrown away at SHOVE m/s (the player at
 PLAYER-SHOVE, NIL to leave them, and up at PLAYER-LIFT). All of it is full within INNER
-of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIUS."
+of CENTRE (the ogre's own body, when it lands) and falls off to nothing at RADIUS. Windows
+within RADIUS shatter (glass.lisp)."
+  (strike-panes centre radius :quake T)
   (flet ((falloff (point margin)
            (let* ((dx (- (vx point) (vx centre)))
                   (dz (- (vz point) (vz centre)))

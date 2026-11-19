@@ -225,6 +225,8 @@ only rolls), and is shoved out."
     ;; It tears up a bloodroot's roots round the feet, and any snare with them (bloodroot.lisp).
     (break-snare player)
     (tear-roots feet *shake-radius*)
+    ;; And shatters the windows round it (glass.lisp).
+    (strike-panes feet *shake-radius* :quake T)
     (let ((dir (look-direction player)))
       (floor-sparks (+ (vx feet) (* *shake-spark-reach* (vx dir))) (vy feet) (+ (vz feet) (* *shake-spark-reach* (vz dir)))))
     (hit-stop *shake-hit-stop*)
