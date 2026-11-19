@@ -337,7 +337,9 @@ the cell's centre and its top over the floor, both -1 for none; found when it ro
                          do (setf face (- d 0.03)) (return))
                  (when face
                    (let ((top (loop for h from 0.5 to *root-climb* by 0.25
-                                    while (solid-at (+ x (* dx (+ face 0.05))) (+ floor h) (+ z (* dz (+ face 0.05))))
+                                    ;; Not up a window's pane, which may break (glass.lisp).
+                                    while (let ((s (solid-at (+ x (* dx (+ face 0.05))) (+ floor h) (+ z (* dz (+ face 0.05))))))
+                                            (and s (not (eq :glass (solid-strike s)))))
                                     finally (return (- h 0.25)))))
                      (setf (aref walls (+ (* 8 w) (* 2 side))) (float face 0f0)
                            (aref walls (+ (* 8 w) (* 2 side) 1)) (float (max 0.25 top) 0f0)))))))))

@@ -21,7 +21,7 @@
 (defpackage #:hexmaw.blueprint
   (:use #:cl)
   (:export #:*cell-size* #:*storey-height* #:*connector-kinds* #:*lava-depth* #:*lava-surface* #:*water-surface* #:*shallow-depth*
-           #:kind-liquid
+           #:kind-liquid #:*glass-designs* #:*pane-thickness*
            #:blueprint-error #:read-blueprint #:blueprint-names #:blueprint-path
            #:build-blueprint #:build-blueprints #:*build-blocks* #:ensure-block #:main))
 
@@ -49,6 +49,16 @@ to the cisterns at either end of it. A canal's doorway is a river's with deep wa
 place of lava. A creek's is the same doorway in the caves, a network of its own, and a rill is
 its narrow kind. A frozen river's is a river's with a channel of ice sunk in place of the lava,
 and a slide is its narrow kind: the ice caves' river.")
+(defparameter *glass-designs* '(("lancet-flame" 1.0 2.5) ("lancet-frost" 1.0 2.5) ("rose-maw" 2.0 2.0)
+                                 ("quarry" 1.0 1.5))
+  "Each stained-glass design a window may hold (glass.lisp): its name and its pane's width and
+height in metres. Its texture is laid on the pane at 64 texels a metre, so the window drawn for
+it is exactly that wide.")
+(defparameter *glass-min-sill* 1.0
+  "The lowest a window's sill may be: higher than any creature steps, so a broken window never
+opens a walk and the nav grid never changes.")
+(defparameter *pane-thickness* 0.2
+  "How thick a pane's solid is: 0.1 m lets a line tested every 0.1 m step through it.")
 (defparameter *default-ceiling* 4.0)
 (defparameter *torch-height* 2.4 "Where T puts a torch's flame, above the storey's floor.")
 (defparameter *torch-inset* 0.3
@@ -265,6 +275,16 @@ pool stands this far out of the water, within a step.")
                (unless (member tier '("floor" "reward") :test #'string-equal)
                  (fail line NIL "A pickup spot is floor or reward, not ~s." tier))
                (list :pickup (string-downcase tier))))
+            ((string-equal op "glass")
+             ;; glass DESIGN Y0 [MATERIAL]: a stained-glass window from Y0 up, in a wall of
+             ;; MATERIAL that fills these cells under it and over it.
+             (let ((design (assoc (arg 0) *glass-designs* :test #'string-equal)))
+               (unless design
+                 (fail line NIL "No glass design ~s; there are ~{~a~^, ~}." (arg 0) (mapcar #'first *glass-designs*)))
+               (let ((y0 (parse-number (arg 1) line)))
+                 (unless (<= *glass-min-sill* y0)
+                   (fail line NIL "A window's sill is ~a m up at least, not ~a: a broken one mustn't open a walk." *glass-min-sill* y0))
+                 (list :glass (first design) y0 (or (third args) "wall")))))
             ((string-equal op "exit") (list :exit))
             ((string-equal op "altar") (list :altar))
             (T (fail line NIL "Unknown action ~s." op))))))
@@ -283,6 +303,12 @@ pool stands this far out of the water, within a step.")
                          for ws = (words part)
                          when ws collect (parse-action ws line))))
       (unless actions (fail line NIL "~s has no actions." (string char)))
+      ;; A window's wall: its sill under the pane and its lintel over it.
+      (let ((glass (action :glass actions)))
+        (when glass
+          (destructuring-bind (design y0 material) (rest glass)
+            (let ((y1 (+ y0 (third (assoc design *glass-designs* :test #'string=)))))
+              (setf actions (append actions (list (list :box 0 y0 material) (list :box y1 :top material))))))))
       (setf (gethash char (legend blueprint)) (cons line actions)))))
 
 (defun parse-header (blueprint key args line)
@@ -475,7 +501,7 @@ the ^ cells between; NIL if there is no doorway under it."
       (maphash (lambda (char entry)
                  (declare (ignore char))
                  (dolist (a (cdr entry))
-                   (let ((material (case (first a) ((:box :deco) (fourth a)) (:stairs (fifth a)) ((:wall :diagonal :floor) (second a)))))
+                   (let ((material (case (first a) ((:box :deco) (fourth a)) ((:stairs :glass) (car (last a))) ((:wall :diagonal :floor) (second a)))))
                      (when (and material (not (assoc material (materials blueprint) :test #'string-equal)))
                        (fail (car entry) NIL "No material ~s; add a material line." material)))))
                (legend blueprint))
@@ -498,7 +524,9 @@ the ^ cells between; NIL if there is no doorway under it."
                                 ((and border (not (or (wall-like-p actions) (action :door actions) (action :over-door actions))))
                                  (fail line (1+ c) "The border must be wall, torch or doorway, not ~s." (string char)))
                                 ((and (not border) (action :door actions))
-                                 (fail line (1+ c) "A doorway must be on the border.")))
+                                 (fail line (1+ c) "A doorway must be on the border."))
+                                ((and border (action :glass actions))
+                                 (fail line (1+ c) "A window can't be on the border: it would look out onto nothing.")))
                           ;; A doorway taller than its storey runs on up through the plans above.
                           (when (action :over-door actions)
                             (unless (< 1e-3 (or (door-top-under blueprint (storey plan) r c) 0))
@@ -742,8 +770,9 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                            (arrive (action :arrive actions))
                            (altar (action :altar actions))
                            (falls (action :falls actions))
+                           (glass (action :glass actions))
                            (torch (action :torch actions)))
-                      (when (and (or stairs spawn pickup exit npc zone arrive altar falls) (not (gethash (list r c) done)))
+                      (when (and (or stairs spawn pickup exit npc zone arrive altar falls glass) (not (gethash (list r c) done)))
                         (let ((cells (region rows r c)))
                           (dolist (cell cells) (setf (gethash cell done) T))
                           (multiple-value-bind (r0 c0 r1 c1) (region-bounds cells)
@@ -813,6 +842,36 @@ its wall, floor slab, boxes and door lintel together. A diagonal doesn't count."
                                 (let ((n (incf (gethash "falls" counts 0))))
                                   (push (list (format NIL "falls_~d_lo" n) (list x0 (height (second falls)) z0) NIL) empties)
                                   (push (list (format NIL "falls_~d_hi" n) (list x1 (height (third falls)) z1) NIL) empties)))
+                              (when glass
+                                ;; One row runs along x, else one column along z; the pane
+                                ;; stands in the middle of the wall, *PANE-THICKNESS* thick,
+                                ;; as two corners (glass.lisp).
+                                (destructuring-bind (design y0 material) (rest glass)
+                                  (declare (ignore material))
+                                  (let* ((size (assoc design *glass-designs* :test #'string=))
+                                         ;; A single cell runs the way it is longer.
+                                         (along-x (if (and (= r0 r1) (= c0 c1)) (<= (- z1 z0) (- x1 x0)) (= r0 r1)))
+                                         (length (if along-x (- x1 x0) (- z1 z0)))
+                                         (half (/ *pane-thickness* 2))
+                                         (n (incf (gethash "glass" counts 0))))
+                                    (unless (or along-x (= c0 c1))
+                                      (fail (+ (line plan) r) (1+ c) "The window drawn with ~s is more than one row or column thick." (string char)))
+                                    (unless (= (length cells) (1+ (if along-x (- c1 c0) (- r1 r0))))
+                                      (fail (+ (line plan) r) (1+ c) "The window drawn with ~s isn't one straight line." (string char)))
+                                    (unless (< (abs (- length (second size))) 1e-3)
+                                      (fail (+ (line plan) r) (1+ c) "A ~a window is ~a m wide; this one is ~a m." design (second size) length))
+                                    (when (< (+ top 1e-3) (height (+ y0 (third size))))
+                                      (fail (+ (line plan) r) (1+ c) "A ~a window ~a m up reaches over this storey's top." design y0))
+                                    (let ((mx (/ (+ x0 x1) 2)) (mz (/ (+ z0 z1) 2)))
+                                      (push (list (format NIL "glass_~d_~a_lo" n design)
+                                                  (if along-x (list x0 (height y0) (- mz half)) (list (- mx half) (height y0) z0)) NIL)
+                                            empties)
+                                      (push (list (format NIL "glass_~d_~a_hi" n design)
+                                                  (if along-x
+                                                      (list x1 (height (+ y0 (third size))) (+ mz half))
+                                                      (list (+ mx half) (height (+ y0 (third size))) z1))
+                                                  NIL)
+                                            empties)))))
                               (when altar
                                 ;; On top of the box it stands on, if any: the spellforge's (forge.lisp).
                                 (let ((y (reduce #'max (remove :box actions :key #'first :test-not #'eq)

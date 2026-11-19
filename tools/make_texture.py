@@ -34,6 +34,13 @@ its mean, times this: generated surfaces come out flatter than the sprites), --t
 colour moved to a CIE a* b*, so the stones of one dungeon are one family) and --chroma, then
 --palette, the master palette in place of --colors' own.
 
+A stained-glass pane (--glass W H) is one window drawn on magenta, W by H metres, as
+glass.lisp lays it on a pane: cropped to what isn't magenta and scaled to W x H x 64, its lead
+(near black in every channel, and any magenta inside the panel, such as a lancet's corners outside its arch) one
+dark opaque colour, alpha 255, and its glass each texel's average over its glass alone, so the
+lead doesn't darken the pieces' edges, on the --palette, alpha 128: the shader tells lead from
+glass by it. It prints the glass's commonest colours, for the shards' ramps (*GLASS-LOOKS*).
+
 --brightness scales every colour first, for a generated surface that came
 out too light or dark beside the rest of the level. Writes <out>.png and, beside the source, <source stem>-tiled.png: the
 texture 3 x 3 at 4x zoom, to check the seams by eye. It prints how far the wrapped
@@ -43,6 +50,7 @@ edges differ from neighbouring rows inside the tile (1.0: no more than any two r
 import argparse
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageChops, ImageStat
 
 from pixelart import adjust_tone, quantize_to_palette, read_palette
@@ -141,6 +149,43 @@ def make_panel(src, args):
     return tex
 
 
+def make_glass(src, args):
+    """The pane texture of SRC, a window drawn on magenta, as --glass describes."""
+    rgb = np.asarray(src.convert("RGB")).astype(np.float64)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    magenta = (r > 150) & (b > 150) & (g < 120)
+    ys, xs = np.nonzero(~magenta)
+    y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    rgb, magenta = rgb[y0:y1, x0:x1], magenta[y0:y1, x0:x1]
+    # Near black in every channel: deep blue and violet glass is dark but not in its own channel.
+    lead = magenta | (rgb.max(-1) < args.lead)
+    w, h = round(args.glass[0] * PIXELS_PER_METRE), round(args.glass[1] * PIXELS_PER_METRE)
+    glass = (~lead).astype(np.float64)
+    def down(a):
+        return np.asarray(Image.fromarray(a.astype(np.float32), "F").resize((w, h), Image.BOX), dtype=np.float64)
+    share = down(glass)
+    colour = np.stack([down(rgb[..., c] * glass) for c in range(3)], -1) / np.maximum(share, 1e-6)[..., None]
+    if args.brightness != 1.0:
+        colour = colour * args.brightness
+    tex = Image.fromarray(np.clip(colour, 0, 255).astype(np.uint8), "RGB")
+    if args.contrast != 1.0 or args.tone or args.chroma != 1.0:
+        tex = adjust_tone(tex, args.contrast, args.tone, args.chroma)
+    if args.palette:
+        tex = quantize_to_palette(tex, read_palette(args.palette)).convert("RGB")
+    out = np.asarray(tex.convert("RGBA")).copy()
+    is_lead = share < 0.5
+    out[is_lead, :3] = args.lead_colour
+    out[..., 3] = np.where(is_lead, 255, 128)
+    tex = Image.fromarray(out, "RGBA")
+    counts = {}
+    for c in out[~is_lead][:, :3]:
+        key = "%02x%02x%02x" % tuple(c)
+        counts[key] = counts.get(key, 0) + 1
+    common = sorted(counts.items(), key=lambda kv: -kv[1])[:12]
+    print("lead %d%%; glass colours: %s" % (round(100 * is_lead.mean()), " ".join(f"{k}:{n}" for k, n in common)))
+    return tex
+
+
 def finish(tex, args):
     """The house style's last steps: --contrast, --tone and --chroma, then the --palette."""
     if args.contrast != 1.0 or args.tone or args.chroma != 1.0:
@@ -172,11 +217,22 @@ def main():
                     help="move the mean colour to this CIE a* b*, keeping each texel's difference from it")
     ap.add_argument("--chroma", type=float, default=1.0, help="every colour's saturation, times this")
     ap.add_argument("--palette", help="map onto this palette file (art/style/palette.txt) instead of --colors")
+    ap.add_argument("--glass", type=float, nargs=2, metavar=("W", "H"),
+                    help="metres wide and tall: the source is a stained-glass window on magenta")
+    ap.add_argument("--lead", type=float, default=48.0, help="brightest channel under which a source pixel is lead (default 48)")
     ap.add_argument("--key", action="store_true",
                     help="the source is drawn on magenta, which becomes see-through (a bloodroot's roots)")
     args = ap.parse_args()
 
     src = Image.open(args.source).convert("RGB")
+    if args.glass:
+        args.lead_colour = (24, 17, 14)
+        tex = make_glass(src, args)
+        out = Path(args.out).with_suffix(".png")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        tex.save(out)
+        print(f"{out}: {tex.size[0]} x {tex.size[1]} px")
+        return
     if args.strip or args.panel:
         tex = finish(make_panel(src, args) if args.panel else make_strip(src, args), args)
         out = Path(args.out).with_suffix(".png")

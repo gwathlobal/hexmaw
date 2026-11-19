@@ -793,6 +793,8 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
            (update-creature-look creature))
   ;; The arena's gate goes up again, and its boss back to sleep (boss.lisp).
   (unseal-arena)
+  ;; Broken windows whole again (glass.lisp).
+  (restore-panes)
   (when (and +main+ (scene +main+))
     (let ((leftovers ()))
       (for:for ((entity over (scene +main+)))

@@ -118,8 +118,9 @@ a footstep on it sounds like).")
 ;; What a melee blow that strikes a solid of a surface throws (WALL-STRIKE, sword.lisp): any surface
 ;; not named here, a flat colour and the arena's gate are stone.
 (defparameter *surface-strikes*
-  '((:beam :wood) (:platform :wood) (:ice-rock :ice-rock) (:ice :ice) (:snow :snow))
-  "Per surface name, its strike kind: :WOOD, :ICE-ROCK, :ICE or :SNOW; anything else :STONE.")
+  '((:beam :wood) (:platform :wood) (:ice-rock :ice-rock) (:ice :ice) (:snow :snow) (:glass :glass))
+  "Per surface name, its strike kind: :WOOD, :ICE-ROCK, :ICE, :SNOW or :GLASS (a pane's, glass.lisp);
+anything else :STONE.")
 
 (defun surface-strike (name)
   "The strike code of surface NAME (a keyword or a material's name) for MAKE-SOLID: its place in

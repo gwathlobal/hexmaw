@@ -1,0 +1,29 @@
+{
+  "prompt": "Pixel-art STAINED-GLASS WINDOW PANEL for a Doom/Hexen-style first-person dark-fantasy dungeon game. It is drawn as a texture: the game lays it flat in a window opening and lights it, and a player can smash it.\n\nREFERENCE IMAGES: the first is the game's style anchor sheet (an imp, a knight, a stone wall, a floor, a flask and a sword together). Use it ONLY for the art style: the pixel size, the hard-edged shading with a few tones, the palette's mood. Do not draw anything from it.\n\nTHE IMAGE\n- One flat window panel seen perfectly dead-on: no perspective, no frame of stone, no wall around it, no shadow, no background scene through it. Outside the panel the image is pure flat magenta (#FF00FF), nothing else.\n- The panel is a rectangle exactly the proportions given below, centred in the image, filling it as far as those proportions allow.\n- LEAD CAME: every piece of glass is outlined by lead strips drawn in PURE BLACK (#000000), all the same width, about a fortieth of the panel's width, crisp and unbroken. A black lead border runs round the whole rectangle. Larger shapes are held by thicker black bars. Nothing else in the image is pure black.\n- GLASS: flat pieces of saturated coloured glass, each piece one main colour with at most two or three hard-edged tones of it (a lighter streak, a darker edge), like pieces of real cathedral glass. Rich, jewel-like colours: ruby red, amber gold, cobalt and deep blue, emerald, violet. No piece is grey, brown or pure white, and no piece is near black.\n- Even lighting: no light source, no glow, no gradient across the panel, no lens flare, no reflections. The game lights it.\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients, no semi-transparent pixels.\n- No text, letters, numbers, signatures or watermark.\n\nTHIS PANEL: a ROSE window in a SQUARE panel, exactly as tall as it is wide.\n- A large circle fills the square. The four corners of the square outside the circle are filled with SOLID PURE BLACK, as part of the lead.\n- The circle is divided by black lead into twelve petal-shaped panes radiating from the centre, in alternating deep violet and ruby red, each with a small gold piece at its outer tip.\n- In the very centre, a round medallion about a third of the circle's width: a monstrous FANGED MAW seen from the front, wide open, a ring of pointed ivory-yellow fangs above and below round a deep red throat with an ember-orange glow at its middle, as in the second reference image, the game's title picture of a maw hewn in rock.\n- A thin ring of small amber and gold pieces runs round the circle's edge inside the outer lead.",
+  "prompt_file": null,
+  "refs": [
+    "art/style/anchor.png",
+    "art/splash/maw-1.png"
+  ],
+  "mask": null,
+  "backend": "codex",
+  "n": 2,
+  "created": 1795057961,
+  "size_request": "1024x1024",
+  "background": "auto",
+  "codex_prompt": "Pixel-art STAINED-GLASS WINDOW PANEL for a Doom/Hexen-style first-person dark-fantasy dungeon game. It is drawn as a texture: the game lays it flat in a window opening and lights it, and a player can smash it.\n\nREFERENCE IMAGES: the first is the game's style anchor sheet (an imp, a knight, a stone wall, a floor, a flask and a sword together). Use it ONLY for the art style: the pixel size, the hard-edged shading with a few tones, the palette's mood. Do not draw anything from it.\n\nTHE IMAGE\n- One flat window panel seen perfectly dead-on: no perspective, no frame of stone, no wall around it, no shadow, no background scene through it. Outside the panel the image is pure flat magenta (#FF00FF), nothing else.\n- The panel is a rectangle exactly the proportions given below, centred in the image, filling it as far as those proportions allow.\n- LEAD CAME: every piece of glass is outlined by lead strips drawn in PURE BLACK (#000000), all the same width, about a fortieth of the panel's width, crisp and unbroken. A black lead border runs round the whole rectangle. Larger shapes are held by thicker black bars. Nothing else in the image is pure black.\n- GLASS: flat pieces of saturated coloured glass, each piece one main colour with at most two or three hard-edged tones of it (a lighter streak, a darker edge), like pieces of real cathedral glass. Rich, jewel-like colours: ruby red, amber gold, cobalt and deep blue, emerald, violet. No piece is grey, brown or pure white, and no piece is near black.\n- Even lighting: no light source, no glow, no gradient across the panel, no lens flare, no reflections. The game lights it.\n- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients, no semi-transparent pixels.\n- No text, letters, numbers, signatures or watermark.\n\nTHIS PANEL: a ROSE window in a SQUARE panel, exactly as tall as it is wide.\n- A large circle fills the square. The four corners of the square outside the circle are filled with SOLID PURE BLACK, as part of the lead.\n- The circle is divided by black lead into twelve petal-shaped panes radiating from the centre, in alternating deep violet and ruby red, each with a small gold piece at its outer tip.\n- In the very centre, a round medallion about a third of the circle's width: a monstrous FANGED MAW seen from the front, wide open, a ring of pointed ivory-yellow fangs above and below round a deep red throat with an ember-orange glow at its middle, as in the second reference image, the game's title picture of a maw hewn in rock.\n- A thin ring of small amber and gold pieces runs round the circle's edge inside the outer lead.\nImage size: 1024x1024 pixels (square).",
+  "codex_threads": [
+    "01a1f1c8-bdb4-7fd1-8fb4-b81d23078ffe",
+    "01a1f1c9-a315-7f51-8cd4-947146034d2e"
+  ],
+  "sizes": [
+    [
+      1254,
+      1254
+    ],
+    [
+      1254,
+      1254
+    ]
+  ]
+}

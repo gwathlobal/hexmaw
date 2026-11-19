@@ -1,0 +1,12 @@
+Pixel-art STAINED-GLASS WINDOW PANEL for a Doom/Hexen-style first-person dark-fantasy dungeon game. It is drawn as a texture: the game lays it flat in a window opening and lights it, and a player can smash it.
+
+REFERENCE IMAGES: the first is the game's style anchor sheet (an imp, a knight, a stone wall, a floor, a flask and a sword together). Use it ONLY for the art style: the pixel size, the hard-edged shading with a few tones, the palette's mood. Do not draw anything from it.
+
+THE IMAGE
+- One flat window panel seen perfectly dead-on: no perspective, no frame of stone, no wall around it, no shadow, no background scene through it. Outside the panel the image is pure flat magenta (#FF00FF), nothing else.
+- The panel is a rectangle exactly the proportions given below, centred in the image, filling it as far as those proportions allow.
+- LEAD CAME: every piece of glass is outlined by lead strips drawn in PURE BLACK (#000000), all the same width, about a fortieth of the panel's width, crisp and unbroken. A black lead border runs round the whole rectangle. Larger shapes are held by thicker black bars. Nothing else in the image is pure black.
+- GLASS: flat pieces of saturated coloured glass, each piece one main colour with at most two or three hard-edged tones of it (a lighter streak, a darker edge), like pieces of real cathedral glass. Rich, jewel-like colours: ruby red, amber gold, cobalt and deep blue, emerald, violet. No piece is grey, brown or pure white, and no piece is near black.
+- Even lighting: no light source, no glow, no gradient across the panel, no lens flare, no reflections. The game lights it.
+- Crisp pixel art with hard edges: a limited palette, no anti-aliasing, no blur, no noise, no dithering gradients, no semi-transparent pixels.
+- No text, letters, numbers, signatures or watermark.

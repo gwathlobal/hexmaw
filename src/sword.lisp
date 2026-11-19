@@ -378,6 +378,10 @@ ahead, strike it there. True if it did."
         (let ((range (/ reach (max 0.6 (+ (* dx (vx ahead)) (* dy (vy ahead)) (* dz (vz ahead)))))))
           (multiple-value-bind (s x y z nx ny nz)
               (wall-strike-point (vx eye) (vy eye) (vz eye) dx dy dz range)
+            (when (and s (pane-of-solid s))
+              ;; A window shatters (glass.lisp).
+              (break-pane (pane-of-solid s) :from eye)
+              (return-from wall-strike T))
             (when s
               (flet ((by-charge (key) (wall-strike-value (getf props key) charge)))
                 (let ((strike (solid-strike s))

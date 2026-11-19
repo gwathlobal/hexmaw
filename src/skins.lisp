@@ -143,7 +143,8 @@ the middle a metre up reaches them; a wedge's diagonal is left bare, as blood le
                                                  (push-cell at va ua at vb ub normal)
                                                  (push-cell ua va at ub vb at normal))))))))))
       (do-solids-near (s x0 z0 x1 z1)
-        (unless (or (gethash s seen) (< 0 (solid-cut s)))
+        ;; Nor a window's pane (glass.lisp): it may break.
+        (unless (or (gethash s seen) (< 0 (solid-cut s)) (eq :glass (solid-strike s)))
           (setf (gethash s seen) T)
           (when (and (< (aref s 1) top) (< floor (aref s 4)))
             (face s 0 NIL) (face s 0 T) (face s 2 NIL) (face s 2 T)))))

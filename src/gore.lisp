@@ -551,6 +551,20 @@ Returns its slot."
       (setf (aref p b) (float x 0f0) (aref p (+ b 1)) (float y 0f0) (aref p (+ b 2)) (float z 0f0))
       T)))
 
+(defun dissolve-splats-in (low high &optional (margin 0.0))
+  "Start every splat lying in the box from LOW to HIGH (MARGIN metres wider each way) dissolving:
+the blood on a window that broke (glass.lisp)."
+  (let ((pool *blood-pool*))
+    (when pool
+      (let ((p (pool-positions pool)))
+        (dotimes (i (pool-size pool))
+          (when (splat-lying-p pool i)
+            (let ((b (* 3 i)))
+              (when (and (<= (- (vx low) margin) (aref p b) (+ (vx high) margin))
+                         (<= (- (vy low) margin) (aref p (+ b 1)) (+ (vy high) margin))
+                         (<= (- (vz low) margin) (aref p (+ b 2)) (+ (vz high) margin)))
+                (dissolve-splat pool i)))))))))
+
 (defun dissolve-splat (pool i)
   "Start slot I's splat dissolving now, as the oldest does when there are too many."
   (when (splat-lying-p pool i)

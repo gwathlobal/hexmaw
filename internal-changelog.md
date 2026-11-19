@@ -7,6 +7,22 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Stained glass (src/glass.lisp): coloured windows over a sill at least 1 m high, a wall to
+  everything until a blow, a projectile or beam, a burst or nova, the earthshake, an ogre's quake or a
+  body flung into one shatters it into shards of its colours, leaving teeth of glass in an empty frame
+  that the player can jump through. Drawn as a filter over what is behind and its own light, the lamps
+  behind it shining through; a window lit from one side hangs a dim lamp of its colour on the other,
+  near windows sharing one. Four designs (two lancets, a rose window round the maw, a guardhouse's
+  diamond quarries), a blueprint `glass DESIGN Y0` action, `make_texture.py --glass`, the
+  `glass-shatter` sound. Two new rooms built round them, the `chapel` (a facade of lancets before a
+  nave cut into the rock) and the `outpost` (a yard and a guardhouse with leaded windows); the
+  reliquary's screen has a rose window and the town temple two lancets. A save keeps the broken
+  windows, a reset mends them. The debug level's shrine has the chapel off its east doorway. The new
+  rooms change every seed's layout, so a save from before starts its level fresh. `tools/levelcheck`
+  reports windows a level.
+- The spark ramp for snow struck loose was unreachable (`:snow` twice in `*spark-ramps*`); it is
+  `:snow-chips` now.
+
 - The bloodroot streamlined: the husk and its red lamp are gone (and `blow-damage` with them), and the
   burrowing root is its one attack in place of the lobbed blood seed (gone, with `lobbed-projectile`,
   the seed's art and the `bloodroot-spit` sound): 2 to 20 m, every 3 s (1.5 in Glut), erupting as a

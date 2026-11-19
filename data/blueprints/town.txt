@@ -1,7 +1,7 @@
 ; The settlement: once a run, a town in a 9 m vault that a level is grown from (settlement.lisp).
-; A plaza ringed by open-fronted quarters: the temple (a dais, the Spellforge's altar on it), the
-; descent's recess between it and the hall, the market's counter, the training yard and the
-; barracks. Gates west and east, which the level's wing grows from. Who is here depends on the
+; A plaza ringed by open-fronted quarters: the temple (a dais, the Spellforge's altar on it, two
+; stained-glass windows onto the recess), the descent's recess between it and the hall, the
+; market's counter, the training yard and the barracks. Gates west and east, which the level's wing grows from. Who is here depends on the
 ; settlement's condition (npc and spawn conditions). No tag the generator grows from: the run
 ; places it itself, first (*SETTLEMENT-LEVEL*).
 cells 8 6
@@ -43,13 +43,16 @@ legend
   v npc commoner south sacked
   x spawn any-ogre south 30 when:sacked
   $ pickup floor
+  g glass lancet-flame 1.2        ; the temple's windows onto the descent's recess
+  h glass lancet-frost 1.2
+  y box 0 1.2, box 3.7 top        ; the wall round them, opened
 
 plan 0
 ####T############T#######AAAAAA###########T#############T#######
 #qqq%%%%%%aa%%%%%%qqq####XXXXXX####............................#
-#qqq%%%%%%aa%%%%%%qqq####XXXXXX####........QQ...............$$.#
+#qqq%%%%%%aa%%%%%%qqqygyyXXXXXX####........QQ...............$$.#
 #qqq::::::::::::::qqq####T....T####T.....tttttt....tttttt......#
-#qqqqqqqqqqqqqqqqqppq####......####............................#
+#qqqqqqqqqqqqqqqqqppqyhyy......####............................#
 #qqqqqqqqqvvqqqqqqqqT####......####............................#
 Tqqqqqqqqqqqqqqqqqqqq.LL........MM................xx...........T
 #qqqqqqqqqqqqqqqqqqqq..........................................#

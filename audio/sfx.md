@@ -240,6 +240,7 @@ Loops on many sources: play only the nearest few of each kind.
 | water-lap | 3 | P L | 4 | 2 | water surfaces, liquids.lisp |
 | waterfall | 2 | P L | 6 | 2 | a waterfall's foot, `add-waterfall` waterfall.lisp (`*falls-points*`) |
 | dungeon-drips | 3 | 1P L | 8 | 2 | room tone under everything |
+| glass-shatter | 2 | P | 1.2 | 3 | `break-pane` glass.lisp, a stained-glass window shattering, whatever broke it |
 
 ## Pickups and inventory
 

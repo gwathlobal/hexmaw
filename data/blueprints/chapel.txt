@@ -1,0 +1,48 @@
+; An abandoned chapel. Its front is a room like any other, with the doorways; across it stands
+; a facade of dressed stone, a doorway in its middle and four stained-glass lancets, and behind
+; it the nave is cut into the rock: a dais, an altar stone with something left on it, benches,
+; and the torches that light the windows from within. Break a window to see, or shoot, through.
+cells 3 4
+tags room
+weight 1
+material rock 0.36 0.32 0.3
+material stone 0.6 0.58 0.55
+material dais 0.58 0.47 0.30
+material beam 0.35 0.25 0.18
+legend
+  R wall rock
+  [ diagonal / rock
+  ] diagonal \ rock
+  F wall stone
+  L box 3 top stone                   ; the lintel over the facade's doorway
+  g glass lancet-flame 1.2 stone
+  h glass lancet-frost 1.2 stone
+  % box 0 0.4 dais
+  u box 0 0.4 dais, torch 2.4
+  A box 0 1.2 stone, pickup reward    ; the altar stone, 0.8 m over the dais
+  b box 0 0.5 beam                    ; a bench
+  t torch 2.2
+  a spawn acolyte|necromancer south
+  M spawn acolyte|necromancer south 30
+  k spawn imp|knight north
+  m spawn imp|knight north 30
+  $ pickup floor
+
+plan 0
+########################
+#RRR[[.u%%%%%%%%u.]]RRR#
+#R[[...%%%%AA%%%%...]]R#
+#R.....%%%%%%%%%%.....R#
+#Rt.........aa.......tR#
+#R...bbbb......bbbb...R#
+#R..........MM........R#
+#R...bbbb......bbbb...R#
+#RFggFhhFLLLLLLFhhFggFR#
+#..$$..............$$..#
+#......................#
+#...........mm.........#
+#......................#
+w......................e
+w..........kk..........e
+w......................e
+#########ssssss#########

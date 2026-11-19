@@ -326,6 +326,8 @@ hit-stop, and its own stamina against a raised shield."))
 it reaches (STRIKE-SKINS, skins.lisp: fire melts rime)."
   (dolist (effect (spell-effects spell))
     (when (and (target-effect-p effect) (< 0 (effect-area effect)))
+      ;; Windows within it shatter, whatever it is made of (glass.lisp).
+      (strike-panes point (effect-area effect))
       (when (effect-element effect)
         (strike-skins (effect-element effect) point (effect-area effect) caster))
       (let ((burst (make-instance 'strike :spell spell :caster caster :origin point)))
@@ -756,6 +758,7 @@ least: so the plain Fire Bolt melts rime.")
             (setf (projectile-sound spell-projectile)
                   (start-loop (spell-sound (spell spell-projectile) :flight) loc))))
       (let ((victim (projectile-victim spell-projectile loc r))
+            (hit NIL)
             (entered (and (not (submerged spell-projectile)) (liquid-at (vx loc) (vy loc) (vz loc)))))
         (setf (submerged spell-projectile) (and (liquid-at (vx loc) (vy loc) (vz loc)) T))
         (cond ((and victim (deflects-p victim spell-projectile))
@@ -773,8 +776,11 @@ least: so the plain Fire Bolt melts rime.")
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
                  (projectile-landed spell-projectile at victim)
                  (impact spell-projectile :at at)))
-              ((or entered (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r)))
+              ((or entered (setf hit (solid-overlapping (vx loc) (- (vy loc) r) (vz loc) r (* 2 r))))
                (let ((at (impact-point spell-projectile)))
+                 ;; A window it struck shatters (glass.lisp).
+                 (when (pane-of-solid hit)
+                   (break-pane (pane-of-solid hit) :from at))
                  (burst-spell (spell spell-projectile) at (caster spell-projectile))
                  (projectile-landed spell-projectile at NIL)
                  (impact spell-projectile :at at
@@ -1412,7 +1418,9 @@ at what it struck."
            (r (nova-radius-at spell-nova age))
            (spell (spell spell-nova))
            (dome (nova-dome spell-nova)))
-      ;; What it reaches, it strikes.
+      ;; What it reaches, it strikes, windows too (glass.lisp).
+      (when live
+        (strike-panes (centre spell-nova) r))
       (loop while (and (nova-victims spell-nova) (<= (second (first (nova-victims spell-nova))) r))
             do (destructuring-bind (body distance) (pop (nova-victims spell-nova))
                  (when (or (eq body *player*) (not (dead body)))
@@ -1693,10 +1701,13 @@ creature, or the player when CASTER is anyone else) or NIL."
                                (and player (player-at-p player point *beam-reach*) player))))
                (when victim
                  (return-from beam-end (values point victim))))
-             (when (or (solid-overlapping (vx point) (- (vy point) r) (vz point) r (* 2 r))
-                       (and (not wet) (liquid-at (vx point) (vy point) (vz point))))
-               (nv+* point direction (- *beam-step*))
-               (return)))
+             (let ((s (solid-overlapping (vx point) (- (vy point) r) (vz point) r (* 2 r))))
+               (when (or s (and (not wet) (liquid-at (vx point) (vy point) (vz point))))
+                 (nv+* point direction (- *beam-step*))
+                 ;; A window it reaches shatters; the next strike goes through (glass.lisp).
+                 (when (pane-of-solid s)
+                   (break-pane (pane-of-solid s) :from origin))
+                 (return))))
     (values point NIL)))
 
 (defun beam-strike (spell origin direction container caster &key quiet)
