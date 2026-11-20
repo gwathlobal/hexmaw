@@ -692,11 +692,12 @@ with nothing at Y under its centre, stands on that ledge's."
 
 (defvar *skin-patches* (make-array 0 :adjustable T :fill-pointer T)
   "What skins lie over the level's floors and walls for a while (SKIN, skins.lisp: a rime hag's
-ice): each a simple-vector (X Y Z RADIUS GRID-X GRID-Z N CELL HEIGHTS FOOTING WALLS KIND), its
+ice): each a simple-vector (X Y Z RADIUS GRID-X GRID-Z N CELL HEIGHTS FOOTING WALLS KIND WALL-BASE), its
 centre and the radius it reaches now, the corner of its grid of N by N cells CELL metres a side,
 each cell's floor height row by row (most-negative-single-float where it has none), the footing
-it is underfoot (a key of *FOOTINGS*, or NIL for a look only), its wall cells (SKIN-WALL-CELLS)
-and its kind (*SKIN-KINDS*). CLEAR-LEVEL empties it.")
+it is underfoot (a key of *FOOTINGS*, or NIL for a look only), its wall cells (SKIN-WALL-CELLS),
+its kind (*SKIN-KINDS*) and the height its wall cells start from (its floor's, or lower when it
+has none). CLEAR-LEVEL empties it.")
 
 (defun skin-footing (x y z)
   "The footing of the skin the point X Y Z stands on (within its radius, on the floor of its cell

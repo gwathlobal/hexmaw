@@ -7,6 +7,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Rime laid with no floor under it (a frost patch struck high over a drop) ends in the same
+  jagged frosted top as any other on the walls: the drawer measured the top from the patch's
+  floor height, 1.25 m above where its wall cells end, so the cut never reached them.
+
 - A saved frost patch keeps its freeze duration. Loading places it back underfoot, and
   renewing it can freeze creatures again.
 
