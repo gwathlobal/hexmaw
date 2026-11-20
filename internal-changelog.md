@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A saved frost patch keeps its freeze duration. Loading places it back underfoot, and
+  renewing it can freeze creatures again.
+
 - Creature updates reuse the current level's difficulty and ability rules. A level build
   refreshes them, including on quickload and when rebuilding the same seed after an edit.
 
