@@ -39,7 +39,7 @@ plan 0
 #R...bbbb......bbbb...R#
 #R..........MM........R#
 #R...bbbb......bbbb...R#
-#RFggFjjFLLLLLLFyyFhhFR#
+#FFggFjjFLLLLLLFyyFhhFF#
 #..$$..............$$..#
 #......................#
 #...........mm.........#

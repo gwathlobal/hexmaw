@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The chapel's facade runs wall to wall in dressed stone: its two end cells were rock, a slice of
+  cave between the front room's brick and the facade.
 - Lightning draws after the sprites (`late-rank` 0.45 on `bolt-lines`): drawn in hash order, a
   sprite drawn after it covered it, so the arc votary's own sprite hid its beam.
 - Death can be undone by a save: the death screen offers Quickload (while a quicksave exists)
