@@ -7,6 +7,59 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Killing a rime hag (or an arc votary, a bloodroot) before you know its element no longer freezes
+  the picture when the level placed no glyph of that kind: its dropped glyph's texture was never
+  loaded, so drawing it failed every frame while the game ran on underneath. `preload-pickups`
+  loads every kind that can drop in play (`dropped-kinds`: what imps steal, every glyph, and kill
+  gold the bag can't hold). Nothing else spawned in play was found unloaded: every effect
+  animation and image not loaded on a generated level belongs to a creature, townsperson, block or
+  pickup placed as the level is built, which stages its own.
+
+- What the player's weapon is doing is a `wield` (player.lisp) the player holds: the swing, charge,
+  second blow, guard and jolt timers moved off the player's own slots, reached by the same
+  accessors, so saves keep their names. `spear-jolt` is `weapon-jolt`; an older save's is read
+  as it (`*renamed-saved-slots*`, save.lisp).
+
+- A weapon in the bag is an instance of its template, a `weapon-item` (weapons.lisp) holding its
+  enchantment: a stack is `(:sword 1 #<weapon-item>)` (`make-weapon-stack`), saved as
+  `(:sword 1 (:weapon-item :sword ENCHANTMENT))`. An older save's `(:sword 1)` or `(:sword 1 SPELL)`
+  gets its item on loading and on the stairs (`migrate-weapon-items`, `stack-item`); a found
+  weapon is copied with `copy-stack`. Saves from before this load as they did; a save from this
+  build won't load in an older one, so `*save-version*` stays.
+
+- A weapon's item entry, icon, loot sprite, forge noun and whether levels hand it out come from its
+  template: `*item-kinds*` lost its sword, spear and maul lines (`item-property` reads
+  `template-item-entry`), `*loot-weapons*` is `loot-weapons`, and the forge, the tooltips and the
+  Deepwardens' rule ask the template or its guard (`guard-sink-p`, the shield by its name) instead of
+  naming `:sword`, `:spear`, `:maul` and `:shield`. Over run seeds 1 to 30 every level's loot is
+  the same item, enchantment and spot as before.
+
+- The weapons on screen are one class, `weapon-sprite`, one made for each template with a strip
+  (`add-weapon-sprites`), and the shield a `guard-sprite`, one for each guard; the `sword`,
+  `spear`, `maul` and `shield` entities, `add-sword` and its siblings, `held-weapon`,
+  `idle-frames`, `swing-first`, `weapon-aim` and `shield-frame` are gone. A sprite's frame comes
+  from its template's `:frames` (`weapon-frame`, `blow-frame`; a `charged-blow` shows its
+  charge). `*weapon-sprites*` is keyed by weapon and guard name. Screenshots of every weapon and
+  move match master's.
+
+- What a weapon does is its blows' classes (`thrust`, `charged-blow`, `bash`, `sweep`,
+  `earthshake`) and its template's: `weapon-attack` and `weapon-alternate` (the hands a
+  `hands-template` that casts), `start-blow`, and `swing-strike`, `swing-miss` and `bash-strike`
+  specialised on the blow. The `case`s on the weapon's keyword in `player-attack` and
+  `player-press` are gone, `maul-heaving-p` and `maul-speed-scale` are `heaving-p` and
+  `heave-speed-scale` (any blow with a speed, or a charge), `update-maul-charge` is
+  `update-blow-charge`, `maul-lerp` is `charge-lerp`, and the tooltips are each blow's
+  `blow-lines` and `second-blow-lines`. `shield-facing-p` asks for a guard. Nothing plays
+  differently.
+
+- Weapons are templates (`src/weapons.lisp`): `define-weapon` holds a weapon's numbers, frames,
+  icon, sounds and moves, each move a `blow` (its frame times, hit frame, reach, arc, damage,
+  knockback, stamina, sound, wall strike and tip), and `define-guard` the shield. The sword's,
+  spear's and maul's `defparameter`s, the keyword generics (`swing-frame-times`, `swing-reach`,
+  `bash-frame-times`, `guard-raise-time` and the rest) and the tables `*weapon-sounds*`,
+  `*wall-strikes*`, `*weapon-tips*` and `*weapon-icons*` are gone into them. `wall-strike` takes a
+  blow. Nothing plays differently.
+
 - A save from before the weapon on screen was saved (`held-rune`) takes what its wanted hotbar
   slot holds in hand on loading (`settle-held`), as it did before: with that slot empty it had
   loaded with the casting hands up and no spell in them.

@@ -11,6 +11,24 @@
 ;;; the spell in them (*HAND-LOOKS*).
 
 (define-fx-animation fire-hands "sprites/hands/hands" :fps 6 :loop T)
+
+;;; As a weapon (weapons.lisp): what switching to them plays. Their frames follow the spell in them
+;;; (below), not a template's.
+(defclass hands-template (weapon-template) ()
+  (:documentation "The casting hands as a weapon: both buttons cast."))
+
+(define-weapon :hands
+  :class hands-template :title "Hands" :item NIL :sounds (:draw :draw-magic))
+
+;; The left button casts the slot's rune, the right its off hand's (player.lisp).
+(defmethod weapon-attack ((template hands-template) player)
+  (when (held-spell player)
+    (player-cast player (held-spell player))))
+
+(defmethod weapon-alternate ((template hands-template) player)
+  (let ((spell (offhand-spell player)))
+    (when (and spell (weapon-ready-p player))
+      (player-cast player spell :hand :off))))
 ;; The same with the fire recoloured (tools/recolor_strip.py), one for each look.
 (define-fx-animation storm-hands "sprites/hands/storm" :fps 6 :loop T)
 (define-fx-animation frost-hands "sprites/hands/frost" :fps 6 :loop T)

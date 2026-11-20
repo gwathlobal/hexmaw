@@ -59,7 +59,7 @@ settlement's), else their values."
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     charge-time blow-charge
-    block-raise bash-time bash-pending spear-jolt guard-broken run-time damage-taken level-records
+    block-raise bash-time bash-pending weapon-jolt guard-broken run-time damage-taken level-records
     reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells offhand-cells wanted-slot held-rune enchantments cast-hand cast-held overcharge
     snare snare-guard))
@@ -191,6 +191,8 @@ settlement's), else their values."
                   (status-left value) (status-timer value) (status-owed value)
                   (encode-value (status-caster value)) (status-duration value)))
     (ability (list :ability (ability-name value)))
+    ;; A weapon the player owns (weapons.lisp), by its template's name.
+    (weapon-item (list :weapon-item (weapon-item-kind value) (encode-value (weapon-item-enchantment value))))
     (fx-animation (list :animation (animation-name value)))
     (cons (mapcar #'encode-value value))
     (T (error "Don't know how to save ~s." value))))
@@ -212,6 +214,7 @@ references that are relative to it (an ability)."
                                           :timer timer :owed owed :caster (decode-value caster owner))))
         (:ability (or (find-ability owner (second data)) (error "~a has no ability ~s." owner (second data))))
         (:animation (find-fx-animation (second data)))
+        (:weapon-item (make-weapon-item (second data) (decode-value (third data) owner)))
         (T (mapcar (lambda (d) (decode-value d owner)) data)))
       data))
 
@@ -231,10 +234,15 @@ references that are relative to it (an ability)."
   (loop for name in (saved-slots object)
         collect (cons name (encode-value (saved-value object name)))))
 
+(defparameter *renamed-saved-slots* '((spear-jolt . weapon-jolt))
+  "Saved names an older save may have, each with the name it is saved by now.")
+
 (defun restore-state (object state)
-  "Set OBJECT's slots from STATE (OBJECT-STATE's alist), skipping those it no longer has.
-A vector is written in place, since some slots have only a reader."
-  (loop for (name . data) in state
+  "Set OBJECT's slots from STATE (OBJECT-STATE's alist), skipping those it no longer has. A name an
+older save used is read as its new one (*RENAMED-SAVED-SLOTS*). A vector is written in place, since
+some slots have only a reader."
+  (loop for (saved . data) in state
+        for name = (or (cdr (assoc saved *renamed-saved-slots*)) saved)
         when (or (slot-exists-p object name) (fboundp name))
           do (let ((value (decode-value data object))
                    (old (saved-value object name)))
@@ -482,6 +490,7 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
         (spawn-creature (make-instance (getf record :class) :summoned T) scene)))
     (restore-state *player* (getf save :player))
     (migrate-bindings *player*)
+    (migrate-weapon-items *player*)
     (migrate-enchantments *player*)
     (migrate-known-effects *player*)
     ;; A save keeps what is on screen (HELD-RUNE) apart from a switch queued to the wanted slot.

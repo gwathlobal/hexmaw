@@ -23,135 +23,92 @@
 
 (define-fx-animation maul "sprites/maul/maul" :fps 5 :loop T)
 
-(defparameter *maul-idle-frames* 4 "Strip frames the idle loop steps through, from the first.")
-(defparameter *maul-charge-first* 4 "Strip index of the charge's first frame: raised.")
-(defparameter *maul-swing-first* 7 "Strip index of the blow's first frame.")
-(defparameter *maul-shake-first* 11 "Strip index of the earthshake's first frame.")
-(defparameter *maul-aim* 177
-  "Art pixels left from the strip's screen corner to where the head lands (the impact frame,
-placed by art/maul/maul-frames.txt), which goes on the screen's middle.")
+;;; Its strip: 4 idle frames, the charge's 3 (raised, wound up, wound up a pixel aside), the
+;;; blow's 4 and the earthshake's 5. It is placed by its aim, where the head lands (the impact
+;;; frame, placed by art/maul/maul-frames.txt), which goes on the screen's middle.
+(define-weapon :maul
+  :title "Maul" :icon 11 :strip maul :frames (:idle 4 :charge 4 :swing 7 :alternate 11) :aim 177
+  :loot T :loot-strip loot-maul :forge-noun "Maul"
+  :sounds (:draw :draw-maul)
+  ;; The blow: it rises for 0.4 s (the least charge), whatever the button does, and while held winds
+  ;; on to a full charge 1.35 s from the press, for 30 stamina a second past the least. The cry starts
+  ;; once the button has been held 0.2 s. Once released: falling, the impact (where it lands),
+  ;; lower, recovery. Each number given twice runs from the least charge's to the full one's.
+  :swing (charged-blow :name :maul :frame-times (0.19 0.12 0.12 0.16) :hit-frame 1
+                       :reach 2.2 :arc 0.6 :damage (18 24) :full-damage (34 44)
+                       :knockback 8.0 :full-knockback 15.0 :pain-bonus 10 :full-pain-bonus 60
+                       :hit-stop (0.06 0.12) :sparks (6 26)
+                       :camera-shake (0.45 0.8) :full-camera-shake 1.0 :gib-overkill 0.1
+                       :stamina 15.0 :sound :maul-swing :verb "blow"
+                       :min-charge 0.4 :full-charge 1.35 :cry-delay 0.2 :charge-stamina 30.0
+                       :charge-speed 0.6 :raise-frame-time 0.17 :tremble-rate 12.0
+                       ;; (:CHARGE least full): the least charge's, then the full one's.
+                       :wall (:sparks (:charge 8 20) :grit (:charge 8 16) :speed (:charge (3.0 6.0) (3.0 9.0))
+                              :spread 1.0 :sound :maul-hit-stone :wood-sound :blade-hit-wood
+                              :camera (:charge 0.2 0.4) :hit-stop (:charge 0.02 0.04))
+                       ;; The head's top, strip frame 8.
+                       :tip (:maul 111 117))
+  ;; The earthshake: lifted, coming over, the slam (where it lands), held, recovery. It reaches 3 m
+  ;; across from the feet to a body, feet within 0.4 m of the player's floor.
+  :alternate (earthshake :name :shake :frame-times (0.22 0.08 0.12 0.18 0.2) :hit-frame 2
+                         :reach 3.0 :reach-height 0.4 :damage (3 6) :knockback 5.0
+                         :boss-pain-bonus 50 :poise-time 2.0 :stamina 30.0 :speed 0.3 :sound :maul-swing
+                         :hit-stop 0.08 :camera-shake 0.7 :dust-radius 1.5 :dust-puffs 8 :spark-reach 0.9))
 
-(defparameter *maul-min-charge* 0.4 "Seconds the maul takes to rise: the least charge a blow has.")
-(defparameter *maul-full-charge* 1.35 "Seconds from the press to a full charge.")
-(defparameter *maul-cry-delay* 0.2
-  "Seconds the left button must be held before the charge's cry: a click is shorter.")
-(defparameter *maul-blow-stamina* 15.0
-  "Stamina every blow costs, paid as the maul is raised; with less, it isn't raised.")
-(defparameter *maul-charge-stamina* 30.0
-  "Stamina a second the charge costs while it grows past the least; with none, it stops growing.")
-(defparameter *maul-raise-frame-time* 0.17 "Seconds the charge shows the raised frame before the wound-up one.")
-(defparameter *maul-tremble-rate* 12.0 "Times a second the fully charged maul trembles from one frame to the other.")
-(defparameter *maul-charge-speed* 0.6 "Fraction of a walk the player keeps while charging, with no run or jump.")
-
-(defparameter *maul-frame-times* '(0.19 0.12 0.12 0.16)
-  "Seconds each frame of the blow shows once released: falling, the impact, lower, recovery.")
-(defparameter *maul-hit-frame* 1 "Blow frame it lands on, counted from 0: the impact.")
-(defparameter *maul-reach* 2.2 "Metres from the player to the nearest edge of a creature's body.")
-(defparameter *maul-arc* 0.6 "Radians either side of the view the blow reaches.")
-(defparameter *maul-damage* '(18 24) "Damage of the least charge.")
-(defparameter *maul-full-damage* '(34 44) "Damage of a full charge; between, by the charge.")
-(defparameter *maul-knockback* 8.0 "Speed in m/s the least charge throws a creature, before heft.")
-(defparameter *maul-full-knockback* 15.0 "Speed in m/s a full charge throws a creature, before heft.")
-(defparameter *maul-pain-bonus* 10 "Percent the least charge adds to the creature's PAIN-CHANCE.")
-(defparameter *maul-full-pain-bonus* 60
-  "Percent a full charge adds to a boss's PAIN-CHANCE: anything else always flinches.")
-(defparameter *maul-hit-stop* 0.06 "Seconds the world freezes when the least charge lands.")
-(defparameter *maul-full-hit-stop* 0.12 "Seconds the world freezes when a full charge lands.")
-(defparameter *maul-sparks* '(6 26) "Sparks the least charge's blow throws, and the full one's.")
-(defparameter *maul-camera-shake* '(0.45 0.8)
-  "Strength of the camera shake (KICK-CAMERA, player.lisp) when the least charge lands, and an
-almost full one; a full one shakes at *MAUL-FULL-CAMERA-SHAKE*.")
-(defparameter *maul-full-camera-shake* 1.0)
 (defparameter *maul-reel-time* 1.2
   "Seconds a creature whose shield or ward a full blow struck reels (REEL): its guard down.")
 (defparameter *maul-boss-reel-time* 0.5 "Seconds a boss's ward stays knocked aside.")
-(defparameter *maul-gib-overkill* 0.1
-  "A maul's killing blow tears a creature apart from this overkill, a fraction of its most (its
-own if less); the undead's at any overkill.")
 
-(defparameter *shake-frame-times* '(0.22 0.08 0.12 0.18 0.2)
-  "Seconds each frame of the earthshake shows: lifted, coming over, the slam, held, recovery.")
-(defparameter *shake-hit-frame* 2 "Earthshake frame it lands on, counted from 0: the slam.")
-(defparameter *shake-radius* 3.0 "Metres across from the player's feet to a creature's body the earthshake reaches.")
-(defparameter *shake-reach-height* 0.4
-  "Metres from the player's floor within which a creature's feet must be to feel the earthshake.")
-(defparameter *shake-damage* '(3 6))
-(defparameter *shake-knockback* 5.0 "Speed in m/s the earthshake shoves each creature out, before heft.")
-(defparameter *shake-boss-pain-bonus* 50 "Percent the earthshake adds to a boss's PAIN-CHANCE: the rest always flinch.")
-(defparameter *shake-poise-time* 2.0 "Seconds after the earthshake in which it, a bash or a sweep can't flinch a creature.")
-(defparameter *shake-stamina* 30.0 "Stamina an earthshake costs; with less, none.")
-(defparameter *shake-speed* 0.3 "Fraction of a walk the player keeps through an earthshake.")
-(defparameter *shake-hit-stop* 0.08)
-(defparameter *shake-camera-shake* 0.7 "Strength of the camera shake the earthshake gives.")
-(defparameter *shake-dust-radius* 1.5 "Metres out the earthshake's ring of dust puffs is (KICK-DUST, ogre.lisp).")
-(defparameter *shake-spark-reach* 0.9 "Metres in front of the player's feet the earthshake's maul strikes sparks.")
-(defparameter *shake-dust-puffs* 8)
+;;; The charge (a CHARGED-BLOW's, weapons.lisp).
 
-(defmethod swing-frame-times ((weapon (eql :maul))) *maul-frame-times*)
-(defmethod swing-hit-frame ((weapon (eql :maul))) *maul-hit-frame*)
-(defmethod swing-reach ((weapon (eql :maul))) *maul-reach*)
-(defmethod swing-arc ((weapon (eql :maul))) *maul-arc*)
-(defmethod swing-damage ((weapon (eql :maul))) *maul-damage*)
-(defmethod swing-knockback ((weapon (eql :maul))) *maul-knockback*)
-(defmethod swing-pain-bonus ((weapon (eql :maul))) *maul-pain-bonus*)
+(defun blow-charge-at (blow time)
+  "The charge, 0 to 1, of BLOW (a charged blow) TIME seconds into its charging."
+  (let ((least (blow-min-charge blow)))
+    (max 0.0 (min 1.0 (/ (- time least) (- (blow-full-charge blow) least))))))
 
-(defmethod bash-frame-times ((weapon (eql :maul))) *shake-frame-times*)
-(defmethod bash-hit-frame ((weapon (eql :maul))) *shake-hit-frame*)
-(defmethod bash-strike (player (weapon (eql :maul))) (earthshake-hit player))
+;; The left button raises it, for its STAMINA; with less, it isn't raised.
+(defmethod start-blow ((blow charged-blow) player)
+  (let ((cost (blow-stamina blow)))
+    (unless (or (swing-time player) (charge-time player) (bash-time player)
+                (< (stamina player) cost))
+      (decf (stamina player) cost)
+      (setf (charge-time player) 0.0))))
 
-;;; The charge.
-
-(defun maul-charge (time)
-  "The charge, 0 to 1, of a blow TIME seconds into its charging."
-  (max 0.0 (min 1.0 (/ (- time *maul-min-charge*) (- *maul-full-charge* *maul-min-charge*)))))
-
-(defun maul-heaving-p (player)
-  "True while PLAYER charges the maul or shakes the floor with it: no run, no jump."
-  (and (eq (weapon player) :maul) (or (charge-time player) (bash-time player)) T))
-
-(defun maul-speed-scale (player)
-  "Fraction of a walk PLAYER keeps for the maul in hand: slowed by its charge and its earthshake."
-  (cond ((not (eq (weapon player) :maul)) 1.0)
-        ((bash-time player) *shake-speed*)
-        ((charge-time player) *maul-charge-speed*)
-        (T 1.0)))
-
-(defun player-maul (player)
-  "The left button with the maul: start raising it, for *MAUL-BLOW-STAMINA*."
-  (unless (or (swing-time player) (charge-time player) (bash-time player)
-              (< (stamina player) *maul-blow-stamina*))
-    (decf (stamina player) *maul-blow-stamina*)
-    (setf (charge-time player) 0.0)))
-
-(defun update-maul-charge (player dt)
-  "Wind the maul's charge up while the left button is held (stamina buys it past the least), and
-bring the blow down once it is let go and the maul is up. The strain's cry starts once the
-button has been held *MAUL-CRY-DELAY*, and the blow cuts it off."
-  (let ((time (charge-time player)))
-    (when time
-      (cond ((< time *maul-min-charge*)
-             (setf (charge-time player) (min *maul-min-charge* (+ time dt)))
-             (when (and (attack-held player) (< time *maul-cry-delay*) (<= *maul-cry-delay* (charge-time player)))
-               (setf (charge-voice player) (play-sound :maul-charge))))
-            ((and (attack-held player) (< time *maul-full-charge*) (< 0.0 (stamina player)))
-             (let ((grow (min dt (- *maul-full-charge* time) (/ (stamina player) *maul-charge-stamina*))))
-               (decf (stamina player) (* grow *maul-charge-stamina*))
-               (setf (charge-time player) (+ time grow))
-               (when (<= *maul-full-charge* (charge-time player))
-                 (play-sound :maul-full)))))
-      (when (and (not (attack-held player)) (<= *maul-min-charge* (charge-time player)))
-        (setf (blow-charge player) (maul-charge (charge-time player))
-              (charge-time player) NIL
-              (charge-voice player) (cut-sound (charge-voice player)))
-        (player-swing player)))))
+(defun update-blow-charge (player dt)
+  "Wind the charge of the weapon in hand up while the left button is held (stamina buys it past the
+least), and bring the blow down once it is let go and the weapon is up. The strain's cry starts
+once the button has been held its CRY-DELAY, and the blow cuts it off."
+  (let ((time (charge-time player))
+        (blow (swing-blow (weapon player))))
+    (when (and time (typep blow 'charged-blow))
+      (let ((least (blow-min-charge blow))
+            (full (blow-full-charge blow))
+            (cry (blow-cry-delay blow))
+            (rate (blow-charge-stamina blow)))
+        (cond ((< time least)
+               (setf (charge-time player) (min least (+ time dt)))
+               (when (and (attack-held player) (< time cry) (<= cry (charge-time player)))
+                 (setf (charge-voice player) (play-sound :maul-charge))))
+              ((and (attack-held player) (< time full) (< 0.0 (stamina player)))
+               (let ((grow (min dt (- full time) (/ (stamina player) rate))))
+                 (decf (stamina player) (* grow rate))
+                 (setf (charge-time player) (+ time grow))
+                 (when (<= full (charge-time player))
+                   (play-sound :maul-full)))))
+        (when (and (not (attack-held player)) (<= least (charge-time player)))
+          (setf (blow-charge player) (blow-charge-at blow (charge-time player))
+                (charge-time player) NIL
+                (charge-voice player) (cut-sound (charge-voice player)))
+          (player-swing player))))))
 
 ;;; The blow.
 
-(defun maul-lerp (charge least full)
+(defun charge-lerp (charge least full)
+  "LEAST at no charge, FULL at a full one."
   (+ least (* charge (- full least))))
 
-(defun maul-damage (charge)
-  (round (maul-lerp charge (roll *maul-damage*) (roll *maul-full-damage*))))
+(defun charged-damage (blow charge)
+  (round (charge-lerp charge (roll (blow-damage blow)) (roll (blow-full-damage blow)))))
 
 (defun knock-guard-aside (creature)
   "A full blow struck CREATURE's shield or ward: it reels, its guard down (REEL)."
@@ -161,107 +118,106 @@ button has been held *MAUL-CRY-DELAY*, and the blow cuts it off."
           (brace creature) 0.0)
     (stop-walking creature time)))
 
-(defmethod swing-strike (player (weapon (eql :maul)) target)
+(defmethod swing-strike (player (blow charged-blow) target)
   (let* ((charge (blow-charge player))
          (full (<= 1.0 charge))
          (feet (feet player))
          (boss (typep target 'boss)))
     (play-sound :maul-hit (location target))
-    (strike-sparks target feet (round (maul-lerp charge (first *maul-sparks*) (second *maul-sparks*)))
-                   :speed (list 3.0 (maul-lerp charge 6.0 9.0)))
+    (strike-sparks target feet (round (apply #'charge-lerp charge (blow-sparks blow)))
+                   :speed (list 3.0 (charge-lerp charge 6.0 9.0)))
     (when (and full (shielded-p target feet))
       (shield-sparks target)
       (knock-guard-aside target))
-    (hurt target (maul-damage charge) :from feet :by player
-                                      :pain-bonus (round (maul-lerp charge *maul-pain-bonus* *maul-full-pain-bonus*))
-                                      :force-pain (and full (not boss))
-                                      :gib-overkill (if (undead target) 0.0 *maul-gib-overkill*))
+    (hurt target (charged-damage blow charge) :from feet :by player
+                                              :pain-bonus (round (charge-lerp charge (blow-pain-bonus blow) (blow-full-pain-bonus blow)))
+                                              :force-pain (and full (not boss))
+                                              :gib-overkill (if (undead target) 0.0 (blow-gib-overkill blow)))
     (when (gibbed target)
       (play-sound :maul-crush (location target)))
-    (hit-stop (maul-lerp charge *maul-hit-stop* *maul-full-hit-stop*))
-    (kick-camera (if full *maul-full-camera-shake* (apply #'maul-lerp charge *maul-camera-shake*)) player)
+    (hit-stop (apply #'charge-lerp charge (blow-hit-stop blow)))
+    (kick-camera (if full (blow-full-camera-shake blow) (apply #'charge-lerp charge (blow-camera-shake blow))) player)
     (push-creature target (v- (location target) feet)
-                   (float (maul-lerp charge *maul-knockback* *maul-full-knockback*) 0f0)
+                   (float (charge-lerp charge (blow-knockback blow) (blow-full-knockback blow)) 0f0)
                    :heft (not boss))
-    (enchant-strike player :maul target)))
+    (enchant-strike player (weapon player) target)))
 
 ;; A blow that finds no one living comes down on a corpse in its reach, if one could be raised,
 ;; and else on the wall or floor the crosshair meets (WALL-STRIKE, sword.lisp).
-(defmethod swing-miss (player (weapon (eql :maul)))
-  (let ((corpse (looked-at-creature player *maul-reach* *maul-arc*
+(defmethod swing-miss (player (blow charged-blow))
+  (let ((corpse (looked-at-creature player (blow-reach blow) (blow-arc blow)
                                     :dead T :test (lambda (c) (and (dead c) (raisable-p c))))))
     (if corpse
         (progn
           (play-sound :maul-crush (location corpse))
           (tear-apart corpse :from (feet player)))
-        (wall-strike player :maul *maul-reach* :charge (blow-charge player)))))
+        (wall-strike player blow :charge (blow-charge player)))))
+
+(defmethod blow-lines ((blow charged-blow))
+  (list (format NIL "Damage ~a to ~a, reach ~,1f m" (range-text (blow-damage blow)) (range-text (blow-full-damage blow))
+                (blow-reach blow))
+        (format NIL "A blow ~d SP; hold to charge it" (round (blow-stamina blow)))
+        "A full charge breaks a shield's guard"))
 
 ;;; The earthshake.
 
-(defun player-earthshake (player)
-  (when (and (weapon-ready-p player) (not (attacking-p player)) (<= *shake-stamina* (stamina player)))
-    (decf (stamina player) *shake-stamina*)
-    (play-sound (weapon-sound :maul :swing))
-    (setf (bash-time player) 0.0
-          (bash-pending player) T)))
+(defmethod start-blow ((blow earthshake) player)
+  (start-alternate player blow))
 
-(defun shaken-p (player creature)
-  "True if CREATURE, alive, stands on the floor PLAYER shakes, within its reach and with no wall between."
+(defmethod bash-strike (player (blow earthshake))
+  (earthshake-hit player blow))
+
+(defmethod second-blow-lines ((blow earthshake))
+  (list (format NIL "Right button: earthshake, ~d SP" (round (blow-stamina blow)))
+        "  staggers all standing round you"))
+
+(defun shaken-p (player creature shake)
+  "True if CREATURE, alive, stands on the floor PLAYER shakes with SHAKE (an earthshake), within its
+reach and with no wall between."
   (let* ((feet (feet player))
          (loc (location creature))
          (dx (- (vx loc) (vx feet)))
          (dz (- (vz loc) (vz feet))))
     (and (not (dead creature))
-         (< (abs (- (vy loc) (vy feet))) *shake-reach-height*)
-         (< (sqrt (+ (* dx dx) (* dz dz))) (+ *shake-radius* (body-radius creature)))
+         (< (abs (- (vy loc) (vy feet))) (blow-reach-height shake))
+         (< (sqrt (+ (* dx dx) (* dz dz))) (+ (blow-reach shake) (body-radius creature)))
          (clear-path-p feet loc 0.3))))
 
-(defun earthshake-hit (player)
-  "The maul strikes the floor: everything standing within its reach flinches, unless poised (a boss
-only rolls), and is shoved out."
+(defun earthshake-hit (player shake)
+  "The weapon strikes the floor (the earthshake SHAKE): everything standing within its reach flinches,
+unless poised (a boss only rolls), and is shoved out."
   (let ((feet (feet player)))
     (play-sound :earthshake feet)
-    (kick-dust feet *shake-dust-radius* *shake-dust-puffs* (container player))
+    (kick-dust feet (blow-dust-radius shake) (blow-dust-puffs shake) (container player))
     ;; It tears up a bloodroot's roots round the feet, and any snare with them (bloodroot.lisp).
     (break-snare player)
-    (tear-roots feet *shake-radius*)
+    (tear-roots feet (blow-reach shake))
     ;; And shatters the windows round it (glass.lisp).
-    (strike-panes feet *shake-radius* :quake T)
+    (strike-panes feet (blow-reach shake) :quake T)
     (let ((dir (look-direction player)))
-      (floor-sparks (+ (vx feet) (* *shake-spark-reach* (vx dir))) (vy feet) (+ (vz feet) (* *shake-spark-reach* (vz dir)))))
-    (hit-stop *shake-hit-stop*)
-    (kick-camera *shake-camera-shake* player)
+      (floor-sparks (+ (vx feet) (* (blow-spark-reach shake) (vx dir))) (vy feet)
+                    (+ (vz feet) (* (blow-spark-reach shake) (vz dir)))))
+    (hit-stop (blow-hit-stop shake))
+    (kick-camera (blow-camera-shake shake) player)
     (loop for c across *creatures*
-          when (shaken-p player c)
+          when (shaken-p player c shake)
             do (let ((poised (< 0.0 (bash-poise c)))
                      (boss (typep c 'boss)))
-                 (setf (bash-poise c) (max (bash-poise c) *shake-poise-time*))
-                 (hurt c (roll *shake-damage*) :from feet :by player
-                                               :pain-bonus (cond (poised -100) (boss *shake-boss-pain-bonus*) (T 0))
-                                               :force-pain (not (or poised boss)))
+                 (setf (bash-poise c) (max (bash-poise c) (blow-poise-time shake)))
+                 (hurt c (roll (blow-damage shake)) :from feet :by player
+                                                    :pain-bonus (cond (poised -100) (boss (blow-boss-pain-bonus shake)) (T 0))
+                                                    :force-pain (not (or poised boss)))
                  (push-creature c (v- (location c) feet)
-                                (float (* *shake-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0)
+                                (float (* (blow-knockback shake) (if poised *poised-bash-knockback* 1.0)) 0f0)
                                 :heft (not boss))))))
 
-;;; The sprite.
+;;; On screen: the charge's frames, raised, then wound up, and trembling from one wound-up frame to
+;;; the other once full; else as any swing.
 
-(define-shader-entity maul (sword)
-  ((animation :initform (find-fx-animation 'maul))))
-
-(defmethod held-weapon ((maul maul)) :maul)
-(defmethod idle-frames ((maul maul)) *maul-idle-frames*)
-(defmethod swing-first ((maul maul)) *maul-swing-first*)
-(defmethod weapon-aim ((maul maul)) *maul-aim*)
-
-(defmethod weapon-frame ((maul maul) player)
-  (let ((shake (and (bash-time player) (frame-at (bash-time player) *shake-frame-times*)))
-        (charge (charge-time player)))
-    (cond (shake (+ *maul-shake-first* shake))
-          ((null charge) (call-next-method))
-          ((< charge *maul-raise-frame-time*) *maul-charge-first*)
-          ((< charge *maul-full-charge*) (+ 1 *maul-charge-first*))
-          ;; Full: trembling from one wound-up frame to the other.
-          (T (+ 1 *maul-charge-first* (mod (floor (* (age maul) *maul-tremble-rate*)) 2))))))
-
-(defun add-maul (container)
-  (add-weapon-sprite 'maul container))
+(defmethod blow-frame ((blow charged-blow) sprite player)
+  (let ((charge (charge-time player))
+        (first (weapon-frame-index (sprite-template sprite) :charge)))
+    (cond ((null charge) (call-next-method))
+          ((< charge (blow-raise-frame-time blow)) first)
+          ((< charge (blow-full-charge blow)) (+ 1 first))
+          (T (+ 1 first (mod (floor (* (age sprite) (blow-tremble-rate blow))) 2))))))

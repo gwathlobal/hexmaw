@@ -97,6 +97,31 @@ projectile, a mana beam and a stamina nova, to try them.")
 (defparameter *gasp-breath* 0.5 "Fraction of *BREATH-TIME* left, under which surfacing gasps.")
 (defparameter *ice-slide-speed* 6.0 "Metres per second at which the slide on ice is at full volume.")
 
+(defclass wield ()
+  ((swing-time :initform NIL :accessor swing-time
+               :documentation "Seconds since the swing began, or NIL when not swinging.")
+   (swing-pending :initform NIL :accessor swing-pending
+                  :documentation "True until the swing's blow has landed.")
+   (charge-time :initform NIL :accessor charge-time
+                :documentation "Seconds a charged blow has been charging (maul.lisp), or NIL.")
+   (charge-voice :initform NIL :accessor charge-voice :documentation "The charge's cry, or NIL (maul.lisp).")
+   (blow-charge :initform 0.0 :accessor blow-charge
+                :documentation "A charged blow's charge, 0 to 1, as it was released.")
+   (block-raise :initform 0.0 :accessor block-raise
+                :documentation "How far the guard (the shield) is raised to block: 0 down, 1 up.")
+   (bash-time :initform NIL :accessor bash-time
+              :documentation "Seconds since the second blow began (a bash, a sweep, an earthshake), or NIL.")
+   (bash-pending :initform NIL :accessor bash-pending
+                 :documentation "True until the second blow has landed.")
+   (weapon-jolt :initform 0.0 :accessor weapon-jolt
+                :documentation "Seconds the weapon still shows the jolt of a counter (spear.lisp).")
+   (guard-broken :initform 0.0 :accessor guard-broken
+                 :documentation "Seconds left before the guard can be raised again, after a blow knocked
+it aside (BREAK-GUARD)."))
+  (:documentation "What the player's weapon is doing (sword.lisp, weapons.lisp): its swing, charge and
+second blow, its guard and a counter's jolt. The player's accessors of the same names reach it, so a
+save keeps them by those names."))
+
 (defclass player (fps-camera whirlable afflicted)
   ((name :initform :player)
    (fov :initform 75.0)
@@ -184,31 +209,13 @@ INVENTORY (EQ), or NIL (inventory.lisp): what keys 1 to 9 take in hand. Saved as
 differs from WEAPON while switching.")
    (weapon-lower :initform 0.0 :accessor weapon-lower
                  :documentation "How far the weapon on screen is lowered: 0 up, 1 gone.")
-   (swing-time :initform NIL :accessor swing-time
-               :documentation "Seconds since the sword swing began, or NIL when not swinging.")
-   (swing-pending :initform NIL :accessor swing-pending
-                  :documentation "True until the swing's blow has landed.")
+   (wield :initform (make-instance 'wield) :reader wield
+          :documentation "What the weapon in hand is doing: a WIELD.")
    (attack-held :initform NIL :accessor attack-held
                 :documentation "True while the attack button (the left one) is down: the maul charges,
 a beam stays on, a spell overcharges.")
-   (charge-time :initform NIL :accessor charge-time
-                :documentation "Seconds the maul's blow has been charging (maul.lisp), or NIL.")
-   (charge-voice :initform NIL :accessor charge-voice :documentation "The maul's cry while it charges, or NIL (maul.lisp).")
-   (blow-charge :initform 0.0 :accessor blow-charge
-                :documentation "The maul's charge, 0 to 1, as its blow was released.")
    (block-held :initform NIL :accessor block-held
                :documentation "True while the block button (the right one) is down.")
-   (block-raise :initform 0.0 :accessor block-raise
-                :documentation "How far the shield is raised to block: 0 down, 1 up.")
-   (bash-time :initform NIL :accessor bash-time
-              :documentation "Seconds since the shield bash began, or NIL when not bashing.")
-   (bash-pending :initform NIL :accessor bash-pending
-                 :documentation "True until the bash's blow has landed.")
-   (spear-jolt :initform 0.0 :accessor spear-jolt
-               :documentation "Seconds the spear still shows the jolt of a counter (spear.lisp).")
-   (guard-broken :initform 0.0 :accessor guard-broken
-                 :documentation "Seconds left before the shield can be raised again, after a
-blow knocked it aside (BREAK-GUARD).")
    (run-time :initform 0.0 :accessor run-time
              :documentation "Seconds of this run in play: not paused, not on the map, not in hit-stop.")
    (damage-taken :initform 0 :accessor damage-taken
@@ -248,6 +255,15 @@ blow knocked it aside (BREAK-GUARD).")
 ;; The starting kit, in the bag and bound to its keys (GIVE-STARTING-KIT, inventory.lisp).
 (defmethod initialize-instance :after ((player player) &key)
   (give-starting-kit player))
+
+;; The player's weapon state is its WIELD's, reached by the same names.
+(macrolet ((reach-wield (&rest names)
+             `(progn ,@(loop for name in names
+                             collect `(defmethod ,name ((player player)) (,name (wield player)))
+                             collect `(defmethod (setf ,name) (value (player player))
+                                        (setf (,name (wield player)) value))))))
+  (reach-wield swing-time swing-pending charge-time charge-voice blow-charge block-raise
+               bash-time bash-pending weapon-jolt guard-broken))
 
 (defmethod project-view ((camera player))
   (let* ((rot (rotation camera))
@@ -565,15 +581,13 @@ overcharged), or a nova bursts round the player."
           (case action
             (:attack (setf (attack-held player) T)
              (player-attack player))
-            ;; Held, the shield rises; with the spear, a press sweeps with the haft, with the
-            ;; maul it shakes the floor, and with the hands it casts the off-hand rune.
+            ;; Held, a guard (the shield) rises; a press starts the weapon's alternate blow (the
+            ;; spear's sweep, the maul's earthshake), and with the hands casts the off-hand rune
+            ;; (WEAPON-ALTERNATE, weapons.lisp).
             (:block (setf (block-held player) T)
-             (case (weapon player)
-               (:spear (player-sweep player))
-               (:maul (player-earthshake player))
-               (:hands (let ((spell (offhand-spell player)))
-                         (when (and spell (weapon-ready-p player))
-                           (player-cast player spell :hand :off))))))
+             (let ((template (find-weapon (weapon player) NIL)))
+               (when template
+                 (weapon-alternate template player))))
             ;; Talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
             (:interact (player-interact player))
             (T (let ((slot (position action *hotbar-slots*)))
@@ -959,7 +973,7 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
               (winded player) T))
       ;; Nor does it come back while the maul is charged or shakes the floor (maul.lisp), nor while
       ;; a spell overcharges or a stamina beam or an Absorb is held.
-      (unless (or (maul-heaving-p player) (overcharging-p player)
+      (unless (or (heaving-p player) (overcharging-p player)
                   (and (channel player) (eq (spell-tier (channel player)) :stamina)))
         (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt))))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
@@ -1032,16 +1046,16 @@ and not the last step of the stair.")
                      (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
-         (heaving (or (maul-heaving-p player) (overcharging-p player)))
+         (heaving (or (heaving-p player) (overcharging-p player)))
          (running (and (held-p :run) (< 0.0 wlen) (not crouching) (= 0.0 raise) (not heaving) (not (channel player))
                        (not (winded player)) (not (whirl player))))
-         ;; The raised shield slows the player to a walk and below, and so does the maul's charge
-         ;; and its earthshake (maul.lisp).
+         ;; The raised shield slows the player to a walk and below, and so does a blow they heave,
+         ;; the maul's charge and its earthshake (HEAVE-SPEED, weapons.lisp).
          (speed (* (cond (crouching *crouch-speed*)
                          (running *run-speed*)
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
-                   (maul-speed-scale player)
+                   (heave-speed-scale player)
                    (cond ((channel player) *channel-speed-scale*)
                          ((overcharging-p player) *overcharge-speed*)
                          (T 1.0))
@@ -1200,7 +1214,7 @@ at SPEED, out of liquid KIND if any."
     ;; Roots hold the feet, on ice too.
     (when (snared-p player)
       (setf (vx vel) 0f0 (vz vel) 0f0))
-    (when (and (grounded player) (held-p :jump) (not crouching) (not (maul-heaving-p player)) (not (overcharging-p player))
+    (when (and (grounded player) (held-p :jump) (not crouching) (not (heaving-p player)) (not (overcharging-p player))
                (not (snared-p player))
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
@@ -1249,9 +1263,9 @@ right under them (a grave circle on someone who stood still), back from where th
          (< (acos (max -1.0 (min 1.0 (/ (- (* dx (sin yaw)) (* dz (cos yaw))) len)))) arc))))
 
 (defun shield-facing-p (player from &optional (margin 0.0))
-  "True if PLAYER's shield is raised at all (sword.lisp) and point FROM lies within
+  "True if PLAYER's guard (the shield, sword.lisp) is raised at all and point FROM lies within
 *BLOCK-ARC*, plus MARGIN radians, of where the player faces."
-  (and (eq (weapon player) :sword)
+  (and (weapon-guard-of (weapon player))
        (< 0.0 (block-raise player))
        (facing-point-p player from (+ *block-arc* margin))))
 

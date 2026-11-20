@@ -70,40 +70,46 @@ hover gives it), or that was last added or changed.")
 (defvar *forge-note* NIL "What the forge says under the readout: why it can't, or what it did.")
 
 (defun weapon-sink-p (sink)
-  "True if SINK is a weapon: one in the bag (its stack, with its own enchantment), or the shield."
-  (or (eq sink :shield) (weapon-stack-p sink)))
+  "True if SINK is a weapon: one in the bag (its stack, with its own enchantment), or a guard (the
+shield), by name."
+  (or (guard-sink-p sink) (weapon-stack-p sink)))
 
 (defun sink-weapon (sink)
-  "The weapon SINK is, :SWORD, :SPEAR, :MAUL or :SHIELD, or NIL."
-  (if (eq sink :shield) :shield (and (weapon-stack-p sink) (item-property (first sink) :weapon))))
+  "The weapon SINK is, a template's or a guard's name (:SWORD, :SHIELD), or NIL."
+  (if (guard-sink-p sink) sink (and (weapon-stack-p sink) (item-property (first sink) :weapon))))
 
 (defun player-runes (player)
   "The runes PLAYER's bag holds, in its order."
   (remove :rune (carried-stacks player) :key #'first :test-not #'eq))
 
 (defun carried-weapons (player)
-  "The weapons PLAYER carries, each its own bag stack, and the shield, which goes with a sword."
-  (let ((stacks (remove-if-not #'weapon-stack-p (carried-stacks player))))
-    (append stacks (when (find :sword stacks :key #'sink-weapon) (list :shield)))))
+  "The weapons PLAYER carries, each its own bag stack, and the guards that go with them (the shield,
+with a sword), by name."
+  (let* ((stacks (remove-if-not #'weapon-stack-p (carried-stacks player)))
+         (guards (remove-duplicates (loop for stack in stacks
+                                          for guard = (weapon-guard-of (sink-weapon stack))
+                                          when guard collect (guard-name guard))
+                                    :from-end T)))
+    (append stacks guards)))
 
 (defun sink-title (sink)
-  (cond ((eq sink :shield) "Shield")
+  (cond ((guard-sink-p sink) (guard-title (find-guard sink)))
         ((weapon-sink-p sink) (item-property (first sink) :name))
         ((eq sink :new) "New spell")
         (T (spell-title (stack-spell sink)))))
 
 (defun sink-spell (player sink)
   "The spell SINK holds: a weapon's enchantment, a rune's; NIL for :NEW."
-  (cond ((eq sink :shield) (getf (enchantments player) :shield))
+  (cond ((guard-sink-p sink) (getf (enchantments player) sink))
         ((weapon-sink-p sink) (stack-enchantment sink))
         ((eq sink :new) NIL)
         (T (stack-spell sink))))
 
 (defun (setf sink-spell) (spell player sink)
   "Enchant the weapon SINK with SPELL, or with NIL disenchant it."
-  (cond ((not (eq sink :shield)) (setf (stack-enchantment sink) spell))
-        (spell (setf (getf (enchantments player) :shield) spell))
-        (T (remf (enchantments player) :shield) NIL)))
+  (cond ((not (guard-sink-p sink)) (setf (stack-enchantment sink) spell))
+        (spell (setf (getf (enchantments player) sink) spell))
+        (T (remf (enchantments player) sink) NIL)))
 
 (defun rune-place (player stack)
   "Where STACK is, as the forge says it: its key, or the bag."
@@ -129,7 +135,7 @@ hover gives it), or that was last added or changed.")
 
 (defun default-sink (player tab)
   "What a tab opens on: a new spell, or the first weapon carried."
-  (if (eq tab :enchant) (or (first (carried-weapons player)) :shield) :new))
+  (if (eq tab :enchant) (or (first (carried-weapons player)) (first *guards*)) :new))
 
 (defun fit-label (text &optional (width *forge-label-width*))
   "TEXT cut to WIDTH characters, ending in .. where it was longer."
@@ -219,10 +225,8 @@ never offers damage cast on yourself or a heal thrown at a monster."
   (let* ((effects (draft-effects draft))
          (first (first effects))
          (weapon (sink-weapon (draft-sink draft)))
-         (noun (cond ((eq weapon :sword) "Edge")
-                     ((eq weapon :spear) "Point")
-                     ((eq weapon :maul) "Maul")
-                     ((eq weapon :shield) "Bulwark")
+         (noun (cond ((guard-sink-p weapon) (guard-forge-noun (find-guard weapon)))
+                     (weapon (weapon-forge-noun (find-weapon weapon)))
                      ((eq (draft-delivery draft) :touch) "Touch")
                      ((eq (draft-delivery draft) :seeker) "Seeker")
                      ((eq (draft-delivery draft) :beam) "Ray")
@@ -371,7 +375,7 @@ what it holds, not what making it takes (DRAFT-PROBLEM). Generated loot asks it 
   "Put SINK on the forge: a new spell or a plain weapon to make, or a rune or an enchanted weapon
 to look at. One the player no longer carries falls back to the tab's first. :SWORD, :SPEAR or
 :MAUL, as from the REPL, is the first one carried."
-  (let* ((sink (if (member sink '(:sword :spear :maul))
+  (let* ((sink (if (and (keywordp sink) (weapon-kind-entry sink))
                    (or (find sink (carried-weapons player) :key #'sink-weapon) sink)
                    sink))
          (sink (if (valid-sink-p player sink *forge-tab*) sink (default-sink player *forge-tab*))))

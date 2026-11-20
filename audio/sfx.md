@@ -32,20 +32,20 @@ First-person, so stereo is fine (`:speech`).
 | shield-raise | 1 | 1P | 0.5 | 3 | `block-raise` leaving 0, sword.lisp:253 (edge) |
 | shield-block | 1 | 1P | 0.6 | 3 | `hurt-player` player.lisp:700-702, blocked |
 | shield-guard-break | 1 | 1P | 0.8 | 3 | `hurt-player` player.lisp:703-708, `break-guard` 658 |
-| shield-bash | 1 | 1P | 0.5 | 3 | `player-bash` sword.lisp:147 |
+| shield-bash | 1 | 1P | 0.5 | 3 | `start-blow` on the shield's `bash` sword.lisp (its blow's `:sound`) |
 | bash-hit | 1 | P | 0.5 | 3 | `bash-hit` sword.lisp:217, a target |
 | bash-glance | 1 | P | 0.6 | 3 | `bash-hit` sword.lisp:223-226, a covered view (knight, warded boss) |
 | spear-impale | 1 | P | 0.7 | 3 | `spear-counter` spear.lisp, a thrust that met a charge |
-| haft-sweep | 1 | 1P | 0.6 | 3 | `player-sweep` spear.lisp, the right button with the spear |
+| haft-sweep | 1 | 1P | 0.6 | 3 | `start-alternate` sword.lisp, the right button with the spear (the sweep's `:sound`) |
 | draw-sword | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:sword` |
 | draw-spear | 1 | 1P | 0.6 | 2 | `(setf (weapon player))` sword.lisp:270, `:spear` |
 | draw-magic | 1 | 1P | 0.7 | 3 | `(setf (weapon player))` sword.lisp:270, `:hands` and `:tempest` |
 | draw-maul | 1 | 1P | 0.7 | 2 | `(setf (weapon player))` sword.lisp, `:maul` |
-| maul-charge | 1 | 1P | 1.5 | 3 | `update-maul-charge` maul.lisp, once the button has been held `*maul-cry-delay*` (0.2 s); cut off (`cut-sound`) when the blow comes down |
-| maul-full | 1 | 1P | 1.0 | 3 | `update-maul-charge` maul.lisp, the charge reaching full |
-| maul-swing | 1 | 1P | 0.6 | 3 | `player-swing` sword.lisp, `:maul` (the release), and `player-earthshake` maul.lisp |
-| maul-hit | 1 | P | 0.6 | 3 | `swing-strike :maul` maul.lisp, a target |
-| maul-crush | 1 | P | 0.8 | 3 | `swing-strike :maul` and `swing-miss :maul` maul.lisp, a kill torn apart or a corpse pulped |
+| maul-charge | 1 | 1P | 1.5 | 3 | `update-blow-charge` maul.lisp, once the button has been held its blow's cry delay (0.2 s); cut off (`cut-sound`) when the blow comes down |
+| maul-full | 1 | 1P | 1.0 | 3 | `update-blow-charge` maul.lisp, the charge reaching full |
+| maul-swing | 1 | 1P | 0.6 | 3 | `player-swing` sword.lisp, `:maul` (the release), and `start-alternate` for its earthshake (both blows' `:sound`) |
+| maul-hit | 1 | P | 0.6 | 3 | `swing-strike` on a `charged-blow` maul.lisp, a target |
+| maul-crush | 1 | P | 0.8 | 3 | `swing-strike` and `swing-miss` on a `charged-blow` maul.lisp, a kill torn apart or a corpse pulped |
 | maul-guard-break | 1 | P | 0.8 | 3 | `knock-guard-aside` maul.lisp, a full blow on a shield or ward |
 | earthshake | 1 | P | 1.2 | 3 | `earthshake-hit` maul.lisp |
 | blade-hit-stone | 2 | P | 0.5 | 3 | `wall-strike` sword.lisp, a sword slash or spear thrust that finds no one striking stone, rock or ice |
@@ -286,7 +286,7 @@ tables above:
   skeleton's chop, the acolyte's kindling), so a boss's powers play its kind's wind-up too.
   The necromancer's and wraith's casts sound from their abilities instead.
 - A spell's clips are `*spell-sounds*` (spells.lisp): its creature cast, flight loop, impact,
-  and a circle's loop and strike. A weapon's are `*weapon-sounds*` (sword.lisp).
+  and a circle's loop and strike. A weapon's are its template's `:sounds` (`:draw`) and its blows' `:sound` (`weapon-sound`, sword.lisp).
 - `player-hurt` plays for a blow or a crash, not each tick of a burn or drowning.
 - Every hit on a creature plays `flesh-hit` (`bone-hit` on one that doesn't bleed), whatever
   struck it, and `flesh-wet` with every wound that bleeds: so a sword hit is `blade-hit-flesh` and

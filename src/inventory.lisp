@@ -20,14 +20,12 @@
      :about "Spent at an altar to make spells and enchant weapons")
     (:gold :name "Gold" :icon 3 :stack 999 :note "coins" :about "Coin, for trade")
     (:relic :name "Reliquary" :icon 4 :stack 1 :about "Lost in the undercroft: the quest-giver wants it back")
-    (:sword :name "Sword" :weapon :sword :stack 1)
-    (:spear :name "Spear" :weapon :spear :stack 1)
-    (:maul :name "Maul" :weapon :maul :stack 1)
     (:rune :name "Rune" :stack 1))
   "What each kind of item is: its name, its frame in the icon strip, what it restores, and how
 many fit in one stack. A pickup that gives one (*PICKUP-KINDS*) counts its :AMOUNT in a level's
-budget, so keep the two the same. A weapon's :WEAPON is what it puts in the player's hand
-(sword.lisp); a rune is a spell the hands cast, its stack (:RUNE 1 SPELL). Neither stacks.")
+budget, so keep the two the same. A weapon is an item too, its entry from its template
+(TEMPLATE-ITEM-ENTRY, weapons.lisp): its :WEAPON is what it puts in the player's hand (sword.lisp). A
+rune is a spell the hands cast, its stack (:RUNE 1 SPELL). Neither stacks.")
 
 (defparameter *hotbar-slots* '(:hot-1 :hot-2 :hot-3 :hot-4 :hot-5 :hot-6 :hot-7 :hot-8 :hot-9)
   "The hotbar's slots, keys 1 to 9, *HOTBAR-SIZE* of them (player.lisp).")
@@ -52,7 +50,7 @@ hud.lisp, measures a line).")
 (defparameter *inventory-border-color* (vec4 0.60 0.48 0.28 1))
 
 (defun item-property (kind key)
-  (getf (rest (or (assoc kind *item-kinds*) (error "No item kind ~s." kind))) key))
+  (getf (rest (or (assoc kind *item-kinds*) (weapon-kind-entry kind) (error "No item kind ~s." kind))) key))
 
 ;;; The model. The bag holds every item; the hotbar and the quickslot only point into it: a
 ;;; hotbar slot at a stack in the bag (EQ), the quickslot at a kind of potion, so binding a key
@@ -124,16 +122,38 @@ its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound; an of
 (defun weapon-stack-p (stack)
   (and (consp stack) (item-property (first stack) :weapon) T))
 
+(defun stack-item (stack)
+  "The weapon item (weapons.lisp) a weapon's STACK, (KIND 1 ITEM), holds, giving one an older save's
+stack lacked: (KIND 1) or (KIND 1 SPELL) becomes (KIND 1 ITEM) with that spell, in place."
+  (let ((third (third stack)))
+    (if (typep third 'weapon-item)
+        third
+        (let ((item (make-weapon-item (first stack) third)))
+          (setf (cddr stack) (list item))
+          item))))
+
 (defun stack-enchantment (stack)
-  "The spell a weapon's STACK, (KIND 1 SPELL), strikes with on every blow (ENCHANT-STRIKE,
-sword.lisp), or NIL for a plain one: each weapon has its own, as a rune its spell."
-  (and (weapon-stack-p stack) (third stack)))
+  "The spell a weapon's STACK strikes with on every blow (ENCHANT-STRIKE, sword.lisp), its weapon
+item's, or NIL for a plain one: each weapon has its own, as a rune its spell."
+  (and (weapon-stack-p stack)
+       (let ((third (third stack)))
+         (if (typep third 'weapon-item) (weapon-item-enchantment third) third))))
 
 (defun (setf stack-enchantment) (spell stack)
-  (if (cddr stack)
-      (setf (third stack) spell)
-      (setf (cdr (cdr stack)) (list spell)))
-  spell)
+  (setf (weapon-item-enchantment (stack-item stack)) spell))
+
+(defun copy-stack (stack)
+  "A copy of STACK that shares nothing that changes: a weapon's has an item of its own."
+  (if (weapon-stack-p stack)
+      (make-weapon-stack (first stack) (stack-enchantment stack))
+      (copy-list stack)))
+
+(defun migrate-weapon-items (player)
+  "Give every weapon stack in PLAYER's bag its weapon item (STACK-ITEM): a save from before them kept
+a weapon as (KIND 1) or (KIND 1 ENCHANTMENT). Harmless on a current one."
+  (dolist (stack (inventory player))
+    (when (weapon-stack-p stack)
+      (stack-item stack))))
 
 (defun stack-label (stack)
   "STACK in a word or two, for TOOLS/HD STATUS: -, sword, bolt, health-potion*3."
@@ -380,7 +400,7 @@ to its key and an off-hand rune to its key's off hand; on the debug level, *DEBU
     (loop for entry in (if (eq *level* :test) *debug-starting-hotbar* *starting-hotbar*)
           for i from 0
           do (multiple-value-bind (main off) (kit-entry entry)
-               (let ((stack (if (keywordp main) (list main 1) (list :rune 1 (kit-spell main)))))
+               (let ((stack (if (keywordp main) (make-weapon-stack main) (list :rune 1 (kit-spell main)))))
                  (setf (nth cell bag) stack (nth i hotbar) stack)
                  (incf cell))
                (when off
@@ -593,24 +613,12 @@ slot's key."))
                     (mapcan #'effect-lines (spell-effects spell))))
       (list (format NIL "~a: plain (enchant it at an altar)" label))))
 
-(defgeneric weapon-lines (weapon)
-  (:documentation "What WEAPON's tooltip says it does, as lines: its blow, then its other actions.")
-  (:method (weapon)
-    (list (format NIL "Damage ~a, reach ~,1f m" (range-text (swing-damage weapon)) (swing-reach weapon))
-          (format NIL "~,2f s a swing" (reduce #'+ (swing-frame-times weapon)))
-          "Right button: shield up, click to bash"))
-  (:method ((weapon (eql :spear)))
-    (list (format NIL "Damage ~a, reach ~,1f m" (range-text (swing-damage weapon)) (swing-reach weapon))
-          (format NIL "~,2f s a thrust" (reduce #'+ (swing-frame-times weapon)))
-          "A thrust counters a leap or dive"
-          "Right button: sweep, shove all near"))
-  (:method ((weapon (eql :maul)))
-    (list (format NIL "Damage ~a to ~a, reach ~,1f m" (range-text *maul-damage*) (range-text *maul-full-damage*)
-                  *maul-reach*)
-          (format NIL "A blow ~d SP; hold to charge it" (round *maul-blow-stamina*))
-          "A full charge breaks a shield's guard"
-          (format NIL "Right button: earthshake, ~d SP" (round *shake-stamina*))
-          "  staggers all standing round you")))
+(defun weapon-lines (template)
+  "What TEMPLATE's tooltip says it does, as lines: its swing (BLOW-LINES), then the right button's
+(SECOND-BLOW-LINES of its alternate blow, else its guard)."
+  (let ((second (or (weapon-alternate-blow template) (weapon-guard template))))
+    (append (blow-lines (weapon-swing template))
+            (and second (second-blow-lines second)))))
 
 (defun stack-details (player stack)
   "STACK in detail, as lines for its tooltip: its name, then what it does."
@@ -619,13 +627,15 @@ slot's key."))
            (let ((spell (stack-spell stack)))
              (list* (spell-title spell) (spell-lines spell))))
           ((item-property kind :weapon)
-           (let ((weapon (item-property kind :weapon)))
+           (let* ((template (find-weapon (item-property kind :weapon)))
+                  (guard (weapon-guard template)))
              (append
               (list (item-property kind :name))
-              (weapon-lines weapon)
+              (weapon-lines template)
               (enchantment-lines "Enchanted" (stack-enchantment stack))
-              (when (eq weapon :sword)
-                (enchantment-lines "Shield" (getf (enchantments player) :shield))))))
+              ;; Its guard's enchantment is the player's, whichever weapon it is with.
+              (when guard
+                (enchantment-lines (guard-title guard) (getf (enchantments player) (guard-name guard)))))))
           ((potion-p stack)
            (list (item-property kind :name)
                  (format NIL "Restores ~d ~(~a~)" (item-property kind :amount) (item-property kind :resource))
@@ -644,7 +654,7 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
     (cond ((eq kind :rune)
            (values (find-fx-animation 'weapon-icons) (spell-icon (stack-spell stack))))
           ((item-property kind :weapon)
-           (values (find-fx-animation 'weapon-icons) (getf *weapon-icons* (item-property kind :weapon))))
+           (values (find-fx-animation 'weapon-icons) (weapon-icon-frame (find-weapon (item-property kind :weapon)))))
           (T
            (values (find-fx-animation 'item-icons) (item-property kind :icon))))))
 
