@@ -300,7 +300,7 @@ jobs:
           path: ${{ steps.package.outputs.archive }}
           archive: false
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 1
 
       # The screenshot is the thing to look at when a platform is in doubt: it shows what
       # that machine drew.
@@ -314,7 +314,7 @@ jobs:
             ${{ runner.temp }}/hexmaw-data/hexmaw/*.txt
             ${{ runner.temp }}/hexmaw-data/hexmaw/trial.log
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 1
 
   publish:
     name: Publish the GitHub Release
