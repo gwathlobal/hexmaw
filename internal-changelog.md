@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Projectiles in a save remember who first fired them, including after a reflection, so
+  absorbing one after loading returns the right mana and its shooter reacts.
+
 - Buying, selling and looting potions at the settlement act on the potion named on the button.
 
 - Loading during a weapon switch keeps the weapon and rune in hand until the queued switch

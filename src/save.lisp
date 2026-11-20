@@ -136,7 +136,7 @@ their values."
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing homing-target projectile-velocity submerged evade-asked gust))
+  '(spell caster launcher homing homing-target projectile-velocity submerged evade-asked gust))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
@@ -448,6 +448,9 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
                          when entry append (list initarg (decode-value (cdr entry) NIL))))
          (effect (apply #'make-instance class initargs)))
     (restore-state effect state)
+    ;; Before saves kept the launcher, the current caster was the only shooter recorded.
+    (when (and (typep effect 'spell-projectile) (not (assoc 'launcher state)))
+      (setf (launcher effect) (caster effect)))
     (enter effect scene)
     (destructuring-bind (&optional color radius) (getf record :glow)
       (when color
