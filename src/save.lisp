@@ -27,15 +27,15 @@
     (:elite-chance . *elite-chance*))
   "Which of *SAVED-GENERATOR-SETTINGS* a level of *RUN-LEVELS* sets, by its key.")
 
-(defun level-settings (depth)
-  "The generator's settings for level DEPTH of a run, as an alist of those variables: what its
-entry in the run sets by key (*LEVEL-SETTING-KEYS*), its own :SETTINGS (the settlement's), else
-their values."
-  (let ((own (run-level-property depth :settings)))
+(defun level-settings (entry)
+  "The generator's settings for a level of a run, ENTRY (of RUN-LEVELS), as an alist of those
+variables: what the entry sets by key (*LEVEL-SETTING-KEYS*), its own :SETTINGS (the
+settlement's), else their values."
+  (let ((own (getf entry :settings)))
     (loop for var in *saved-generator-settings*
           for key = (car (rassoc var *level-setting-keys*))
           collect (cons var (cond ((assoc var own) (cdr (assoc var own)))
-                                  (key (run-level-property depth key (symbol-value var)))
+                                  (key (getf entry key (symbol-value var)))
                                   (T (symbol-value var)))))))
 
 (defun save-path (slot)
@@ -298,9 +298,10 @@ status auras, which come back from their statuses."
         :seed *last-level-seed*
         :depth *run-depth*
         :run-seed (current-run-seed)
-        :generator (level-settings *run-depth*)
-        ;; The level's entry in the run (RUN-LEVELS): its core and exit.
-        :level (nth (1- *run-depth*) (run-levels))
+        ;; What the level was built with and from, not RUN-LEVELS now: a load builds the same.
+        :generator *level-generator-settings*
+        ;; The level's entry in the run (RUN-LEVELS): its core and exit, and its rules.
+        :level *level-entry*
         :layout (level-layout)
         :globals (list :hit-stop *hit-stop*
                        :light-clock *light-clock*
@@ -483,11 +484,12 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
     (migrate-bindings *player*)
     (migrate-enchantments *player*)
     (migrate-known-effects *player*)
-    (sync-wanted *player*)
-    ;; Older saves kept the active weapon but only the requested rune.
-    (when (and (eq (weapon *player*) :hands)
-               (not (assoc 'held-rune (getf save :player))))
-      (setf (held-spell *player*) (wanted-spell *player*)))
+    ;; A save keeps what is on screen (HELD-RUNE) apart from a switch queued to the wanted slot.
+    ;; One older than that kept only the wanted slot's rune: take what that slot holds in hand,
+    ;; or its weapon and spell might not agree (the casting hands up with no spell).
+    (if (assoc 'held-rune (getf save :player))
+        (sync-wanted *player*)
+        (settle-held *player*))
     (place-camera *player*)
     (loop for record in records
           for creature across *creatures*

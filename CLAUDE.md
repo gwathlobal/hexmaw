@@ -549,7 +549,9 @@ real time instead.
 - `src/save.lisp`: saving and loading generated runs, one file per slot in `*save-directory*`
   (`$XDG_DATA_HOME/hexmaw/saves/`, usually `~/.local/share/hexmaw/saves/`:
   `slot-1.sav` .. `slot-3.sav`, `quick.sav`). A save doesn't store the level: it keeps the
-  seed and the generator's settings (`*saved-generator-settings*`), and the level's cells
+  seed, the generator's settings the level was built with (`*saved-generator-settings*`, as
+  `*level-generator-settings*` holds them) and its entry in the run (`:level`, `*level-entry*`,
+  which a load builds from), and the level's cells
   (`level-layout`) to check that the rebuild is the same level; one built from changed blocks
   isn't, and its save then starts fresh, with a warning. So does one whose pickups were scattered
   another way (`:pickup-kinds`, `built-pickup-kinds`: the taken ones are named by index), and one
@@ -4473,7 +4475,9 @@ harder going down, by keys in each entry (none are flat stat multipliers):
   and so the whole high quarter; the log says which),
   `:skip-scale`, which scales the chance of an empty `spawn ... 30` (`*spawn-skip-scale*`: 1, 0.75,
   0.5), and `:elite-chance` (0, 0.12, 0.2; see `src/elite.lisp`);
-- asked in play (`depth-scale`, 1 off a generated level): `:sight` and `:hearing` scale
+- asked in play (`depth-scale`, 1 off a generated level, from the entry the level in play was built
+  from, `*level-entry*`, never `run-levels` again, so a changed `*settlement-override*` or
+  `*run-levels*` doesn't change a level already built): `:sight` and `:hearing` scale
   `*sight-range*` and `*hearing-range*` in `sees-target-p`, `:alert` the hunt's `alert-time`,
   `:pause` the pause after an attack, `:cooldown` the necromancer's, wraith's, riftwalker's and
   acolyte's abilities, the knight's charge and the ogre's leap (not the boss's powers). 1, 1.15 and 1.3 the sight; pauses 1, 0.85 and 0.7.

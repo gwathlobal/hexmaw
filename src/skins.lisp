@@ -177,9 +177,10 @@ the middle a metre up reaches them; a wedge's diagonal is left bare, as blood le
   "Work out SKIN's cells for its radius now, into its entry."
   (let* ((at (location skin))
          (ground (float (skin-ground skin) 0f0))
+         (base (float (or (skin-wall-base skin) ground) 0f0))
          (radius (float (skin-radius skin) 0f0))
          (entry (or (skin-entry skin)
-                    (setf (skin-entry skin) (make-array 12 :initial-element NIL)))))
+                    (setf (skin-entry skin) (make-array 13 :initial-element NIL)))))
     (multiple-value-bind (ox oz n c heights)
         (if (and *nav-grid* (skin-floor-p skin))
             (skin-floor-cells (vx at) ground (vz at) radius)
@@ -189,9 +190,10 @@ the middle a metre up reaches them; a wedge's diagonal is left bare, as blood le
             (aref entry 4) ox (aref entry 5) oz (aref entry 6) n (aref entry 7) c (aref entry 8) heights
             (aref entry 9) (skin-kind-property (skin-kind skin) :footing)
             (aref entry 10) (if (and (skin-walls-p skin) (< 0 (length *solids*)))
-                                (skin-wall-cells (vx at) (float (or (skin-wall-base skin) ground) 0f0) (vz at) radius)
+                                (skin-wall-cells (vx at) base (vz at) radius)
                                 (make-array 0 :element-type 'single-float))
-            (aref entry 11) (skin-kind skin)))
+            (aref entry 11) (skin-kind skin)
+            (aref entry 12) base))
     entry))
 
 ;; Not ENTER :AFTER: preloading enters things into the staging area.
@@ -499,8 +501,9 @@ cells, HEIGHTS row by row, that are laid, on about the floor of the first laid o
                                  (corner x0 z0 0 0) (corner x1 z1 1 1) (corner x1 z0 1 0)
                                  (corner x0 z0 0 0) (corner x0 z1 0 1) (corner x1 z1 1 1))))))))
                    (setf q 1f0)
-                   ;; Its wall cells, a hair out from their faces.
-                   (let ((top (float (+ (aref entry 1) *skin-wall-height*) 0f0)))
+                   ;; Its wall cells, a hair out from their faces, jagged where they end: their
+                   ;; base's height up, which over a drop is under its floor's (COMPUTE-SKIN-CELLS).
+                   (let ((top (float (+ (aref entry 12) *skin-wall-height*) 0f0)))
                      (loop for w from 0 below (length walls) by 7
                            while (<= (+ k (* 6 *skin-vertex-floats*)) most)
                            do (let* ((normal (round (aref walls (+ w 6))))

@@ -7,11 +7,23 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A save from before the weapon on screen was saved (`held-rune`) takes what its wanted hotbar
+  slot holds in hand on loading (`settle-held`), as it did before: with that slot empty it had
+  loaded with the casting hands up and no spell in them.
+
+- Rime laid with no floor under it (a frost patch struck high over a drop) ends in the same
+  jagged frosted top as any other on the walls: the drawer measured the top from the patch's
+  floor height, 1.25 m above where its wall cells end, so the cut never reached them.
+
 - A saved frost patch keeps its freeze duration. Loading places it back underfoot, and
   renewing it can freeze creatures again.
 
-- Creature updates reuse the current level's difficulty and ability rules. A level build
-  refreshes them, including on quickload and when rebuilding the same seed after an edit.
+- A level keeps the run entry and generator settings it was built from (`*level-entry*`,
+  `*level-generator-settings*`): its rules in play (`depth-scale`, `level-ability-p`), its
+  rebuild check, its loot and a save read those, never `run-levels` again, so changing
+  `*settlement-override*` or `*run-levels*` mid-level no longer changes the rules of the level on
+  screen or what its save describes. Replaces the combat-rules cache, which also called
+  `current-run-seed` every creature tick.
 
 - Quicksave and Quickload respond to mouse buttons assigned in Controls.
 

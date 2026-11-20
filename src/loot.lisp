@@ -22,19 +22,20 @@ each once a run at most (AUTHORED-LOOT).")
 
 (defvar *loot-override* NIL "A :LOOT that LOOT-PROPERTY answers from instead, for the debug level's.")
 
-(defun loot-property (key &optional (depth *run-depth*) default)
-  "KEY of level DEPTH's :LOOT. The settlement's level gives its own :LOOT before the one of the
-level it takes the rest from (RUN-LEVELS), so a key it leaves out comes from there."
-  (loop for (k v) on (if *loot-override* (list :loot *loot-override*) (nth (1- depth) (run-levels))) by #'cddr
+(defun loot-property (key &optional (entry (current-level-entry)) default)
+  "KEY of the :LOOT of ENTRY (of RUN-LEVELS), by default the level in play's. The settlement's
+level gives its own :LOOT before the one of the level it takes the rest from (RUN-LEVELS), so a
+key it leaves out comes from there."
+  (loop for (k v) on (if *loot-override* (list :loot *loot-override*) entry) by #'cddr
         when (eq k :loot)
           do (let ((found (getf v key '%none)))
                (unless (eq found '%none) (return found)))
         finally (return default)))
 
-(defun loot-count (&optional (depth *run-depth*))
-  "How many items level DEPTH hands out."
+(defun loot-count ()
+  "How many items the level in play hands out."
   (if (eq *level* :generated)
-      (+ (loot-property :weapons depth 0) (loot-property :runes depth 0))
+      (+ (loot-property :weapons (current-level-entry) 0) (loot-property :runes (current-level-entry) 0))
       0))
 
 (defun random-range (range random)
@@ -106,24 +107,24 @@ COST-OF the draft's spell stays at most TARGET. Bisected, so the effects keep th
   "A draft for a generated rune of this level: its delivery, effects and dials drawn, sized to a
 power in its :RUNE-POWER. Its tier follows from what it is (SPELL-TIER)."
   (let* ((delivery (weighted-choice *loot-deliveries* random))
-         (count (random-range (list 1 (loot-property :rune-effects *run-depth* 1)) random))
+         (count (random-range (list 1 (loot-property :rune-effects (current-level-entry) 1)) random))
          (kinds (loot-kinds (if (eq delivery :self) *loot-self-kinds* *loot-strike-kinds*) count random))
          (draft (make-instance 'forge-draft :sink :new :delivery delivery
                                             :effects (mapcar (lambda (k) (loot-effect k random)) kinds))))
     ;; A burst, now and then: every effect that can spread does.
-    (when (and (projectile-delivery-p delivery) (< (random 1.0 random) (loot-property :area-chance *run-depth* 0)))
+    (when (and (projectile-delivery-p delivery) (< (random 1.0 random) (loot-property :area-chance (current-level-entry) 0)))
       (let ((area (* 0.5 (random-range '(2 5) random))))
         (dolist (e (draft-effects draft))
           (setf (draft-area e) (min area (kind-property (draft-kind e) :area))))))
-    (size-draft draft #'spell-power (random-range (loot-property :rune-power *run-depth* '(10 18)) random) random)))
+    (size-draft draft #'spell-power (random-range (loot-property :rune-power (current-level-entry) '(10 18)) random) random)))
 
 (defun loot-enchantment (stack random)
   "A generated enchantment for the weapon STACK, sized to a cost a blow in its level's :ENCHANT-COST."
-  (let* ((count (random-range (list 1 (loot-property :enchant-effects *run-depth* 1)) random))
+  (let* ((count (random-range (list 1 (loot-property :enchant-effects (current-level-entry) 1)) random))
          (draft (make-instance 'forge-draft :sink stack
                                             :effects (mapcar (lambda (k) (loot-effect k random))
                                                              (loot-kinds *loot-strike-kinds* count random)))))
-    (size-draft draft #'enchant-cost (random-range (loot-property :enchant-cost *run-depth* '(2 3)) random) random)
+    (size-draft draft #'enchant-cost (random-range (loot-property :enchant-cost (current-level-entry) '(2 3)) random) random)
     (draft-spell draft)))
 
 ;;; Items.
@@ -134,7 +135,7 @@ enchanted with the level's :ENCHANT-CHANCE."
   (let* ((kind (or kind (nth (random (length *loot-weapons*) random) *loot-weapons*)))
          (stack (list kind 1 NIL))
          (roll (random 1.0 random)))
-    (when (< roll (loot-property :enchant-chance *run-depth* 0))
+    (when (< roll (loot-property :enchant-chance (current-level-entry) 0))
       (setf (stack-enchantment stack) (loot-enchantment stack random)))
     stack))
 
@@ -148,7 +149,7 @@ as strong as the level's :RUNE-POWER. Tried again while the forge would refuse i
 too weak."
   (list :rune 1
         (or spell
-            (loop with least = (- (first (loot-property :rune-power *run-depth* '(10 18))) *rune-power-slack*)
+            (loop with least = (- (first (loot-property :rune-power (current-level-entry) '(10 18))) *rune-power-slack*)
                   repeat 20
                   for draft = (loot-rune-draft random)
                   unless (or (draft-fault draft *max-mana*) (< (spell-power (draft-spell draft)) least))
@@ -161,20 +162,21 @@ once a run at most, on the first level whose :AUTHORED-CHANCE roll comes up, fro
 alone, so every level of the run agrees."
   (let ((random (sb-ext:seed-random-state (logxor (or *run-seed* 0) #xA17))))
     (loop for spell in *loot-spells*
-          when (loop for d from 1 to (run-length)
+          when (loop for d from 1
+                     for entry in (run-levels)
                      ;; Every level rolls, so a change of one level's chance moves no other's.
-                     for hit = (< (random 1.0 random) (loot-property :authored-chance d 0))
+                     for hit = (< (random 1.0 random) (loot-property :authored-chance entry 0))
                      when hit return (= d depth))
             collect (find-spell spell))))
 
 (defun make-level-loot (random)
   "The stacks this level hands out, weapons first: its :WEAPONS (its :FIRST-WEAPON, if it names
 one, first) and :RUNES, the authored spells it has taking runes' places."
-  (let ((first (loot-property :first-weapon *run-depth*))
+  (let ((first (loot-property :first-weapon))
         (authored (authored-loot)))
-    (append (loop for i from 0 below (loot-property :weapons *run-depth* 0)
+    (append (loop for i from 0 below (loot-property :weapons (current-level-entry) 0)
                   collect (make-loot-weapon random (and (= i 0) first)))
-            (loop for i from 0 below (loot-property :runes *run-depth* 0)
+            (loop for i from 0 below (loot-property :runes (current-level-entry) 0)
                   collect (make-loot-rune random (pop authored))))))
 
 ;;; On the floor.
