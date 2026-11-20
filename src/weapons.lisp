@@ -175,8 +175,19 @@ on the screen's middle; NIL keeps the strip against the bottom-right corner.")
    (alternate :initarg :alternate :initform NIL :reader weapon-alternate-blow
               :documentation "Its blow on a press of the right button, or NIL.")
    (guard :initarg :guard :initform NIL :reader weapon-guard-name
-          :documentation "The name of its guard (DEFINE-GUARD), held up with the right button, or NIL."))
+          :documentation "The name of its guard (DEFINE-GUARD), held up with the right button, or NIL.")
+   (item :initarg :item :initform T :reader template-item-p
+         :documentation "True if it is an item the bag holds (inventory.lisp); the hands aren't.")
+   (item-entry :initform NIL :reader template-item-entry
+               :documentation "Its entry as *ITEM-KINDS* has them, (NAME :NAME title :WEAPON name :STACK 1),
+or NIL if it isn't an item: ITEM-PROPERTY reads it."))
   (:documentation "A kind of weapon (DEFINE-WEAPON)."))
+
+(defmethod shared-initialize :after ((template weapon-template) slots &key)
+  (declare (ignore slots))
+  (setf (slot-value template 'item-entry)
+        (and (template-item-p template)
+             (list (weapon-name template) :name (weapon-title template) :weapon (weapon-name template) :stack 1))))
 
 (defvar *weapon-templates* ()
   "Every weapon template (DEFINE-WEAPON), a plist by name in the order they were defined: a level's
@@ -198,6 +209,20 @@ loot draws from them in that order.")
 (defun find-guard (name &optional (errorp T))
   (or (and name (getf *guards* name))
       (and errorp (error "No guard ~s." name))))
+
+(defun weapon-kind-entry (kind)
+  "The *ITEM-KINDS* entry of the weapon item KIND, from its template, or NIL."
+  (let ((template (find-weapon kind NIL)))
+    (and template (template-item-entry template))))
+
+(defun loot-weapons ()
+  "The names of the weapons a level may hand out (their templates' LOOT), in the order defined."
+  (loop for template in (weapon-templates)
+        when (weapon-loot-p template) collect (weapon-name template)))
+
+(defun guard-sink-p (thing)
+  "True if THING is a guard's name: the forge's sink for its enchantment (the player's ENCHANTMENTS)."
+  (and (keywordp thing) (find-guard thing NIL) T))
 
 (defun weapon-guard (template)
   "TEMPLATE's guard, or NIL."

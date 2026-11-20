@@ -18,7 +18,7 @@
   "Spells the forge can't make that a level may hand out as a rune instead of a generated one,
 each once a run at most (AUTHORED-LOOT).")
 
-(defparameter *loot-weapons* '(:sword :spear :maul) "The weapons a level may hand out, as items.")
+;; The weapons a level may hand out are LOOT-WEAPONS (weapons.lisp): the templates with :LOOT.
 
 (defvar *loot-override* NIL "A :LOOT that LOOT-PROPERTY answers from instead, for the debug level's.")
 
@@ -130,9 +130,9 @@ power in its :RUNE-POWER. Its tier follows from what it is (SPELL-TIER)."
 ;;; Items.
 
 (defun make-loot-weapon (random &optional kind)
-  "A weapon of this level, a stack (KIND 1 ENCHANTMENT): KIND, or one of *LOOT-WEAPONS* at random,
+  "A weapon of this level, a stack (KIND 1 ENCHANTMENT): KIND, or one of LOOT-WEAPONS at random,
 enchanted with the level's :ENCHANT-CHANCE."
-  (let* ((kind (or kind (nth (random (length *loot-weapons*) random) *loot-weapons*)))
+  (let* ((kind (or kind (let ((kinds (loot-weapons))) (nth (random (length kinds) random) kinds))))
          (stack (list kind 1 NIL))
          (roll (random 1.0 random)))
     (when (< roll (loot-property :enchant-chance (current-level-entry) 0))
@@ -217,10 +217,7 @@ outline glows in its enchantment's colour, pulsing, as it does in hand and in th
 (defun loot-animation (stack)
   (if (eq :rune (first stack))
       (getf *loot-rune-animations* (spell-look (stack-spell stack)) 'loot-rune-fire)
-      (ecase (item-property (first stack) :weapon)
-        (:sword 'loot-sword)
-        (:spear 'loot-spear)
-        (:maul 'loot-maul))))
+      (weapon-loot-strip (find-weapon (item-property (first stack) :weapon)))))
 
 (defun add-loot (container stack x y z &key (phase 0.0))
   "A pickup of STACK standing on the floor at X Y Z."
@@ -294,10 +291,10 @@ sword and two runes, as the deepest level makes them, from a fixed seed."
   (and (typep creature 'ogre) (monster-p creature)))
 
 (defun make-hoard-loot (random)
-  "A hoard's item: a weapon of *LOOT-WEAPONS* with an enchantment of this level, or a generated
+  "A hoard's item: a weapon of LOOT-WEAPONS with an enchantment of this level, or a generated
 rune. Never plain, which on the first level every weapon is."
   (if (< (random 1.0 random) 0.5)
-      (let ((stack (list (nth (random (length *loot-weapons*) random) *loot-weapons*) 1 NIL)))
+      (let ((stack (list (let ((kinds (loot-weapons))) (nth (random (length kinds) random) kinds)) 1 NIL)))
         (setf (stack-enchantment stack) (loot-enchantment stack random))
         stack)
       (make-loot-rune random)))

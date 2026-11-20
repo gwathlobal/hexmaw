@@ -436,10 +436,10 @@ Its enchantment is its guard's, the shield's."
     (and stack (eq (weapon player) (item-property (first stack) :weapon)) stack)))
 
 (defun weapon-spell (player weapon)
-  "The enchantment WEAPON's blows carry: the shield's PLAYER's own, a sword's or spear's the one
+  "The enchantment WEAPON's blows carry: a guard's (the shield's) PLAYER's own, a weapon's the one
 in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
-  (if (eq weapon :shield)
-      (getf (enchantments player) :shield)
+  (if (guard-sink-p weapon)
+      (getf (enchantments player) weapon)
       (let ((stack (held-weapon-stack player)))
         (and stack (eq weapon (item-property (first stack) :weapon)) (stack-enchantment stack)))))
 
@@ -823,6 +823,8 @@ void main(){
 }")
 
 (defun weapon-enchantment (player stack)
-  "The spell the weapon STACK's blows carry: a sword's slot shows its shield's if it has none."
+  "The spell the weapon STACK's blows carry: a weapon with a guard (the sword) shows its guard's if it
+has none."
   (or (stack-enchantment stack)
-      (and (eq :sword (item-property (first stack) :weapon)) (getf (enchantments player) :shield))))
+      (let ((guard (weapon-guard-of (item-property (first stack) :weapon))))
+        (and guard (getf (enchantments player) (guard-name guard))))))

@@ -20,14 +20,12 @@
      :about "Spent at an altar to make spells and enchant weapons")
     (:gold :name "Gold" :icon 3 :stack 999 :note "coins" :about "Coin, for trade")
     (:relic :name "Reliquary" :icon 4 :stack 1 :about "Lost in the undercroft: the quest-giver wants it back")
-    (:sword :name "Sword" :weapon :sword :stack 1)
-    (:spear :name "Spear" :weapon :spear :stack 1)
-    (:maul :name "Maul" :weapon :maul :stack 1)
     (:rune :name "Rune" :stack 1))
   "What each kind of item is: its name, its frame in the icon strip, what it restores, and how
 many fit in one stack. A pickup that gives one (*PICKUP-KINDS*) counts its :AMOUNT in a level's
-budget, so keep the two the same. A weapon's :WEAPON is what it puts in the player's hand
-(sword.lisp); a rune is a spell the hands cast, its stack (:RUNE 1 SPELL). Neither stacks.")
+budget, so keep the two the same. A weapon is an item too, its entry from its template
+(TEMPLATE-ITEM-ENTRY, weapons.lisp): its :WEAPON is what it puts in the player's hand (sword.lisp). A
+rune is a spell the hands cast, its stack (:RUNE 1 SPELL). Neither stacks.")
 
 (defparameter *hotbar-slots* '(:hot-1 :hot-2 :hot-3 :hot-4 :hot-5 :hot-6 :hot-7 :hot-8 :hot-9)
   "The hotbar's slots, keys 1 to 9, *HOTBAR-SIZE* of them (player.lisp).")
@@ -52,7 +50,7 @@ hud.lisp, measures a line).")
 (defparameter *inventory-border-color* (vec4 0.60 0.48 0.28 1))
 
 (defun item-property (kind key)
-  (getf (rest (or (assoc kind *item-kinds*) (error "No item kind ~s." kind))) key))
+  (getf (rest (or (assoc kind *item-kinds*) (weapon-kind-entry kind) (error "No item kind ~s." kind))) key))
 
 ;;; The model. The bag holds every item; the hotbar and the quickslot only point into it: a
 ;;; hotbar slot at a stack in the bag (EQ), the quickslot at a kind of potion, so binding a key
@@ -607,13 +605,15 @@ slot's key."))
            (let ((spell (stack-spell stack)))
              (list* (spell-title spell) (spell-lines spell))))
           ((item-property kind :weapon)
-           (let ((weapon (item-property kind :weapon)))
+           (let* ((template (find-weapon (item-property kind :weapon)))
+                  (guard (weapon-guard template)))
              (append
               (list (item-property kind :name))
-              (weapon-lines (find-weapon weapon))
+              (weapon-lines template)
               (enchantment-lines "Enchanted" (stack-enchantment stack))
-              (when (eq weapon :sword)
-                (enchantment-lines "Shield" (getf (enchantments player) :shield))))))
+              ;; Its guard's enchantment is the player's, whichever weapon it is with.
+              (when guard
+                (enchantment-lines (guard-title guard) (getf (enchantments player) (guard-name guard)))))))
           ((potion-p stack)
            (list (item-property kind :name)
                  (format NIL "Restores ~d ~(~a~)" (item-property kind :amount) (item-property kind :resource))

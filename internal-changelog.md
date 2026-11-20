@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A weapon's item entry, icon, loot sprite, forge noun and whether levels hand it out come from its
+  template: `*item-kinds*` lost its sword, spear and maul lines (`item-property` reads
+  `template-item-entry`), `*loot-weapons*` is `loot-weapons`, and the forge, the tooltips and the
+  Deepwardens' rule ask the template or its guard (`guard-sink-p`, the shield by its name) instead of
+  naming `:sword`, `:spear`, `:maul` and `:shield`. Over run seeds 1 to 30 every level's loot is
+  the same item, enchantment and spot as before.
+
 - The weapons on screen are one class, `weapon-sprite`, one made for each template with a strip
   (`add-weapon-sprites`), and the shield a `guard-sprite`, one for each guard; the `sword`,
   `spear`, `maul` and `shield` entities, `add-sword` and its siblings, `held-weapon`,

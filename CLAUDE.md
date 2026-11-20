@@ -1235,7 +1235,8 @@ real time instead.
   (`enchant-dust`); destroying one gives back `*dust-refund*` (0.5) of that (`refund-dust`). Two tabs
   (`*forge-tab*`, `forge-tab`): **Spells** lists "New spell" and every rune in the bag (`player-runes`,
   `*forge-list-rows*` a page, `forge-page`), **Enchant** the weapons carried (`carried-weapons`: every
-  sword, spear and maul in the bag, each a stack, its sink, and the shield, `:shield`, with a sword;
+  sword, spear and maul in the bag, each a stack, its sink, and their guards by name, the shield, `:shield`,
+  with a sword (`guard-sink-p`);
   `weapon-sink-p`, `sink-weapon`, `(setf sink-spell)`; `(forge-select :sword)` from the REPL takes the
   first sword). The forge is on one of them (`*forge-sink*`,
   `forge-select`): a new spell or a plain weapon has a draft to make (`*forge-draft*`, kept per sink in
@@ -1368,7 +1369,7 @@ real time instead.
   Projectiles in its off hand) and heal; the rest is loot. Each level's `:loot` (`*run-levels*`, run.lisp; `loot-property`, which takes the
   settlement's own `(:weapons 0 :runes 1)` before the level it borrows the rest from) gives its
   `:weapons` (level 1 a plain spear, `:first-weapon`) and `:runes`. A weapon is a sword, spear or maul
-  (`*loot-weapons*`, each as likely) with
+  (`loot-weapons`: the templates with `:loot`, weapons.lisp, each as likely) with
   the usual stats; only its enchantment varies: `:enchant-chance` (0, 0.5, 0.8) of one costing
   `:enchant-cost` a blow (2-3 on level 2, 3-6 on level 3) with up to `:enchant-effects`
   (`loot-enchantment`). A rune (`make-loot-rune`) is a generated spell made as the forge makes one,
@@ -1386,7 +1387,7 @@ real time instead.
   `loot-pickup` (its `loot-stack`, given as a copy so a reset hands out the same) on a reward spot
   first, from a random state of the level's seed, so a load builds the same items; taken, it goes
   into the bag on the next free key with "Found a sword: Frost Edge, on key 4." Its sprite is
-  `loot-sword`, `loot-spear`, `loot-maul` or `loot-rune-<look>` by its spell's look (`tools/draw_loot.py
+  its template's `:loot-strip` (`loot-sword`, `loot-spear`, `loot-maul`) or `loot-rune-<look>` by its spell's look (`tools/draw_loot.py
   data/sprites/pickups`). An enchanted weapon's pickup has the outline it has in hand: `loot-pickup` is a `rim-glow`
   (boss.lisp), its rim in the enchantment's colour, pulsing as the weapon's in hand (never dimmed). A
   rune's stone shows its look, not its first effect as its icon does. The debug level has
@@ -1397,7 +1398,8 @@ real time instead.
   what an item is (name, frame in `data/sprites/icons/items`, what it restores, how many fit in a
   stack); a pickup's `:amount` must match its item's, since a level's budget counts it. Potions stack
   5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, the settlement's coin) 999.
-  Weapons and spells are items too: `:sword`, `:spear` and `:maul` (`:weapon`, what they put in hand), a stack
+  Weapons and spells are items too: `:sword`, `:spear` and `:maul` (`:weapon`, what they put in hand; their
+  entries are their templates', `template-item-entry`, weapons.lisp, which `item-property` reads), a stack
   `(:sword 1 enchantment)` (`stack-enchantment`, each weapon its own; `(:sword 1)` is plain), and
   `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
   tag for a spell reference); none of them stack. `give-stack` puts one in the first free cell, bound
@@ -4643,7 +4645,7 @@ crimes count, prices and whether its guards take bribes:
 | Faction | Rule | Crimes | Cheap | Bribable |
 | --- | --- | --- | --- | --- |
 | `:ashen-temple` | no spell cast in town (`player-cast`) | rule, assault, murder | healing, mana | no |
-| `:deepwardens` | no sword, spear or maul drawn in the `market` and `temple` zones (`check-drawn-blade`) | rule, assault, murder | training | no |
+| `:deepwardens` | no sword, spear or maul drawn (a weapon the bag holds, `template-item-p`) in the `market` and `temple` zones (`check-drawn-blade`) | rule, assault, murder | training | no |
 | `:free-company` | none | murder | goods (and a random extra in stock) | yes |
 
 The player learns it on arriving: the level banner names the town and who holds it ("Level 2 of 4:

@@ -18,7 +18,7 @@
   (:documentation "The casting hands as a weapon: both buttons cast."))
 
 (define-weapon :hands
-  :class hands-template :title "Hands" :sounds (:draw :draw-magic))
+  :class hands-template :title "Hands" :item NIL :sounds (:draw :draw-magic))
 
 ;; The left button casts the slot's rune, the right its off hand's (player.lisp).
 (defmethod weapon-attack ((template hands-template) player)
