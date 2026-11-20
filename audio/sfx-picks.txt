@@ -145,4 +145,4 @@ snare-break 2
 burrow-rumble 1           # take 2 clips
 burrow-erupt 2            # take 1 clips
 roots-burn 1
-shield-scrape 6           # least clipping, even; 5 the other good one
+shield-scrape 13 even      # metal on metal: steadiest screech, no clipping
