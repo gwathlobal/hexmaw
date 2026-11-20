@@ -137,29 +137,33 @@ the last level (*LAST-LEVEL-KINDS*)."
   "True if level DEPTH of the run is the settlement's."
   (and (run-level-property depth :core) T))
 
-(defparameter *combat-rules-cache* NIL
-  "The run seed, depth and level properties used by creature updates. Rebuilt on level entry.")
+(defvar *level-entry* NIL
+  "The entry of RUN-LEVELS (a plist of *RUN-LEVELS*' keys) the level in play was built from, or NIL
+off a generated level: what its rules are asked from in play (DEPTH-SCALE, LEVEL-ABILITY-P), what
+its loot was drawn by (LOOT-PROPERTY) and what a save keeps as :LEVEL, so changing
+*SETTLEMENT-OVERRIDE* or *RUN-LEVELS* changes no level already built. GENERATE-RUN-LEVEL sets it,
+CLEAR-LEVEL forgets it.")
 
-(defun current-combat-rules ()
-  (let ((seed (current-run-seed)))
-    (unless (and (eql seed (first *combat-rules-cache*))
-                 (eql *run-depth* (second *combat-rules-cache*)))
-      (setf *combat-rules-cache*
-            (list seed *run-depth* (nth (1- *run-depth*) (run-levels)))))
-    (third *combat-rules-cache*)))
+(defvar *level-generator-settings* NIL
+  "The generator's settings (an alist of *SAVED-GENERATOR-SETTINGS*) the level in play was built
+with, or NIL off a generated level: what a save keeps as :GENERATOR. Set with *LEVEL-ENTRY*.")
+
+(defun current-level-entry ()
+  "The entry the level in play was built from (*LEVEL-ENTRY*), else the run's at *RUN-DEPTH*."
+  (or *level-entry* (nth (1- *run-depth*) (run-levels))))
 
 (defun depth-scale (key)
   "How much the level being played scales a creature's KEY (see *RUN-LEVELS*): 1 but on a
-generated level."
+generated level, where its entry (*LEVEL-ENTRY*) says."
   (if (eq *level* :generated)
-      (float (getf (current-combat-rules) key 1.0) 0f0)
+      (float (getf (current-level-entry) key 1.0) 0f0)
       1f0))
 
 (defun level-ability-p (name)
   "True if the level being played lets its monsters use ability NAME (:ABILITIES in *RUN-LEVELS*):
 always but on a generated level, so the debug level has them all."
   (or (not (eq *level* :generated))
-      (and (member name (getf (current-combat-rules) :abilities)) T)))
+      (and (member name (getf (current-level-entry) :abilities)) T)))
 
 (defun current-run-seed ()
   "The seed this run's levels come from, picked when first asked for; *LEVEL-SEED* fixes it for testing."

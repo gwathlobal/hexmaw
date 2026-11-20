@@ -127,6 +127,8 @@ grudge. Returns them."
         *level-doorways* ()
         *arena* NIL
         *settlement* NIL
+        *level-entry* NIL
+        *level-generator-settings* NIL
         ;; A nova in flight when the scene was dropped never left it: its sweep would stay painted.
         *newest-nova* NIL
         *nova-sweep-radius* 0.0
@@ -136,7 +138,10 @@ grudge. Returns them."
 (defun generate-run-level (container depth seed settings &key settlement (entry (nth (1- depth) (run-levels))))
   "Level DEPTH of the run from SEED and the generator SETTINGS (an alist), as ENTRY (of
 RUN-LEVELS) says. The settlement's level makes its SETTLEMENT first, from SETTLEMENT's plist
-of :FACTION and :CONDITION when a save gives them, so its town is placed as it was."
+of :FACTION and :CONDITION when a save gives them, so its town is placed as it was. The level
+keeps ENTRY and SETTINGS (*LEVEL-ENTRY*, *LEVEL-GENERATOR-SETTINGS*) for its rules and a save."
+  (setf *level-entry* entry
+        *level-generator-settings* settings)
   (progv (mapcar #'car settings) (mapcar #'cdr settings)
     (let ((core (getf entry :core)))
       (when core
@@ -148,17 +153,19 @@ of :FACTION and :CONDITION when a save gives them, so its town is placed as it w
   "The level of the run at *RUN-DEPTH*, or the saved one being loaded."
   (if *pending-load*
       (generate-saved-level container *pending-load*)
-      (generate-run-level container *run-depth* (level-seed (current-run-seed) *run-depth* attempt)
-                          (level-settings *run-depth*))))
+      (let ((entry (nth (1- *run-depth*) (run-levels))))
+        (generate-run-level container *run-depth* (level-seed (current-run-seed) *run-depth* attempt)
+                            (level-settings entry) :entry entry))))
 
 (defun level-needs-rebuilding-p ()
   "Why the level just built won't do, or NIL: it must have a way off it, or the boss's arena,
 and the player can't get to one; it is the settlement's and its wing came out too small; or it
 must have an altar (:ALTAR-CHANCE 1) and has none the player can get to."
   (when (and (eq *level* :generated) (not *pending-load*))
-    (let ((wing (run-level-property *run-depth* :min-wing))
-          (altar (run-level-property *run-depth* :altar-chance)))
-      (cond ((and (run-level-property *run-depth* :exit) (not (level-goal-reached-p)))
+    (let* ((entry (current-level-entry))
+           (wing (getf entry :min-wing))
+           (altar (getf entry :altar-chance)))
+      (cond ((and (getf entry :exit) (not (level-goal-reached-p)))
              "has no exit the player can reach")
             ((and wing (< *last-wing-rooms* wing))
              "has too small a wing")
@@ -171,10 +178,6 @@ must have an altar (:ALTAR-CHANCE 1) and has none the player can get to."
 creatures (CHECK-REACHABLE), :ICE-JOINS (CHECK-ICE-JOINS). Level sweeps read it (levelcheck.lisp).")
 
 (defun build-level (container)
-  ;; A rebuild of the same seed and depth may pick up edited level or settlement rules.
-  (setf *combat-rules-cache* NIL)
-  (when (eq *level* :generated)
-    (current-combat-rules))
   (let ((*block-memo* (make-hash-table :test 'equal))
         (attempts 0) (last-problem NIL))
     (loop for attempt from 0
