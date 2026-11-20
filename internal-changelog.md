@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Loading during a weapon switch keeps the weapon and rune in hand until the queued switch
+  completes. A saved melee swing or bash finishes with the weapon that started it.
+
 - `release.yml` keeps its archives and reports 3 days instead of 30 (a public repository's
   artifacts don't count against the account's Actions storage, and three days still cover the
   itch job's approval).
