@@ -7,8 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
-- `release.yml` keeps its archives and reports 1 day instead of 30: the account's Actions
-  storage ran out.
+- `release.yml` keeps its archives and reports 3 days instead of 30 (a public repository's
+  artifacts don't count against the account's Actions storage, and three days still cover the
+  itch job's approval).
 - The chapel's facade runs wall to wall in dressed stone: its two end cells were rock, a slice of
   cave between the front room's brick and the facade.
 - Lightning draws after the sprites (`late-rank` 0.45 on `bolt-lines`): drawn in hash order, a
