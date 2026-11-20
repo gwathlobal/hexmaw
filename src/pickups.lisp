@@ -304,12 +304,21 @@ its item for a pile (gold, dust), else as many as it gives."
                 (vy at) (+ (vy loc) (sprite-height carrier) *loot-lift* (* 0.5 (vy (scaling carried-loot))))
                 (vz at) (vz loc))))))
 
+(defun dropped-kinds ()
+  "Every kind of pickup that can appear in play (DROP-LOOT), not only as a level is built: what imps
+carry off and drop, the glyph an elemental foe teaches (DROP-TAUGHT-GLYPH), and kill gold the bag
+has no room for."
+  (remove-duplicates (append *stealable-kinds* (glyph-kinds) (list :gold)) :from-end T))
+
 (defun preload-pickups (scene)
-  "Imps carry pickups off and drop them in play: load every kind they take up front."
-  (loop for kind in *stealable-kinds*
-        for animation = (find-fx-animation (pickup-property kind :animation))
-        do (preload (make-instance 'pickup :animation animation :kind kind :ground 0.0) scene)
-           (preload (make-instance 'carried-loot :animation animation :carrier NIL) scene)))
+  "Load the sprite of every kind DROPPED-KINDS gives up front: a level that placed none of one has
+it nowhere else, and a pickup drawn with a texture never loaded fails every frame and freezes the
+picture. Imps carry the stealable ones, so those are loaded carried too."
+  (dolist (kind (dropped-kinds))
+    (let ((animation (find-fx-animation (pickup-property kind :animation))))
+      (preload (make-instance 'pickup :animation animation :kind kind :ground 0.0) scene)
+      (when (member kind *stealable-kinds*)
+        (preload (make-instance 'carried-loot :animation animation :carrier NIL) scene)))))
 
 (defun take-pickups-at (indices)
   (dolist (i indices)

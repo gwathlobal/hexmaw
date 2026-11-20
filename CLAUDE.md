@@ -1344,7 +1344,10 @@ real time instead.
   **An elemental foe teaches its element**: a creature whose `taught-effect` (creature.lisp; the rime
   hag's `:frost`) the player doesn't know, killed by them on a generated or the test level, drops that
   glyph where it fell (`drop-taught-glyph`, from `creature-died`), once a level per glyph; the run's
-  placed glyphs stay as they are, and a save keeps the drop (`:drops`).
+  placed glyphs stay as they are, and a save keeps the drop (`:drops`). Every kind that can drop in
+  play (`dropped-kinds`: what imps steal, every glyph, kill gold) is preloaded by `preload-pickups`
+  (`setup-scene`): a pickup drawn with a texture never loaded fails every frame and freezes the
+  picture, and a level that placed none of a kind has it nowhere else.
   **Glyphs** are pickup kinds with `:teaches` (`:glyph-frost` .. `:glyph-area`): touched, they teach
   the player an effect for the forge (`learn-glyph`: `known-effects`, a gold flash, a message), and
   one already known stays. Each level of a run has `*glyphs-per-level*` (2), the run's six shuffled by

@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Killing a rime hag (or an arc votary, a bloodroot) before you know its element no longer freezes
+  the picture when the level placed no glyph of that kind: its dropped glyph's texture was never
+  loaded, so drawing it failed every frame while the game ran on underneath. `preload-pickups`
+  loads every kind that can drop in play (`dropped-kinds`: what imps steal, every glyph, and kill
+  gold the bag can't hold). Nothing else spawned in play was found unloaded: every effect
+  animation and image not loaded on a generated level belongs to a creature, townsperson, block or
+  pickup placed as the level is built, which stages its own.
+
 - What the player's weapon is doing is a `wield` (player.lisp) the player holds: the swing, charge,
   second blow, guard and jolt timers moved off the player's own slots, reached by the same
   accessors, so saves keep their names. `spear-jolt` is `weapon-jolt`; an older save's is read
