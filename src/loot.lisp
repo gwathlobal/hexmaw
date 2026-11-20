@@ -133,7 +133,7 @@ power in its :RUNE-POWER. Its tier follows from what it is (SPELL-TIER)."
   "A weapon of this level, a stack (KIND 1 ENCHANTMENT): KIND, or one of LOOT-WEAPONS at random,
 enchanted with the level's :ENCHANT-CHANCE."
   (let* ((kind (or kind (let ((kinds (loot-weapons))) (nth (random (length kinds) random) kinds))))
-         (stack (list kind 1 NIL))
+         (stack (make-weapon-stack kind))
          (roll (random 1.0 random)))
     (when (< roll (loot-property :enchant-chance (current-level-entry) 0))
       (setf (stack-enchantment stack) (loot-enchantment stack random)))
@@ -239,7 +239,7 @@ outline glows in its enchantment's colour, pulsing, as it does in hand and in th
 
 (defmethod collect-pickup ((pickup loot-pickup) player)
   ;; With the bag full it stays, as any item does.
-  (let ((stack (copy-list (loot-stack pickup))))
+  (let ((stack (copy-stack (loot-stack pickup))))
     (multiple-value-bind (cell key) (give-stack player stack)
       (when cell
         (flash-resource player :glyph)
@@ -266,8 +266,8 @@ with no pickup if there are any. After the glyphs, from random states of its own
 sword and two runes, as the deepest level makes them, from a fixed seed."
   (let ((random (sb-ext:seed-random-state 7))
         (*loot-override* (getf (car (last *run-levels*)) :loot)))
-    (loop for stack in (list (list :spear 1 NIL)
-                             (let ((sword (list :sword 1 NIL)))
+    (loop for stack in (list (make-weapon-stack :spear)
+                             (let ((sword (make-weapon-stack :sword)))
                                (setf (stack-enchantment sword) (loot-enchantment sword random))
                                sword)
                              ;; A rune thrown and a rune of touch, so the two differ.
@@ -294,7 +294,7 @@ sword and two runes, as the deepest level makes them, from a fixed seed."
   "A hoard's item: a weapon of LOOT-WEAPONS with an enchantment of this level, or a generated
 rune. Never plain, which on the first level every weapon is."
   (if (< (random 1.0 random) 0.5)
-      (let ((stack (list (let ((kinds (loot-weapons))) (nth (random (length kinds) random) kinds)) 1 NIL)))
+      (let ((stack (make-weapon-stack (let ((kinds (loot-weapons))) (nth (random (length kinds) random) kinds)))))
         (setf (stack-enchantment stack) (loot-enchantment stack random))
         stack)
       (make-loot-rune random)))

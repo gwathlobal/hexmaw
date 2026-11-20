@@ -191,6 +191,8 @@ settlement's), else their values."
                   (status-left value) (status-timer value) (status-owed value)
                   (encode-value (status-caster value)) (status-duration value)))
     (ability (list :ability (ability-name value)))
+    ;; A weapon the player owns (weapons.lisp), by its template's name.
+    (weapon-item (list :weapon-item (weapon-item-kind value) (encode-value (weapon-item-enchantment value))))
     (fx-animation (list :animation (animation-name value)))
     (cons (mapcar #'encode-value value))
     (T (error "Don't know how to save ~s." value))))
@@ -212,6 +214,7 @@ references that are relative to it (an ability)."
                                           :timer timer :owed owed :caster (decode-value caster owner))))
         (:ability (or (find-ability owner (second data)) (error "~a has no ability ~s." owner (second data))))
         (:animation (find-fx-animation (second data)))
+        (:weapon-item (make-weapon-item (second data) (decode-value (third data) owner)))
         (T (mapcar (lambda (d) (decode-value d owner)) data)))
       data))
 
@@ -482,6 +485,7 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
         (spawn-creature (make-instance (getf record :class) :summoned T) scene)))
     (restore-state *player* (getf save :player))
     (migrate-bindings *player*)
+    (migrate-weapon-items *player*)
     (migrate-enchantments *player*)
     (migrate-known-effects *player*)
     ;; A save keeps what is on screen (HELD-RUNE) apart from a switch queued to the wanted slot.

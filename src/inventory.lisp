@@ -122,16 +122,38 @@ its kind and the bag's total of it (*QUICK-VIEW*), NIL when it is unbound; an of
 (defun weapon-stack-p (stack)
   (and (consp stack) (item-property (first stack) :weapon) T))
 
+(defun stack-item (stack)
+  "The weapon item (weapons.lisp) a weapon's STACK, (KIND 1 ITEM), holds, giving one an older save's
+stack lacked: (KIND 1) or (KIND 1 SPELL) becomes (KIND 1 ITEM) with that spell, in place."
+  (let ((third (third stack)))
+    (if (typep third 'weapon-item)
+        third
+        (let ((item (make-weapon-item (first stack) third)))
+          (setf (cddr stack) (list item))
+          item))))
+
 (defun stack-enchantment (stack)
-  "The spell a weapon's STACK, (KIND 1 SPELL), strikes with on every blow (ENCHANT-STRIKE,
-sword.lisp), or NIL for a plain one: each weapon has its own, as a rune its spell."
-  (and (weapon-stack-p stack) (third stack)))
+  "The spell a weapon's STACK strikes with on every blow (ENCHANT-STRIKE, sword.lisp), its weapon
+item's, or NIL for a plain one: each weapon has its own, as a rune its spell."
+  (and (weapon-stack-p stack)
+       (let ((third (third stack)))
+         (if (typep third 'weapon-item) (weapon-item-enchantment third) third))))
 
 (defun (setf stack-enchantment) (spell stack)
-  (if (cddr stack)
-      (setf (third stack) spell)
-      (setf (cdr (cdr stack)) (list spell)))
-  spell)
+  (setf (weapon-item-enchantment (stack-item stack)) spell))
+
+(defun copy-stack (stack)
+  "A copy of STACK that shares nothing that changes: a weapon's has an item of its own."
+  (if (weapon-stack-p stack)
+      (make-weapon-stack (first stack) (stack-enchantment stack))
+      (copy-list stack)))
+
+(defun migrate-weapon-items (player)
+  "Give every weapon stack in PLAYER's bag its weapon item (STACK-ITEM): a save from before them kept
+a weapon as (KIND 1) or (KIND 1 ENCHANTMENT). Harmless on a current one."
+  (dolist (stack (inventory player))
+    (when (weapon-stack-p stack)
+      (stack-item stack))))
 
 (defun stack-label (stack)
   "STACK in a word or two, for TOOLS/HD STATUS: -, sword, bolt, health-potion*3."
@@ -378,7 +400,7 @@ to its key and an off-hand rune to its key's off hand; on the debug level, *DEBU
     (loop for entry in (if (eq *level* :test) *debug-starting-hotbar* *starting-hotbar*)
           for i from 0
           do (multiple-value-bind (main off) (kit-entry entry)
-               (let ((stack (if (keywordp main) (list main 1) (list :rune 1 (kit-spell main)))))
+               (let ((stack (if (keywordp main) (make-weapon-stack main) (list :rune 1 (kit-spell main)))))
                  (setf (nth cell bag) stack (nth i hotbar) stack)
                  (incf cell))
                (when off

@@ -567,7 +567,8 @@ real time instead.
   An object saves the slots `saved-slots` names (an `append` generic; a name with no slot
   is an accessor, as `location` is), so **a new slot that changes in play needs adding
   there**. Values go through `encode-value`: vecs as `(:vec ...)`, references to the player,
-  creatures, spells, abilities and animations as tagged lists, anything else an error that
+  creatures, spells, abilities and animations as tagged lists, a weapon item as
+  `(:weapon-item kind enchantment)`, anything else an error that
   stops the save. `load-game` starts a run as `start-level` does with `*pending-load*` set;
   `build-level` builds the saved seed and `setup-scene` ends with `restore-run`, which leaves
   the game paused. Reloading save.lisp resets `*save-directory*`; to test without touching
@@ -1400,7 +1401,9 @@ real time instead.
   5; arcane dust (`:dust`, the forge's, forge.lisp) and gold (`:gold`, the settlement's coin) 999.
   Weapons and spells are items too: `:sword`, `:spear` and `:maul` (`:weapon`, what they put in hand; their
   entries are their templates', `template-item-entry`, weapons.lisp, which `item-property` reads), a stack
-  `(:sword 1 enchantment)` (`stack-enchantment`, each weapon its own; `(:sword 1)` is plain), and
+  `(:sword 1 #<weapon-item>)` (`make-weapon-stack`; the **weapon item**, weapons.lisp, is that one weapon:
+  its template's name and its enchantment, `stack-enchantment`, each weapon its own; `copy-stack` copies
+  it), and
   `:rune`, a spell the hands cast, its stack `(:rune 1 spell)` (`stack-spell`; not `:spell`, a save's
   tag for a spell reference); none of them stack. `give-stack` puts one in the first free cell, bound
   to the first free key (`give-rune` makes a rune's). A stack is a list `(kind count)`. **The bag holds
@@ -1739,8 +1742,9 @@ real time instead.
 - `src/sword.lisp` also has **enchantments**: a weapon's spell (a sword's or spear's its own stack's,
   `stack-enchantment`, so two swords differ; the shield's in the player's `enchantments` plist under
   `:shield`; `weapon-spell` asks for the one in hand, `held-weapon-stack`; made at the forge or found,
-  `src/loot.lisp`; `migrate-enchantments` moves an older save's `:sword`/`:spear` entries onto the
-  bag's first such weapon, after a load and the stairs) goes with every blow of it that lands
+  `src/loot.lisp`; `migrate-weapon-items` gives an older save's `(:sword 1)` or `(:sword 1 spell)` its
+  weapon item (`stack-item`), and `migrate-enchantments` moves an even older save's `:sword`/`:spear`
+  entries onto the bag's first such weapon, after a load and the stairs) goes with every blow of it that lands
   (`enchant-strike`, from `swing-hit` and the bash), for `enchant-cost` mana (`*enchant-cost-scale*`
   of the spell's power, `spell-power`) out of the pool; with too little left the blow is plain, and a miss costs
   nothing. Its self effects land on the player. The weapon's border on the hotbar and in the bag takes

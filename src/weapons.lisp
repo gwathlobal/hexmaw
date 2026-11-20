@@ -341,3 +341,28 @@ no stamina coming back."
 (defun heave-speed-scale (player)
   "Fraction of a walk PLAYER keeps for the blow they heave: 1 when none."
   (or (heave-speed player) 1.0))
+
+;;; A weapon the player owns: an instance of its template, with its own enchantment. A bag stack
+;;; holds one as its third element, (:SWORD 1 #<WEAPON-ITEM>), as a rune's holds its spell
+;;; (inventory.lisp). It names its template, so a template redefined is the one it uses at once.
+
+(defclass weapon-item ()
+  ((kind :initarg :kind :reader weapon-item-kind :documentation "Its template's name.")
+   (enchantment :initarg :enchantment :initform NIL :accessor weapon-item-enchantment
+                :documentation "The spell its blows carry (ENCHANT-STRIKE, sword.lisp), or NIL."))
+  (:documentation "One weapon the player owns: its template and its enchantment."))
+
+(defmethod print-object ((item weapon-item) stream)
+  (print-unreadable-object (item stream :type T)
+    (format stream "~(~a~)~@[ ~a~]" (weapon-item-kind item)
+            (and (weapon-item-enchantment item) (spell-title (weapon-item-enchantment item))))))
+
+(defun make-weapon-item (kind &optional enchantment)
+  (make-instance 'weapon-item :kind kind :enchantment enchantment))
+
+(defun weapon-item-template (item)
+  (find-weapon (weapon-item-kind item)))
+
+(defun make-weapon-stack (kind &optional enchantment)
+  "A bag stack of one weapon of KIND, a template's name, with ENCHANTMENT."
+  (list kind 1 (make-weapon-item kind enchantment)))

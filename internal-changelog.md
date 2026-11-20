@@ -7,6 +7,13 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A weapon in the bag is an instance of its template, a `weapon-item` (weapons.lisp) holding its
+  enchantment: a stack is `(:sword 1 #<weapon-item>)` (`make-weapon-stack`), saved as
+  `(:sword 1 (:weapon-item :sword ENCHANTMENT))`. An older save's `(:sword 1)` or `(:sword 1 SPELL)`
+  gets its item on loading and on the stairs (`migrate-weapon-items`, `stack-item`); a found
+  weapon is copied with `copy-stack`. Saves from before this load as they did; a save from this
+  build won't load in an older one, so `*save-version*` stays.
+
 - A weapon's item entry, icon, loot sprite, forge noun and whether levels hand it out come from its
   template: `*item-kinds*` lost its sword, spear and maul lines (`item-property` reads
   `template-item-entry`), `*loot-weapons*` is `loot-weapons`, and the forge, the tooltips and the

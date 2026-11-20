@@ -133,6 +133,7 @@ RGBA-ICON would put them. An icon that won't load only logs."
       (when *carried-state*
         (restore-state new *carried-state*)
         (migrate-bindings new)
+        (migrate-weapon-items new)
         (migrate-enchantments new)
         (migrate-known-effects new)
         (settle-held new)
