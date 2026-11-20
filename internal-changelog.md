@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Quicksave and Quickload respond to mouse buttons assigned in Controls.
+
 - Projectiles in a save remember who first fired them, including after a reflection, so
   absorbing one after loading returns the right mana and its shooter reacts.
 
