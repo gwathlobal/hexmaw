@@ -7,6 +7,16 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- What a weapon does is its blows' classes (`thrust`, `charged-blow`, `bash`, `sweep`,
+  `earthshake`) and its template's: `weapon-attack` and `weapon-alternate` (the hands a
+  `hands-template` that casts), `start-blow`, and `swing-strike`, `swing-miss` and `bash-strike`
+  specialised on the blow. The `case`s on the weapon's keyword in `player-attack` and
+  `player-press` are gone, `maul-heaving-p` and `maul-speed-scale` are `heaving-p` and
+  `heave-speed-scale` (any blow with a speed, or a charge), `update-maul-charge` is
+  `update-blow-charge`, `maul-lerp` is `charge-lerp`, and the tooltips are each blow's
+  `blow-lines` and `second-blow-lines`. `shield-facing-p` asks for a guard. Nothing plays
+  differently.
+
 - Weapons are templates (`src/weapons.lisp`): `define-weapon` holds a weapon's numbers, frames,
   icon, sounds and moves, each move a `blow` (its frame times, hit frame, reach, arc, damage,
   knockback, stamina, sound, wall strike and tip), and `define-guard` the shield. The sword's,

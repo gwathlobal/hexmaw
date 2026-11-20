@@ -593,27 +593,12 @@ slot's key."))
                     (mapcan #'effect-lines (spell-effects spell))))
       (list (format NIL "~a: plain (enchant it at an altar)" label))))
 
-(defgeneric weapon-lines (weapon)
-  (:documentation "What WEAPON's tooltip says it does, as lines: its blow, then its other actions.")
-  (:method (weapon)
-    (let ((blow (swing-blow weapon)))
-      (list (format NIL "Damage ~a, reach ~,1f m" (range-text (blow-damage blow)) (blow-reach blow))
-            (format NIL "~,2f s a swing" (blow-duration blow))
-            "Right button: shield up, click to bash")))
-  (:method ((weapon (eql :spear)))
-    (let ((blow (swing-blow weapon)))
-      (list (format NIL "Damage ~a, reach ~,1f m" (range-text (blow-damage blow)) (blow-reach blow))
-            (format NIL "~,2f s a thrust" (blow-duration blow))
-            "A thrust counters a leap or dive"
-            "Right button: sweep, shove all near")))
-  (:method ((weapon (eql :maul)))
-    (let ((blow (swing-blow weapon)))
-      (list (format NIL "Damage ~a to ~a, reach ~,1f m" (range-text (blow-damage blow)) (range-text (blow-full-damage blow))
-                    (blow-reach blow))
-            (format NIL "A blow ~d SP; hold to charge it" (round (blow-stamina blow)))
-            "A full charge breaks a shield's guard"
-            (format NIL "Right button: earthshake, ~d SP" (round (blow-stamina (second-blow weapon))))
-            "  staggers all standing round you"))))
+(defun weapon-lines (template)
+  "What TEMPLATE's tooltip says it does, as lines: its swing (BLOW-LINES), then the right button's
+(SECOND-BLOW-LINES of its alternate blow, else its guard)."
+  (let ((second (or (weapon-alternate-blow template) (weapon-guard template))))
+    (append (blow-lines (weapon-swing template))
+            (and second (second-blow-lines second)))))
 
 (defun stack-details (player stack)
   "STACK in detail, as lines for its tooltip: its name, then what it does."
@@ -625,7 +610,7 @@ slot's key."))
            (let ((weapon (item-property kind :weapon)))
              (append
               (list (item-property kind :name))
-              (weapon-lines weapon)
+              (weapon-lines (find-weapon weapon))
               (enchantment-lines "Enchanted" (stack-enchantment stack))
               (when (eq weapon :sword)
                 (enchantment-lines "Shield" (getf (enchantments player) :shield))))))

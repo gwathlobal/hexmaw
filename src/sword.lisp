@@ -148,15 +148,27 @@ it holds something."
 spear, raise the maul to charge it (maul.lisp), or, with the shield raised, bash with it.
 Nothing while the shield is on its way up or down, or with nothing in hand. Its blow, as it lands,
 tears free of a bloodroot's roots closing on or holding the player (bloodroot.lisp): SWING-HIT and
-BASH-STRIKE's moment in UPDATE-WEAPONS, a spell's release."
+BASH-STRIKE's moment in UPDATE-WEAPONS, a spell's release. What it does is the template's
+WEAPON-ATTACK (weapons.lisp)."
   (when (weapon-ready-p player)
-    (case (weapon player)
-      (:hands (when (held-spell player)
-                (player-cast player (held-spell player))))
-      (:sword (cond ((<= 1.0 (block-raise player)) (player-bash player))
-                    ((= 0.0 (block-raise player)) (player-swing player))))
-      (:spear (player-swing player))
-      (:maul (player-maul player)))))
+    (let ((template (find-weapon (weapon player) NIL)))
+      (when template
+        (weapon-attack template player)))))
+
+;; A weapon's swing; with its guard fully raised, its guard's bash, and nothing while the guard is
+;; on its way up or down.
+(defmethod weapon-attack ((template weapon-template) player)
+  (let ((guard (weapon-guard template))
+        (raise (block-raise player)))
+    (cond ((null guard) (start-blow (weapon-swing template) player))
+          ((<= 1.0 raise) (start-blow (guard-bash guard) player))
+          ((= 0.0 raise) (start-blow (weapon-swing template) player)))))
+
+;; A weapon's alternate blow, if it has one.
+(defmethod weapon-alternate ((template weapon-template) player)
+  (let ((blow (weapon-alternate-blow template)))
+    (when blow
+      (start-blow blow player))))
 
 (defun weapon-sound (weapon event)
   "WEAPON's clip (sound.lisp) for EVENT: :SWING as its swing starts (its blow's), :GUARD as its
@@ -169,24 +181,39 @@ guard rises, :DRAW as it comes up (its template's SOUNDS)."
            (T (getf (weapon-sounds template) event))))))
 
 (defun player-swing (player)
+  "Start the swing of the weapon in hand, on SWING-TIME."
   (unless (swing-time player)
     (play-sound (weapon-sound (weapon player) :swing))
     (setf (swing-time player) 0.0
           (swing-pending player) T)))
 
-(defun player-bash (player)
-  (unless (bash-time player)
-    (play-sound :shield-bash)
-    (setf (bash-time player) 0.0
-          (bash-pending player) T)))
+;; A plain swing starts at once.
+(defmethod start-blow ((blow blow) player)
+  (player-swing player))
 
 ;;; The second blow: with the shield up (BLOCK-RAISE), a click bashes with it; with the spear, the
-;;; right button sweeps with its haft (spear.lisp). Both run on BASH-TIME, WEAPON's SECOND-BLOW
-;;; (weapons.lisp).
+;;; right button sweeps with its haft (spear.lisp), with the maul it shakes the floor (maul.lisp).
+;;; Each runs on BASH-TIME, the weapon's SECOND-BLOW (weapons.lisp).
 
-(defgeneric bash-strike (player weapon)
-  (:documentation "WEAPON's guard blow lands: the shield's bash, the spear's sweep.")
-  (:method (player (weapon (eql :sword))) (bash-hit player)))
+(defun start-second-blow (player blow)
+  "Start BLOW on BASH-TIME."
+  (play-sound (blow-sound blow))
+  (setf (bash-time player) 0.0
+        (bash-pending player) T))
+
+(defmethod start-blow ((blow bash) player)
+  (unless (bash-time player)
+    (start-second-blow player blow)))
+
+(defun start-alternate (player blow)
+  "Start the alternate blow BLOW, a press of the right button: not before the weapon is ready, nor
+during another blow, nor without its stamina."
+  (when (and (weapon-ready-p player) (not (attacking-p player)) (<= (blow-stamina blow) (stamina player)))
+    (decf (stamina player) (blow-stamina blow))
+    (start-second-blow player blow)))
+
+(defmethod bash-strike (player (blow bash))
+  (bash-hit player blow))
 
 (defun frame-at (time frame-times)
   "Frame of an animation timed by FRAME-TIMES at TIME seconds into it, or NIL once it
@@ -255,17 +282,14 @@ be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
     best))
 
 (defun swing-hit (player)
-  (let* ((weapon (weapon player))
-         (blow (swing-blow weapon))
+  (let* ((blow (swing-blow (weapon player)))
          (target (swing-target player (blow-reach blow) (blow-arc blow))))
     (if target
-        (swing-strike player weapon target)
-        (swing-miss player weapon))))
+        (swing-strike player blow target)
+        (swing-miss player blow))))
 
-(defgeneric swing-miss (player weapon)
-  (:documentation "WEAPON's swing found no one living to land on: it strikes the wall in its reach
-(WALL-STRIKE); the maul first pulps a corpse (maul.lisp).")
-  (:method (player weapon) (wall-strike player (swing-blow weapon))))
+(defmethod swing-miss (player (blow blow))
+  (wall-strike player blow))
 
 ;;; A blow that finds no one strikes the wall where its weapon's tip is on screen at the hit frame
 ;;; (its BLOW-TIP): sparks and grit off stone (SOLID-STRIKE, greybox.lisp; WALL-SPARKS, sparks.lisp),
@@ -312,8 +336,8 @@ as three values, or NIL if its sprite isn't there."
   (if (and (consp value) (eq :charge (first value)))
       (destructuring-bind (least full) (rest value)
         (if (consp least)
-            (mapcar (lambda (l f) (maul-lerp charge l f)) least full)
-            (maul-lerp charge least full)))
+            (mapcar (lambda (l f) (charge-lerp charge l f)) least full)
+            (charge-lerp charge least full)))
       value))
 
 (defun wall-strike (player blow &key (reach (blow-reach blow)) (charge 0.0))
@@ -354,27 +378,24 @@ screen (WEAPON-TIP-DIRECTION; the crosshair without one) meets a solid within RE
                     (when recoil (shove-player player at recoil)))
                   T)))))))))
 
-(defgeneric swing-strike (player weapon target)
-  (:documentation "WEAPON's swing lands on TARGET: hurt, shoved, and the weapon's enchantment.
-The spear's thrust counters a charge instead (spear.lisp).")
-  (:method (player weapon target)
-    (let ((blow (swing-blow weapon)))
-      (play-sound (if (bleeds target) :blade-hit-flesh :blade-hit-bone) (location target))
-      ;; The shield doesn't stop the blade, but the blade rings off it.
-      (when (shielded-p target (feet player))
-        (shield-sparks target))
-      (hurt target (roll (blow-damage blow)) :from (feet player) :by player
-                                             :pain-bonus (blow-pain-bonus blow))
-      (push-creature target (v- (location target) (feet player))
-                     (float (blow-knockback blow) 0f0))
-      (enchant-strike player weapon target))))
+;; A blade's blow: hurt, shoved, and the weapon's enchantment.
+(defmethod swing-strike (player (blow blow) target)
+  (play-sound (if (bleeds target) :blade-hit-flesh :blade-hit-bone) (location target))
+  ;; The shield doesn't stop the blade, but the blade rings off it.
+  (when (shielded-p target (feet player))
+    (shield-sparks target))
+  (hurt target (roll (blow-damage blow)) :from (feet player) :by player
+                                         :pain-bonus (blow-pain-bonus blow))
+  (push-creature target (v- (location target) (feet player))
+                 (float (blow-knockback blow) 0f0))
+  (enchant-strike player (weapon player) target))
 
-(defun bash-hit (player)
-  "Bash the creature in front of PLAYER. Against a shield that covers it, the bash glances
-off and the player reels back; otherwise it hurts and shoves, staggering only a creature
-winding up an attack and not already poised from a bash. With no one there, it strikes the wall."
-  (let* ((bash (guard-bash (find-guard :shield)))
-         (target (swing-target player (blow-reach bash) (blow-arc bash))))
+(defun bash-hit (player bash)
+  "Bash (the blow BASH) the creature in front of PLAYER. Against a shield that covers it, the bash
+glances off and the player reels back; otherwise it hurts and shoves, staggering only a creature
+winding up an attack and not already poised from a bash. With no one there, it strikes the wall.
+Its enchantment is its guard's, the shield's."
+  (let* ((target (swing-target player (blow-reach bash) (blow-arc bash))))
     (cond ((null target) (wall-strike player bash))
           ((shielded-p target (feet player))
            (play-sound :bash-glance (location target))
@@ -389,7 +410,16 @@ winding up an attack and not already poised from a bash. With no one there, it s
              (hurt target (roll (blow-damage bash)) :from (feet player) :pain-bonus bonus :by player)
              (push-creature target (v- (location target) (feet player))
                             (float (* (blow-knockback bash) (if poised *poised-bash-knockback* 1.0)) 0f0))
-             (enchant-strike player :shield target))))))
+             (enchant-strike player (weapon-guard-name (find-weapon (weapon player))) target))))))
+
+;;; What a weapon's tooltip says of its blows (WEAPON-LINES, inventory.lisp).
+
+(defmethod blow-lines ((blow blow))
+  (list (format NIL "Damage ~a, reach ~,1f m" (range-text (blow-damage blow)) (blow-reach blow))
+        (format NIL "~,2f s a ~a" (blow-duration blow) (blow-verb blow))))
+
+(defmethod second-blow-lines ((guard guard-template))
+  (list (format NIL "Right button: ~(~a~) up, click to bash" (guard-title guard))))
 
 ;;; Enchantments: a weapon's spell (the forge's, forge.lisp) goes with every blow of it that
 ;;; lands, for ENCHANT-COST mana out of the player's pool; with too little left, the blow
@@ -445,12 +475,12 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
     (when (and (bash-pending player) (<= (bash-hit-time (weapon player)) (bash-time player)))
       (setf (bash-pending player) NIL)
       (break-snare player)
-      (bash-strike player (weapon player)))
+      (bash-strike player (second-blow (weapon player))))
     ;; A bash that glanced off a knight's shield knocked the guard aside (BREAK-GUARD), ending it.
     (unless (and (bash-time player) (frame-at (bash-time player) (blow-frame-times (second-blow (weapon player)))))
       (setf (bash-time player) NIL)))
   (setf (spear-jolt player) (max 0.0 (- (spear-jolt player) dt)))
-  (update-maul-charge player dt)
+  (update-blow-charge player dt)
   ;; The guard (the shield) rises while the block is held with its weapon in hand and staying
   ;; there, once any swing is over; it stays up through a bash. With no guard in hand, one still
   ;; up comes down at the shield's pace.

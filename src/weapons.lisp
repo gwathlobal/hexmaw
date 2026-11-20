@@ -260,3 +260,59 @@ guard's bash; or NIL."
   "The guard of WEAPON, a template's name, or NIL."
   (let ((template (find-weapon weapon NIL)))
     (and template (weapon-guard template))))
+
+;;; What the weapons do: generics a template, a blow or a guard answers, so a new weapon is a
+;;; definition reusing these classes, and a new kind of move a blow subclass with its methods.
+
+(defgeneric weapon-attack (template player)
+  (:documentation "A click of the left button with TEMPLATE in hand and ready: start its swing, or with
+its guard fully raised its guard's bash (sword.lisp); the hands cast (hands.lisp)."))
+
+(defgeneric weapon-alternate (template player)
+  (:documentation "A press of the right button with TEMPLATE in hand: start its alternate blow, if it has
+one (a guard is held up instead, UPDATE-WEAPONS); the hands cast the off-hand rune."))
+
+(defgeneric start-blow (blow player)
+  (:documentation "Start BLOW: a swing on SWING-TIME, a charge on CHARGE-TIME (a CHARGED-BLOW), a second
+blow on BASH-TIME, each as its class says, paying what it costs."))
+
+(defgeneric swing-strike (player blow target)
+  (:documentation "The swing BLOW lands on TARGET: hurt, shoved, and the enchantment of the weapon in
+hand (sword.lisp). A thrust may counter a charge (spear.lisp), a charged blow runs by its charge
+(maul.lisp)."))
+
+(defgeneric swing-miss (player blow)
+  (:documentation "The swing BLOW found no one living to land on: it strikes the wall in its reach
+(WALL-STRIKE); a charged blow first pulps a corpse (maul.lisp)."))
+
+(defgeneric bash-strike (player blow)
+  (:documentation "The second blow BLOW (SECOND-BLOW) lands: the shield's bash, the spear's sweep, the
+maul's earthshake."))
+
+(defgeneric blow-lines (blow)
+  (:documentation "What a weapon's tooltip says of BLOW as its swing, as lines (inventory.lisp)."))
+
+(defgeneric second-blow-lines (thing)
+  (:documentation "What a weapon's tooltip says of THING, its alternate blow or its guard: the right
+button's, as lines."))
+
+(defun heave-speed (player)
+  "The fraction of a walk the blow PLAYER is charging or running keeps (an alternate's SPEED, a
+charged blow's CHARGE-SPEED), or NIL if none slows the player: while it does, no run, no jump and
+no stamina coming back."
+  (let ((weapon (weapon player)))
+    (cond ((bash-time player)
+           (let ((blow (second-blow weapon)))
+             (and blow (blow-speed blow))))
+          ((charge-time player)
+           (let ((blow (swing-blow weapon)))
+             (and (typep blow 'charged-blow) (blow-charge-speed blow))))
+          (T NIL))))
+
+(defun heaving-p (player)
+  "True while PLAYER charges a blow or runs one that slows them (HEAVE-SPEED): the maul's."
+  (and (heave-speed player) T))
+
+(defun heave-speed-scale (player)
+  "Fraction of a walk PLAYER keeps for the blow they heave: 1 when none."
+  (or (heave-speed player) 1.0))

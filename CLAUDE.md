@@ -1788,7 +1788,7 @@ real time instead.
   it aside for at least `*stamina-guard-break*`,
   and `:unblockable` ones (the ogre's shockwave, the grave circle) ignore it. Raised, it slows
   the player to `*block-speed-scale*` of a walk, no running. A left click with it raised bashes
-  (`player-bash`, the guard's `bash` blow): on its hit frame the nearest creature within its reach
+  (`start-blow` on the guard's `bash` blow): on its hit frame the nearest creature within its reach
   and arc (1.6 m, 0.6 rad) takes its damage (2-4) and is pushed at its knockback (6 m/s).
   It rolls for pain with `*bash-pain-bonus*` only if the creature is winding up an attack
   (`winding-up-p`, creature.lisp), and never otherwise: a timed interrupt, not a stunlock.
@@ -1798,9 +1798,15 @@ real time instead.
   frame: idle, its guard's raise frames rising, the block held, then the bash's.
   `block-raise` is the template's guard's (`weapon-guard-of`; a weapon with none has no guard), and
   the second blow (`second-blow`: the template's alternate, the spear's sweep and the maul's
-  earthshake, else its guard's bash) runs on `bash-time`, landing through `bash-strike`. A swing
-  that lands goes through `swing-strike` (player, weapon, target), whose spear method makes a
-  counter. `blow-reaches-p` is the test every melee blow makes of one creature (reach, arc,
+  earthshake, else its guard's bash) runs on `bash-time`, landing through `bash-strike`. What the
+  buttons do are generics (weapons.lisp): `weapon-attack` and `weapon-alternate` on the template
+  (the left button starts its swing, or with its guard fully up its guard's bash; the right starts
+  its alternate; the hands' `hands-template` casts), `start-blow` on the blow (a swing on
+  `swing-time`, a charged blow's charge, a second blow on `bash-time`, `start-alternate` paying a
+  sweep's or earthshake's stamina). A swing that lands goes through `swing-strike` (player, blow,
+  target) on its blow's class, whose `thrust` method makes a counter, and one that finds no one
+  through `swing-miss`; a second blow through `bash-strike` (player, blow): `bash-hit`, `sweep-hit`,
+  `earthshake-hit`. `blow-reaches-p` is the test every melee blow makes of one creature (reach, arc,
   height, a clear line), `looked-at-creature` the nearest that passes it. The sprite's tick asks
   `weapon-frame` for its strip frame.
   **A blow that finds no one strikes the wall**: the slash and thrust (`swing-miss`'s default
@@ -1846,7 +1852,7 @@ real time instead.
   the click, so a click late in the crouch or early in the flight meets a pounce or leap, and one
   a little into a dive meets the harpy as it comes down within the player's height.
   **The sweep**: a press of the right button (`:block`, `player-press`, player.lisp; it holds
-  nothing up, so the player isn't slowed) swings the haft across (`player-sweep`, the template's
+  nothing up, so the player isn't slowed) swings the haft across (`start-alternate`, the template's
   alternate, a `sweep` blow: 15 stamina, none without it, nor during a thrust), landing on its hit
   frame (`sweep-hit`) on every creature within its reach (1.8 m) and arc (1.4 rad): its damage and
   knockback, and the bash's rules for the rest (a stagger only in a
@@ -1855,21 +1861,21 @@ real time instead.
   (`:jolt` in its `:frames`), then the sweep's 4 (`:alternate`).
 - `src/maul.lisp`: the maul, two-handed, no shield: the slowest weapon, its blow charged. **The
   charge**: its swing is a `charged-blow` (`define-weapon :maul`). A press of the left button
-  (`player-maul`, from `player-attack`) pays its stamina (15; with less, nothing happens) and starts
+  (`start-blow` on a `charged-blow`, from `player-attack`) pays its stamina (15; with less, nothing happens) and starts
   `charge-time`; the maul rises for its min charge (0.4 s, the least charge, whatever the button
   does), and while `attack-held` (a player slot `player-press` sets and `player-release` clears, so a
   quick click is a least-charge blow) it winds on to its full charge (1.35 s from the press) for its
   charge stamina (30) a second past the least, about 29 for a full one; with no stamina it stops
   growing. Full, it trembles between two strip frames (its tremble rate). While it charges and
-  through the earthshake (`maul-heaving-p`) the player walks at `maul-speed-scale` (the blow's
+  through the earthshake (`heaving-p`, weapons.lisp) the player walks at `heave-speed-scale` (the blow's
   charge speed 0.6, the earthshake's speed 0.3), with no run, no jump and no stamina coming back
-  (`update-stamina`). Let go once it is up, `update-maul-charge` (from `update-weapons`) puts the
-  charge, 0 to 1 (`maul-charge`), in `blow-charge` and starts the swing (`player-swing`, so
+  (`update-stamina`). Let go once it is up, `update-blow-charge` (from `update-weapons`) puts the
+  charge, 0 to 1 (`blow-charge-at`), in `blow-charge` and starts the swing (`player-swing`, so
   `swing-time` and its frame times, landing 0.19 s after the release and done 0.4 s later: a quick click
   takes 1 s in all, a full blow 1.95).
-  **The blow** (`swing-strike` on `:maul`): one creature within its reach (2.2 m) and
+  **The blow** (`swing-strike` on a `charged-blow`): one creature within its reach (2.2 m) and
   arc (0.6 rad); damage, knockback, pain bonus and hit-stop run from the least charge's to
-  the full one's by the charge (`maul-lerp`: 18-24 to 34-44, 8 to 15 m/s, 10 to 60, 0.06 to 0.12 s).
+  the full one's by the charge (`charge-lerp`: 18-24 to 34-44, 8 to 15 m/s, 10 to 60, 0.06 to 0.12 s).
   Its knockback has **heft** (`push-creature`'s `:heft`, the square root of `knockback-scale`: the
   knight 0.59, the ogre 0.39; not a boss's, whose cap stands), so it throws things into walls, other
   bodies, lava, deep water and across ice ("Impacts", `src/creature.lisp`): an imp hit full a metre
@@ -1880,9 +1886,9 @@ real time instead.
   thinking, and makes `shielded-p` false, so a spell reaches its front. Its kills gib from
   its gib overkill (0.1; `hurt`'s `:gib-overkill`, `gib-p`), the undead's from any overkill, so a
   skeleton it kills always shatters and can't be raised. A blow that finds no one living
-  (`swing-miss`, sword.lisp, a generic) pulps a corpse in its reach that `raisable-p` says could be
+  (`swing-miss` on a `charged-blow`) pulps a corpse in its reach that `raisable-p` says could be
   raised (`tear-apart`). The enchantment goes with every blow that lands. **The earthshake**: the right
-  button (`:block`, `player-earthshake`, the template's alternate, an `earthshake` blow: 30 stamina,
+  button (`:block`, `start-alternate`, the template's alternate, an `earthshake` blow: 30 stamina,
   none without it, nor while charging or swinging) runs on `bash-time` (landing 0.3 s in, 0.8 s in all):
   `earthshake-hit` puffs `ogre-dust` round the player (`kick-dust`, ogre.lisp) and reaches every live
   creature whose feet are within its reach height (0.4 m) of the player's and its body within its
@@ -1894,7 +1900,8 @@ real time instead.
   (`data/sprites/maul/maul`): 4 idle frames, the charge's 3 (`:charge` in its `:frames`: raised,
   wound up, wound up a pixel aside), the blow's 4 (`:swing`) and the earthshake's 5 (`:alternate`:
   lifted, coming over, the slam, held, recovery), placed by its `:aim` (the impact's head on the view's middle).
-  The tooltip's weapon lines are `weapon-lines` (inventory.lisp), a generic on the weapon's keyword.
+  The tooltip's weapon lines are `weapon-lines` (inventory.lisp): its swing's `blow-lines`, then the
+  right button's `second-blow-lines` (its alternate's, else its guard's), generics on the blow's class.
   To try it on the debug level: `(select-weapon *player* :6)`, then `(setf (attack-held *player*) t)
   (player-attack *player*)`, and `(setf (attack-held *player*) NIL)` 1.35 s later for a full blow;
   `(player-press *player* :mouse-right)` shakes the floor.

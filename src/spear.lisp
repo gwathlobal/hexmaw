@@ -48,34 +48,30 @@
                     ;; The spearhead leading the sweep, strip frame 14, its rightmost pixel.
                     :tip (:spear 337 102)))
 
-(defmethod bash-strike (player (weapon (eql :spear))) (sweep-hit player))
-
 ;; A thrust's blow is a counter on a creature charging at the player; from the front, where its
 ;; shield covers it, it stops a knight's shield charge instead (BRACE-AGAINST-CHARGE).
-(defmethod swing-strike (player (weapon (eql :spear)) target)
+(defmethod swing-strike (player (blow thrust) target)
   (cond ((and (charging-p target) (not (shielded-p target (feet player))))
-         (spear-counter player target))
+         (spear-counter player blow target))
         ((and (shield-charging-p target) (shielded-p target (feet player)))
-         (brace-against-charge player target))
+         (brace-against-charge player blow target))
         (T (call-next-method))))
 
-(defun brace-against-charge (player knight)
-  "PLAYER's thrust met KNIGHT's shield charge head-on: the point takes the shield, and the charge
+(defun brace-against-charge (player thrust knight)
+  "PLAYER's THRUST met KNIGHT's shield charge head-on: the point takes the shield, and the charge
 stops dead, the knight reeling with its guard down (knight.lisp). No harm to it."
-  (let ((thrust (swing-blow :spear)))
-    (setf (spear-jolt player) (blow-jolt-time thrust))
-    (play-sound :bash-glance (location knight))
-    (play-sound :maul-guard-break (location knight))
-    (shield-sparks knight 16)
-    (reel-from-charge knight :spear)
-    (shove-player player (location knight) (blow-brace-recoil thrust))
-    (hit-stop (blow-brace-hit-stop thrust))))
+  (setf (spear-jolt player) (blow-jolt-time thrust))
+  (play-sound :bash-glance (location knight))
+  (play-sound :maul-guard-break (location knight))
+  (shield-sparks knight 16)
+  (reel-from-charge knight :spear)
+  (shove-player player (location knight) (blow-brace-recoil thrust))
+  (hit-stop (blow-brace-hit-stop thrust)))
 
-(defun spear-counter (player target)
-  "TARGET charged onto PLAYER's thrust: skewered, flinching whatever the roll, and its charge
+(defun spear-counter (player thrust target)
+  "TARGET charged onto PLAYER's THRUST: skewered, flinching whatever the roll, and its charge
 broken (IMPALE)."
-  (let ((feet (feet player))
-        (thrust (swing-blow :spear)))
+  (let ((feet (feet player)))
     (setf (spear-jolt player) (blow-jolt-time thrust))
     (play-sound :spear-impale (location target))
     (strike-sparks target feet (blow-counter-sparks thrust))
@@ -84,22 +80,19 @@ broken (IMPALE)."
                                                      :pain-bonus (blow-counter-pain-bonus thrust)
                                                      :force-pain (not (typep target 'boss)))
     (push-creature target (v- (location target) feet) (float (blow-counter-knockback thrust) 0f0))
-    (enchant-strike player :spear target)))
+    (enchant-strike player (weapon player) target)))
 
-(defun player-sweep (player)
-  (let ((sweep (second-blow :spear)))
-    (when (and (weapon-ready-p player) (not (attacking-p player)) (<= (blow-stamina sweep) (stamina player)))
-      (decf (stamina player) (blow-stamina sweep))
-      (play-sound (blow-sound sweep))
-      (setf (bash-time player) 0.0
-            (bash-pending player) T))))
+(defmethod start-blow ((blow sweep) player)
+  (start-alternate player blow))
 
-(defun sweep-hit (player)
-  "Sweep the haft through every creature in its arc: each shoved, staggered only in the wind-up of
-an attack and not poised (BASH-HIT's rules). One a shield covers glances off it, and the player
-reels back once. With no one in it, it strikes the wall."
+(defmethod bash-strike (player (blow sweep))
+  (sweep-hit player blow))
+
+(defun sweep-hit (player sweep)
+  "Sweep the haft (the blow SWEEP) through every creature in its arc: each shoved, staggered only
+in the wind-up of an attack and not poised (BASH-HIT's rules). One a shield covers glances off it,
+and the player reels back once. With no one in it, it strikes the wall."
   (let ((feet (feet player))
-        (sweep (second-blow :spear))
         (glanced NIL)
         (struck NIL))
     (loop for c across *creatures*
@@ -123,6 +116,12 @@ reels back once. With no one in it, it strikes the wall."
     ;; With no one in its arc, the haft strikes the wall the crosshair meets (WALL-STRIKE, sword.lisp).
     (unless struck
       (wall-strike player sweep))))
+
+(defmethod blow-lines ((blow thrust))
+  (append (call-next-method) (list "A thrust counters a leap or dive")))
+
+(defmethod second-blow-lines ((blow sweep))
+  (list "Right button: sweep, shove all near"))
 
 (define-shader-entity spear (sword)
   ((animation :initform (find-fx-animation 'spear))))

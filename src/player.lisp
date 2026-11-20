@@ -565,15 +565,13 @@ overcharged), or a nova bursts round the player."
           (case action
             (:attack (setf (attack-held player) T)
              (player-attack player))
-            ;; Held, the shield rises; with the spear, a press sweeps with the haft, with the
-            ;; maul it shakes the floor, and with the hands it casts the off-hand rune.
+            ;; Held, a guard (the shield) rises; a press starts the weapon's alternate blow (the
+            ;; spear's sweep, the maul's earthshake), and with the hands casts the off-hand rune
+            ;; (WEAPON-ALTERNATE, weapons.lisp).
             (:block (setf (block-held player) T)
-             (case (weapon player)
-               (:spear (player-sweep player))
-               (:maul (player-earthshake player))
-               (:hands (let ((spell (offhand-spell player)))
-                         (when (and spell (weapon-ready-p player))
-                           (player-cast player spell :hand :off))))))
+             (let ((template (find-weapon (weapon player) NIL)))
+               (when template
+                 (weapon-alternate template player))))
             ;; Talk to the townsperson looked at, or use the altar stood at (INTERACT-TARGET).
             (:interact (player-interact player))
             (T (let ((slot (position action *hotbar-slots*)))
@@ -959,7 +957,7 @@ player WINDED until *WINDED-RECOVER*, so they don't stutter between a run and a 
               (winded player) T))
       ;; Nor does it come back while the maul is charged or shakes the floor (maul.lisp), nor while
       ;; a spell overcharges or a stamina beam or an Absorb is held.
-      (unless (or (maul-heaving-p player) (overcharging-p player)
+      (unless (or (heaving-p player) (overcharging-p player)
                   (and (channel player) (eq (spell-tier (channel player)) :stamina)))
         (setf (stamina player) (min (max-stamina player) (+ (stamina player) (* *stamina-regen* dt))))))
   (when (and (winded player) (<= *winded-recover* (stamina player)))
@@ -1032,16 +1030,16 @@ and not the last step of the stair.")
                      (setf (wading player) now))
                    (if liquid (liquid-kind liquid) (wading player))))
          (raise (block-raise player))
-         (heaving (or (maul-heaving-p player) (overcharging-p player)))
+         (heaving (or (heaving-p player) (overcharging-p player)))
          (running (and (held-p :run) (< 0.0 wlen) (not crouching) (= 0.0 raise) (not heaving) (not (channel player))
                        (not (winded player)) (not (whirl player))))
-         ;; The raised shield slows the player to a walk and below, and so does the maul's charge
-         ;; and its earthshake (maul.lisp).
+         ;; The raised shield slows the player to a walk and below, and so does a blow they heave,
+         ;; the maul's charge and its earthshake (HEAVE-SPEED, weapons.lisp).
          (speed (* (cond (crouching *crouch-speed*)
                          (running *run-speed*)
                          (T *walk-speed*))
                    (+ 1.0 (* raise (- *block-speed-scale* 1.0)))
-                   (maul-speed-scale player)
+                   (heave-speed-scale player)
                    (cond ((channel player) *channel-speed-scale*)
                          ((overcharging-p player) *overcharge-speed*)
                          (T 1.0))
@@ -1200,7 +1198,7 @@ at SPEED, out of liquid KIND if any."
     ;; Roots hold the feet, on ice too.
     (when (snared-p player)
       (setf (vx vel) 0f0 (vz vel) 0f0))
-    (when (and (grounded player) (held-p :jump) (not crouching) (not (maul-heaving-p player)) (not (overcharging-p player))
+    (when (and (grounded player) (held-p :jump) (not crouching) (not (heaving-p player)) (not (overcharging-p player))
                (not (snared-p player))
                (<= *jump-stamina* (stamina player)))
       (decf (stamina player) *jump-stamina*)
@@ -1249,9 +1247,9 @@ right under them (a grave circle on someone who stood still), back from where th
          (< (acos (max -1.0 (min 1.0 (/ (- (* dx (sin yaw)) (* dz (cos yaw))) len)))) arc))))
 
 (defun shield-facing-p (player from &optional (margin 0.0))
-  "True if PLAYER's shield is raised at all (sword.lisp) and point FROM lies within
+  "True if PLAYER's guard (the shield, sword.lisp) is raised at all and point FROM lies within
 *BLOCK-ARC*, plus MARGIN radians, of where the player faces."
-  (and (eq (weapon player) :sword)
+  (and (weapon-guard-of (weapon player))
        (< 0.0 (block-raise player))
        (facing-point-p player from (+ *block-arc* margin))))
 
