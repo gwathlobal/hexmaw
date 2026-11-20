@@ -7,6 +7,22 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A saved frost patch keeps its freeze duration. Loading places it back underfoot, and
+  renewing it can freeze creatures again.
+
+- Creature updates reuse the current level's difficulty and ability rules. A level build
+  refreshes them, including on quickload and when rebuilding the same seed after an edit.
+
+- Quicksave and Quickload respond to mouse buttons assigned in Controls.
+
+- Projectiles in a save remember who first fired them, including after a reflection, so
+  absorbing one after loading returns the right mana and its shooter reacts.
+
+- Buying, selling and looting potions at the settlement act on the potion named on the button.
+
+- Loading during a weapon switch keeps the weapon and rune in hand until the queued switch
+  completes. A saved melee swing or bash finishes with the weapon that started it.
+
 - `release.yml` keeps its archives and reports 3 days instead of 30 (a public repository's
   artifacts don't count against the account's Actions storage, and three days still cover the
   itch job's approval).

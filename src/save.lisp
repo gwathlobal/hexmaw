@@ -61,8 +61,20 @@ their values."
     charge-time blow-charge
     block-raise bash-time bash-pending spear-jolt guard-broken run-time damage-taken level-records
     reputation max-health max-mana max-stamina blessed
-    known-effects hotbar-cells offhand-cells wanted-slot enchantments cast-hand cast-held overcharge
+    known-effects hotbar-cells offhand-cells wanted-slot held-rune enchantments cast-hand cast-held overcharge
     snare snare-guard))
+
+;; Preserve the spell on screen independently of a queued switch. A forged spell in
+;; the bag must remain the very same object for WEAPON-IN-HAND-P after loading.
+(defun held-rune (player)
+  (let ((spell (held-spell player)))
+    (when spell
+      (or (position spell (inventory player) :key #'stack-spell) spell))))
+
+(defun (setf held-rune) (value player)
+  (setf (held-spell player) (if (integerp value)
+                                (stack-spell (nth value (inventory player)))
+                                value)))
 
 (defmethod saved-slots append ((actor afflicted))
   '(statuses))
@@ -124,7 +136,7 @@ their values."
   '(animation location age))
 
 (defmethod saved-slots append ((projectile spell-projectile))
-  '(spell caster homing homing-target projectile-velocity submerged evade-asked gust))
+  '(spell caster launcher homing homing-target projectile-velocity submerged evade-asked gust))
 
 (defmethod saved-slots append ((circle spell-circle))
   '(spell caster centre struck rings-left))
@@ -436,6 +448,9 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
                          when entry append (list initarg (decode-value (cdr entry) NIL))))
          (effect (apply #'make-instance class initargs)))
     (restore-state effect state)
+    ;; Before saves kept the launcher, the current caster was the only shooter recorded.
+    (when (and (typep effect 'spell-projectile) (not (assoc 'launcher state)))
+      (setf (launcher effect) (caster effect)))
     (enter effect scene)
     (destructuring-bind (&optional color radius) (getf record :glow)
       (when color
@@ -468,7 +483,11 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
     (migrate-bindings *player*)
     (migrate-enchantments *player*)
     (migrate-known-effects *player*)
-    (settle-held *player*)
+    (sync-wanted *player*)
+    ;; Older saves kept the active weapon but only the requested rune.
+    (when (and (eq (weapon *player*) :hands)
+               (not (assoc 'held-rune (getf save :player))))
+      (setf (held-spell *player*) (wanted-spell *player*)))
     (place-camera *player*)
     (loop for record in records
           for creature across *creatures*

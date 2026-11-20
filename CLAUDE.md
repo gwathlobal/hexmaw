@@ -1736,7 +1736,8 @@ real time instead.
   `wanted-weapon` and `wanted-spell` off the slot, so a drag in the inventory changes what is in hand:
   a weapon or rune dragged off the slot leaves the player empty-handed. Switching lowers one off
   screen and raises the next, from one spell to another too; `settle-held` takes it in hand at once
-  (after a load, the stairs or a reset).
+  after the stairs or a reset. Loading restores the weapon and rune on screen independently of
+  the requested slot, so a switch queued during a swing or bash waits for it to finish.
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
   so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
   blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and

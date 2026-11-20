@@ -841,6 +841,11 @@ the same but freezes for half a second (a forced full GC, reloaded resources)."
           :documentation "True until the first tick. The menu pass outlives scenes, so a new
 scene's controller rebuilds whatever panel it finds, picking up changed panel code.")))
 
+(defun queue-save-shortcut (input)
+  (case (input-action input :global)
+    (:quicksave (queue-menu-action 'quicksave))
+    (:quickload (queue-menu-action 'quickload))))
+
 (define-handler (menu-controller key-press) (key (repeat trial::repeat))
   (case (if *capturing* :capture key)
     ;; The Controls screen waits for an input to bind (settings.lisp).
@@ -855,13 +860,13 @@ scene's controller rebuilds whatever panel it finds, picking up changed panel co
            ((eq *game-state* :forge) (close-forge))
            ((eq *game-state* :playing) (pause-game))
            ((eq *game-state* :paused) (resume-game))))
-    (T (case (input-action key :global)
-         (:quicksave (queue-menu-action 'quicksave))
-         (:quickload (queue-menu-action 'quickload))))))
+    (T (queue-save-shortcut key))))
 
 (define-handler (menu-controller mouse-press) (button)
-  (when *capturing*
-    (capture-input (mouse-input button))))
+  (let ((input (mouse-input button)))
+    (if *capturing*
+        (capture-input input)
+        (queue-save-shortcut input))))
 
 (define-handler (menu-controller tick) ()
   (update-capture)
