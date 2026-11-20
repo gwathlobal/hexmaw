@@ -596,21 +596,24 @@ slot's key."))
 (defgeneric weapon-lines (weapon)
   (:documentation "What WEAPON's tooltip says it does, as lines: its blow, then its other actions.")
   (:method (weapon)
-    (list (format NIL "Damage ~a, reach ~,1f m" (range-text (swing-damage weapon)) (swing-reach weapon))
-          (format NIL "~,2f s a swing" (reduce #'+ (swing-frame-times weapon)))
-          "Right button: shield up, click to bash"))
+    (let ((blow (swing-blow weapon)))
+      (list (format NIL "Damage ~a, reach ~,1f m" (range-text (blow-damage blow)) (blow-reach blow))
+            (format NIL "~,2f s a swing" (blow-duration blow))
+            "Right button: shield up, click to bash")))
   (:method ((weapon (eql :spear)))
-    (list (format NIL "Damage ~a, reach ~,1f m" (range-text (swing-damage weapon)) (swing-reach weapon))
-          (format NIL "~,2f s a thrust" (reduce #'+ (swing-frame-times weapon)))
-          "A thrust counters a leap or dive"
-          "Right button: sweep, shove all near"))
+    (let ((blow (swing-blow weapon)))
+      (list (format NIL "Damage ~a, reach ~,1f m" (range-text (blow-damage blow)) (blow-reach blow))
+            (format NIL "~,2f s a thrust" (blow-duration blow))
+            "A thrust counters a leap or dive"
+            "Right button: sweep, shove all near")))
   (:method ((weapon (eql :maul)))
-    (list (format NIL "Damage ~a to ~a, reach ~,1f m" (range-text *maul-damage*) (range-text *maul-full-damage*)
-                  *maul-reach*)
-          (format NIL "A blow ~d SP; hold to charge it" (round *maul-blow-stamina*))
-          "A full charge breaks a shield's guard"
-          (format NIL "Right button: earthshake, ~d SP" (round *shake-stamina*))
-          "  staggers all standing round you")))
+    (let ((blow (swing-blow weapon)))
+      (list (format NIL "Damage ~a to ~a, reach ~,1f m" (range-text (blow-damage blow)) (range-text (blow-full-damage blow))
+                    (blow-reach blow))
+            (format NIL "A blow ~d SP; hold to charge it" (round (blow-stamina blow)))
+            "A full charge breaks a shield's guard"
+            (format NIL "Right button: earthshake, ~d SP" (round (blow-stamina (second-blow weapon))))
+            "  staggers all standing round you"))))
 
 (defun stack-details (player stack)
   "STACK in detail, as lines for its tooltip: its name, then what it does."
@@ -644,7 +647,7 @@ the weapon icons (sword.lisp), a rune's by its spell's look."
     (cond ((eq kind :rune)
            (values (find-fx-animation 'weapon-icons) (spell-icon (stack-spell stack))))
           ((item-property kind :weapon)
-           (values (find-fx-animation 'weapon-icons) (getf *weapon-icons* (item-property kind :weapon))))
+           (values (find-fx-animation 'weapon-icons) (weapon-icon-frame (find-weapon (item-property kind :weapon)))))
           (T
            (values (find-fx-animation 'item-icons) (item-property kind :icon))))))
 

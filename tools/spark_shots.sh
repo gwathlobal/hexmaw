@@ -64,15 +64,15 @@ shot() {
 shot shield    "$(player 0.0 -1.0 0.0 0.0)" "$(put knight 0.0 -2.8 3.1416)" "$(hold 1)" \
                "(shield-sparks $(it knight))" "$(run 0.06)"
 shot counter   "$(player 0.0 -1.0 0.05 0.0)" "$(put imp 0.0 -3.2 3.1416)" "$(hold 3)" \
-               "(strike-sparks $(it imp) (feet *player*) *counter-sparks*)" "$(run 0.05)"
+               "(strike-sparks $(it imp) (feet *player*) (blow-counter-sparks (swing-blow :spear)))" "$(run 0.05)"
 shot maul      "$(player 0.0 -1.0 0.05 0.0)" "$(put knight 0.0 -2.9 3.1416)" "$(hold 6)" \
-               "(strike-sparks $(it knight) (feet *player*) (second *maul-sparks*) :speed '(3.0 9.0))" \
+               "(strike-sparks $(it knight) (feet *player*) (second (blow-sparks (swing-blow :maul))) :speed '(3.0 9.0))" \
                "(shield-sparks $(it knight))" "$(run 0.07)"
 shot shake     "$(player 0.0 2.0 0.45 0.0)" "$(hold 6)" \
-               "(kick-dust (vec 0 0 0) *shake-dust-radius* *shake-dust-puffs* (scene +main+))" \
+               "(let ((shake (second-blow :maul))) (kick-dust (vec 0 0 0) (blow-dust-radius shake) (blow-dust-puffs shake) (scene +main+)))" \
                "(floor-sparks 0.0 0.0 0.0)" "$(run 0.12)"
 shot grit      "$(player 0.0 2.0 0.45 0.0)" "$(hold 6)" \
-               "(kick-dust (vec 0 0 0) *shake-dust-radius* *shake-dust-puffs* (scene +main+))" "$(run 1.0)"
+               "(let ((shake (second-blow :maul))) (kick-dust (vec 0 0 0) (blow-dust-radius shake) (blow-dust-puffs shake) (scene +main+)))" "$(run 1.0)"
 shot landing   "$(player 0.0 4.0 0.15 0.0)" "$(put ogre 0.0 -2.0 3.1416)" "$(hold 1)" \
                "(kick-dust (vec 0 0 -2) (* 0.6 *quake-radius*) *ogre-dust-puffs* (scene +main+))" \
                "(floor-sparks 0.0 0.0 -0.5)" "$(run 0.1)"
@@ -99,11 +99,11 @@ wallshot() {
 }
 
 west=4.7124
-wallshot wall-sword -8.4 0.0 0.05 $west 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* :sword *sword-reach*)"
-wallshot wall-spear -7.2 0.0 0.05 $west 3 "(setf (swing-time *player*) (swing-hit-time :spear))" "(wall-strike *player* :spear *spear-reach*)"
+wallshot wall-sword -8.4 0.0 0.05 $west 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* (swing-blow :sword))"
+wallshot wall-spear -7.2 0.0 0.05 $west 3 "(setf (swing-time *player*) (swing-hit-time :spear))" "(wall-strike *player* (swing-blow :spear))"
 wallshot wall-maul  -8.4 0.0 0.1  $west 6 "(setf (blow-charge *player*) 1.0 (swing-time *player*) (swing-hit-time :maul))" \
-         "(wall-strike *player* :maul *maul-reach* :charge 1.0)"
-wallshot wall-bash  -8.9 0.0 0.05 $west 1 "(setf (block-raise *player*) 1.0 (bash-time *player*) (bash-hit-time :sword))" "(wall-strike *player* :shield *bash-reach*)"
-wallshot wall-sweep -8.7 0.0 0.05 $west 3 "(setf (bash-time *player*) (bash-hit-time :spear))" "(wall-strike *player* :haft *sweep-reach*)"
-wallshot wall-floor 0.0 2.0 1.1 0.0 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* :sword *sword-reach*)"
-wallshot wall-wood  9.0 -3.3 0.3 0.0 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* :sword *sword-reach*)"
+         "(wall-strike *player* (swing-blow :maul) :charge 1.0)"
+wallshot wall-bash  -8.9 0.0 0.05 $west 1 "(setf (block-raise *player*) 1.0 (bash-time *player*) (bash-hit-time :sword))" "(wall-strike *player* (second-blow :sword))"
+wallshot wall-sweep -8.7 0.0 0.05 $west 3 "(setf (bash-time *player*) (bash-hit-time :spear))" "(wall-strike *player* (second-blow :spear))"
+wallshot wall-floor 0.0 2.0 1.1 0.0 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* (swing-blow :sword))"
+wallshot wall-wood  9.0 -3.3 0.3 0.0 1 "(setf (swing-time *player*) (swing-hit-time :sword))" "(wall-strike *player* (swing-blow :sword))"

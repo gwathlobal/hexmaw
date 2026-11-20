@@ -481,7 +481,7 @@ real time instead.
   flashes, knocks back and hit-stops, but only a pain roll makes it flinch and break off
   its walk or attack (`pain-roll-p`, from `*roll-random*`): its `pain-chance` (percent:
   knight 8, ogre 9, bloodroot 10, riftwalker 11, skeleton and arc votary 20, acolyte and harpy 25, imp, wraith and rime hag 30, necromancer 35) plus the weapon's
-  bonus (`*sword-pain-bonus*` 0; a spell's `:pain-bonus`, the bolt's 10), at most
+  bonus (the sword's 0, its swing's `:pain-bonus`; a spell's `:pain-bonus`, the bolt's 10), at most
   `*max-pain-chance*` (75), so nothing can be held in its flinch. Knockback carries a creature
   whatever the pain roll: while its `momentum` is over `*shove-hold-speed*` (1.5 m/s; `shoved-p`;
   on ice, over what its walk reaches there, `walk-top-speed`) it neither walks nor lunges, so a hunter doesn't walk straight back through a push. A killing blow and
@@ -823,8 +823,8 @@ real time instead.
   `(spray-sparks at dir count &key kind ramp speed spread)` throws them (DIR NIL: up, any way above
   level); the hooks are `shield-sparks` (off a shield's face, its ward's violet for anyone but a
   knight: `block-hit`, so a spell, bash or sweep glancing off, and a sword or spear blow on a
-  covered view, `swing-strike`), `strike-sparks` (the spear's counter, `*counter-sparks*`; the
-  maul's blow, `*maul-sparks*` 6 to 26 by charge, faster too), `floor-sparks` (the earthshake, in
+  covered view, `swing-strike`), `strike-sparks` (the spear's counter, its thrust's counter sparks; the
+  maul's blow, its sparks 6 to 26 by charge, faster too), `floor-sparks` (the earthshake, in
   front of the player; the ogre's landing and slam, where its maul comes down), `kick-grit`,
   from `kick-dust` (ogre.lisp), `*grit-per-puff*` round every dust puff, and `wall-sparks`, a
   melee blow that found no one striking a wall or floor (`wall-strike`, sword.lisp): off the face
@@ -1678,7 +1678,7 @@ real time instead.
   landing and the firestorm's roar 10, the ogre's footsteps and the blizzard 8). `tune-voice` sets them on a voice as it connects;
   `(game (retune-sounds))` re-tunes those connected already after a change.
   A creature's clips are `define-creature-sounds` (creature.lisp; `creature-noise` plays one),
-  a spell's `*spell-sounds*` (spells.lisp), a weapon's `*weapon-sounds*` (sword.lisp).
+  a spell's `*spell-sounds*` (spells.lisp), a weapon's its template's `:sounds` and its blows' `:sound` (`weapon-sound`, sword.lisp).
   `hold-loop`, called every tick, keeps a holder's loop in a slot while it is wanted (the
   player's slide on ice, the water and the wind, a creature floundering, the boss's ward).
   The player's footsteps and strokes are `body-sounds` (player.lisp); the torches', lava's and
@@ -1718,6 +1718,22 @@ real time instead.
   `tools/restyle.py --palette art/style/palette.txt data/sprites/hands/<look>.png`; `add-hands`
   preloads them all, since `swap-animation` changes the strip mid-game. The recipes (the hotbar's
   defaults) work as before: `(select-weapon *player* :1)` is hotbar key 1, the sword at the start.
+- `src/weapons.lisp` (before hands.lisp): what a weapon is. A **template** (`weapon-template`,
+  `define-weapon`, registered by name in `*weapon-templates*`, a `defvar` plist in definition order:
+  `find-weapon`, `weapon-templates`) is a kind of weapon: its name (a keyword, also its item kind and
+  the player's `weapon` while in hand), `:title`, `:icon`, `:strip` and `:frames` (where its strip's
+  idle loop, swing, alternate blow, jolt and charge start), `:aim`, `:sounds` (`:draw`), `:loot` and
+  `:loot-strip`, `:forge-noun`, and its moves: `:swing` (the left button), `:alternate` (a press of
+  the right button) and `:guard` (a guard's name, held up with the right button). A move is a
+  **blow** (`blow` and its subclasses `thrust`, `charged-blow`, `bash`, `sweep`, `earthshake`: frame
+  times, hit frame and the cached `blow-hit-time`, reach, arc, damage, knockback, pain bonus,
+  stamina, sound, speed, `:wall` (what a wall strike throws) and `:tip` (where its weapon strikes on
+  screen), and its class's own numbers). A **guard** (`guard-template`, `define-guard`, `find-guard`:
+  the shield) has its strip, raise time and frames, margin, sound and `:bash` blow.
+  `swing-blow` and `second-blow` (the alternate, else the guard's bash: what runs on `bash-time`)
+  take a template's name. Every holder keeps the name and looks the template up, and a redefinition
+  replaces the template in its place, so reloading a weapon's file updates the one in hand. Nothing
+  in a definition is evaluated. The hands are a template too (hands.lisp), for their draw sound.
 - `src/sword.lisp` also has **enchantments**: a weapon's spell (a sword's or spear's its own stack's,
   `stack-enchantment`, so two swords differ; the shield's in the player's `enchantments` plist under
   `:shield`; `weapon-spell` asks for the one in hand, `held-weapon-stack`; made at the forge or found,
@@ -1741,16 +1757,16 @@ real time instead.
   after the stairs or a reset. Loading restores the weapon and rune on screen independently of
   the requested slot, so a switch queued during a swing or bash waits for it to finish.
   The sword is a single sprite against the bottom-right corner (its arm runs off that edge,
-  so `*sword-overhang*` must exceed the sway). The slash plays `*swing-frame-times*` and the
-  blow lands on `*swing-hit-frame*`: the nearest creature within `*sword-reach*` and
-  `*sword-arc*`, not behind a wall. The sword's slash and the spear's thrust are both swings,
-  through the same `swing-time`: generics on the weapon's keyword give each its timing and blow
-  (`swing-frame-times`, `swing-hit-frame`, `swing-reach`, `swing-arc`, `swing-damage`,
-  `swing-knockback`, `swing-pain-bonus`), and generics on the sprite which weapon it draws
+  so `*sword-overhang*` must exceed the sway). Its template (`define-weapon :sword`, see
+  `src/weapons.lisp`) has its numbers: the slash, its swing blow, plays its frame times and lands on
+  its hit frame: the nearest creature within its reach (2 m) and arc (0.8 rad), not behind a wall.
+  The sword's slash and the spear's thrust are both swings, through the same `swing-time`, each
+  timed and dealt by its template's swing (`swing-blow`, `blow-frame-times`, `blow-hit-time`,
+  `blow-reach`, `blow-damage` and the rest), and generics on the sprite say which weapon it draws
   for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
-  `weapon-aim`, NIL to keep it against the bottom-right corner). The mouse wheel is the
-  quickslot's (inventory.lisp). Weapon and rune icons are frames of `data/sprites/icons/weapons.png`
-  (`*weapon-icons*`; a rune's by its spell's first effect, `spell-icon-key` into `*spell-icons*`:
+  `weapon-aim`, from the template's `:frames` and `:aim`, NIL to keep it against the bottom-right
+  corner). The mouse wheel is the quickslot's (inventory.lisp). Weapon and rune icons are frames
+  of `data/sprites/icons/weapons.png` (a weapon's its template's `:icon`; a rune's by its spell's first effect, `spell-icon-key` into `*spell-icons*`:
   damage by element, a flame, a snowflake, a lightning bolt; drain a drop of blood, heal a cross, ward a
   shield, slow an hourglass, knockback a shockwave; a vortex the tornado), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`, then `tools/restyle.py --house
@@ -1760,7 +1776,8 @@ real time instead.
   the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
   off on screens whose whole-number scale shows fewer art pixels across. It drops and sways
   with the sword. Both draw at `*weapon-depth*`, behind the bars, the hotbar and the
-  pain flash. Holding the right button raises the shield over `*block-raise-time*`
+  pain flash. Holding the right button raises the shield over its guard's raise time (0.12 s;
+  `define-guard :shield`, sword.lisp)
   (`block-raise`, 0 to 1; not during a swing, and it comes down before a weapon switch);
   fully raised, a blow from within `*block-arc*` of the view (`shield-blocks-p`, player.lisp,
   asked by `hurt-player`, so it covers creatures' spells too) does `*block-damage-scale*` of
@@ -1771,17 +1788,17 @@ real time instead.
   it aside for at least `*stamina-guard-break*`,
   and `:unblockable` ones (the ogre's shockwave, the grave circle) ignore it. Raised, it slows
   the player to `*block-speed-scale*` of a walk, no running. A left click with it raised bashes
-  (`player-bash`, `*bash-frame-times*`): on `*bash-hit-frame*` the nearest creature within
-  `*bash-reach*` and `*bash-arc*` takes `*bash-damage*` and is pushed `*bash-knockback*`.
+  (`player-bash`, the guard's `bash` blow): on its hit frame the nearest creature within its reach
+  and arc (1.6 m, 0.6 rad) takes its damage (2-4) and is pushed at its knockback (6 m/s).
   It rolls for pain with `*bash-pain-bonus*` only if the creature is winding up an attack
   (`winding-up-p`, creature.lisp), and never otherwise: a timed interrupt, not a stunlock.
   Every bash that lands leaves the creature poised (`bash-poise`, `*bash-poise-time*`), when
   another bash can't stagger it and shoves it only `*poised-bash-knockback*` as far
   (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
-  frame: idle, `*shield-raise-frames*` rising, the block held, then the bash's.
-  `block-raise` is the shield's guard (`guard-raise-time`, by keyword: NIL for a weapon with
-  none), and the guard's blow runs on `bash-time` through generics on the weapon's keyword
-  (`bash-frame-times`, `bash-hit-frame`, `bash-strike`: the bash, or the spear's sweep). A swing
+  frame: idle, its guard's raise frames rising, the block held, then the bash's.
+  `block-raise` is the template's guard's (`weapon-guard-of`; a weapon with none has no guard), and
+  the second blow (`second-blow`: the template's alternate, the spear's sweep and the maul's
+  earthshake, else its guard's bash) runs on `bash-time`, landing through `bash-strike`. A swing
   that lands goes through `swing-strike` (player, weapon, target), whose spear method makes a
   counter. `blow-reaches-p` is the test every melee blow makes of one creature (reach, arc,
   height, a clear line), `looked-at-creature` the nearest that passes it. The sprite's tick asks
@@ -1789,7 +1806,7 @@ real time instead.
   **A blow that finds no one strikes the wall**: the slash and thrust (`swing-miss`'s default
   method), the maul when there is no corpse to pulp, the bash (`bash-hit`) and the spear's sweep
   (`sweep-hit`) call `wall-strike` with their reach. The line goes from the eye through where the
-  weapon's tip is on screen in its hit frame (`weapon-tip-direction`: `*weapon-tips*`, an art pixel
+  weapon's tip is on screen in its hit frame (`weapon-tip-direction`: the blow's `:tip`, an art pixel
   of the strip's cell, through the sprite's placement, `*weapon-sprites*`, and the camera's fov), so
   the sparks start at the tip at any window size: the sword's blade tip low right, the spear's
   point, the maul head's top, the shield's upper rim, the sweep's spearhead. REACH is how far
@@ -1802,56 +1819,56 @@ real time instead.
   The solid's `solid-strike` (its surface's, `*surface-strikes*`) says what it throws
   (`wall-sparks`, sparks.lisp) and sounds like: `blade-hit-stone` or `maul-hit-stone`,
   `blade-hit-wood`, `footstep-snow`; the bash plays `shield-block`, the haft `bone-hit`. Each
-  blow's counts, speed, sound and feel are `*wall-strikes*`, kept below a hit's: the maul kicks
+  blow's counts, speed, sound and feel are its `:wall`, kept below a hit's: the maul kicks
   the view 0.2 to 0.4 and hit-stops 0.02 to 0.04 s by charge (`(:charge least full)`,
   `wall-strike-value`), the bash shoves the player back 1.5 m/s; the sword, the spear and the haft
   have none (the spear's jolt frame pulled its point away from the sparks). `tools/spark_shots.sh`'s
   `wall-*` shots stage each at its hit frame.
 - `src/spear.lisp`: the spear, held in both hands, so no shield. Against the sword it reaches further
-  (`*spear-reach*` 3.5 m against 2) in a narrower arc (`*spear-arc*` 0.3 rad), staggers more
-  (`*spear-pain-bonus*` 35) and is slower: the thrust plays `*thrust-frame-times*` (0.68 s
-  against 0.53) and lands at full extension, `*thrust-hit-frame*` (0.24 s in, against 0.23).
+  (its thrust's reach, 3.5 m against 2) in a narrower arc (0.3 rad), staggers more (pain bonus
+  35) and is slower: the thrust (a `thrust` blow, `define-weapon :spear`) takes 0.68 s against 0.53
+  and lands at full extension (0.24 s in, against 0.23).
   Its sprite (`spear`) is a subclass of the sword's, drawn from `data/sprites/spear/spear`,
   at the sword's art pixel size (`sword-scale`) and sunk as far (`*sword-drop*`), but placed
-  by its aim (`weapon-aim`, `*spear-aim*`: the point at full extension) on the screen's
+  by its aim (`weapon-aim`, the template's `:aim`: the point at full extension) on the screen's
   middle rather than against the right edge, so the thrust goes where the player looks on any
-  screen width. A re-made strip whose extended point moves needs `*spear-aim*` measured again
+  screen width. A re-made strip whose extended point moves needs its `:aim` measured again
   (`art/spear/spear-frames.txt` says how).
   **The counter**: a thrust whose blow lands on a creature `charging-p` (creature.lisp: hunting the
   player and coming at them through the air, a leaper `airborne`, the imp's pounce or the ogre's
   leap, or a flyer with `dive-left`, the harpy; not a crouch, nor a melee blow's lunge, which stops
-  a moment into its wind-up) skewers it (`spear-counter`): `*counter-damage*` (18 to 26),
-  `*counter-knockback*`, a flinch whatever the roll (`hurt`'s `:force-pain`; a boss rolls with
-  `*counter-pain-bonus*`), the jolt frame for `*spear-jolt-time*` (`spear-jolt`), the enchantment,
+  a moment into its wind-up) skewers it (`spear-counter`): the thrust's counter damage (18 to 26)
+  and knockback, a flinch whatever the roll (`hurt`'s `:force-pain`; a boss rolls with its counter
+  pain bonus), the jolt frame for its jolt time (`spear-jolt`), the enchantment,
   and `impale`: a leaper drops out of the air where it is (`falling`, `impaled`) and lands with no
   quake (an imp's own `react-to-hit` throws it down; a diving harpy is downed as by any hit). A
   knight from a view its shield covers takes it as a plain thrust. The thrust lands 0.24 s after
   the click, so a click late in the crouch or early in the flight meets a pounce or leap, and one
   a little into a dive meets the harpy as it comes down within the player's height.
   **The sweep**: a press of the right button (`:block`, `player-press`, player.lisp; it holds
-  nothing up, so the player isn't slowed) swings the haft across (`player-sweep`, `*sweep-stamina*`,
-  none without it, nor during a thrust) on `*sweep-frame-times*`, landing on `*sweep-hit-frame*`
-  (`sweep-hit`) on every creature within `*sweep-reach*` (1.8 m) and `*sweep-arc*` (1.4 rad):
-  `*sweep-damage*`, `*sweep-knockback*`, and the bash's rules for the rest (a stagger only in a
+  nothing up, so the player isn't slowed) swings the haft across (`player-sweep`, the template's
+  alternate, a `sweep` blow: 15 stamina, none without it, nor during a thrust), landing on its hit
+  frame (`sweep-hit`) on every creature within its reach (1.8 m) and arc (1.4 rad): its damage and
+  knockback, and the bash's rules for the rest (a stagger only in a
   wind-up and not poised, `bash-poise`; a covered knight glances and the player reels back once).
   No enchantment goes with it. The strip: 4 idle frames, the 8 of the thrust, the jolt
-  (`*spear-jolt-frame*`), then the sweep's 4 (`*spear-sweep-first*`).
+  (`:jolt` in its `:frames`), then the sweep's 4 (`:alternate`).
 - `src/maul.lisp`: the maul, two-handed, no shield: the slowest weapon, its blow charged. **The
-  charge**: a press of the left button (`player-maul`, from `player-attack`) pays `*maul-blow-stamina*`
-  (15; with less, nothing happens) and starts `charge-time`;
-  the maul rises for `*maul-min-charge*` (0.4 s, the least charge, whatever the button does), and
-  while `attack-held` (a player slot `player-press` sets and `player-release` clears, so a quick
-  click is a least-charge blow) it winds on to `*maul-full-charge*` (1.35 s from the press) for
-  `*maul-charge-stamina*` (30) a second past the least, about 29 for a full one; with no stamina it
-  stops growing. Full, it trembles between two strip frames (`*maul-tremble-rate*`). While it charges
-  and through the earthshake (`maul-heaving-p`) the player walks at `maul-speed-scale`
-  (`*maul-charge-speed*` 0.6, `*shake-speed*` 0.3), with no run, no jump and no stamina coming back
+  charge**: its swing is a `charged-blow` (`define-weapon :maul`). A press of the left button
+  (`player-maul`, from `player-attack`) pays its stamina (15; with less, nothing happens) and starts
+  `charge-time`; the maul rises for its min charge (0.4 s, the least charge, whatever the button
+  does), and while `attack-held` (a player slot `player-press` sets and `player-release` clears, so a
+  quick click is a least-charge blow) it winds on to its full charge (1.35 s from the press) for its
+  charge stamina (30) a second past the least, about 29 for a full one; with no stamina it stops
+  growing. Full, it trembles between two strip frames (its tremble rate). While it charges and
+  through the earthshake (`maul-heaving-p`) the player walks at `maul-speed-scale` (the blow's
+  charge speed 0.6, the earthshake's speed 0.3), with no run, no jump and no stamina coming back
   (`update-stamina`). Let go once it is up, `update-maul-charge` (from `update-weapons`) puts the
   charge, 0 to 1 (`maul-charge`), in `blow-charge` and starts the swing (`player-swing`, so
-  `swing-time` and the swing generics, `*maul-frame-times*`, landing 0.19 s after the release and done 0.4 s later: a quick click
+  `swing-time` and its frame times, landing 0.19 s after the release and done 0.4 s later: a quick click
   takes 1 s in all, a full blow 1.95).
-  **The blow** (`swing-strike` on `:maul`): one creature within `*maul-reach*` (2.2 m) and
-  `*maul-arc*` (0.6 rad); damage, knockback, pain bonus and hit-stop run from the least charge's to
+  **The blow** (`swing-strike` on `:maul`): one creature within its reach (2.2 m) and
+  arc (0.6 rad); damage, knockback, pain bonus and hit-stop run from the least charge's to
   the full one's by the charge (`maul-lerp`: 18-24 to 34-44, 8 to 15 m/s, 10 to 60, 0.06 to 0.12 s).
   Its knockback has **heft** (`push-creature`'s `:heft`, the square root of `knockback-scale`: the
   knight 0.59, the ogre 0.39; not a boss's, whose cap stands), so it throws things into walls, other
@@ -1861,22 +1878,22 @@ real time instead.
   (`knock-guard-aside`): the creature's `reel` (creature.lisp, `*maul-reel-time*` 1.2 s, a boss's
   `*maul-boss-reel-time*` 0.5) holds its flinch's stagger frame (`creature-hurting-p`), stops it
   thinking, and makes `shielded-p` false, so a spell reaches its front. Its kills gib from
-  `*maul-gib-overkill*` (0.1; `hurt`'s `:gib-overkill`, `gib-p`), the undead's from any overkill, so a
+  its gib overkill (0.1; `hurt`'s `:gib-overkill`, `gib-p`), the undead's from any overkill, so a
   skeleton it kills always shatters and can't be raised. A blow that finds no one living
   (`swing-miss`, sword.lisp, a generic) pulps a corpse in its reach that `raisable-p` says could be
   raised (`tear-apart`). The enchantment goes with every blow that lands. **The earthshake**: the right
-  button (`:block`, `player-earthshake`, `*shake-stamina*` 30, none without it, nor while charging or
-  swinging) runs on `bash-time` (`*shake-frame-times*`, landing 0.3 s in, 0.8 s in all):
+  button (`:block`, `player-earthshake`, the template's alternate, an `earthshake` blow: 30 stamina,
+  none without it, nor while charging or swinging) runs on `bash-time` (landing 0.3 s in, 0.8 s in all):
   `earthshake-hit` puffs `ogre-dust` round the player (`kick-dust`, ogre.lisp) and reaches every live
-  creature whose feet are within `*shake-reach-height*` (0.4 m) of the player's and its body within
-  `*shake-radius*` (3 m) all round, with no wall between (`shaken-p`): `*shake-damage*` (3-6), a flinch
-  whatever the roll unless poised (a boss rolls with `*shake-boss-pain-bonus*`), and a shove out at
-  `*shake-knockback*` (5 m/s, with heft). No shield stops it, and nothing off the floor feels it (a
-  hovering flyer, a leap or pounce in the air). It shares the bash's poise (`bash-poise`, set to
-  `*shake-poise-time*`, 2 s), so the shake, a bash and a sweep never flinch one creature twice running.
-  The strip (`data/sprites/maul/maul`): 4 idle frames, the charge's 3 (`*maul-charge-first*`: raised,
-  wound up, wound up a pixel aside), the blow's 4 (`*maul-swing-first*`) and the earthshake's 5
-  (`*maul-shake-first*`: lifted, coming over, the slam, held, recovery), placed by its aim, `*maul-aim*` (the impact's head on the view's middle).
+  creature whose feet are within its reach height (0.4 m) of the player's and its body within its
+  reach (3 m) all round, with no wall between (`shaken-p`): its damage (3-6), a flinch whatever the
+  roll unless poised (a boss rolls with its boss pain bonus), and a shove out at its knockback (5 m/s,
+  with heft). No shield stops it, and nothing off the floor feels it (a hovering flyer, a leap or
+  pounce in the air). It shares the bash's poise (`bash-poise`, set to its poise time, 2 s), so the
+  shake, a bash and a sweep never flinch one creature twice running. The strip
+  (`data/sprites/maul/maul`): 4 idle frames, the charge's 3 (`:charge` in its `:frames`: raised,
+  wound up, wound up a pixel aside), the blow's 4 (`:swing`) and the earthshake's 5 (`:alternate`:
+  lifted, coming over, the slam, held, recovery), placed by its `:aim` (the impact's head on the view's middle).
   The tooltip's weapon lines are `weapon-lines` (inventory.lisp), a generic on the weapon's keyword.
   To try it on the debug level: `(select-weapon *player* :6)`, then `(setf (attack-held *player*) t)
   (player-attack *player*)`, and `(setf (attack-held *player*) NIL)` 1.35 s later for a full blow;
@@ -1933,8 +1950,8 @@ real time instead.
   (`project-view`), never `location` or `rotation`, so aim, hearing and hit tests stay put; it runs in the
   player's tick (`update-camera-shake`, allocating nothing), so it holds through hit-stop and starts after
   it, shows only in `:playing`, draws from `random` and isn't saved. Kicks: the maul's blow
-  (`*maul-camera-shake*` 0.45 to 0.8 by charge, `*maul-full-camera-shake*` 1 full), the earthshake
-  (`*shake-camera-shake*` 0.7), the ogre's landing (`*quake-camera-shake*` 1, to 16 m) and slam (0.7, to
+  (its camera shake, 0.45 to 0.8 by charge, 1 full), the earthshake
+  (0.7), the ogre's landing (`*quake-camera-shake*` 1, to 16 m) and slam (0.7, to
   10 m), the boss's Shockwave (1, to 20 m), a crash (`hit-surface`, `*camera-shake-impact*` 0.4 to 1 by
   damage) and a shoved blow taken of `*camera-shake-hurt-from*` (8) or more (`hurt-shake`, 0.3 to 0.9 at
   25: an ogre's slam that lands, 14 to 22, is 0.5 to 0.8). Not the sword or spear.
@@ -3521,7 +3538,7 @@ from the recover frame (`restyle/recover-detail.png`, with `maul-restyle-detail.
 copy as a pose, and on the slam it drew the butt end's cap as a
 second head until told the head is out of sight (`maul-restyle-butt.txt`). `art/maul/maul-frames.txt`
 places the chosen takes as the spear's pictures are, at its scale, 14 art pixels low so what runs off a
-picture's top is cut above the screen's (the idle 50, so at rest the hands and head hide less of the view); `*maul-aim*` is measured from the impact frame's head.
+picture's top is cut above the screen's (the idle 50, so at rest the hands and head hide less of the view); its template's `:aim` is measured from the impact frame's head.
 
 ```bash
 tools/render_maul.py /tmp/maul-preview --pixel 4

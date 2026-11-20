@@ -11,6 +11,11 @@
 ;;; the spell in them (*HAND-LOOKS*).
 
 (define-fx-animation fire-hands "sprites/hands/hands" :fps 6 :loop T)
+
+;;; As a weapon (weapons.lisp): what switching to them plays. Their frames follow the spell in them
+;;; (below), not a template's.
+(define-weapon :hands
+  :title "Hands" :sounds (:draw :draw-magic))
 ;; The same with the fire recoloured (tools/recolor_strip.py), one for each look.
 (define-fx-animation storm-hands "sprites/hands/storm" :fps 6 :loop T)
 (define-fx-animation frost-hands "sprites/hands/frost" :fps 6 :loop T)

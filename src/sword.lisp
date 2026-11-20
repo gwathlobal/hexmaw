@@ -26,8 +26,35 @@
 
 (define-fx-animation sword "sprites/sword/sword" :fps 5 :loop T)
 
-(defparameter *sword-idle-frames* 4 "Strip frames the idle loop steps through, from the first.")
-(defparameter *sword-swing-first* 4 "Strip index of the slash's first frame.")
+;;; The sword (weapons.lisp): a slash that lands at full sweep, its 4-frame idle loop then the
+;;; slash's 8 frames in its strip, and the shield (below) as its guard.
+(define-weapon :sword
+  :title "Sword" :icon 0 :strip sword :frames (:idle 4 :swing 4)
+  :loot T :loot-strip loot-sword :forge-noun "Edge"
+  :sounds (:draw :draw-sword)
+  :guard :shield
+  ;; The blow lands on frame 4, the blade at full sweep: the nearest creature within 2 m of its
+  ;; body's edge and 0.8 rad either side of the view.
+  :swing (blow :name :sword :frame-times (0.05 0.07 0.07 0.04 0.06 0.07 0.08 0.08) :hit-frame 4
+               :reach 2.0 :arc 0.8 :damage (10 16) :knockback 3.0 :pain-bonus 0
+               :sound :sword-swing :verb "swing"
+               :wall (:sparks 8 :grit 4 :speed (3.0 7.0) :spread 0.8
+                      :sound :blade-hit-stone :wood-sound :blade-hit-wood)
+               ;; The blade's tip in strip frame 8.
+               :tip (:sword 140 167)))
+
+;;; The shield, the sword's guard: it rises over 0.12 s; a click while it is up bashes, pulled
+;;; back, thrust, impact, coming back, landing on the thrust. Its strip's idle frame comes first,
+;;; then 2 rising (lowering plays them back), the block held, then the bash's.
+(define-guard :shield
+  :title "Shield" :strip shield :raise-time 0.12 :raise-frames 2 :margin 6
+  :sound :shield-raise :forge-noun "Bulwark"
+  :bash (bash :name :shield :frame-times (0.08 0.06 0.12 0.08) :hit-frame 1
+              :reach 1.6 :arc 0.6 :damage (2 4) :knockback 6.0 :sound :shield-bash
+              :wall (:sparks 3 :grit 5 :speed (2.0 5.0) :spread 0.9
+                     :sound :shield-block :wood-sound :shield-block :recoil 1.5)
+              ;; Its upper rim in strip frame 5.
+              :tip (:shield 182 10)))
 
 (defparameter *hotbar-keys* '(:1 :2 :3 :4 :5 :6 :7 :8 :9) "The key of each hotbar slot.")
 (defvar *weapon-sprites* ()
@@ -36,23 +63,8 @@ WEAPON-TIP-DIRECTION reads where they are.")
 
 (defparameter *weapon-switch-time* 0.15 "Seconds to lower a weapon, and again to raise the next.")
 
-(defparameter *swing-frame-times* '(0.05 0.07 0.07 0.04 0.06 0.07 0.08 0.08)
-  "Seconds each frame of the slash shows. The swing is over after the last.")
-(defparameter *swing-hit-frame* 4 "Slash frame the blow lands on, counted from 0: the blade at full sweep.")
-(defparameter *sword-reach* 2.0 "Metres from the player to the nearest edge of a creature's body.")
-(defparameter *sword-arc* 0.8 "Radians either side of the view the blade sweeps through.")
-(defparameter *sword-damage* '(10 16))
-(defparameter *sword-knockback* 3.0 "Speed in m/s a hit slides the creature away.")
-(defparameter *sword-pain-bonus* 0 "Percent a hit adds to the creature's PAIN-CHANCE.")
-
-(defparameter *block-raise-time* 0.12 "Seconds to raise the shield to block, and again to lower it.")
-(defparameter *bash-frame-times* '(0.08 0.06 0.12 0.08)
-  "Seconds each frame of the bash shows: pulled back, thrust, impact, coming back.")
-(defparameter *bash-hit-frame* 1 "Bash frame the blow lands on, counted from 0: the thrust.")
-(defparameter *bash-reach* 1.6 "Metres from the player to the nearest edge of a creature's body.")
-(defparameter *bash-arc* 0.6 "Radians either side of the view the bash reaches.")
-(defparameter *bash-damage* '(2 4))
-(defparameter *bash-knockback* 6.0 "Speed in m/s a bash slides the creature away.")
+;;; The rules of a staggering blow, which the bash, the spear's sweep and the maul's earthshake
+;;; share.
 (defparameter *bash-pain-bonus* 50
   "Percent a bash adds to the creature's PAIN-CHANCE when it lands in the wind-up of the
 creature's attack (WINDING-UP-P): interrupting is what it is for. At any other time a
@@ -60,7 +72,7 @@ bash doesn't stagger.")
 (defparameter *bash-poise-time* 1.5
   "Seconds after a bash lands in which another bash can't stagger the creature and barely
 moves it.")
-(defparameter *poised-bash-knockback* 0.25 "Fraction of *BASH-KNOCKBACK* a poised creature takes.")
+(defparameter *poised-bash-knockback* 0.25 "Fraction of a staggering blow's knockback a poised creature takes.")
 (defparameter *bash-recoil* 4.0 "Speed in m/s a bash glancing off a shield throws the player back.")
 (defparameter *bash-recoil-guard* 0.5 "Seconds a bash glancing off a shield leaves the player's shield down.")
 
@@ -77,28 +89,6 @@ keeps the proportions of its render and of the generator's restyle.")
   "Art pixels the strip reaches past the right edge. The arm runs off that edge in the
 cut, so this must be more than the sway, or the cut-off end shows.")
 (defparameter *sword-bob* 3.0 "Sway at walking speed, in art pixels.")
-
-(defgeneric swing-frame-times (weapon)
-  (:documentation "Seconds each frame of WEAPON's swing shows. The swing is over after the last."))
-(defgeneric swing-hit-frame (weapon)
-  (:documentation "Swing frame WEAPON's blow lands on, counted from 0."))
-(defgeneric swing-reach (weapon)
-  (:documentation "Metres from the player to the nearest edge of a body WEAPON reaches."))
-(defgeneric swing-arc (weapon)
-  (:documentation "Radians either side of the view WEAPON's blow reaches."))
-(defgeneric swing-damage (weapon))
-(defgeneric swing-knockback (weapon)
-  (:documentation "Speed in m/s WEAPON's blow slides a creature away."))
-(defgeneric swing-pain-bonus (weapon)
-  (:documentation "Percent WEAPON's blow adds to the creature's PAIN-CHANCE."))
-
-(defmethod swing-frame-times ((weapon (eql :sword))) *swing-frame-times*)
-(defmethod swing-hit-frame ((weapon (eql :sword))) *swing-hit-frame*)
-(defmethod swing-reach ((weapon (eql :sword))) *sword-reach*)
-(defmethod swing-arc ((weapon (eql :sword))) *sword-arc*)
-(defmethod swing-damage ((weapon (eql :sword))) *sword-damage*)
-(defmethod swing-knockback ((weapon (eql :sword))) *sword-knockback*)
-(defmethod swing-pain-bonus ((weapon (eql :sword))) *sword-pain-bonus*)
 
 ;;; Weapon state lives on the player: WEAPON (and HELD-SPELL, for the hands) is the one on
 ;;; screen, WANTED-WEAPON (and WANTED-SPELL) the one asked for, from the hotbar slot
@@ -168,22 +158,15 @@ BASH-STRIKE's moment in UPDATE-WEAPONS, a spell's release."
       (:spear (player-swing player))
       (:maul (player-maul player)))))
 
-(defparameter *weapon-sounds*
-  '(:sword (:swing :sword-swing :draw :draw-sword :guard :shield-raise)
-    :spear (:swing :spear-thrust :draw :draw-spear)
-    :maul (:swing :maul-swing :draw :draw-maul)
-    :hands (:draw :draw-magic))
-  "Each weapon's clips (sound.lisp): :SWING as a swing starts, :DRAW as it comes up, :GUARD as
-its guard rises (the shield).")
-
-(defgeneric guard-raise-time (weapon)
-  (:documentation "Seconds WEAPON's guard takes to rise, and to come down, or NIL if it has none:
-the sword's shield.")
-  (:method (weapon) (declare (ignore weapon)) NIL)
-  (:method ((weapon (eql :sword))) *block-raise-time*))
-
 (defun weapon-sound (weapon event)
-  (getf (getf *weapon-sounds* weapon) event))
+  "WEAPON's clip (sound.lisp) for EVENT: :SWING as its swing starts (its blow's), :GUARD as its
+guard rises, :DRAW as it comes up (its template's SOUNDS)."
+  (let ((template (find-weapon weapon NIL)))
+    (and template
+         (case event
+           (:swing (let ((blow (weapon-swing template))) (and blow (blow-sound blow))))
+           (:guard (let ((guard (weapon-guard template))) (and guard (guard-sound guard))))
+           (T (getf (weapon-sounds template) event))))))
 
 (defun player-swing (player)
   (unless (swing-time player)
@@ -197,15 +180,10 @@ the sword's shield.")
     (setf (bash-time player) 0.0
           (bash-pending player) T)))
 
-;;; The guard's blow: with the shield up (BLOCK-RAISE), a click bashes with it; with the spear, the
-;;; right button sweeps with its haft (spear.lisp). Both run on BASH-TIME, by the weapon's keyword.
+;;; The second blow: with the shield up (BLOCK-RAISE), a click bashes with it; with the spear, the
+;;; right button sweeps with its haft (spear.lisp). Both run on BASH-TIME, WEAPON's SECOND-BLOW
+;;; (weapons.lisp).
 
-(defgeneric bash-frame-times (weapon)
-  (:documentation "Seconds each frame of WEAPON's guard blow shows. It is over after the last.")
-  (:method ((weapon (eql :sword))) *bash-frame-times*))
-(defgeneric bash-hit-frame (weapon)
-  (:documentation "Frame of WEAPON's guard blow it lands on, counted from 0.")
-  (:method ((weapon (eql :sword))) *bash-hit-frame*))
 (defgeneric bash-strike (player weapon)
   (:documentation "WEAPON's guard blow lands: the shield's bash, the spear's sweep.")
   (:method (player (weapon (eql :sword))) (bash-hit player)))
@@ -220,13 +198,13 @@ is over."
 
 (defun swing-frame (time weapon)
   "Frame of WEAPON's swing at TIME seconds into it, or NIL once it is over."
-  (frame-at time (swing-frame-times weapon)))
+  (frame-at time (blow-frame-times (swing-blow weapon))))
 
 (defun swing-hit-time (weapon)
-  (reduce #'+ (subseq (swing-frame-times weapon) 0 (swing-hit-frame weapon))))
+  (blow-hit-time (swing-blow weapon)))
 
 (defun bash-hit-time (weapon)
-  (reduce #'+ (subseq (bash-frame-times weapon) 0 (bash-hit-frame weapon))))
+  (blow-hit-time (second-blow weapon)))
 
 (defun clear-path-p (from to height)
   "True if nothing solid stands between FROM and TO, HEIGHT metres above FROM."
@@ -238,7 +216,7 @@ is over."
           for k = (/ i steps)
           never (solid-overlapping (+ (vx from) (* k dx)) y (+ (vz from) (* k dz)) 0.02 0.02))))
 
-(defun swing-target (player &optional (reach *sword-reach*) (arc *sword-arc*))
+(defun swing-target (player reach arc)
   "The nearest live creature the swing reaches: its body within REACH, inside ARC
 either side of where the player faces, level with the player, and not behind a wall."
   (looked-at-creature player reach arc))
@@ -278,7 +256,8 @@ be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
 
 (defun swing-hit (player)
   (let* ((weapon (weapon player))
-         (target (swing-target player (swing-reach weapon) (swing-arc weapon))))
+         (blow (swing-blow weapon))
+         (target (swing-target player (blow-reach blow) (blow-arc blow))))
     (if target
         (swing-strike player weapon target)
         (swing-miss player weapon))))
@@ -286,47 +265,20 @@ be true of it; DEAD lets in the dead, for E (townsfolk.lisp)."
 (defgeneric swing-miss (player weapon)
   (:documentation "WEAPON's swing found no one living to land on: it strikes the wall in its reach
 (WALL-STRIKE); the maul first pulps a corpse (maul.lisp).")
-  (:method (player weapon) (wall-strike player weapon (swing-reach weapon))))
+  (:method (player weapon) (wall-strike player (swing-blow weapon))))
 
 ;;; A blow that finds no one strikes the wall where its weapon's tip is on screen at the hit frame
-;;; (*WEAPON-TIPS*): sparks and grit off stone (SOLID-STRIKE, greybox.lisp; WALL-SPARKS, sparks.lisp),
+;;; (its BLOW-TIP): sparks and grit off stone (SOLID-STRIKE, greybox.lisp; WALL-SPARKS, sparks.lisp),
 ;;; chips off ice, splinters off wood, a puff off snow, with a sound and a little of the feel of a
 ;;; hit, always less than one. The line goes from the eye through that pixel, so the sparks start at
 ;;; the tip whatever the window's size (the weapons' art pixels are whole screen pixels, so a fixed
 ;;; offset from the crosshair would drift with it).
 
-(defparameter *wall-strikes*
-  '(:sword (:sparks 8 :grit 4 :speed (3.0 7.0) :spread 0.8
-            :sound :blade-hit-stone :wood-sound :blade-hit-wood)
-    :spear (:sparks 8 :grit 3 :speed (3.0 7.5) :spread 0.5
-            :sound :blade-hit-stone :wood-sound :blade-hit-wood)
-    ;; (:CHARGE least full): the least charge's, then the full one's.
-    :maul (:sparks (:charge 8 20) :grit (:charge 8 16) :speed (:charge (3.0 6.0) (3.0 9.0)) :spread 1.0
-           :sound :maul-hit-stone :wood-sound :blade-hit-wood
-           :camera (:charge 0.2 0.4) :hit-stop (:charge 0.02 0.04))
-    :shield (:sparks 3 :grit 5 :speed (2.0 5.0) :spread 0.9
-             :sound :shield-block :wood-sound :shield-block :recoil 1.5)
-    :haft (:sparks 0 :grit 5 :speed (1.5 4.0) :spread 1.0
-           :sound :bone-hit :wood-sound :bone-hit))
-  "Per blow (a weapon's keyword, :SHIELD for the bash, :HAFT for the spear's sweep), what striking a
-wall throws (WALL-SPARKS' counts, speed and spread, before the surface's share), the sound on
-stone or ice and on wood (snow is always a footstep's crunch), and the feel: a :CAMERA kick and
-:HIT-STOP (by the maul's charge), a :RECOIL in m/s.")
-
-(defparameter *weapon-tips*
-  '(:sword (sword 140 167) :spear (spear 165 18) :haft (spear 337 102)
-    :maul (maul 111 117) :shield (shield 182 10))
-  "Per blow, the sprite (a key of *WEAPON-SPRITES*) and the art pixel of its strip's cell, from the
-cell's top-left corner, where the weapon strikes in the blow's hit frame: the sword's blade tip
-(strip frame 8), the spear's point at full extension (8), the spearhead leading the sweep (14),
-the maul head's top (8), the shield's upper rim (5). Measured as the topmost (the sweep's,
-rightmost) opaque pixel of that frame.")
-
 (defun weapon-tip-direction (player blow)
-  "The unit vector from PLAYER's eye through where BLOW's weapon tip is on screen (*WEAPON-TIPS*),
+  "The unit vector from PLAYER's eye through where BLOW's weapon tip is on screen (its BLOW-TIP),
 as three values, or NIL if its sprite isn't there."
-  (destructuring-bind (&optional class (ax 0) (ay 0)) (getf *weapon-tips* blow)
-    (let ((sprite (and class (getf *weapon-sprites* class))))
+  (destructuring-bind (&optional sprite-name (ax 0) (ay 0)) (blow-tip blow)
+    (let ((sprite (and sprite-name (getf *weapon-sprites* sprite-name))))
       (when (and sprite (slot-boundp sprite 'animation))
         (let* ((atlas (animation-atlas (sprite-animation sprite)))
                (cw (float (getf atlas :cell-width) 0f0))
@@ -356,7 +308,7 @@ as three values, or NIL if its sprite isn't there."
           (values (/ dx len) (/ dy len) (/ dz len)))))))
 
 (defun wall-strike-value (value charge)
-  "VALUE as *WALL-STRIKES* gives it, at CHARGE (0 to 1) if it is (:CHARGE least full)."
+  "VALUE as a BLOW-WALL gives it, at CHARGE (0 to 1) if it is (:CHARGE least full)."
   (if (and (consp value) (eq :charge (first value)))
       (destructuring-bind (least full) (rest value)
         (if (consp least)
@@ -364,11 +316,11 @@ as three values, or NIL if its sprite isn't there."
             (maul-lerp charge least full)))
       value))
 
-(defun wall-strike (player blow reach &key (charge 0.0))
-  "BLOW (a key of *WALL-STRIKES*) found no one: if the line from PLAYER's eye through its weapon's
-tip on screen (WEAPON-TIP-DIRECTION; the crosshair without one) meets a solid within REACH metres
-ahead, strike it there. True if it did."
-  (let ((props (getf *wall-strikes* blow))
+(defun wall-strike (player blow &key (reach (blow-reach blow)) (charge 0.0))
+  "BLOW (weapons.lisp) found no one: if the line from PLAYER's eye through its weapon's tip on
+screen (WEAPON-TIP-DIRECTION; the crosshair without one) meets a solid within REACH metres ahead
+(the blow's own), strike it there, as its BLOW-WALL says. True if it did."
+  (let ((props (blow-wall blow))
         (eye (location player))
         (ahead (look-direction player)))
     (when props
@@ -406,22 +358,24 @@ ahead, strike it there. True if it did."
   (:documentation "WEAPON's swing lands on TARGET: hurt, shoved, and the weapon's enchantment.
 The spear's thrust counters a charge instead (spear.lisp).")
   (:method (player weapon target)
-    (play-sound (if (bleeds target) :blade-hit-flesh :blade-hit-bone) (location target))
-    ;; The shield doesn't stop the blade, but the blade rings off it.
-    (when (shielded-p target (feet player))
-      (shield-sparks target))
-    (hurt target (roll (swing-damage weapon)) :from (feet player) :by player
-                                              :pain-bonus (swing-pain-bonus weapon))
-    (push-creature target (v- (location target) (feet player))
-                   (float (swing-knockback weapon) 0f0))
-    (enchant-strike player weapon target)))
+    (let ((blow (swing-blow weapon)))
+      (play-sound (if (bleeds target) :blade-hit-flesh :blade-hit-bone) (location target))
+      ;; The shield doesn't stop the blade, but the blade rings off it.
+      (when (shielded-p target (feet player))
+        (shield-sparks target))
+      (hurt target (roll (blow-damage blow)) :from (feet player) :by player
+                                             :pain-bonus (blow-pain-bonus blow))
+      (push-creature target (v- (location target) (feet player))
+                     (float (blow-knockback blow) 0f0))
+      (enchant-strike player weapon target))))
 
 (defun bash-hit (player)
   "Bash the creature in front of PLAYER. Against a shield that covers it, the bash glances
 off and the player reels back; otherwise it hurts and shoves, staggering only a creature
 winding up an attack and not already poised from a bash. With no one there, it strikes the wall."
-  (let ((target (swing-target player *bash-reach* *bash-arc*)))
-    (cond ((null target) (wall-strike player :shield *bash-reach*))
+  (let* ((bash (guard-bash (find-guard :shield)))
+         (target (swing-target player (blow-reach bash) (blow-arc bash))))
+    (cond ((null target) (wall-strike player bash))
           ((shielded-p target (feet player))
            (play-sound :bash-glance (location target))
            (block-hit target)
@@ -432,9 +386,9 @@ winding up an attack and not already poised from a bash. With no one there, it s
                   (bonus (if (and (not poised) (winding-up-p target)) *bash-pain-bonus* -100)))
              (setf (bash-poise target) *bash-poise-time*)
              (play-sound :bash-hit (location target))
-             (hurt target (roll *bash-damage*) :from (feet player) :pain-bonus bonus :by player)
+             (hurt target (roll (blow-damage bash)) :from (feet player) :pain-bonus bonus :by player)
              (push-creature target (v- (location target) (feet player))
-                            (float (* *bash-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0))
+                            (float (* (blow-knockback bash) (if poised *poised-bash-knockback* 1.0)) 0f0))
              (enchant-strike player :shield target))))))
 
 ;;; Enchantments: a weapon's spell (the forge's, forge.lisp) goes with every blow of it that
@@ -493,15 +447,16 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
       (break-snare player)
       (bash-strike player (weapon player)))
     ;; A bash that glanced off a knight's shield knocked the guard aside (BREAK-GUARD), ending it.
-    (unless (and (bash-time player) (frame-at (bash-time player) (bash-frame-times (weapon player))))
+    (unless (and (bash-time player) (frame-at (bash-time player) (blow-frame-times (second-blow (weapon player)))))
       (setf (bash-time player) NIL)))
   (setf (spear-jolt player) (max 0.0 (- (spear-jolt player) dt)))
   (update-maul-charge player dt)
   ;; The guard (the shield) rises while the block is held with its weapon in hand and staying
-  ;; there, once any swing is over; it stays up through a bash.
+  ;; there, once any swing is over; it stays up through a bash. With no guard in hand, one still
+  ;; up comes down at the shield's pace.
   (let* ((weapon (weapon player))
-         (guard (guard-raise-time weapon))
-         (step (/ dt (or guard *block-raise-time*)))
+         (guard (let ((g (weapon-guard-of weapon))) (and g (guard-raise-time g))))
+         (step (/ dt (or guard (guard-raise-time (find-guard :shield)))))
          (was (block-raise player)))
     (setf (block-raise player)
           (if (and guard
@@ -554,9 +509,10 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
 puts on the screen's middle; or NIL to keep the strip against the bottom-right corner."))
 
 (defmethod held-weapon ((sword sword)) :sword)
-(defmethod idle-frames ((sword sword)) *sword-idle-frames*)
-(defmethod swing-first ((sword sword)) *sword-swing-first*)
-(defmethod weapon-aim ((sword sword)) NIL)
+;; From its template's FRAMES and AIM (weapons.lisp).
+(defmethod idle-frames ((sword sword)) (weapon-frame-index (find-weapon (held-weapon sword)) :idle))
+(defmethod swing-first ((sword sword)) (weapon-frame-index (find-weapon (held-weapon sword)) :swing))
+(defmethod weapon-aim ((sword sword)) (weapon-aim-pixels (find-weapon (held-weapon sword))))
 
 (defgeneric weapon-frame (sprite player)
   (:documentation "Strip frame SPRITE shows for PLAYER now: its swing's, else its idle loop's.")
@@ -569,7 +525,7 @@ puts on the screen's middle; or NIL to keep the strip against the bottom-right c
 
 (defun add-weapon-sprite (class container)
   (let ((sprite (make-instance class)))
-    (setf (getf *weapon-sprites* class) sprite)
+    (setf (getf *weapon-sprites* (rim-weapon sprite)) sprite)
     (enter sprite container)))
 
 (defun add-sword (container)
@@ -624,16 +580,11 @@ by the sway. As with the hands, the sway only ever dips."
 ;;; The shield, in the left hand: a sprite of its own against the bottom-left corner,
 ;;; drawn with the sword at the sword's art pixel size. Its strip
 ;;; (data/sprites/sword/shield, from tools/make_shield.py) has its cell's bottom-left
-;;; corner *SHIELD-MARGIN* art pixels past the screen's. It drops and sways with the
-;;; sword. Frames: low and idle, then *SHIELD-RAISE-FRAMES* rising (lowering plays them
+;;; corner its guard's MARGIN art pixels past the screen's. It drops and sways with the
+;;; sword. Frames: low and idle, then its guard's RAISE-FRAMES rising (lowering plays them
 ;;; back), the block held, then the bash's frames.
 
 (define-fx-animation shield "sprites/sword/shield" :fps 1 :loop T)
-
-(defparameter *shield-raise-frames* 2 "Strip frames between the idle one and the held block.")
-(defparameter *shield-margin* 6
-  "Art pixels the shield strip reaches past the screen's left and bottom edges:
-make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (define-shader-entity shield (sword)
   ((animation :initform (find-fx-animation 'shield))))
@@ -669,13 +620,15 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (defun shield-frame (player)
   "Strip frame showing PLAYER's shield: the bash's, else how far it is raised."
-  (let ((bash (and (bash-time player) (eq (weapon player) :sword)
-                   (frame-at (bash-time player) *bash-frame-times*)))
-        (raise (block-raise player))
-        (held (1+ *shield-raise-frames*)))
+  (let* ((guard (find-guard :shield))
+         (raise-frames (guard-raise-frames guard))
+         (bash (and (bash-time player) (eq (weapon-guard-of (weapon player)) guard)
+                    (frame-at (bash-time player) (blow-frame-times (guard-bash guard)))))
+         (raise (block-raise player))
+         (held (1+ raise-frames)))
     (cond (bash (+ held 1 bash))
           ((<= 1.0 raise) held)
-          ((< 0.0 raise) (min *shield-raise-frames* (1+ (floor (* raise *shield-raise-frames*)))))
+          ((< 0.0 raise) (min raise-frames (1+ (floor (* raise raise-frames)))))
           (T 0))))
 
 (defun layout-shield (shield)
@@ -683,13 +636,14 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
     (let* ((atlas (animation-atlas (sprite-animation shield)))
            (w (* sx (getf atlas :cell-width)))
            (h (* sy (getf atlas :cell-height)))
+           (margin (guard-margin (find-guard :shield)))
            (bob (* *sword-bob* (bob-amount shield)))
            (phase (bob-phase shield)))
       (setf (vx (scaling shield)) (float w 0f0)
             (vy (scaling shield)) (float h 0f0))
       (place shield
-             (- (round (* bob sx (cos phase))) (* *shield-margin* sx))
-             (- (+ (* *shield-margin* sy)
+             (- (round (* bob sx (cos phase))) (* margin sx))
+             (- (+ (* margin sy)
                    (round (* bob sy (abs (sin phase))))
                    ;; Lowered by the sword's height, so both leave the screen together.
                    (round (* sy (getf (animation-atlas (find-fx-animation 'sword)) :cell-height)
@@ -712,7 +666,7 @@ make_shield.py's --margin. More than the sway, or the strip's edge shows.")
 
 (define-fx-animation weapon-icons "sprites/icons/weapons")
 
-(defparameter *weapon-icons* '(:sword 0 :spear 2 :maul 11) "Frame of each weapon's icon in the strip.")
+;; A weapon's icon is its template's ICON (weapons.lisp).
 (defparameter *spell-icons*
   '(:fire 1 :storm 3 :frost 4 :shock 5 :drain 6 :heal 7 :ward 8 :slow 9 :knockback 10 :absorb 12)
   "Frame in the strip of the icon of a rune by its first effect (SPELL-ICON-KEY): damage by its

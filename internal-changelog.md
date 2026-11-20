@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Weapons are templates (`src/weapons.lisp`): `define-weapon` holds a weapon's numbers, frames,
+  icon, sounds and moves, each move a `blow` (its frame times, hit frame, reach, arc, damage,
+  knockback, stamina, sound, wall strike and tip), and `define-guard` the shield. The sword's,
+  spear's and maul's `defparameter`s, the keyword generics (`swing-frame-times`, `swing-reach`,
+  `bash-frame-times`, `guard-raise-time` and the rest) and the tables `*weapon-sounds*`,
+  `*wall-strikes*`, `*weapon-tips*` and `*weapon-icons*` are gone into them. `wall-strike` takes a
+  blow. Nothing plays differently.
+
 - A save from before the weapon on screen was saved (`held-rune`) takes what its wanted hotbar
   slot holds in hand on loading (`settle-held`), as it did before: with that slot empty it had
   loaded with the casting hands up and no spell in them.

@@ -55,6 +55,7 @@
                (:file "townsfolk")
                (:file "pickups")
                (:file "hud")
+               (:file "weapons")
                (:file "hands")
                (:file "sword")
                (:file "spear")

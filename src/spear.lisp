@@ -11,62 +11,43 @@
 
 (define-fx-animation spear "sprites/spear/spear" :fps 5 :loop T)
 
-(defparameter *spear-idle-frames* 4 "Strip frames the idle loop steps through, from the first.")
-(defparameter *spear-swing-first* 4 "Strip index of the thrust's first frame.")
-(defparameter *spear-aim* 187
-  "Art pixels left from the strip's screen corner to the spearhead's point at full
-extension (art/spear/extend-1.png's tip, placed by art/spear/spear-frames.txt), which goes on
-the screen's middle: held in both hands, the spear points where the player looks.")
-
-(defparameter *thrust-frame-times* '(0.05 0.08 0.06 0.05 0.12 0.10 0.12 0.10)
-  "Seconds each frame of the thrust shows. The thrust is over after the last.")
-(defparameter *thrust-hit-frame* 4 "Thrust frame the blow lands on, counted from 0: full extension.")
-(defparameter *spear-reach* 3.5 "Metres from the player to the nearest edge of a creature's body.")
-(defparameter *spear-arc* 0.3 "Radians either side of the view the thrust reaches.")
-(defparameter *spear-damage* '(8 14))
-(defparameter *spear-knockback* 2.5 "Speed in m/s a hit slides the creature away.")
-(defparameter *spear-pain-bonus* 35
-  "Percent a hit adds to the creature's PAIN-CHANCE: staggering is what it is for.")
-
 ;;; A thrust that lands on a creature charging at the player through the air (CHARGING-P,
 ;;; creature.lisp: a leap or pounce, a harpy's dive) is a counter: the charge runs onto the
-;;; point. It hits harder, always flinches (a boss only rolls with *COUNTER-PAIN-BONUS*), shows the
-;;; jolt and does its kind's reaction (IMPALE: a leaper drops out of the air with no quake). A
-;;; knight's shield takes it as any thrust. The right button (the shield's action, :BLOCK) sweeps
-;;; with the haft: the bash's rules (a stagger only in a wind-up, poise), but every creature in a
-;;; wide arc, to clear space, and no enchantment.
+;;; point. It hits harder, always flinches (a boss only rolls with the thrust's COUNTER-PAIN-BONUS),
+;;; shows the jolt and does its kind's reaction (IMPALE: a leaper drops out of the air with no
+;;; quake). A knight's shield takes it as any thrust. The right button (the shield's action, :BLOCK)
+;;; sweeps with the haft: the bash's rules (a stagger only in a wind-up, poise), but every creature
+;;; in a wide arc, to clear space, and no enchantment.
+;;;
+;;; Its strip: the 4 idle frames, the thrust's 8 (rest, drawing back, drawn back, the thrust, full
+;;; extension, pulling back, recovery, rest), the jolt of a counter, then the sweep's 4. It is placed
+;;; by its aim, the spearhead's point at full extension (art/spear/extend-1.png's tip, placed by
+;;; art/spear/spear-frames.txt), which goes on the screen's middle: held in both hands, the spear
+;;; points where the player looks.
+(define-weapon :spear
+  :title "Spear" :icon 2 :strip spear :frames (:idle 4 :swing 4 :jolt 12 :alternate 13) :aim 187
+  :loot T :loot-strip loot-spear :forge-noun "Point"
+  :sounds (:draw :draw-spear)
+  ;; Further than the sword and staggering more often, but slower and in a narrow arc: it hits
+  ;; only what the player looks at. It lands on frame 4, full extension.
+  :swing (thrust :name :spear :frame-times (0.05 0.08 0.06 0.05 0.12 0.10 0.12 0.10) :hit-frame 4
+                 :reach 3.5 :arc 0.3 :damage (8 14) :knockback 2.5 :pain-bonus 35
+                 :sound :spear-thrust :verb "thrust"
+                 :counter-damage (18 26) :counter-sparks 12 :counter-knockback 5.0
+                 :counter-pain-bonus 100 :jolt-time 0.25 :brace-recoil 2.5 :brace-hit-stop 0.08
+                 :wall (:sparks 8 :grit 3 :speed (3.0 7.5) :spread 0.5
+                        :sound :blade-hit-stone :wood-sound :blade-hit-wood)
+                 ;; The point at full extension, strip frame 8.
+                 :tip (:spear 165 18))
+  ;; The haft's sweep: wound up to the right, the sweep (where it lands), the follow-through,
+  ;; back. A flanker's side is in its arc too.
+  :alternate (sweep :name :haft :frame-times (0.1 0.08 0.12 0.12) :hit-frame 1
+                    :reach 1.8 :arc 1.4 :damage (2 4) :knockback 6.0 :stamina 15.0 :sound :haft-sweep
+                    :wall (:sparks 0 :grit 5 :speed (1.5 4.0) :spread 1.0
+                           :sound :bone-hit :wood-sound :bone-hit)
+                    ;; The spearhead leading the sweep, strip frame 14, its rightmost pixel.
+                    :tip (:spear 337 102)))
 
-(defparameter *counter-damage* '(18 26) "Damage of a thrust that meets a charge.")
-(defparameter *counter-sparks* 12 "Sparks the spearhead throws as it meets a charge.")
-(defparameter *counter-knockback* 5.0 "Speed in m/s a counter throws the creature back.")
-(defparameter *counter-pain-bonus* 100
-  "Percent a counter adds to a boss's PAIN-CHANCE: anything else always flinches.")
-(defparameter *spear-jolt-time* 0.25 "Seconds the spear shows the jolt of a counter.")
-
-(defparameter *sweep-frame-times* '(0.1 0.08 0.12 0.12)
-  "Seconds each frame of the haft sweep shows: wound up to the right, the sweep, the
-follow-through, back. It is over after the last.")
-(defparameter *sweep-hit-frame* 1 "Sweep frame the blow lands on, counted from 0: the sweep.")
-(defparameter *sweep-reach* 1.8 "Metres from the player to the nearest edge of a creature's body.")
-(defparameter *sweep-arc* 1.4 "Radians either side of the view the sweep reaches: a flanker's side too.")
-(defparameter *sweep-damage* '(2 4))
-(defparameter *sweep-knockback* 6.0 "Speed in m/s a sweep slides each creature away.")
-(defparameter *sweep-stamina* 15.0 "Stamina a sweep costs; with less, no sweep.")
-
-;;; Strip frames after the thrust: the jolt of a counter, then the sweep.
-(defparameter *spear-jolt-frame* 12 "Strip index of the jolt of a counter.")
-(defparameter *spear-sweep-first* 13 "Strip index of the sweep's first frame.")
-
-(defmethod swing-frame-times ((weapon (eql :spear))) *thrust-frame-times*)
-(defmethod swing-hit-frame ((weapon (eql :spear))) *thrust-hit-frame*)
-(defmethod swing-reach ((weapon (eql :spear))) *spear-reach*)
-(defmethod swing-arc ((weapon (eql :spear))) *spear-arc*)
-(defmethod swing-damage ((weapon (eql :spear))) *spear-damage*)
-(defmethod swing-knockback ((weapon (eql :spear))) *spear-knockback*)
-(defmethod swing-pain-bonus ((weapon (eql :spear))) *spear-pain-bonus*)
-
-(defmethod bash-frame-times ((weapon (eql :spear))) *sweep-frame-times*)
-(defmethod bash-hit-frame ((weapon (eql :spear))) *sweep-hit-frame*)
 (defmethod bash-strike (player (weapon (eql :spear))) (sweep-hit player))
 
 ;; A thrust's blow is a counter on a creature charging at the player; from the front, where its
@@ -78,50 +59,51 @@ follow-through, back. It is over after the last.")
          (brace-against-charge player target))
         (T (call-next-method))))
 
-(defparameter *brace-recoil* 2.5 "Speed in m/s the spear set against a shield charge pushes the player back.")
-(defparameter *brace-hit-stop* 0.08)
-
 (defun brace-against-charge (player knight)
   "PLAYER's thrust met KNIGHT's shield charge head-on: the point takes the shield, and the charge
 stops dead, the knight reeling with its guard down (knight.lisp). No harm to it."
-  (setf (spear-jolt player) *spear-jolt-time*)
-  (play-sound :bash-glance (location knight))
-  (play-sound :maul-guard-break (location knight))
-  (shield-sparks knight 16)
-  (reel-from-charge knight :spear)
-  (shove-player player (location knight) *brace-recoil*)
-  (hit-stop *brace-hit-stop*))
+  (let ((thrust (swing-blow :spear)))
+    (setf (spear-jolt player) (blow-jolt-time thrust))
+    (play-sound :bash-glance (location knight))
+    (play-sound :maul-guard-break (location knight))
+    (shield-sparks knight 16)
+    (reel-from-charge knight :spear)
+    (shove-player player (location knight) (blow-brace-recoil thrust))
+    (hit-stop (blow-brace-hit-stop thrust))))
 
 (defun spear-counter (player target)
   "TARGET charged onto PLAYER's thrust: skewered, flinching whatever the roll, and its charge
 broken (IMPALE)."
-  (let ((feet (feet player)))
-    (setf (spear-jolt player) *spear-jolt-time*)
+  (let ((feet (feet player))
+        (thrust (swing-blow :spear)))
+    (setf (spear-jolt player) (blow-jolt-time thrust))
     (play-sound :spear-impale (location target))
-    (strike-sparks target feet *counter-sparks*)
+    (strike-sparks target feet (blow-counter-sparks thrust))
     (impale target)
-    (hurt target (roll *counter-damage*) :from feet :by player
-                                          :pain-bonus *counter-pain-bonus*
-                                          :force-pain (not (typep target 'boss)))
-    (push-creature target (v- (location target) feet) (float *counter-knockback* 0f0))
+    (hurt target (roll (blow-counter-damage thrust)) :from feet :by player
+                                                     :pain-bonus (blow-counter-pain-bonus thrust)
+                                                     :force-pain (not (typep target 'boss)))
+    (push-creature target (v- (location target) feet) (float (blow-counter-knockback thrust) 0f0))
     (enchant-strike player :spear target)))
 
 (defun player-sweep (player)
-  (when (and (weapon-ready-p player) (not (attacking-p player)) (<= *sweep-stamina* (stamina player)))
-    (decf (stamina player) *sweep-stamina*)
-    (play-sound :haft-sweep)
-    (setf (bash-time player) 0.0
-          (bash-pending player) T)))
+  (let ((sweep (second-blow :spear)))
+    (when (and (weapon-ready-p player) (not (attacking-p player)) (<= (blow-stamina sweep) (stamina player)))
+      (decf (stamina player) (blow-stamina sweep))
+      (play-sound (blow-sound sweep))
+      (setf (bash-time player) 0.0
+            (bash-pending player) T))))
 
 (defun sweep-hit (player)
   "Sweep the haft through every creature in its arc: each shoved, staggered only in the wind-up of
 an attack and not poised (BASH-HIT's rules). One a shield covers glances off it, and the player
 reels back once. With no one in it, it strikes the wall."
   (let ((feet (feet player))
+        (sweep (second-blow :spear))
         (glanced NIL)
         (struck NIL))
     (loop for c across *creatures*
-          when (and (not (dead c)) (blow-reaches-p player c *sweep-reach* *sweep-arc*))
+          when (and (not (dead c)) (blow-reaches-p player c (blow-reach sweep) (blow-arc sweep)))
             do (setf struck T)
                (if (shielded-p c feet)
                    (progn
@@ -132,28 +114,27 @@ reels back once. With no one in it, it strikes the wall."
                           (bonus (if (and (not poised) (winding-up-p c)) *bash-pain-bonus* -100)))
                      (setf (bash-poise c) *bash-poise-time*)
                      (play-sound :bash-hit (location c))
-                     (hurt c (roll *sweep-damage*) :from feet :pain-bonus bonus :by player)
+                     (hurt c (roll (blow-damage sweep)) :from feet :pain-bonus bonus :by player)
                      (push-creature c (v- (location c) feet)
-                                    (float (* *sweep-knockback* (if poised *poised-bash-knockback* 1.0)) 0f0)))))
+                                    (float (* (blow-knockback sweep) (if poised *poised-bash-knockback* 1.0)) 0f0)))))
     (when glanced
       (shove-player player (location glanced) *bash-recoil*)
       (break-guard player *bash-recoil-guard*))
     ;; With no one in its arc, the haft strikes the wall the crosshair meets (WALL-STRIKE, sword.lisp).
     (unless struck
-      (wall-strike player :haft *sweep-reach*))))
+      (wall-strike player sweep))))
 
 (define-shader-entity spear (sword)
   ((animation :initform (find-fx-animation 'spear))))
 
 (defmethod held-weapon ((spear spear)) :spear)
-(defmethod idle-frames ((spear spear)) *spear-idle-frames*)
-(defmethod swing-first ((spear spear)) *spear-swing-first*)
-(defmethod weapon-aim ((spear spear)) *spear-aim*)
 
 (defmethod weapon-frame ((spear spear) player)
-  (let ((sweep (and (bash-time player) (frame-at (bash-time player) *sweep-frame-times*))))
-    (cond (sweep (+ *spear-sweep-first* sweep))
-          ((< 0.0 (spear-jolt player)) *spear-jolt-frame*)
+  (let* ((template (find-weapon :spear))
+         (sweep (and (bash-time player)
+                     (frame-at (bash-time player) (blow-frame-times (weapon-alternate-blow template))))))
+    (cond (sweep (+ (weapon-frame-index template :alternate) sweep))
+          ((< 0.0 (spear-jolt player)) (weapon-frame-index template :jolt))
           (T (call-next-method)))))
 
 (defun add-spear (container)
