@@ -3,6 +3,26 @@
 What changed in each version, for players. A version's entry is written when it is
 released; the first one comes with the first public build.
 
+## November 21, 2026 v0.1.2
+
+- Saves from 0.1.1 still load, but loading a save on a generated level restarts that level. The new rooms and monsters change what each seed generates.
+- Added the rime hag. She throws frost shards, freezes the floor ahead of you and releases a frost nova when you get close. On the last level, she also summons a blizzard that deflects your projectiles and slows you.
+- Added the arc votary, found from the second level onward. It fires a sustained lightning beam, electrifying the floor and any water around the impact. It turns slowly while firing, so circle it or break its line of sight. On the last level, damage it takes builds towards a shock burst.
+- Added the bloodroot on the last level. It stays in place while its roots spread across floors and walls, draining and snaring you. Spilt blood heals it. Fire and frost stop the roots, and any attack breaks you free.
+- Killing a monster whose element you haven't learnt now drops that element's glyph.
+- From the second level onward, acolytes summon a firestorm that follows you. Absorbing their fire makes them cast it sooner.
+- From the second level onward, knights charge behind their shields. Dodge the charge to make them crash into a wall, leaving them open to attack, or brace your spear to stop them.
+- From the second level onward, imps in packs leap past or over you to attack from the side or behind.
+- Added stained-glass windows that shatter when hit by attacks or shockwaves. Some hide rewards. Added three rooms with these windows: a chapel, an outpost and a treasury. The town's temple and barracks are now buildings with windows.
+- Aiming at an elite now shows its name, health and an explanation of its glow.
+- Missed melee attacks now hit walls, throwing sparks, dust or splinters.
+- Fixed the town trainer's movement, combat, flinch and death animations after the town is sacked.
+- Fixed the thumb placement on the fire spell casting hands and oversized pixels on distant lightning effects.
+- Fixed Quicksave and Quickload failing when bound to mouse buttons.
+- Fixed shop buttons sometimes buying or selling the wrong potion.
+- Fixed quickloading during a weapon switch or swing sometimes leaving the wrong weapon in hand.
+- Fixed absorbed projectiles restoring the wrong amount of mana after a quickload.
+
 ## November 16, 2026 v0.1.1
 
 - Saves from 0.1.0 still load, but a save on a generated level starts that level over: the new level pieces change what each seed builds.

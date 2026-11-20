@@ -7,6 +7,8 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+## November 21, 2026 v0.1.2
+
 - Killing a rime hag (or an arc votary, a bloodroot) before you know its element no longer freezes
   the picture when the level placed no glyph of that kind: its dropped glyph's texture was never
   loaded, so drawing it failed every frame while the game ran on underneath. `preload-pickups`

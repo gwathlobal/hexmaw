@@ -1,7 +1,7 @@
 (asdf:defsystem hexmaw
   :long-name "Hexmaw"
   ;; The game's version: the release tag must agree with it ("Releases" in CLAUDE.md).
-  :version "0.1.1"
+  :version "0.1.2"
   :description "First-person real-time roguelike POC."
   :author "Vadim Murin"
   :license "zlib (code); assets: see ASSETS-LICENSE.md"
