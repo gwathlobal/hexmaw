@@ -1743,7 +1743,7 @@ real time instead.
   of the spell's power, `spell-power`) out of the pool; with too little left the blow is plain, and a miss costs
   nothing. Its self effects land on the player. The weapon's border on the hotbar and in the bag takes
   the spell's colour, dimmed while mana can't pay (`weapon-enchantment`, `spell-tint`), and so does its
-  sprite on screen: `sword` (and so the spear and the shield) is a `rim-glow` (boss.lisp), whose rim
+  sprite on screen: `weapon-sprite` (and so the shield's) is a `rim-glow` (boss.lisp), whose rim
   `rim-weapon`'s enchantment colours each tick, pulsing on `*light-clock*` (`*weapon-rim-strength*`,
   `*weapon-rim-pulse*`) and dimmed by `*enchant-dim*`; `*weapon-rim-width*` (2 texels, `rim-width`)
   since the weapons' art is fine-grained. The shield's rim is the shield's own enchantment.
@@ -1762,17 +1762,20 @@ real time instead.
   its hit frame: the nearest creature within its reach (2 m) and arc (0.8 rad), not behind a wall.
   The sword's slash and the spear's thrust are both swings, through the same `swing-time`, each
   timed and dealt by its template's swing (`swing-blow`, `blow-frame-times`, `blow-hit-time`,
-  `blow-reach`, `blow-damage` and the rest), and generics on the sprite say which weapon it draws
-  for and how its strip is laid out (`held-weapon`, `idle-frames`, `swing-first`, and
-  `weapon-aim`, from the template's `:frames` and `:aim`, NIL to keep it against the bottom-right
-  corner). The mouse wheel is the quickslot's (inventory.lisp). Weapon and rune icons are frames
+  `blow-reach`, `blow-damage` and the rest). On screen each template with a strip has a
+  `weapon-sprite` (`add-weapon-sprites`, `setup-scene`; its `sprite-kind` the template's name), drawn
+  while that weapon is in hand (`sprite-shown-p`), laid out by the template's `:aim` (NIL keeps it
+  against the bottom-right corner) and showing `weapon-frame`: the alternate blow's frames while it
+  runs, the jolt (`:jolt`) while `spear-jolt` lasts, else `blow-frame` of its swing (the swing's
+  frames from `:swing`, the idle loop's `:idle`; a `charged-blow` shows its charge first). The mouse wheel is the quickslot's (inventory.lisp). Weapon and rune icons are frames
   of `data/sprites/icons/weapons.png` (a weapon's its template's `:icon`; a rune's by its spell's first effect, `spell-icon-key` into `*spell-icons*`:
   damage by element, a flame, a snowflake, a lightning bolt; drain a drop of blood, heal a cross, ward a
   shield, slow an hourglass, knockback a shockwave; a vortex the tornado), drawn by
   `tools/draw_weapon_icons.py data/sprites/icons/weapons`, then `tools/restyle.py --house
   data/sprites/icons/weapons.png` (the palette; Absorb's whirlpool is frame 12); a new weapon or effect kind needs a frame
   there.
-  The left hand holds a shield, a sprite of its own (`shield`, a subclass of `sword`) against
+  The left hand holds a shield, a sprite of its own (a `guard-sprite`, one per guard, its
+  `sprite-kind` the weapon it sinks with) against
   the bottom-left corner, at the sword's art pixel size (`sword-scale`), so it doesn't slide
   off on screens whose whole-number scale shows fewer art pixels across. It drops and sways
   with the sword. Both draw at `*weapon-depth*`, behind the bars, the hotbar and the
@@ -1794,7 +1797,7 @@ real time instead.
   (`winding-up-p`, creature.lisp), and never otherwise: a timed interrupt, not a stunlock.
   Every bash that lands leaves the creature poised (`bash-poise`, `*bash-poise-time*`), when
   another bash can't stagger it and shoves it only `*poised-bash-knockback*` as far
-  (`bash-hit`, `swing-target` with the bash's reach and arc). `shield-frame` picks the strip
+  (`bash-hit`, `swing-target` with the bash's reach and arc). The guard sprite's `weapon-frame` picks the strip
   frame: idle, its guard's raise frames rising, the block held, then the bash's.
   `block-raise` is the template's guard's (`weapon-guard-of`; a weapon with none has no guard), and
   the second blow (`second-blow`: the template's alternate, the spear's sweep and the maul's
@@ -1808,7 +1811,7 @@ real time instead.
   through `swing-miss`; a second blow through `bash-strike` (player, blow): `bash-hit`, `sweep-hit`,
   `earthshake-hit`. `blow-reaches-p` is the test every melee blow makes of one creature (reach, arc,
   height, a clear line), `looked-at-creature` the nearest that passes it. The sprite's tick asks
-  `weapon-frame` for its strip frame.
+  `weapon-frame` for its strip frame, `rim-weapon` the enchantment its rim shows.
   **A blow that finds no one strikes the wall**: the slash and thrust (`swing-miss`'s default
   method), the maul when there is no corpse to pulp, the bash (`bash-hit`) and the spear's sweep
   (`sweep-hit`) call `wall-strike` with their reach. The line goes from the eye through where the
@@ -1834,9 +1837,9 @@ real time instead.
   (its thrust's reach, 3.5 m against 2) in a narrower arc (0.3 rad), staggers more (pain bonus
   35) and is slower: the thrust (a `thrust` blow, `define-weapon :spear`) takes 0.68 s against 0.53
   and lands at full extension (0.24 s in, against 0.23).
-  Its sprite (`spear`) is a subclass of the sword's, drawn from `data/sprites/spear/spear`,
+  Its sprite is a `weapon-sprite` like the sword's, drawn from `data/sprites/spear/spear`,
   at the sword's art pixel size (`sword-scale`) and sunk as far (`*sword-drop*`), but placed
-  by its aim (`weapon-aim`, the template's `:aim`: the point at full extension) on the screen's
+  by its aim (the template's `:aim`: the point at full extension) on the screen's
   middle rather than against the right edge, so the thrust goes where the player looks on any
   screen width. A re-made strip whose extended point moves needs its `:aim` measured again
   (`art/spear/spear-frames.txt` says how).

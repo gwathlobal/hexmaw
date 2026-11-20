@@ -518,78 +518,101 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
                  (held-spell player) (wanted-spell player))
            (play-sound (weapon-sound (weapon player) :draw))))))
 
-;;; The sword on screen. The spear's sprite (spear.lisp) is a subclass: these generics
-;;; say which weapon a sprite draws and how its strip is laid out.
+;;; The weapon on screen: one WEAPON-SPRITE for each template with a strip (sword, spear, maul),
+;;; drawn while it is in hand, its strip laid out by the template's FRAMES and AIM (weapons.lisp),
+;;; and one GUARD-SPRITE for each guard (the shield), drawn while its weapon is.
 
-(define-shader-entity sword (rim-glow hud-element fx-sprite)
+(define-shader-entity weapon-sprite (rim-glow hud-element fx-sprite)
   ((vertex-array :initform (// 'hexmaw 'hud-quad))
-   (animation :initform (find-fx-animation 'sword))
+   (kind :initarg :kind :initform :sword :reader sprite-kind
+         :documentation "The template it draws, by name (DEFINE-WEAPON).")
    (bob-phase :initform 0.0 :accessor bob-phase)
-   (bob-amount :initform 0.0 :accessor bob-amount)))
+   (bob-amount :initform 0.0 :accessor bob-amount))
+  (:documentation "A weapon in hand on screen, its template's strip."))
 
-(defgeneric held-weapon (sprite)
-  (:documentation "The weapon (:SWORD, :SPEAR or :MAUL, as a weapon item's :WEAPON) SPRITE is drawn for."))
-(defgeneric idle-frames (sprite)
-  (:documentation "Strip frames SPRITE's idle loop steps through, from the first."))
-(defgeneric swing-first (sprite)
-  (:documentation "Strip index of the first frame of SPRITE's swing."))
-(defgeneric weapon-aim (sprite)
-  (:documentation "Art pixels left from the strip's screen corner (the bottom-right one,
-*SWORD-OVERHANG* in from the strip's edge) to where SPRITE's weapon points, which LAYOUT-SWORD
-puts on the screen's middle; or NIL to keep the strip against the bottom-right corner."))
+(defun make-weapon-sprite (template)
+  (make-instance 'weapon-sprite :kind (weapon-name template)
+                                :animation (find-fx-animation (weapon-strip template))))
 
-(defmethod held-weapon ((sword sword)) :sword)
-;; From its template's FRAMES and AIM (weapons.lisp).
-(defmethod idle-frames ((sword sword)) (weapon-frame-index (find-weapon (held-weapon sword)) :idle))
-(defmethod swing-first ((sword sword)) (weapon-frame-index (find-weapon (held-weapon sword)) :swing))
-(defmethod weapon-aim ((sword sword)) (weapon-aim-pixels (find-weapon (held-weapon sword))))
+(defun sprite-template (sprite)
+  (find-weapon (sprite-kind sprite)))
+
+(defgeneric blow-frame (blow sprite player)
+  (:documentation "Strip frame SPRITE shows for PLAYER while its template's swing is BLOW and no second
+blow runs: the swing's, else the idle loop's. A charged blow shows its charge first (maul.lisp).")
+  (:method ((blow blow) sprite player)
+    (let* ((template (sprite-template sprite))
+           (time (swing-time player))
+           (swing (and time (frame-at time (blow-frame-times blow)))))
+      (if swing
+          (+ (weapon-frame-index template :swing) swing)
+          (mod (floor (* (age sprite) (animation-fps (sprite-animation sprite))))
+               (weapon-frame-index template :idle))))))
 
 (defgeneric weapon-frame (sprite player)
-  (:documentation "Strip frame SPRITE shows for PLAYER now: its swing's, else its idle loop's.")
-  (:method ((sword sword) player)
-    (let* ((time (swing-time player))
-           (swing (and time (swing-frame time (held-weapon sword)))))
-      (if swing
-          (+ (swing-first sword) swing)
-          (mod (floor (* (age sword) (animation-fps (sprite-animation sword)))) (idle-frames sword))))))
+  (:documentation "Strip frame SPRITE shows for PLAYER now: its template's alternate blow's while it runs,
+the jolt of a counter, else its swing's (BLOW-FRAME); a guard's how far it is raised, or its bash.")
+  (:method ((sprite weapon-sprite) player)
+    (let* ((template (sprite-template sprite))
+           (alternate (weapon-alternate-blow template))
+           (second (and alternate (bash-time player) (frame-at (bash-time player) (blow-frame-times alternate))))
+           (jolt (weapon-frame-index template :jolt NIL)))
+      (cond (second (+ (weapon-frame-index template :alternate) second))
+            ((and jolt (< 0.0 (spear-jolt player))) jolt)
+            (T (blow-frame (weapon-swing template) sprite player))))))
 
-(defun add-weapon-sprite (class container)
-  (let ((sprite (make-instance class)))
-    (setf (getf *weapon-sprites* (rim-weapon sprite)) sprite)
-    (enter sprite container)))
+(defun add-weapon-sprite (sprite container)
+  (setf (getf *weapon-sprites* (rim-weapon sprite)) sprite)
+  (enter sprite container))
 
-(defun add-sword (container)
-  (add-weapon-sprite 'sword container))
+(defun add-weapon-sprites (container)
+  "One sprite for each weapon template with a strip, then one for each guard, with the first weapon
+whose guard it is (it sinks with that weapon's strip)."
+  (let ((guards ()))
+    (dolist (template (weapon-templates))
+      (when (weapon-strip template)
+        (add-weapon-sprite (make-weapon-sprite template) container)
+        (let ((guard (weapon-guard template)))
+          (when (and guard (not (assoc guard guards)))
+            (push (cons guard template) guards)))))
+    (loop for (guard . template) in (reverse guards)
+          do (add-weapon-sprite (make-instance 'guard-sprite :guard (guard-name guard) :kind (weapon-name template)
+                                                             :animation (find-fx-animation (guard-strip guard)))
+                                container))))
 
-(defmethod render :around ((sword sword) (program shader-program))
-  (when (and *player* (eq (weapon *player*) (held-weapon sword)))
+(defgeneric sprite-shown-p (sprite)
+  (:documentation "True if SPRITE draws now: its weapon is in hand.")
+  (:method ((sprite weapon-sprite)) (eq (weapon *player*) (sprite-kind sprite))))
+
+(defmethod render :around ((sprite weapon-sprite) (program shader-program))
+  (when (and *player* (sprite-shown-p sprite))
     (call-next-method)))
 
 (defun sword-scale ()
-  "Screen pixels per art pixel, across and up, for the sword and the shield: from the
-sword strip's cell height, so the two always share one art pixel size."
+  "Screen pixels per art pixel, across and up, for every first-person weapon, the shield and the
+hands: from the sword strip's cell height, so they all share one art pixel size."
   (let* ((atlas (animation-atlas (find-fx-animation 'sword)))
          (sy (max 1 (round (* *sword-height* (height (context +main+))) (getf atlas :cell-height)))))
     (values (max 1 (round (* sy *sword-stretch*))) sy)))
 
-(defun layout-sword (sword)
-  "Put the strip's right edge past the screen's (or its aim on the screen's middle, for a
-weapon with a WEAPON-AIM), sunk below the bottom edge, lowered while switching, and offset
-by the sway. As with the hands, the sway only ever dips."
+(defun layout-sword (sprite)
+  "Put the strip's right edge past the screen's (or its template's aim on the screen's middle),
+sunk below the bottom edge, lowered while switching, and offset by the sway. As with the hands,
+the sway only ever dips."
   (multiple-value-bind (sx sy) (sword-scale)
-    (let* ((atlas (animation-atlas (sprite-animation sword)))
+    (let* ((atlas (animation-atlas (sprite-animation sprite)))
            (context (context +main+))
            (w (* sx (getf atlas :cell-width)))
            (h (* sy (getf atlas :cell-height)))
-           (aim (weapon-aim sword))
+           (aim (weapon-aim-pixels (sprite-template sprite)))
            (corner (if aim
                        (+ (round (width context) 2) (* aim sx))
                        (width context)))
-           (bob (* *sword-bob* (bob-amount sword)))
-           (phase (bob-phase sword)))
-      (setf (vx (scaling sword)) (float w 0f0)
-            (vy (scaling sword)) (float h 0f0))
-      (place sword
+           (bob (* *sword-bob* (bob-amount sprite)))
+           (phase (bob-phase sprite)))
+      (setf (vx (scaling sprite)) (float w 0f0)
+            (vy (scaling sprite)) (float h 0f0))
+      (place sprite
              ;; A strip whose pictures reach past the corner says how far (make_shield.py).
              (+ (- corner w) (* (getf atlas :overhang *sword-overhang*) sx) (round (* bob sx (cos phase))))
              (- (+ (* *sword-drop* sy)
@@ -598,26 +621,32 @@ by the sway. As with the hands, the sway only ever dips."
              *weapon-depth*))))
 
 ;; Replaces FX-SPRITE's tick, which would face it into the world.
-(define-handler (sword tick) (dt)
+(define-handler (weapon-sprite tick) (dt)
   (when *player*
     (unless (frozen-p)
-      (incf (age sword) dt)
-      (update-bob sword dt))
-    (let ((atlas (animation-atlas (sprite-animation sword))))
-      (strip-uv (frame-uv sword) atlas (weapon-frame sword *player*) (getf atlas :frames)))
-    (layout-sword sword)))
+      (incf (age weapon-sprite) dt)
+      (update-bob weapon-sprite dt))
+    (let ((atlas (animation-atlas (sprite-animation weapon-sprite))))
+      (strip-uv (frame-uv weapon-sprite) atlas (weapon-frame weapon-sprite *player*) (getf atlas :frames)))
+    (layout-sword weapon-sprite)))
 
-;;; The shield, in the left hand: a sprite of its own against the bottom-left corner,
-;;; drawn with the sword at the sword's art pixel size. Its strip
-;;; (data/sprites/sword/shield, from tools/make_shield.py) has its cell's bottom-left
-;;; corner its guard's MARGIN art pixels past the screen's. It drops and sways with the
-;;; sword. Frames: low and idle, then its guard's RAISE-FRAMES rising (lowering plays them
-;;; back), the block held, then the bash's frames.
+;;; The shield, in the left hand: a guard's sprite against the bottom-left corner, drawn with
+;;; the sword at the sword's art pixel size. Its strip (data/sprites/sword/shield, from
+;;; tools/make_shield.py) has its cell's bottom-left corner its guard's MARGIN art pixels past
+;;; the screen's. It drops and sways with the sword. Frames: low and idle, then its guard's
+;;; RAISE-FRAMES rising (lowering plays them back), the block held, then the bash's frames.
 
 (define-fx-animation shield "sprites/sword/shield" :fps 1 :loop T)
 
-(define-shader-entity shield (sword)
-  ((animation :initform (find-fx-animation 'shield))))
+(define-shader-entity guard-sprite (weapon-sprite)
+  ((guard :initarg :guard :initform :shield :reader sprite-guard
+          :documentation "The guard it draws, by name (DEFINE-GUARD)."))
+  (:documentation "A guard on screen, drawn while a weapon whose guard it is is in hand. Its KIND is
+the first weapon whose guard it is: it sinks with that one's strip."))
+
+(defmethod sprite-shown-p ((sprite guard-sprite))
+  (let ((template (find-weapon (weapon *player*) NIL)))
+    (and template (eq (weapon-guard-name template) (sprite-guard sprite)))))
 
 ;;; An enchanted weapon on screen glows at its rim in its spell's colour (RIM-GLOW, boss.lisp),
 ;;; as its hotbar slot's border does: pulsing, and dim while mana can't pay a blow.
@@ -627,16 +656,17 @@ by the sway. As with the hands, the sway only ever dips."
 (defparameter *weapon-rim-rate* 3.0 "The rim's pulse, in radians a second.")
 
 (defparameter *weapon-rim-width* 2 "Texels the rim reaches in: the weapons' art is fine-grained.")
-(defmethod rim-width ((sprite sword)) *weapon-rim-width*)
+(defmethod rim-width ((sprite weapon-sprite)) *weapon-rim-width*)
 
 (defgeneric rim-weapon (sprite)
-  (:documentation "The weapon whose enchantment SPRITE's rim shows: the shield's own for the shield.")
-  (:method ((sprite sword)) (held-weapon sprite))
-  (:method ((sprite shield)) :shield))
+  (:documentation "The weapon whose enchantment SPRITE's rim shows, also its key in *WEAPON-SPRITES*:
+a guard's own for a guard.")
+  (:method ((sprite weapon-sprite)) (sprite-kind sprite))
+  (:method ((sprite guard-sprite)) (sprite-guard sprite)))
 
-(define-handler (sword tick :after) ()
-  (let ((spell (and *player* (weapon-spell *player* (rim-weapon sword))))
-        (glow (glow sword)))
+(define-handler (weapon-sprite tick :after) ()
+  (let ((spell (and *player* (weapon-spell *player* (rim-weapon weapon-sprite))))
+        (glow (glow weapon-sprite)))
     (if spell
         (progn
           (spell-tint spell glow 1.0)
@@ -645,12 +675,9 @@ by the sway. As with the hands, the sway only ever dips."
                                 (* *weapon-rim-pulse* 0.5 (+ 1.0 (sin (* *weapon-rim-rate* *light-clock*))))))))
         (setf (vw glow) 0.0))))
 
-(defun add-shield (container)
-  (add-weapon-sprite 'shield container))
-
-(defun shield-frame (player)
-  "Strip frame showing PLAYER's shield: the bash's, else how far it is raised."
-  (let* ((guard (find-guard :shield))
+(defmethod weapon-frame ((sprite guard-sprite) player)
+  ;; The bash's frames, else how far the guard is raised.
+  (let* ((guard (find-guard (sprite-guard sprite)))
          (raise-frames (guard-raise-frames guard))
          (bash (and (bash-time player) (eq (weapon-guard-of (weapon player)) guard)
                     (frame-at (bash-time player) (blow-frame-times (guard-bash guard)))))
@@ -661,33 +688,34 @@ by the sway. As with the hands, the sway only ever dips."
           ((< 0.0 raise) (min raise-frames (1+ (floor (* raise raise-frames)))))
           (T 0))))
 
-(defun layout-shield (shield)
+(defun layout-shield (sprite)
   (multiple-value-bind (sx sy) (sword-scale)
-    (let* ((atlas (animation-atlas (sprite-animation shield)))
+    (let* ((atlas (animation-atlas (sprite-animation sprite)))
            (w (* sx (getf atlas :cell-width)))
            (h (* sy (getf atlas :cell-height)))
-           (margin (guard-margin (find-guard :shield)))
-           (bob (* *sword-bob* (bob-amount shield)))
-           (phase (bob-phase shield)))
-      (setf (vx (scaling shield)) (float w 0f0)
-            (vy (scaling shield)) (float h 0f0))
-      (place shield
+           (margin (guard-margin (find-guard (sprite-guard sprite))))
+           (bob (* *sword-bob* (bob-amount sprite)))
+           (phase (bob-phase sprite)))
+      (setf (vx (scaling sprite)) (float w 0f0)
+            (vy (scaling sprite)) (float h 0f0))
+      (place sprite
              (- (round (* bob sx (cos phase))) (* margin sx))
              (- (+ (* margin sy)
                    (round (* bob sy (abs (sin phase))))
-                   ;; Lowered by the sword's height, so both leave the screen together.
-                   (round (* sy (getf (animation-atlas (find-fx-animation 'sword)) :cell-height)
+                   ;; Lowered by its weapon's height, so both leave the screen together.
+                   (round (* sy (getf (animation-atlas (find-fx-animation (weapon-strip (sprite-template sprite))))
+                                      :cell-height)
                              (weapon-drop *player*)))))
              *weapon-depth*))))
 
-;; Replaces the sword's tick.
-(define-handler (shield tick) (dt)
+;; Replaces the weapon sprite's tick.
+(define-handler (guard-sprite tick) (dt)
   (when *player*
     (unless (frozen-p)
-      (update-bob shield dt))
-    (let ((atlas (animation-atlas (sprite-animation shield))))
-      (strip-uv (frame-uv shield) atlas (shield-frame *player*) (getf atlas :frames)))
-    (layout-shield shield)))
+      (update-bob guard-sprite dt))
+    (let ((atlas (animation-atlas (sprite-animation guard-sprite))))
+      (strip-uv (frame-uv guard-sprite) atlas (weapon-frame guard-sprite *player*) (getf atlas :frames)))
+    (layout-shield guard-sprite)))
 
 ;;; The weapon slots: one square per weapon in *WEAPONS*, in a row above the bars,
 ;;; each with the weapon's icon and its key number in the top-left

@@ -7,6 +7,14 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- The weapons on screen are one class, `weapon-sprite`, one made for each template with a strip
+  (`add-weapon-sprites`), and the shield a `guard-sprite`, one for each guard; the `sword`,
+  `spear`, `maul` and `shield` entities, `add-sword` and its siblings, `held-weapon`,
+  `idle-frames`, `swing-first`, `weapon-aim` and `shield-frame` are gone. A sprite's frame comes
+  from its template's `:frames` (`weapon-frame`, `blow-frame`; a `charged-blow` shows its
+  charge). `*weapon-sprites*` is keyed by weapon and guard name. Screenshots of every weapon and
+  move match master's.
+
 - What a weapon does is its blows' classes (`thrust`, `charged-blow`, `bash`, `sweep`,
   `earthshake`) and its template's: `weapon-attack` and `weapon-alternate` (the hands a
   `hands-template` that casts), `start-blow`, and `swing-strike`, `swing-miss` and `bash-strike`

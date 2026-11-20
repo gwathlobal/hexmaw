@@ -122,19 +122,3 @@ and the player reels back once. With no one in it, it strikes the wall."
 
 (defmethod second-blow-lines ((blow sweep))
   (list "Right button: sweep, shove all near"))
-
-(define-shader-entity spear (sword)
-  ((animation :initform (find-fx-animation 'spear))))
-
-(defmethod held-weapon ((spear spear)) :spear)
-
-(defmethod weapon-frame ((spear spear) player)
-  (let* ((template (find-weapon :spear))
-         (sweep (and (bash-time player)
-                     (frame-at (bash-time player) (blow-frame-times (weapon-alternate-blow template))))))
-    (cond (sweep (+ (weapon-frame-index template :alternate) sweep))
-          ((< 0.0 (spear-jolt player)) (weapon-frame-index template :jolt))
-          (T (call-next-method)))))
-
-(defun add-spear (container)
-  (add-weapon-sprite 'spear container))

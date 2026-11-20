@@ -211,26 +211,13 @@ unless poised (a boss only rolls), and is shoved out."
                                 (float (* (blow-knockback shake) (if poised *poised-bash-knockback* 1.0)) 0f0)
                                 :heft (not boss))))))
 
-;;; The sprite.
+;;; On screen: the charge's frames, raised, then wound up, and trembling from one wound-up frame to
+;;; the other once full; else as any swing.
 
-(define-shader-entity maul (sword)
-  ((animation :initform (find-fx-animation 'maul))))
-
-(defmethod held-weapon ((maul maul)) :maul)
-
-(defmethod weapon-frame ((maul maul) player)
-  (let* ((template (find-weapon :maul))
-         (blow (weapon-swing template))
-         (first (weapon-frame-index template :charge))
-         (shake (and (bash-time player)
-                     (frame-at (bash-time player) (blow-frame-times (weapon-alternate-blow template)))))
-         (charge (charge-time player)))
-    (cond (shake (+ (weapon-frame-index template :alternate) shake))
-          ((null charge) (call-next-method))
+(defmethod blow-frame ((blow charged-blow) sprite player)
+  (let ((charge (charge-time player))
+        (first (weapon-frame-index (sprite-template sprite) :charge)))
+    (cond ((null charge) (call-next-method))
           ((< charge (blow-raise-frame-time blow)) first)
           ((< charge (blow-full-charge blow)) (+ 1 first))
-          ;; Full: trembling from one wound-up frame to the other.
-          (T (+ 1 first (mod (floor (* (age maul) (blow-tremble-rate blow))) 2))))))
-
-(defun add-maul (container)
-  (add-weapon-sprite 'maul container))
+          (T (+ 1 first (mod (floor (* (age sprite) (blow-tremble-rate blow))) 2))))))
