@@ -171,6 +171,10 @@ must have an altar (:ALTAR-CHANCE 1) and has none the player can get to."
 creatures (CHECK-REACHABLE), :ICE-JOINS (CHECK-ICE-JOINS). Level sweeps read it (levelcheck.lisp).")
 
 (defun build-level (container)
+  ;; A rebuild of the same seed and depth may pick up edited level or settlement rules.
+  (setf *combat-rules-cache* NIL)
+  (when (eq *level* :generated)
+    (current-combat-rules))
   (let ((*block-memo* (make-hash-table :test 'equal))
         (attempts 0) (last-problem NIL))
     (loop for attempt from 0

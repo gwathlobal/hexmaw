@@ -7,6 +7,9 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- Creature updates reuse the current level's difficulty and ability rules. A level build
+  refreshes them, including on quickload and when rebuilding the same seed after an edit.
+
 - Quicksave and Quickload respond to mouse buttons assigned in Controls.
 
 - Projectiles in a save remember who first fired them, including after a reflection, so

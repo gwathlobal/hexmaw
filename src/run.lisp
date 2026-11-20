@@ -137,18 +137,29 @@ the last level (*LAST-LEVEL-KINDS*)."
   "True if level DEPTH of the run is the settlement's."
   (and (run-level-property depth :core) T))
 
+(defparameter *combat-rules-cache* NIL
+  "The run seed, depth and level properties used by creature updates. Rebuilt on level entry.")
+
+(defun current-combat-rules ()
+  (let ((seed (current-run-seed)))
+    (unless (and (eql seed (first *combat-rules-cache*))
+                 (eql *run-depth* (second *combat-rules-cache*)))
+      (setf *combat-rules-cache*
+            (list seed *run-depth* (nth (1- *run-depth*) (run-levels)))))
+    (third *combat-rules-cache*)))
+
 (defun depth-scale (key)
   "How much the level being played scales a creature's KEY (see *RUN-LEVELS*): 1 but on a
 generated level."
   (if (eq *level* :generated)
-      (float (run-level-property *run-depth* key 1.0) 0f0)
+      (float (getf (current-combat-rules) key 1.0) 0f0)
       1f0))
 
 (defun level-ability-p (name)
   "True if the level being played lets its monsters use ability NAME (:ABILITIES in *RUN-LEVELS*):
 always but on a generated level, so the debug level has them all."
   (or (not (eq *level* :generated))
-      (and (member name (run-level-property *run-depth* :abilities)) T)))
+      (and (member name (getf (current-combat-rules) :abilities)) T)))
 
 (defun current-run-seed ()
   "The seed this run's levels come from, picked when first asked for; *LEVEL-SEED* fixes it for testing."
