@@ -15,3 +15,7 @@ Both are placeholders that will do for now.
 
 The 3D pipeline (`art/sword/sword.blend`, `tools/blender_sword.py`) gives correct poses. What's
 missing is a restyle with a clean pixel grid and a consistent palette across frames.
+
+## Take loading off the death screen
+
+Death should end the run. The death screen's Quickload and Load game rows and F9 after death (commit 9f67833, merged as 5d47593) should be removed, and CLAUDE.md, README-PLAYERS.txt and the internal changelog updated to say so.
