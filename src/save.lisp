@@ -484,11 +484,12 @@ same pickups, which a save older than :PICKUP-KINDS can't tell, so its level sta
     (migrate-bindings *player*)
     (migrate-enchantments *player*)
     (migrate-known-effects *player*)
-    (sync-wanted *player*)
-    ;; Older saves kept the active weapon but only the requested rune.
-    (when (and (eq (weapon *player*) :hands)
-               (not (assoc 'held-rune (getf save :player))))
-      (setf (held-spell *player*) (wanted-spell *player*)))
+    ;; A save keeps what is on screen (HELD-RUNE) apart from a switch queued to the wanted slot.
+    ;; One older than that kept only the wanted slot's rune: take what that slot holds in hand,
+    ;; or its weapon and spell might not agree (the casting hands up with no spell).
+    (if (assoc 'held-rune (getf save :player))
+        (sync-wanted *player*)
+        (settle-held *player*))
     (place-camera *player*)
     (loop for record in records
           for creature across *creatures*

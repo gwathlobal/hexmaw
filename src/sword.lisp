@@ -129,7 +129,8 @@ changed: its weapon, the hands with its rune's spell, or nothing."
           (wanted-spell player) (stack-spell stack))))
 
 (defun settle-held (player)
-  "Take what the wanted hotbar slot holds in hand at once after the stairs or a scene reset."
+  "Take what the wanted hotbar slot holds in hand at once after the stairs, a scene reset, or a
+load of a save older than HELD-RUNE (save.lisp)."
   (sync-wanted player)
   (setf (weapon player) (wanted-weapon player)
         (held-spell player) (wanted-spell player)))

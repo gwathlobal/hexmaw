@@ -7,6 +7,10 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- A save from before the weapon on screen was saved (`held-rune`) takes what its wanted hotbar
+  slot holds in hand on loading (`settle-held`), as it did before: with that slot empty it had
+  loaded with the casting hands up and no spell in them.
+
 - Rime laid with no floor under it (a frost patch struck high over a drop) ends in the same
   jagged frosted top as any other on the walls: the drawer measured the top from the patch's
   floor height, 1.25 m above where its wall cells end, so the cut never reached them.
