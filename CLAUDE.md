@@ -1738,7 +1738,18 @@ real time instead.
   `swing-blow` and `second-blow` (the alternate, else the guard's bash: what runs on `bash-time`)
   take a template's name. Every holder keeps the name and looks the template up, and a redefinition
   replaces the template in its place, so reloading a weapon's file updates the one in hand. Nothing
-  in a definition is evaluated. The hands are a template too (hands.lisp), for their draw sound.
+  in a definition is evaluated. The hands are a template too (`hands-template`, hands.lisp): both
+  buttons cast, and their frames follow the spell in them, not the template. A **weapon item**
+  (`weapon-item`: its template's name and its enchantment) is one weapon the player owns, the third
+  element of its bag stack (inventory.lisp).
+  **Adding a weapon** is a file with its `define-fx-animation` strip and a `define-weapon`, in
+  `hexmaw.asd` after maul.lisp, reusing the blow classes: a halberd that thrusts and sweeps is
+  `:swing (thrust ...)` and `:alternate (sweep ...)` with its own numbers, `:frames`, `:aim`, `:icon`
+  (a frame in `tools/draw_weapon_icons.py`), `:loot-strip` (a sprite in `tools/draw_loot.py`),
+  `:forge-noun` and `:loot T`. Its sprite, item, tooltip, loot, forge name, sounds, wall strikes,
+  hotbar icon and saves follow from the template. A new kind of move is a `blow` subclass with
+  methods on `start-blow`, `swing-strike` and `swing-miss` (as a swing) or `bash-strike` (as a
+  second blow), `blow-frame` if it draws other frames, and `blow-lines` or `second-blow-lines`.
 - `src/sword.lisp` also has **enchantments**: a weapon's spell (a sword's or spear's its own stack's,
   `stack-enchantment`, so two swords differ; the shield's in the player's `enchantments` plist under
   `:shield`; `weapon-spell` asks for the one in hand, `held-weapon-stack`; made at the forge or found,
@@ -1772,7 +1783,7 @@ real time instead.
   `weapon-sprite` (`add-weapon-sprites`, `setup-scene`; its `sprite-kind` the template's name), drawn
   while that weapon is in hand (`sprite-shown-p`), laid out by the template's `:aim` (NIL keeps it
   against the bottom-right corner) and showing `weapon-frame`: the alternate blow's frames while it
-  runs, the jolt (`:jolt`) while `spear-jolt` lasts, else `blow-frame` of its swing (the swing's
+  runs, the jolt (`:jolt`) while `weapon-jolt` lasts, else `blow-frame` of its swing (the swing's
   frames from `:swing`, the idle loop's `:idle`; a `charged-blow` shows its charge first). The mouse wheel is the quickslot's (inventory.lisp). Weapon and rune icons are frames
   of `data/sprites/icons/weapons.png` (a weapon's its template's `:icon`; a rune's by its spell's first effect, `spell-icon-key` into `*spell-icons*`:
   damage by element, a flame, a snowflake, a lightning bolt; drain a drop of blood, heal a cross, ward a
@@ -1854,7 +1865,7 @@ real time instead.
   leap, or a flyer with `dive-left`, the harpy; not a crouch, nor a melee blow's lunge, which stops
   a moment into its wind-up) skewers it (`spear-counter`): the thrust's counter damage (18 to 26)
   and knockback, a flinch whatever the roll (`hurt`'s `:force-pain`; a boss rolls with its counter
-  pain bonus), the jolt frame for its jolt time (`spear-jolt`), the enchantment,
+  pain bonus), the jolt frame for its jolt time (`weapon-jolt`), the enchantment,
   and `impale`: a leaper drops out of the air where it is (`falling`, `impaled`) and lands with no
   quake (an imp's own `react-to-hit` throws it down; a diving harpy is downed as by any hit). A
   knight from a view its shield covers takes it as a plain thrust. The thrust lands 0.24 s after
@@ -1914,7 +1925,12 @@ real time instead.
   To try it on the debug level: `(select-weapon *player* :6)`, then `(setf (attack-held *player*) t)
   (player-attack *player*)`, and `(setf (attack-held *player*) NIL)` 1.35 s later for a full blow;
   `(player-press *player* :mouse-right)` shakes the floor.
-- `src/player.lisp`: first-person controller and box collision. Walking backward keeps
+- `src/player.lisp`: first-person controller and box collision. What the weapon in hand is doing is
+  the player's `wield` (class `wield`): `swing-time`, `swing-pending`, `charge-time`, `charge-voice`,
+  `blow-charge`, `block-raise`, `bash-time`, `bash-pending`, `weapon-jolt` and `guard-broken`, which
+  the player's accessors of the same names reach, so a save keeps them by those names (an older
+  save's `spear-jolt` is read as `weapon-jolt`, `*renamed-saved-slots*`, save.lisp). The buttons held,
+  `attack-held` and `block-held`, are the player's: casting reads them too. Walking backward keeps
   `*backpedal-scale*` (0.75) of the speed. A vertical move (`move-axis`) stops short of a solid
   and never passes where it started, so a solid the body is already inside can't drop it through
   the floor. Below `*kill-height*` the player goes back to the start (`respawn`), and the log gets

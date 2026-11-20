@@ -479,7 +479,7 @@ in hand's (STACK-ENCHANTMENT, inventory.lisp), each weapon having its own."
     ;; A bash that glanced off a knight's shield knocked the guard aside (BREAK-GUARD), ending it.
     (unless (and (bash-time player) (frame-at (bash-time player) (blow-frame-times (second-blow (weapon player)))))
       (setf (bash-time player) NIL)))
-  (setf (spear-jolt player) (max 0.0 (- (spear-jolt player) dt)))
+  (setf (weapon-jolt player) (max 0.0 (- (weapon-jolt player) dt)))
   (update-blow-charge player dt)
   ;; The guard (the shield) rises while the block is held with its weapon in hand and staying
   ;; there, once any swing is over; it stays up through a bash. With no guard in hand, one still
@@ -558,7 +558,7 @@ the jolt of a counter, else its swing's (BLOW-FRAME); a guard's how far it is ra
            (second (and alternate (bash-time player) (frame-at (bash-time player) (blow-frame-times alternate))))
            (jolt (weapon-frame-index template :jolt NIL)))
       (cond (second (+ (weapon-frame-index template :alternate) second))
-            ((and jolt (< 0.0 (spear-jolt player))) jolt)
+            ((and jolt (< 0.0 (weapon-jolt player))) jolt)
             (T (blow-frame (weapon-swing template) sprite player))))))
 
 (defun add-weapon-sprite (sprite container)

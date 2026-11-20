@@ -60,7 +60,7 @@
 (defun brace-against-charge (player thrust knight)
   "PLAYER's THRUST met KNIGHT's shield charge head-on: the point takes the shield, and the charge
 stops dead, the knight reeling with its guard down (knight.lisp). No harm to it."
-  (setf (spear-jolt player) (blow-jolt-time thrust))
+  (setf (weapon-jolt player) (blow-jolt-time thrust))
   (play-sound :bash-glance (location knight))
   (play-sound :maul-guard-break (location knight))
   (shield-sparks knight 16)
@@ -72,7 +72,7 @@ stops dead, the knight reeling with its guard down (knight.lisp). No harm to it.
   "TARGET charged onto PLAYER's THRUST: skewered, flinching whatever the roll, and its charge
 broken (IMPALE)."
   (let ((feet (feet player)))
-    (setf (spear-jolt player) (blow-jolt-time thrust))
+    (setf (weapon-jolt player) (blow-jolt-time thrust))
     (play-sound :spear-impale (location target))
     (strike-sparks target feet (blow-counter-sparks thrust))
     (impale target)

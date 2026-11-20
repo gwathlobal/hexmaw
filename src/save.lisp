@@ -59,7 +59,7 @@ settlement's), else their values."
     mana inventory quickslot stamina winded cast-timer cast-time
     pending-spell weapon wanted-weapon weapon-lower swing-time swing-pending
     charge-time blow-charge
-    block-raise bash-time bash-pending spear-jolt guard-broken run-time damage-taken level-records
+    block-raise bash-time bash-pending weapon-jolt guard-broken run-time damage-taken level-records
     reputation max-health max-mana max-stamina blessed
     known-effects hotbar-cells offhand-cells wanted-slot held-rune enchantments cast-hand cast-held overcharge
     snare snare-guard))
@@ -234,10 +234,15 @@ references that are relative to it (an ability)."
   (loop for name in (saved-slots object)
         collect (cons name (encode-value (saved-value object name)))))
 
+(defparameter *renamed-saved-slots* '((spear-jolt . weapon-jolt))
+  "Saved names an older save may have, each with the name it is saved by now.")
+
 (defun restore-state (object state)
-  "Set OBJECT's slots from STATE (OBJECT-STATE's alist), skipping those it no longer has.
-A vector is written in place, since some slots have only a reader."
-  (loop for (name . data) in state
+  "Set OBJECT's slots from STATE (OBJECT-STATE's alist), skipping those it no longer has. A name an
+older save used is read as its new one (*RENAMED-SAVED-SLOTS*). A vector is written in place, since
+some slots have only a reader."
+  (loop for (saved . data) in state
+        for name = (or (cdr (assoc saved *renamed-saved-slots*)) saved)
         when (or (slot-exists-p object name) (fboundp name))
           do (let ((value (decode-value data object))
                    (old (saved-value object name)))

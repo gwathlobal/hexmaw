@@ -7,6 +7,11 @@ ships ("Releases" in CLAUDE.md). The history before this file is in `git log`.
 
 ## Unreleased
 
+- What the player's weapon is doing is a `wield` (player.lisp) the player holds: the swing, charge,
+  second blow, guard and jolt timers moved off the player's own slots, reached by the same
+  accessors, so saves keep their names. `spear-jolt` is `weapon-jolt`; an older save's is read
+  as it (`*renamed-saved-slots*`, save.lisp).
+
 - A weapon in the bag is an instance of its template, a `weapon-item` (weapons.lisp) holding its
   enchantment: a stack is `(:sword 1 #<weapon-item>)` (`make-weapon-stack`), saved as
   `(:sword 1 (:weapon-item :sword ENCHANTMENT))`. An older save's `(:sword 1)` or `(:sword 1 SPELL)`

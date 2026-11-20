@@ -90,7 +90,7 @@ wallshot() {
   if [[ -n "${SHOTS:-}" && " $SHOTS " != *" $name "* ]]; then return; fi
   "$hd" "(game (reset-run) (setf *game-state* :playing *hit-stop* 1000.0) $(player $2 $3 $4 $5) $(hold $6)
               (setf (swing-time *player*) NIL (bash-time *player*) NIL (block-raise *player*) 0.0
-                    (spear-jolt *player*) 0.0 (charge-time *player*) NIL)
+                    (weapon-jolt *player*) 0.0 (charge-time *player*) NIL)
               (place-camera *player*) $7 T)" >/dev/null
   sleep 0.3
   "$hd" "(game (let ((*spark-pool* (if $before NIL *spark-pool*))) $8 $(run 0.05)) T)" >/dev/null
